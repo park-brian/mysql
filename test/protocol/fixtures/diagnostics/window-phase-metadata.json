@@ -1,0 +1,7442 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_window270_metadata",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)",
+    "CREATE TABLE real268(id INT PRIMARY KEY,d DOUBLE,f FLOAT,u DOUBLE UNSIGNED,v FLOAT UNSIGNED)",
+    "INSERT INTO real268 VALUES(1,2.5,2.5,2.5,2.5),(2,1e30,1e30,1e30,1e30),(3,-1e30,-1e30,9.223372036854776e18,9.223372036854776e18),(4,NULL,NULL,NULL,NULL)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT id,SUM(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1.0000000150474662e+30
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1.0000000150474662e+30
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1.0000000150474662e+30
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1.0000000150474662e+30
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,AVG(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          5e+29
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,AVG(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          5e+29
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,AVG(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,AVG(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,AVG(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,AVG(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          5e+29
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,AVG(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          5e+29
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,AVG(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,AVG(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          5.000000075237331e+29
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,AVG(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          5.000000075237331e+29
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,AVG(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,AVG(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,AVG(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,AVG(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          5.000000075237331e+29
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,AVG(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          5.000000075237331e+29
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,AVG(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          -1.0000000150474662e+30
+        ],
+        [
+          4,
+          -1.0000000150474662e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          -1.0000000150474662e+30
+        ],
+        [
+          4,
+          -1.0000000150474662e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          -1.0000000150474662e+30
+        ],
+        [
+          4,
+          -1.0000000150474662e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MAX(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          1e+30
+        ],
+        [
+          4,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MAX(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          1e+30
+        ],
+        [
+          4,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MAX(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MAX(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MAX(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MAX(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          1e+30
+        ],
+        [
+          4,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MAX(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          1e+30
+        ],
+        [
+          4,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MAX(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MAX(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          1e+30
+        ],
+        [
+          4,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MAX(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1.0000000150474662e+30
+        ],
+        [
+          3,
+          1.0000000150474662e+30
+        ],
+        [
+          4,
+          1.0000000150474662e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MAX(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MAX(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MAX(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MAX(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1.0000000150474662e+30
+        ],
+        [
+          3,
+          1.0000000150474662e+30
+        ],
+        [
+          4,
+          1.0000000150474662e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MAX(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1.0000000150474662e+30
+        ],
+        [
+          3,
+          1.0000000150474662e+30
+        ],
+        [
+          4,
+          1.0000000150474662e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MAX(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,COUNT(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          1,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,COUNT(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          1,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,COUNT(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,COUNT(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,COUNT(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,COUNT(d) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          1,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,COUNT(d) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          1,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,COUNT(d) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,COUNT(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          1,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,COUNT(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          1,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,COUNT(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,COUNT(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,COUNT(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,COUNT(f) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          1,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,COUNT(f) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          1,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,COUNT(f) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,STDDEV(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          5e+29
+        ],
+        [
+          3,
+          8.16496580927726e+29
+        ],
+        [
+          4,
+          8.16496580927726e+29
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,STDDEV(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          5e+29
+        ],
+        [
+          3,
+          8.16496580927726e+29
+        ],
+        [
+          4,
+          8.16496580927726e+29
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,STDDEV(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,STDDEV(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,STDDEV(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,STDDEV(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          5e+29
+        ],
+        [
+          3,
+          8.16496580927726e+29
+        ],
+        [
+          4,
+          8.16496580927726e+29
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,STDDEV(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          5e+29
+        ],
+        [
+          3,
+          8.16496580927726e+29
+        ],
+        [
+          4,
+          8.16496580927726e+29
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,STDDEV(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,STDDEV(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          5.000000075237331e+29
+        ],
+        [
+          3,
+          8.164965932139307e+29
+        ],
+        [
+          4,
+          8.164965932139307e+29
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,STDDEV(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          5.000000075237331e+29
+        ],
+        [
+          3,
+          8.164965932139307e+29
+        ],
+        [
+          4,
+          8.164965932139307e+29
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,STDDEV(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,STDDEV(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,STDDEV(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,STDDEV(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          5.000000075237331e+29
+        ],
+        [
+          3,
+          8.164965932139307e+29
+        ],
+        [
+          4,
+          8.164965932139307e+29
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,STDDEV(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          5.000000075237331e+29
+        ],
+        [
+          3,
+          8.164965932139307e+29
+        ],
+        [
+          4,
+          8.164965932139307e+29
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,STDDEV(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,VAR_POP(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          2.5000000000000003e+59
+        ],
+        [
+          3,
+          6.666666666666668e+59
+        ],
+        [
+          4,
+          6.666666666666668e+59
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,VAR_POP(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          2.5000000000000003e+59
+        ],
+        [
+          3,
+          6.666666666666668e+59
+        ],
+        [
+          4,
+          6.666666666666668e+59
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,VAR_POP(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,VAR_POP(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,VAR_POP(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,VAR_POP(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          2.5000000000000003e+59
+        ],
+        [
+          3,
+          6.666666666666668e+59
+        ],
+        [
+          4,
+          6.666666666666668e+59
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,VAR_POP(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          2.5000000000000003e+59
+        ],
+        [
+          3,
+          6.666666666666668e+59
+        ],
+        [
+          4,
+          6.666666666666668e+59
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,VAR_POP(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,VAR_POP(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          2.5000000752373317e+59
+        ],
+        [
+          3,
+          6.666666867299551e+59
+        ],
+        [
+          4,
+          6.666666867299551e+59
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,VAR_POP(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          2.5000000752373317e+59
+        ],
+        [
+          3,
+          6.666666867299551e+59
+        ],
+        [
+          4,
+          6.666666867299551e+59
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,VAR_POP(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,VAR_POP(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,VAR_POP(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,VAR_POP(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          2.5000000752373317e+59
+        ],
+        [
+          3,
+          6.666666867299551e+59
+        ],
+        [
+          4,
+          6.666666867299551e+59
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,VAR_POP(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          2.5000000752373317e+59
+        ],
+        [
+          3,
+          6.666666867299551e+59
+        ],
+        [
+          4,
+          6.666666867299551e+59
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,VAR_POP(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,FIRST_VALUE(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          2.5
+        ],
+        [
+          4,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,FIRST_VALUE(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          2.5
+        ],
+        [
+          4,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,FIRST_VALUE(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,FIRST_VALUE(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,FIRST_VALUE(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,FIRST_VALUE(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          2.5
+        ],
+        [
+          4,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,FIRST_VALUE(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          2.5
+        ],
+        [
+          4,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,FIRST_VALUE(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,FIRST_VALUE(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          2.5
+        ],
+        [
+          4,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,FIRST_VALUE(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          2.5
+        ],
+        [
+          4,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,FIRST_VALUE(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,FIRST_VALUE(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,FIRST_VALUE(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,FIRST_VALUE(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          2.5
+        ],
+        [
+          4,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,FIRST_VALUE(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          2.5
+        ],
+        [
+          4,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,FIRST_VALUE(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,LAST_VALUE(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,LAST_VALUE(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,LAST_VALUE(d) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,LAST_VALUE(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,LAST_VALUE(d) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,LAST_VALUE(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,LAST_VALUE(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,LAST_VALUE(SUM(d)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,LAST_VALUE(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,LAST_VALUE(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1.0000000150474662e+30
+        ],
+        [
+          3,
+          -1.0000000150474662e+30
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,LAST_VALUE(f) OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,LAST_VALUE(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,LAST_VALUE(f) OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          4,
+          12,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,LAST_VALUE(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1.0000000150474662e+30
+        ],
+        [
+          3,
+          -1.0000000150474662e+30
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,LAST_VALUE(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1.0000000150474662e+30
+        ],
+        [
+          3,
+          -1.0000000150474662e+30
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,LAST_VALUE(SUM(f)) OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          33,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          33,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          33,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          33,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,PERCENT_RANK() OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0.3333333333333333
+        ],
+        [
+          3,
+          0.6666666666666666
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,PERCENT_RANK() OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0.3333333333333333
+        ],
+        [
+          3,
+          0.6666666666666666
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,PERCENT_RANK() OVER (ORDER BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,PERCENT_RANK() OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,PERCENT_RANK() OVER (ORDER BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,PERCENT_RANK() OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0.3333333333333333
+        ],
+        [
+          3,
+          0.6666666666666666
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,PERCENT_RANK() OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0.3333333333333333
+        ],
+        [
+          3,
+          0.6666666666666666
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,PERCENT_RANK() OVER (ORDER BY id) AS v FROM real268 GROUP BY id ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT SUM(2.5e0) OVER () AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT AVG(2.5e0) OVER () AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT MIN(2.5e0) OVER () AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          5,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ROW_NUMBER() OVER () AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id FROM real268 ORDER BY SUM(d) OVER (PARTITION BY id)",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          4
+        ],
+        [
+          3
+        ],
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id FROM real268 ORDER BY SUM(d) OVER (PARTITION BY id)",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          4
+        ],
+        [
+          3
+        ],
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id FROM real268 ORDER BY SUM(d) OVER (PARTITION BY id)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT DISTINCT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT DISTINCT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT DISTINCT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER w AS v FROM real268 WINDOW w AS (PARTITION BY id) ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER w AS v FROM real268 WINDOW w AS (PARTITION BY id) ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER w AS v FROM real268 WINDOW w AS (PARTITION BY id) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_metadata",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

@@ -1,0 +1,3393 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_window270_owners",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)",
+    "CREATE TABLE real268(id INT PRIMARY KEY,d DOUBLE,f FLOAT,u DOUBLE UNSIGNED,v FLOAT UNSIGNED)",
+    "INSERT INTO real268 VALUES(1,2.5,2.5,2.5,2.5),(2,1e30,1e30,1e30,1e30),(3,-1e30,-1e30,9.223372036854776e18,9.223372036854776e18),(4,NULL,NULL,NULL,NULL)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT id,CAST(SUM(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id IN (2,3)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=99",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=2 AND d>0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=(SELECT 2)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id IN (2,3)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=99",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=2 AND d>0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=(SELECT 2)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id IN (2,3)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=99",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=2 AND d>0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=(SELECT 2)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id IN (2,3)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=99",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=2 AND d>0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=(SELECT 2)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id IN (2,3)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=99",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=2 AND d>0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=(SELECT 2)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id IN (2,3)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=99",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=2 AND d>0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=(SELECT 2)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id IN (2,3)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=99",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=2 AND d>0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=(SELECT 2)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id IN (2,3)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=99",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=2 AND d>0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(f) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=(SELECT 2)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(d) OVER () AS SIGNED) AS v FROM real268",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          0,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(d) OVER () AS SIGNED) AS v FROM real268",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          0,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(d) OVER () AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(d) OVER () AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(d) OVER (ORDER BY d ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(d) OVER (ORDER BY d ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(d) OVER w AS SIGNED) AS v FROM real268 WINDOW w AS (PARTITION BY id)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(SUM(d) OVER w AS SIGNED) AS v FROM real268 WHERE id=2 WINDOW w AS (PARTITION BY id)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(SUM(2.5e0) OVER () AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(SUM(1e30) OVER () AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(SUM(-1e30) OVER () AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(SUM(NULL) OVER () AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(d) OVER () AS SIGNED) AS v FROM real268",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          0,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(d) OVER () AS SIGNED) AS v FROM real268",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          0,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(d) OVER () AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(d) OVER () AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(d) OVER (ORDER BY d ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(d) OVER (ORDER BY d ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(d) OVER w AS SIGNED) AS v FROM real268 WINDOW w AS (PARTITION BY id)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(AVG(d) OVER w AS SIGNED) AS v FROM real268 WHERE id=2 WINDOW w AS (PARTITION BY id)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(AVG(2.5e0) OVER () AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(AVG(1e30) OVER () AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(AVG(-1e30) OVER () AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(AVG(NULL) OVER () AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(d) OVER () AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(d) OVER () AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(d) OVER (ORDER BY d ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(d) OVER (ORDER BY d ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(d) OVER w AS SIGNED) AS v FROM real268 WINDOW w AS (PARTITION BY id)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MIN(d) OVER w AS SIGNED) AS v FROM real268 WHERE id=2 WINDOW w AS (PARTITION BY id)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(MIN(2.5e0) OVER () AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(MIN(1e30) OVER () AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(MIN(-1e30) OVER () AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(MIN(NULL) OVER () AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(d) OVER () AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(d) OVER () AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(d) OVER (ORDER BY d ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(d) OVER (ORDER BY d ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(d) OVER w AS SIGNED) AS v FROM real268 WINDOW w AS (PARTITION BY id)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(MAX(d) OVER w AS SIGNED) AS v FROM real268 WHERE id=2 WINDOW w AS (PARTITION BY id)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(MAX(2.5e0) OVER () AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(MAX(1e30) OVER () AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(MAX(-1e30) OVER () AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(MAX(NULL) OVER () AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(FIRST_VALUE(d) OVER (ORDER BY id) AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(FIRST_VALUE(d) OVER (ORDER BY id) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(LAST_VALUE(d) OVER (ORDER BY id) AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(LAST_VALUE(d) OVER (ORDER BY id) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(LAG(d) OVER (ORDER BY id) AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(LAG(d) OVER (ORDER BY id) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(LEAD(d) OVER (ORDER BY id) AS SIGNED) AS v FROM real268",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST(LEAD(d) OVER (ORDER BY id) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_owners",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

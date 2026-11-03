@@ -3254,6 +3254,55 @@ sources. The 20,000-statement executor run (seed 20261010) passes; plans stay
 retains the same 38 passing file IDs and exact native baseline. The preceding
 c7a51cf commit passed all eleven required GitHub jobs.
 
+**Window PREPARE metadata, verified phase boundary (2026-11-02):**
+The window ownership audit first exposes metadata copied before its physical
+fields exist. PREPARE now retains original expression metadata through both
+plain and grouped window binding. The existing preparation phase reaches
+WindowSink; execution still reports its copied result fields. Select-list and
+ORDER-BY-only windows share the same phase guard. Values, runtime readers,
+window evaluation, argument activity and public contracts are unchanged.
+
+Three native profiles contain 600 outcomes: complete agreement improves from
+98 to 297, including all 199 newly repaired PREPARE responses. Three fixtures
+retain all 297 full outcomes, including 98 already correct controls and
+LAST_INSERT_ID inspection proving PREPARE has no effects. Across 15,044
+responses, complete agreement improves 12,827 to 13,066, retaining all 243,375
+previously matching facts and every prior complete outcome. Forty old window
+outcomes now agree, reducing the preceding audit's 136 open outcomes to 96.
+The 85 focused
+protocol/window tests and three new native groups pass. Typecheck, lint and
+nine unchanged size caps pass at parser/core/facade
+45,599/334,163/334,088 B gzipped.
+
+The remaining 303 outcomes retain distinct boundaries: runtime INTEGER
+conversion, constant-input execution metadata, MIN/MAX evaluation activity,
+and SUM(NULL)'s numeric result shape. The two runtime conversion owners still
+need the existing constant-input planning proof: buffered physical fields
+versus elided checked SUM/AVG and quiet MIN/MAX caches. Reuse that proof;
+do not infer policy from the stream descriptor, an AST predicate pattern or
+observed row count. Keep OVER diagnostic spelling, original binding,
+query/execute/PREPARE separation, scalar caches and ROLLUP forwarding explicit.
+A further read-only planning audit retains 132 responses (38 already complete)
+and ten native plan observations. Native also elides windows over equal BETWEEN
+bounds, a one-row materialized derived input and a join of const tables; the
+current EXPLAIN shortcut does not prove those paths. Key equality, singleton IN,
+null-safe equality, scalar-subquery key binding, constant derived input and
+parameterized keys supply positive controls; a two-key range remains buffered.
+Establish the constant-input proof at the real access/planning owner before
+using its absence to select physical-field conversion. These exploratory
+controls are separate from this slice's 600-response measurement.
+Totals remain 144/190 and M5 42/53; M5.10 stays partial.
+
+The actual c708bbf predecessor passes 80 focused groups and fails all three
+new groups. The 20,000-statement executor run (seed 20261010) passes; plans
+remain 2,127/2,248 against the unchanged 2,118 floor. The full 1,459-file
+official run retains the same 38 passing file IDs and exact native baseline.
+Fresh Docker verification passes all 1,723 tests plus four latency checks,
+typecheck, lint, nine unchanged caps, package/client smoke and all seven
+pinned MySQL 8.4.11 corpora. Source proof matches all 619 test files/fixtures
+and 206 runtime sources. The preceding c708bbf commit passed all eleven
+required GitHub jobs.
+
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse
 excessive DECIMAL precision at the completed parser production. Preserve native prefix

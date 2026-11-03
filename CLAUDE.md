@@ -109,7 +109,8 @@ and NULLIF retaining selected-argument policies. REAL literals now own quiet INT
 clipping. Physical REAL field INTEGER readers now preserve native rounding, inclusive
 DOUBLE clipping/warnings and quiet FLOAT overflow within the verified boundary.
 Grouped numeric aggregates now retain checked INTEGER readers, while REAL
-MIN/MAX use quiet cache conversion. Plan-owned window readings, scalar caches
+MIN/MAX use quiet cache conversion. Window PREPARE now retains original item
+metadata before execution result fields exist. Plan-owned window readings, scalar caches
 and ROLLUP/query forwarding remain separate. Owned DOUBLE readers for byte
 functions, conditional branches and quiet string-result holders are verified
 within their measured boundary; scalar forwarding/cache remains separate. General

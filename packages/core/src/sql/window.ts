@@ -88,10 +88,13 @@ export class WindowSink {
   readonly #rowCtx: CompileContext
   readonly #named: ReadonlyMap<string, WindowSpec>
   readonly #aggregates: AggregateSink
+  /** PREPARE binds the item before the window result fields exist. */
+  readonly #preparing: boolean
 
   /** `rowCtx` compiles arguments, PARTITION BY and ORDER BY; `named` is the query's WINDOW clause. */
-  constructor(rowCtx: CompileContext, base: number, named: readonly { readonly name: string; readonly spec: WindowSpec }[] = []) {
+  constructor(rowCtx: CompileContext, base: number, named: readonly { readonly name: string; readonly spec: WindowSpec }[] = [], preparing = false) {
     this.#rowCtx = rowCtx
+    this.#preparing = preparing
     this.base = base
     this.#named = new Map(named.map((w) => [w.name.toLowerCase(), w.spec]))
     this.#aggregates = new AggregateSink(rowCtx, 0)
@@ -159,7 +162,7 @@ export class WindowSink {
       if (type.kind === 'double') return fieldValue(v, type)
       // AVG reads its final field; TIME fields also lose the raw expression's negative zero.
       return (name === 'AVG' && type.kind === 'decimal') || type.kind === 'time' ? convertTo(v, type) : v
-    }, type: { ...type, length: copiedLength(type), temporary: 'stream' } }
+    }, type: { ...type, length: copiedLength(type), ...(this.#preparing ? {} : { temporary: 'stream' }) } }
   }
 
   /** The window a call names: its own, or a named one, or a named one it extends. */

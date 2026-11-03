@@ -370,7 +370,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const anti = from === undefined || !semijoin ? undefined : costedAntijoin(run, q, node, from)
   // Window functions (M5.6) write into slots past the FROM row.
   const windowBase = from?.width ?? 0
-  const windows = windowed ? new WindowSink(compileContext(run, lookup, 'window order by'), windowBase, node.windows) : undefined
+  const windows = windowed ? new WindowSink(compileContext(run, lookup, 'window order by'), windowBase, node.windows, run.preparing === true) : undefined
 
   // The select list, `*` expanded. A table a correlated, aggregating scalar
   // subquery in it reads is reported nullable there (8.4.11: `SELECT a.x,
@@ -387,7 +387,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     items.push({ ...item, name: selectName(entry, scope), compiled })
   }
   // Read through the windows' temporary table: every column a field of it (8.4.11: `id` loses PRI).
-  windowColumns(items, windows)
+  if (run.preparing !== true) windowColumns(items, windows)
   const [limitCount, offset] = queryLimit(run, q)
   const checkedOutput = anti?.kind === 'correlated' && checkedCorrelatedOutput(node, q, source, items, anti.query)
   let checkedWhere = false
@@ -569,7 +569,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // Resolve every ORDER BY first: name errors precede DISTINCT admission.
   const copied = node.distinct === true && source !== undefined && scope !== undefined && !windowed && modeOf(run.env.session.sqlMode).onlyFullGroupBy ? checkDistinctOrder(run, order, items, orderCtx)?.filter((_, i) => !constantKey(order[i] as OrderItem)) : undefined
   // A window ORDER BY alone names reads the rows through its table as well.
-  windowColumns(items, windows)
+  if (run.preparing !== true) windowColumns(items, windows)
   // A MATCH in the WHERE of one table is read through its full-text index,
   // which yields rows by relevance, highest first: with no ORDER BY of its
   // own that is the order they come in (8.4.11, M5.26).
@@ -2182,7 +2182,7 @@ function planGrouped(
   // Windows over the groups (M5.6): run after HAVING, over the grouped rows,
   // so their arguments and keys may be the groups' aggregates. Their slots
   // follow the aggregates', which are all known only once everything compiled.
-  const windows = windowed ? new WindowSink(postCtx('window order by'), 0, node.windows) : undefined
+  const windows = windowed ? new WindowSink(postCtx('window order by'), 0, node.windows, run.preparing === true) : undefined
   const selectCtx = postCtx('field list', lookup, windows)
   for (const item of selectItems) item.compiled = compile(item.expr, selectCtx)
   // Naming and binding complete before the same records become output fields.
@@ -2321,7 +2321,7 @@ function planGrouped(
     // Read through the windows' temporary table, which takes the groups'
     // place; one row of an aggregate without GROUP BY needs none (8.4.11:
     // `COUNT(*), ROW_NUMBER() OVER ()` keeps BINARY on both).
-    const temporary = node.groupBy === undefined ? undefined : ('stream' as const)
+    const temporary = node.groupBy === undefined || run.preparing === true ? undefined : ('stream' as const)
     for (const item of items) {
       const { temporary: _was, ...type } = item.compiled.type
       item.compiled = { ...item.compiled, type: temporary === undefined ? type : { ...type, temporary } }

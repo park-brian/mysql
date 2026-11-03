@@ -1,0 +1,1467 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_window270_activity",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)",
+    "CREATE TABLE real268(id INT PRIMARY KEY,d DOUBLE,f FLOAT,u DOUBLE UNSIGNED,v FLOAT UNSIGNED)",
+    "INSERT INTO real268 VALUES(1,2.5,2.5,2.5,2.5),(2,1e30,1e30,1e30,1e30),(3,-1e30,-1e30,9.223372036854776e18,9.223372036854776e18),(4,NULL,NULL,NULL,NULL)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256",
+    "SELECT LAST_INSERT_ID(0)"
+  ],
+  "observations": [
+    {
+      "data": {
+        "rows": [
+          [
+            3
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS v FROM real268 WHERE id IN (1,2,3) ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          6
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            3
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS v FROM real268 WHERE id IN (1,2,3) ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          6
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS v FROM real268 WHERE id IN (1,2,3) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            3
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,CAST(SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS SIGNED) AS v FROM real268 WHERE id IN (1,2,3) ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          6
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          0,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            3
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,CAST(SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS SIGNED) AS v FROM real268 WHERE id IN (1,2,3) ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          6
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          0,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,CAST(SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS SIGNED) AS v FROM real268 WHERE id IN (1,2,3) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,CAST(SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS SIGNED) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            3
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,AVG(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS v FROM real268 WHERE id IN (1,2,3) ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1.5
+        ],
+        [
+          3,
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            3
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,AVG(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS v FROM real268 WHERE id IN (1,2,3) ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1.5
+        ],
+        [
+          3,
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,AVG(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS v FROM real268 WHERE id IN (1,2,3) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            3
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,CAST(AVG(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS SIGNED) AS v FROM real268 WHERE id IN (1,2,3) ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          0,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            3
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,CAST(AVG(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS SIGNED) AS v FROM real268 WHERE id IN (1,2,3) ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          0,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,CAST(AVG(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS SIGNED) AS v FROM real268 WHERE id IN (1,2,3) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,AVG(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,CAST(AVG(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS SIGNED) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,MIN(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS v FROM real268 WHERE id IN (1,2,3) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,CAST(MIN(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS SIGNED) AS v FROM real268 WHERE id IN (1,2,3) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,MIN(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,CAST(MIN(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS SIGNED) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,MAX(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS v FROM real268 WHERE id IN (1,2,3) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,CAST(MAX(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS SIGNED) AS v FROM real268 WHERE id IN (1,2,3) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,MAX(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      "sql": "SELECT id,CAST(MAX(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) OVER (ORDER BY id) AS SIGNED) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window270_activity",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ],
+  "inspect": "SELECT LAST_INSERT_ID() AS n"
+}
