@@ -1,0 +1,588 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_window273_plans",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "setup": [
+    "CREATE TABLE t(id INT PRIMARY KEY,d DOUBLE)",
+    "INSERT INTO t VALUES(1,2.5),(2,3.5),(3,-2.5),(4,NULL)"
+  ],
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "observations": [
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t WHERE id=99) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t WHERE id=4) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING d>0) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING COUNT(*)>0) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,MIN(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,MAX(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,AVG(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,COUNT(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT DISTINCT 0 AS id,SUM(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t ORDER BY d) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t LIMIT 2) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    }
+  ]
+}

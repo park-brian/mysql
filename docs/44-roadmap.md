@@ -3404,15 +3404,56 @@ and all seven pinned MySQL 8.4.11 corpora. Source proof matches all 635 test
 files/fixtures and 206 runtime sources. Totals remain 144/190 and M5 42/53;
 M5.10 stays partial.
 
-**Next window ownership prerequisite: implicit aggregate materialization.**
-Capture fresh plans, complete packets, failure header timing and retained
-executions for a noncorrelated implicit aggregate without a written LIMIT.
-Establish its actual selected reader proof before changing window INTEGER
-conversion. Include explicit GROUP BY, HAVING, ROLLUP, empty/all-NULL input,
-correlated/lateral and outer-limit controls. Absence of a positive constant
-proof still does not prove buffered conversion ownership. Parameter inference,
-scalar/NULL forwarding, aggregate activity and diagnostic labels remain
-separate boundaries. Then resume the constructor/presence prerequisite below.
+**Implicit aggregate materialization, verified reader boundary (2026-11-03):**
+The existing implicit grouping strategy now supplies its singleton reader proof
+on SelectPlan. Noncorrelated derived sources share that proof with window
+output metadata and EXPLAIN, including HAVING and empty/all-NULL input. No
+input-cardinality estimate, literal whitelist or new reader owner is added.
+Explicit grouping/ROLLUP, correlated/lateral sources and outer-limit wrappers
+keep their existing paths. Window INTEGER readers remain unchanged.
+
+Four native profiles retain 564 responses, improving 146 to 258 full matches;
+four protocol fixtures pin all 258. Twelve positive EXPLAIN observations pin
+structure and result fields under the existing cost-independent contract.
+Retained executions cover changed keys, deletes, inserts, updates and emptied/
+restored input. MIN result provenance and marker metadata still prevent full
+agreement for other retained responses; neither is hidden by fixture changes.
+
+Across 16,853 responses agreement improves 14,312 to 14,432, preserving every
+previously complete response. All 280,603 matching facts in the older 16,289
+responses remain intact. Four newly audited EXPLAIN responses replace an
+unsupported-query error with the selected zero-row plan. Their previously
+coincidental one-warning count and one-element history shape change to four
+aggregate warnings, while MySQL reports one. This is the separately observed
+HAVING constant-argument evaluation gap; these eight new count/shape facts
+are explicitly not claimed preserved. Group/ROLLUP activity, scalar forwarding,
+NULL-bound emptiness, parameter inference, Note 1249 and diagnostic labels stay
+open. No committed expectations or thresholds are weakened.
+
+All 105 focused local protocol/window tests, five new native groups, typecheck,
+lint and nine unchanged caps pass at parser/core/facade
+45,599/334,350/334,252 B gzipped. The actual 25dff06 predecessor passes 99
+protocol groups and fails all five new groups. A broad probe replay encountered
+an internal Node 22.18.0 TypeScript-loader stack error while importing an older
+probe; restarting at that probe completed the remaining audit without a runtime
+change. The 20,000-statement executor run with seed 20261010 passes, plans
+remain 2,127/2,248 under the unchanged 2,118 floor, and the full 1,459-file
+official run retains the same 38 passing IDs and exact native baseline. The
+preceding 25dff06 commit passed all eleven required GitHub jobs. Fresh Docker
+verification passes all 1,744 tests plus four latency checks, typecheck, lint,
+nine unchanged caps, package/client smoke and all seven pinned MySQL 8.4.11
+corpora. Source proof matches all 640 test files/fixtures and 206 runtime sources.
+Totals remain 144/190 and M5 42/53; M5.10 stays partial.
+
+**Next window metadata boundary: MIN/MAX result provenance.** Compare native
+complete packets for window MIN/MAX over physical versus computed aggregate
+fields, with constant and buffered materialization, PREPARE, empty/all-NULL
+input and retained writes. Establish the result item's actual origin owner;
+do not clear all origins or infer INTEGER conversion from metadata flags.
+Outer-limit propagation, correlated/lateral values and HAVING evaluation counts
+remain distinct gaps. Absence of a positive singleton proof still does not prove
+buffered conversion ownership. Then resume the constructor/presence prerequisite
+below before broader optimizer work.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

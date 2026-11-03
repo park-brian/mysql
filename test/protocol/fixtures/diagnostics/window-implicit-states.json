@@ -1,0 +1,5285 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_window273_states",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "setup": [
+    "CREATE TABLE t(id INT PRIMARY KEY,d DOUBLE)"
+  ],
+  "beforeEach": [
+    "DELETE FROM t",
+    "INSERT INTO t VALUES(1,2.5),(2,3.5),(3,-2.5),(4,NULL)",
+    "SELECT LAST_INSERT_ID(0)"
+  ],
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "observations": [
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,COUNT(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [
+        [
+          0,
+          "0"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          43,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,COUNT(d) AS d FROM t) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [
+        [
+          0,
+          "0"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          43,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,COUNT(d) AS d FROM t) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          43,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,AVG(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,AVG(d) AS d FROM t) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,AVG(d) AS d FROM t) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING d IS NULL) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING d IS NULL) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING d IS NULL) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING COUNT(*)>0) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING COUNT(*)>0) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING COUNT(*)>0) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window273_states",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window273_states",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window273_states",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id WITH ROLLUP) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          8,
+          11,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id WITH ROLLUP) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          8,
+          11,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id WITH ROLLUP) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          8,
+          11,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,COUNT(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "rows": [
+        [
+          0,
+          "0"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          43,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,COUNT(d) AS d FROM t) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "rows": [
+        [
+          0,
+          "0"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          43,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,COUNT(d) AS d FROM t) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          43,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,AVG(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,AVG(d) AS d FROM t) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,AVG(d) AS d FROM t) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING d IS NULL) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING d IS NULL) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING d IS NULL) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING COUNT(*)>0) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING COUNT(*)>0) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING COUNT(*)>0) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "rows": [
+        [
+          1,
+          null
+        ],
+        [
+          2,
+          null
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window273_states",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "rows": [
+        [
+          1,
+          null
+        ],
+        [
+          2,
+          null
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window273_states",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window273_states",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id WITH ROLLUP) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "rows": [
+        [
+          null,
+          null
+        ],
+        [
+          1,
+          null
+        ],
+        [
+          2,
+          null
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          8,
+          11,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id WITH ROLLUP) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "rows": [
+        [
+          null,
+          null
+        ],
+        [
+          1,
+          null
+        ],
+        [
+          2,
+          null
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          8,
+          11,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id WITH ROLLUP) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "UPDATE t SET d=NULL"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          8,
+          11,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "rows": [
+        [
+          0,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "rows": [
+        [
+          0,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,COUNT(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "rows": [
+        [
+          0,
+          "1"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          43,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,COUNT(d) AS d FROM t) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "rows": [
+        [
+          0,
+          "1"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          43,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,COUNT(d) AS d FROM t) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          43,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,AVG(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "rows": [
+        [
+          0,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,AVG(d) AS d FROM t) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "rows": [
+        [
+          0,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,AVG(d) AS d FROM t) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING d IS NULL) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING d IS NULL) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING d IS NULL) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING COUNT(*)>0) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "rows": [
+        [
+          0,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING COUNT(*)>0) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "rows": [
+        [
+          0,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING COUNT(*)>0) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "rows": [
+        [
+          1,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window273_states",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "rows": [
+        [
+          1,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window273_states",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window273_states",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id WITH ROLLUP) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "rows": [
+        [
+          null,
+          2.5
+        ],
+        [
+          1,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          8,
+          11,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id WITH ROLLUP) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "rows": [
+        [
+          null,
+          2.5
+        ],
+        [
+          1,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          8,
+          11,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id WITH ROLLUP) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t WHERE id>1"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          8,
+          11,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,COUNT(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "rows": [
+        [
+          0,
+          "0"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          43,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,COUNT(d) AS d FROM t) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "rows": [
+        [
+          0,
+          "0"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          43,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,COUNT(d) AS d FROM t) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          43,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,AVG(d) AS d FROM t) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,AVG(d) AS d FROM t) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,AVG(d) AS d FROM t) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING d IS NULL) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING d IS NULL) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING d IS NULL) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING COUNT(*)>0) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING COUNT(*)>0) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM t HAVING COUNT(*)>0) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "rows": [
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window273_states",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "rows": [
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window273_states",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window273_states",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id WITH ROLLUP) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "rows": [
+        [
+          null,
+          null
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          8,
+          11,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id WITH ROLLUP) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "rows": [
+        [
+          null,
+          null
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          8,
+          11,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM t GROUP BY id WITH ROLLUP) q ORDER BY q.id",
+      "api": "prepare",
+      "headers": 0,
+      "before": [
+        "DELETE FROM t WHERE id<4"
+      ],
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          8,
+          11,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    }
+  ],
+  "inspect": "SELECT LAST_INSERT_ID() AS n"
+}

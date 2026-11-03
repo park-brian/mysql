@@ -272,7 +272,7 @@ function itemTexts(run: Run, node: SelectNode): (string | undefined)[] {
 }
 
 export interface SelectPlan {
-  /** Static input proof; row existence is checked by each execution. */
+  /** Static singleton reader proof; row existence is checked by each execution. */
   readonly constant?: boolean
   /** The selected query block's LIMIT budget before OFFSET. */
   readonly blockLimit?: number | undefined
@@ -2377,6 +2377,7 @@ function planGrouped(
 
   return {
     ...resultColumns(items, dataColumns),
+    constant: strategy === 'implicit',
     blockLimit: q.limit && keep,
     locking,
     explain() {
