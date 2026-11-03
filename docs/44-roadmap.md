@@ -2984,9 +2984,9 @@ remain 144/190 and M5 42/53; M5.10 stays partial. All eleven required 688e260 CI
 jobs pass.
 
 Binary shifts are now verified below. The computed REAL and quiet REAL literal INTEGER reader boundaries are now
-verified below. Physical REAL field conversion is verified below. Next repair aggregate
-INTEGER readers at their actual owner, retaining scalar-cache, ROLLUP/query
-forwarding and raw-parameter boundaries separately.
+verified below. Physical REAL field conversion is verified below. Grouped aggregate INTEGER readers are verified below. Next establish
+plan-owned window INTEGER readers, keeping scalar-cache, ROLLUP/query
+forwarding and raw-parameter boundaries separate.
 
 The original 81-outcome trigger audit improves from 69 to 81 complete matches,
 including its unchanged DECIMAL and unsigned casts. For example,
@@ -3174,9 +3174,9 @@ contexts, thirty-two aggregate/ROLLUP/query-forwarding contexts and four
 unrelated INSERT header index-status bits. The ROLLUP key reader intentionally
 removes source-column facts; it needs its own reader-forwarding proof, rather
 than a blanket field policy. SUM/AVG require computed REAL overflow errors,
-while MIN/MAX retain quiet cache readings. Next repair those aggregate INTEGER
-readers at their constructor with native finite/NULL/group/window/effect
-controls. Keep query reductions/caches, ROLLUP forwarding and marker transport
+while MIN/MAX retain quiet cache readings. Those grouped aggregate INTEGER readers are now repaired below. Window
+conversion still needs execution-plan ownership rather than blanket field
+metadata. Keep query reductions/caches, ROLLUP forwarding and marker transport
 separate. Totals remain 144/190 and M5 42/53; M5.10 stays partial.
 
 Actual 04b070e retains all 64 older focused groups and fails all nine additions.
@@ -3187,6 +3187,72 @@ passes all 1,713 main/four latency tests, typecheck, lint, nine unchanged caps,
 package/typed smoke, the real client and all seven pinned corpora including
 1,737 coercion warning counts. Source proof matches 609 tests/fixtures and
 206 runtime sources plus tooling. All eleven required 04b070e GitHub jobs pass.
+
+**Next REAL aggregate INTEGER boundary, native audit (2026-11-02):**
+A read-only pinned audit covers 468 complete responses: direct aggregate
+conversions (360, currently 240 matches), grouped/window/materialized frames
+(72, currently 32 matches) and activity (36, all matching). SUM/AVG/MIN/MAX
+read physical DOUBLE/FLOAT inputs at finite, overflowing, NULL and empty-input
+boundaries. All 36 LAST_INSERT_ID activity outcomes agree, including IF/NULLIF
+consumers; INTEGER result reads must not evaluate aggregate arguments again.
+
+Grouped SUM/AVG require their own checked REAL INTEGER conversion and 1690
+expression label. Grouped MIN/MAX retain quiet cache conversion on overflow.
+Actual materialized aggregate outputs and window-buffer results instead use
+physical-field conversion: for example, grouped SUM(d) at 1e30 raises 1690,
+while SUM(d) OVER (PARTITION BY id) clips with an INTEGER 1292 warning. Preserve
+that distinction, including FLOAT window output kinds, before attaching any
+shared method. Implement at AggregateSink's result constructor; change window
+readings only at WindowSink's proven physical output constructor. Keep scalar
+query reduction/cache and ROLLUP forwarding separate. This audit adds no new
+implementation or completion claim.
+
+**Grouped REAL aggregate INTEGER readers, verified boundary (2026-11-02):**
+AggregateSink's result constructor now retains checked REAL INTEGER readers for
+SUM/AVG and statistical aggregates, and quiet REAL cache readers for MIN/MAX.
+INTEGER reads use the stored aggregate result, preserving argument evaluation
+counts and NULL/empty-input behavior. The unchecked numeric conversion is
+shared with FLOAT fields. Ordinary aggregate values, DECIMAL readers, metadata
+and existing physical field policies retain their paths.
+
+Statistical diagnostic aliases share the existing canonical-name map. DISTINCT
+aggregate diagnostics now retain native spelling and qualified arguments
+through diagnostic printing; stored-expression refusal contracts remain intact.
+Eight native profiles cover 1,074 responses, improving 594 to 938 complete
+matches. Seven fixtures retain all 938 complete outcomes, leaving older
+expectations unchanged. They cover finite and signed-boundary values, empty
+and NULL inputs, DISTINCT, statistical aliases, SIGNED/UNSIGNED/bit consumers,
+strict writes and all 36 LAST_INSERT_ID activity outcomes. All grouped direct,
+statistical and DISTINCT outcomes agree, including the 216 grouped signed-bound
+outcomes; aggregate arguments are not evaluated again when their result is read.
+
+Across 14,444 responses complete agreement improves 12,357 to 12,729, preserving
+all 225,608 previously matching protocol facts and every prior complete outcome.
+All 86 focused protocol/printer tests and seven new native groups pass.
+Typecheck, lint and nine unchanged caps pass at parser/core/facade
+45,599/334,132/334,056 B gzipped.
+
+The remaining 136 outcomes are explicitly window-related: twenty-four frame
+outcomes, twenty-four boundary outcomes, sixteen strict writes and seventy-two
+paired window-context outcomes. The first window prototype was reverted:
+WindowSink's current stream descriptor alone is insufficient to choose INTEGER
+policy. Native EXPLAIN shows a buffered Window aggregate for an ordinary table
+scan/range, but only Rows fetched before execution for a primary-key constant
+input. In the latter case SUM/AVG retain 1690 errors with their OVER label and
+MIN/MAX retain quiet cache conversion. Other buffered results use physical-field
+conversion. Query/execute behavior and window PREPARE metadata must be verified
+at the actual plan/output owner before changing it. Keep scalar/query and ROLLUP
+forwarding separate. Totals remain 144/190 and M5 42/53; M5.10 stays partial.
+
+The actual c7a51cf predecessor passes 74 focused groups and fails the six newly
+repaired groups; the new activity control already passed. Fresh Docker
+verification passes all 1,720 tests plus four latency checks, typecheck, lint,
+nine unchanged size caps, package smoke and all seven pinned MySQL 8.4.11
+corpora. Source proof matches all 616 test files/fixtures and 206 runtime
+sources. The 20,000-statement executor run (seed 20261010) passes; plans stay
+2,127/2,248 against the unchanged 2,118 floor. The full 1,459-file official run
+retains the same 38 passing file IDs and exact native baseline. The preceding
+c7a51cf commit passed all eleven required GitHub jobs.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

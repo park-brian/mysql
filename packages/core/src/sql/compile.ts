@@ -597,6 +597,20 @@ export function realInteger(c: Compiled, label: () => string): Compiled {
   } }
 }
 
+/** Unchecked REAL-to-integer conversion used by FLOAT fields and REAL caches. */
+function uncheckedInteger(n: number): bigint {
+  return !Number.isFinite(n) || n < Number(MIN_SIGNED) || n >= -Number(MIN_SIGNED) ? MIN_SIGNED : BigInt(roundHalfEven(n))
+}
+
+/** A REAL cache reads the stored value; aggregate arguments are not evaluated again. */
+export function cacheInteger(c: Compiled): Compiled {
+  if (c.type.kind !== 'double') return c
+  return { ...c, integerOf: () => (r, env) => {
+    const value = c.eval(r, env)
+    return value === null ? null : intValue(uncheckedInteger(toDouble(value)))
+  } }
+}
+
 /** Physical REAL fields own INTEGER conversion; generated and aggregate slots keep their readers. */
 function fieldInteger(c: Compiled): Compiled {
   if (c.type.kind !== 'double' || (c.type.column === undefined && c.type.temporary !== 'stream')) return c
@@ -605,7 +619,7 @@ function fieldInteger(c: Compiled): Compiled {
     const value = c.eval(r, env)
     if (value === null) return null
     const n = toDouble(value)
-    if (c.type.field === FIELD_TYPE.FLOAT) return intValue(n < min || n >= -min ? MIN_SIGNED : BigInt(roundHalfEven(n)))
+    if (c.type.field === FIELD_TYPE.FLOAT) return intValue(uncheckedInteger(n))
     // DOUBLE fields warn inclusively; the largest double below 2^63 is 2^63 - 1024.
     if (n <= min || n >= -min - 1024) {
       let text = toText(c.type.scale < 31 ? decimalAt(value, c.type.scale) : value)

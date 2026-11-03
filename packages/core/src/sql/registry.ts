@@ -123,11 +123,14 @@ const FUNCTION_DIAGNOSTIC_ALIASES: Readonly<Record<string, string>> = {
   SCHEMA: 'database',
   SESSION_USER: 'user',
   SYSTEM_USER: 'user',
+  STDDEV: 'std',
+  STDDEV_POP: 'std',
+  VAR_POP: 'variance',
   MASTER_POS_WAIT: 'source_pos_wait',
   VERSION: 'version()',
 }
 
-/** Canonical labels for value-generator and clock-precision diagnostics, not arity spelling. */
+/** Canonical function labels for diagnostics, not arity spelling. */
 export function canonicalFunctionName(name: string): string {
   return FUNCTION_DIAGNOSTIC_ALIASES[name] ?? name.toLowerCase()
 }

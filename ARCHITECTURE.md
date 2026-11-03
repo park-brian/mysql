@@ -1956,7 +1956,9 @@ computed REAL items now own INTEGER overflow/rounding readers, with IF/CASE
 and NULLIF retaining selected-argument policies. REAL literals now own quiet INTEGER ties-to-even rounding and signed-bound
 clipping. Physical REAL field INTEGER readers now preserve native rounding, inclusive
 DOUBLE clipping/warnings and quiet FLOAT overflow within the verified boundary.
-Aggregate, scalar-cache and ROLLUP/query forwarding boundaries remain separate. Owned DOUBLE readers for byte
+Grouped numeric aggregates now retain checked INTEGER readers, while REAL
+MIN/MAX use quiet cache conversion. Plan-owned window readings, scalar caches
+and ROLLUP/query forwarding remain separate. Owned DOUBLE readers for byte
 functions, conditional branches and quiet string-result holders are verified
 within their measured boundary; scalar forwarding/cache remains separate. General
 updatability, definition normalization and schema-driven automatic reprepare

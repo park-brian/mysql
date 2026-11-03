@@ -58,9 +58,9 @@ import {
   type Value,
   valueBytes,
 } from '@myjs/types'
-import { AGGREGATE_NAMES, asNumber, compile, decimalField, readSlot, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
+import { AGGREGATE_NAMES, asNumber, cacheInteger, compile, decimalField, printedArgument, readSlot, realInteger, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { firstKey, rowKey, valueKey } from './keys.ts'
-import { wrongParameterCount } from './registry.ts'
+import { canonicalFunctionName, wrongParameterCount } from './registry.ts'
 import { asJson } from './json.ts'
 import { decimalType, doubleType, floatLength, intType, jsonType, stringType, type ResultType } from './meta.ts'
 import type { SortKey } from './operators.ts'
@@ -210,7 +210,8 @@ export class AggregateSink {
     if (slot === undefined) {
       const index = this.#base + this.specs.length
       const spec = this.#spec(e, ctx.clause)
-      slot = Object.assign(spec, readSlot(index, spec.type))
+      const value = readSlot(index, spec.type)
+      slot = Object.assign(spec, spec.name === 'MIN' || spec.name === 'MAX' ? cacheInteger(value) : realInteger(value, () => printedArgument({ ...e, name: canonicalFunctionName(spec.name) }, ctx)))
       this.specs.push(slot)
       this.#seen.set(key, slot)
     }
