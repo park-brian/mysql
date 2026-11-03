@@ -2983,9 +2983,9 @@ scalar query ownership is not bypassed or inferred from an AST shape. Totals
 remain 144/190 and M5 42/53; M5.10 stays partial. All eleven required 688e260 CI
 jobs pass.
 
-Binary shifts are now verified below. The computed REAL INTEGER reader boundary is now verified below. Next separate
-REAL literal/field integer conversions from actual scalar-cache conversion,
-retaining the separately captured raw-parameter reader gaps.
+Binary shifts are now verified below. The computed REAL and quiet REAL literal INTEGER reader boundaries are now
+verified below. Next separate physical REAL field conversion from actual
+scalar-cache conversion, retaining the separately captured raw-parameter gaps.
 
 The original 81-outcome trigger audit improves from 69 to 81 complete matches,
 including its unchanged DECIMAL and unsigned casts. For example,
@@ -3084,9 +3084,9 @@ scalar/activity controls, failing only the five repaired groups.
 Keep the 78 unmatched outcomes explicit: four direct REAL literal signed-cast
 outcomes, eighteen physical-field and selected-field conversions, twenty scalar
 reduction/cache conversions, twenty-four parameter definition/conversion
-outcomes and twelve conditional literal-reader outcomes. Next repair the
-shared REAL literal integer conversion with native field/cache/conditional
-controls, before changing those other owners. Quiet STRING INTEGER readers,
+outcomes and twelve conditional literal-reader outcomes. The quiet REAL literal INTEGER reader is verified below. Next repair physical
+REAL field conversion using the captured field/cache/conditional controls,
+before changing those other owners. Quiet STRING INTEGER readers,
 JSON labels, high-byte diagnostics and other M5.10 gaps remain separate.
 M5.10 and roadmap totals remain partial at 144/190 and M5 42/53.
 
@@ -3101,6 +3101,45 @@ size, package/typed smoke, the real client and all seven pinned corpora,
 including 1,737 coercion warning counts. Source proof matches all 597
 tests/fixtures and 206 runtime sources plus tooling. All eleven required
 d1fdc06 GitHub jobs pass. Failed initial audit/release logs remain retained.
+
+**Quiet REAL literal INTEGER readers, verified boundary (2026-11-02):**
+The existing DOUBLE literal constructor now retains its own INTEGER reader.
+It computes a quiet signed-bound clip and ties-to-even integer at construction,
+without changing the literal's ordinary REAL value, source spelling, metadata
+or DECIMAL reader. CAST, numeric bit operators and selected conditional branches
+use that reader through the existing numeric adapter. Computed REAL items keep
+their owned 1690 errors; physical fields and actual scalar caches keep their
+separate conversion paths. No global DOUBLE or assignment policy changes.
+
+Three native profiles cover 831 query/execute/PREPARE responses, improving
+723 to 831 complete matches. Three fixtures retain all 831 complete responses
+and every older expectation stays unchanged. Cases include values just below,
+at and above fractional ties, signed bounds and large finite literals through
+1e308, SIGNED/UNSIGNED casts, bit operators, CASE/IF/NULLIF selected branches,
+COALESCE/IFNULL/ANY_VALUE own-result controls, exact DECIMAL/text controls and
+NULL. Quiet literal clipping remains distinct from computed overflow errors.
+Across 12,719 observations complete agreement improves 11,033 to 11,158,
+preserving all 191,757 previously matching protocol facts and every prior
+complete outcome. The older 120-outcome hybrid INTEGER and 234-outcome holder
+audits now agree completely; one older query() call using a substituted numeric
+parameter also improves.
+All 64 focused local groups and three new native groups pass.
+
+The roadmap stays partial at 144/190 and M5 42/53. Next establish the physical
+FLOAT/DOUBLE field INTEGER boundary with the existing native controls, retaining
+separate scalar reduction/cache, raw-parameter, quiet STRING INTEGER, JSON and
+warning-format gaps. Engine/planner M5.47/M5.49/M5.50 still precede browser work.
+
+Actual c70b382 retains all 61 older focused groups and fails all three new
+groups. Typecheck, lint, 20,000 executor statements seeded 20261010 and plans
+at 2,127/2,248 under the unchanged 2,118 floor pass. The complete official
+suite retains all 38 passing file identities and its exact native baseline.
+All nine unchanged caps pass at parser/core/facade 45,599/333,803/333,744 B
+gzipped. Fresh Docker --reference passes all 1,704 main/four latency tests,
+typecheck, lint, size, package/typed smoke, the real client and all seven pinned
+corpora, including 1,737 coercion warning counts. Source proof matches all
+600 tests/fixtures and 206 runtime sources plus tooling. All eleven required
+c70b382 GitHub jobs pass.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

@@ -1953,8 +1953,8 @@ metadata and input immutability within its verified boundary. Untyped marker inf
 byte decoding remain open. Binary-string shifts now preserve byte width, raw
 literal provenance, unsigned count handling and left-NULL evaluation order;
 computed REAL items now own INTEGER overflow/rounding readers, with IF/CASE
-and NULLIF retaining selected-argument policies. Literal/field/cache INTEGER
-readers remain separate. Owned DOUBLE readers for byte
+and NULLIF retaining selected-argument policies. REAL literals now own quiet INTEGER ties-to-even rounding and signed-bound
+clipping. Physical-field and scalar-cache INTEGER readers remain separate. Owned DOUBLE readers for byte
 functions, conditional branches and quiet string-result holders are verified
 within their measured boundary; scalar forwarding/cache remains separate. General
 updatability, definition normalization and schema-driven automatic reprepare

@@ -938,8 +938,15 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
       const digits = magnitudeDigits(d.v).length
       return lit(d, decimalType(Math.max(digits, d.scale + 1), d.scale, false))
     }
-    case LITERAL.DOUBLE:
-      return lit(doubleValue(e.value as number), doubleType(false, (e.text ?? String(e.value).replace('+', '')).length))
+    case LITERAL.DOUBLE: {
+      const n = e.value as number
+      // A REAL literal clips quietly; computed REAL items own overflow errors.
+      let integer: bigint
+      if (n <= Number(MIN_SIGNED)) integer = MIN_SIGNED
+      else if (n >= -Number(MIN_SIGNED)) integer = MAX_SIGNED
+      else integer = BigInt(roundHalfEven(n))
+      return { ...lit(doubleValue(n), doubleType(false, (e.text ?? String(n).replace('+', '')).length)), integerOf: () => () => intValue(integer) }
+    }
     case LITERAL.STRING: {
       const id = introducerCollation(e, ctx)
       let text = e.value as string
