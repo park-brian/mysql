@@ -2984,8 +2984,9 @@ remain 144/190 and M5 42/53; M5.10 stays partial. All eleven required 688e260 CI
 jobs pass.
 
 Binary shifts are now verified below. The computed REAL and quiet REAL literal INTEGER reader boundaries are now
-verified below. Next separate physical REAL field conversion from actual
-scalar-cache conversion, retaining the separately captured raw-parameter gaps.
+verified below. Physical REAL field conversion is verified below. Next repair aggregate
+INTEGER readers at their actual owner, retaining scalar-cache, ROLLUP/query
+forwarding and raw-parameter boundaries separately.
 
 The original 81-outcome trigger audit improves from 69 to 81 complete matches,
 including its unchanged DECIMAL and unsigned casts. For example,
@@ -3125,10 +3126,9 @@ audits now agree completely; one older query() call using a substituted numeric
 parameter also improves.
 All 64 focused local groups and three new native groups pass.
 
-The roadmap stays partial at 144/190 and M5 42/53. Next establish the physical
-FLOAT/DOUBLE field INTEGER boundary with the existing native controls, retaining
-separate scalar reduction/cache, raw-parameter, quiet STRING INTEGER, JSON and
-warning-format gaps. Engine/planner M5.47/M5.49/M5.50 still precede browser work.
+The roadmap stays partial at 144/190 and M5 42/53. The physical FLOAT/DOUBLE field INTEGER boundary is verified below. Aggregate,
+scalar reduction/cache, ROLLUP forwarding, raw-parameter, quiet STRING INTEGER,
+JSON and other warning-format gaps retain their separate owners. Engine/planner M5.47/M5.49/M5.50 still precede browser work.
 
 Actual c70b382 retains all 61 older focused groups and fails all three new
 groups. Typecheck, lint, 20,000 executor statements seeded 20261010 and plans
@@ -3140,6 +3140,53 @@ typecheck, lint, size, package/typed smoke, the real client and all seven pinned
 corpora, including 1,737 coercion warning counts. Source proof matches all
 600 tests/fixtures and 206 runtime sources plus tooling. All eleven required
 c70b382 GitHub jobs pass.
+
+**Physical REAL field INTEGER readers, verified boundary (2026-11-02):**
+The existing row reader now attaches INTEGER policy only to a bare physical
+column or an existing materialized-field descriptor (temporary stream).
+Correlated physical references retain the same reader. Generic generated and
+aggregate slots retain their existing readers. Ordinary REAL values, metadata, literal
+clipping, computed 1690 errors and DECIMAL readers are unchanged.
+
+Both field kinds round ties to even. FLOAT overflow returns the quiet signed
+minimum sentinel. DOUBLE fields clip and warn at their inclusive signed
+endpoints, including the largest representable DOUBLE below 2^63. Their
+INTEGER diagnostics use fixed-scale and ZEROFILL source formatting. Signed
+and unsigned declarations retain the same native integer-reader bounds.
+The new warnings exposed a numeric AND/OR/XOR NULL-order gap: as for shifts,
+a left NULL now skips the right reader. Existing byte-mode rules are unchanged.
+
+Nine native profiles improve 359 to 587 complete responses out of 651. Nine
+fixtures retain all 587 full outcomes, leaving older expectations unchanged.
+All direct-field, signed-boundary, NULL-order, fixed-format and activity
+profiles agree completely. Cases include merged/materialized bare fields,
+including materialization alongside window calls,
+correlated references, selected IF/NULLIF readers, repeated reads, strict
+TRANS/ALL writes and their stored rows. The earlier 168-outcome physical-field
+audit now agrees completely. Across 13,370 responses complete agreement
+improves 11,517 to 11,763, preserving all 205,024 prior matching facts and
+every prior complete outcome. All 73 focused local and nine new native
+groups pass; typecheck, lint and nine unchanged caps pass at parser/core/
+facade 45,599/333,993/333,924 B gzipped.
+
+The other 64 responses remain explicit: twenty-eight scalar/cache and SUM
+contexts, thirty-two aggregate/ROLLUP/query-forwarding contexts and four
+unrelated INSERT header index-status bits. The ROLLUP key reader intentionally
+removes source-column facts; it needs its own reader-forwarding proof, rather
+than a blanket field policy. SUM/AVG require computed REAL overflow errors,
+while MIN/MAX retain quiet cache readings. Next repair those aggregate INTEGER
+readers at their constructor with native finite/NULL/group/window/effect
+controls. Keep query reductions/caches, ROLLUP forwarding and marker transport
+separate. Totals remain 144/190 and M5 42/53; M5.10 stays partial.
+
+Actual 04b070e retains all 64 older focused groups and fails all nine additions.
+The 20,000 executor statements seeded 20261010 and plans at 2,127/2,248 under
+the unchanged 2,118 floor pass. The complete official suite retains all 38
+passing file identities and its exact native baseline. Fresh Docker --reference
+passes all 1,713 main/four latency tests, typecheck, lint, nine unchanged caps,
+package/typed smoke, the real client and all seven pinned corpora including
+1,737 coercion warning counts. Source proof matches 609 tests/fixtures and
+206 runtime sources plus tooling. All eleven required 04b070e GitHub jobs pass.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

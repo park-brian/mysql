@@ -1,0 +1,1321 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_fields268_fixed",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)",
+    "CREATE TABLE real268(id INT PRIMARY KEY,d DOUBLE(32,2),f FLOAT(32,2),u DOUBLE(32,2) ZEROFILL,v DOUBLE(60,4))",
+    "INSERT INTO real268 VALUES(1,2.5,2.5,2.5,2.5),(2,1e20,1e20,1e20,1e20),(3,1e25,1e25,1e25,1e25),(4,NULL,NULL,NULL,NULL)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT CAST(d AS SIGNED) AS v FROM real268 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(d AS SIGNED) AS v FROM real268 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(d AS SIGNED) AS v FROM real268 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(d AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '100000000000000000000.00'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(d AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '100000000000000000000.00'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(d AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(d AS SIGNED) AS v FROM real268 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '10000000000000000000000000.00'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(d AS SIGNED) AS v FROM real268 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '10000000000000000000000000.00'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(d AS SIGNED) AS v FROM real268 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(d AS SIGNED) AS v FROM real268 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(d AS SIGNED) AS v FROM real268 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(d AS SIGNED) AS v FROM real268 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(f AS SIGNED) AS v FROM real268 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(f AS SIGNED) AS v FROM real268 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(f AS SIGNED) AS v FROM real268 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(f AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          -9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(f AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          -9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(f AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(f AS SIGNED) AS v FROM real268 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          -9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(f AS SIGNED) AS v FROM real268 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          -9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(f AS SIGNED) AS v FROM real268 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(f AS SIGNED) AS v FROM real268 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(f AS SIGNED) AS v FROM real268 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(f AS SIGNED) AS v FROM real268 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(u AS SIGNED) AS v FROM real268 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(u AS SIGNED) AS v FROM real268 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(u AS SIGNED) AS v FROM real268 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(u AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '00000000100000000000000000000.00'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(u AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '00000000100000000000000000000.00'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(u AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(u AS SIGNED) AS v FROM real268 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '00010000000000000000000000000.00'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(u AS SIGNED) AS v FROM real268 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '00010000000000000000000000000.00'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(u AS SIGNED) AS v FROM real268 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(u AS SIGNED) AS v FROM real268 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(u AS SIGNED) AS v FROM real268 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(u AS SIGNED) AS v FROM real268 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(v AS SIGNED) AS v FROM real268 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(v AS SIGNED) AS v FROM real268 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(v AS SIGNED) AS v FROM real268 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(v AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '100000000000000000000.0000'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(v AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '100000000000000000000.0000'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(v AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(v AS SIGNED) AS v FROM real268 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '10000000000000000000000000.0000'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(v AS SIGNED) AS v FROM real268 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '10000000000000000000000000.0000'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(v AS SIGNED) AS v FROM real268 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(v AS SIGNED) AS v FROM real268 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(v AS SIGNED) AS v FROM real268 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(v AS SIGNED) AS v FROM real268 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

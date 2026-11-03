@@ -597,9 +597,29 @@ export function realInteger(c: Compiled, label: () => string): Compiled {
   } }
 }
 
+/** Physical REAL fields own INTEGER conversion; generated and aggregate slots keep their readers. */
+function fieldInteger(c: Compiled): Compiled {
+  if (c.type.kind !== 'double' || (c.type.column === undefined && c.type.temporary !== 'stream')) return c
+  const min = Number(MIN_SIGNED)
+  return { ...c, integerOf: () => (r, env) => {
+    const value = c.eval(r, env)
+    if (value === null) return null
+    const n = toDouble(value)
+    if (c.type.field === FIELD_TYPE.FLOAT) return intValue(n < min || n >= -min ? MIN_SIGNED : BigInt(roundHalfEven(n)))
+    // DOUBLE fields warn inclusively; the largest double below 2^63 is 2^63 - 1024.
+    if (n <= min || n >= -min - 1024) {
+      let text = toText(c.type.scale < 31 ? decimalAt(value, c.type.scale) : value)
+      if (((c.type.column?.flags ?? 0) & COLUMN_FLAG.ZEROFILL) !== 0) text = text.padStart(c.type.length, '0')
+      truncated(env, 'INTEGER', text)
+      return intValue(n < 0 ? MIN_SIGNED : MAX_SIGNED)
+    }
+    return intValue(BigInt(roundHalfEven(n)))
+  } }
+}
+
 /** Read one immutable row slot with its declared metadata. */
 export function readSlot(index: number, type: ResultType): Compiled {
-  return { eval: (row) => row[index] ?? null, type }
+  return fieldInteger({ eval: (row) => row[index] ?? null, type })
 }
 
 /** Where names resolve: the columns of the tables in `FROM`, in row order. */
@@ -802,7 +822,7 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
       if (depth !== undefined && depth > 0) {
         // A correlated reference: a column of an enclosing query's current row.
         const d = depth - 1
-        return { eval: (_row, env) => env.outer?.[d]?.[index] ?? null, type }
+        return fieldInteger({ eval: (_row, env) => env.outer?.[d]?.[index] ?? null, type })
       }
       return readSlot(index, type)
     }
@@ -1562,7 +1582,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       const y = asNumber(cb, 'INTEGER').eval
       return { eval: (r, env) => {
         const first = x(r, env)
-        return shift && first === null ? null : bitwise(first, y(r, env), op)
+        return first === null ? null : bitwise(first, y(r, env), op)
       }, type: intType(21, nullable, true) }
     }
     default: {

@@ -1,0 +1,1007 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_fields268_grouping",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)",
+    "CREATE TABLE real268(id INT PRIMARY KEY,d DOUBLE,f FLOAT,u DOUBLE UNSIGNED,v FLOAT UNSIGNED)",
+    "INSERT INTO real268 VALUES(1,2.5,2.5,2.5,2.5),(2,1e30,1e30,1e30,1e30),(3,-1e30,-1e30,9.223372036854776e18,9.223372036854776e18),(4,NULL,NULL,NULL,NULL)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT d AS k,CAST(d AS SIGNED) AS v FROM real268 WHERE id IN (1,2) GROUP BY d WITH ROLLUP",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "k",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT d AS k,CAST(d AS SIGNED) AS v FROM real268 WHERE id IN (1,2) GROUP BY d",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2.5,
+          2
+        ],
+        [
+          1e+30,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "k",
+          5,
+          22,
+          32768,
+          31,
+          63,
+          "myjs_fields268_grouping",
+          "real268",
+          "real268",
+          "d"
+        ],
+        [
+          "v",
+          8,
+          21,
+          0,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1e30'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT d AS k,CAST(d AS SIGNED) AS v FROM real268 WHERE id IN (1,2) GROUP BY d",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2.5,
+          2
+        ],
+        [
+          1e+30,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "k",
+          5,
+          22,
+          32768,
+          31,
+          63,
+          "myjs_fields268_grouping",
+          "real268",
+          "real268",
+          "d"
+        ],
+        [
+          "v",
+          8,
+          21,
+          0,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1e30'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT d AS k,CAST(d AS SIGNED) AS v FROM real268 WHERE id IN (1,2) GROUP BY d",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "k",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_fields268_grouping",
+          "real268",
+          "real268",
+          "d"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (d+0) AS k,CAST((d+0) AS SIGNED) AS v FROM real268 WHERE id IN (1,2) GROUP BY (d+0) WITH ROLLUP",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "k",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (d+0) AS k,CAST((d+0) AS SIGNED) AS v FROM real268 WHERE id IN (1,2) GROUP BY (d+0)",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT value is out of range in '(`myjs_fields268_grouping`.`real268`.`d` + 0)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT value is out of range in '(`myjs_fields268_grouping`.`real268`.`d` + 0)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (d+0) AS k,CAST((d+0) AS SIGNED) AS v FROM real268 WHERE id IN (1,2) GROUP BY (d+0)",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT value is out of range in '(`myjs_fields268_grouping`.`real268`.`d` + 0)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT value is out of range in '(`myjs_fields268_grouping`.`real268`.`d` + 0)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (d+0) AS k,CAST((d+0) AS SIGNED) AS v FROM real268 WHERE id IN (1,2) GROUP BY (d+0)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "k",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(SUM(d) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(AVG(d) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(MIN(d) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(MAX(d) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (SELECT CAST(d AS SIGNED)) AS v FROM real268 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1e30'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (SELECT CAST(d AS SIGNED)) AS v FROM real268 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1e30'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (SELECT CAST(d AS SIGNED)) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST((SELECT d) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(q.x AS SIGNED) AS v FROM (SELECT d+0 AS x FROM real268 WHERE id=2) q",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT f AS k,CAST(f AS SIGNED) AS v FROM real268 WHERE id IN (1,2) GROUP BY f WITH ROLLUP",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "k",
+          4,
+          12,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT f AS k,CAST(f AS SIGNED) AS v FROM real268 WHERE id IN (1,2) GROUP BY f",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2.5,
+          2
+        ],
+        [
+          1e+30,
+          -9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "k",
+          4,
+          12,
+          32768,
+          31,
+          63,
+          "myjs_fields268_grouping",
+          "real268",
+          "real268",
+          "f"
+        ],
+        [
+          "v",
+          8,
+          21,
+          0,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT f AS k,CAST(f AS SIGNED) AS v FROM real268 WHERE id IN (1,2) GROUP BY f",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2.5,
+          2
+        ],
+        [
+          1.0000000150474662e+30,
+          -9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "k",
+          4,
+          12,
+          32768,
+          31,
+          63,
+          "myjs_fields268_grouping",
+          "real268",
+          "real268",
+          "f"
+        ],
+        [
+          "v",
+          8,
+          21,
+          0,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT f AS k,CAST(f AS SIGNED) AS v FROM real268 WHERE id IN (1,2) GROUP BY f",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "k",
+          4,
+          12,
+          0,
+          31,
+          63,
+          "myjs_fields268_grouping",
+          "real268",
+          "real268",
+          "f"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (f+0) AS k,CAST((f+0) AS SIGNED) AS v FROM real268 WHERE id IN (1,2) GROUP BY (f+0) WITH ROLLUP",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "k",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (f+0) AS k,CAST((f+0) AS SIGNED) AS v FROM real268 WHERE id IN (1,2) GROUP BY (f+0)",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT value is out of range in '(`myjs_fields268_grouping`.`real268`.`f` + 0)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT value is out of range in '(`myjs_fields268_grouping`.`real268`.`f` + 0)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (f+0) AS k,CAST((f+0) AS SIGNED) AS v FROM real268 WHERE id IN (1,2) GROUP BY (f+0)",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT value is out of range in '(`myjs_fields268_grouping`.`real268`.`f` + 0)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT value is out of range in '(`myjs_fields268_grouping`.`real268`.`f` + 0)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (f+0) AS k,CAST((f+0) AS SIGNED) AS v FROM real268 WHERE id IN (1,2) GROUP BY (f+0)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "k",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(SUM(f) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(AVG(f) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(MIN(f) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(MAX(f) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (SELECT CAST(f AS SIGNED)) AS v FROM real268 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          -9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (SELECT CAST(f AS SIGNED)) AS v FROM real268 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          -9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (SELECT CAST(f AS SIGNED)) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST((SELECT f) AS SIGNED) AS v FROM real268 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(q.x AS SIGNED) AS v FROM (SELECT f+0 AS x FROM real268 WHERE id=2) q",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

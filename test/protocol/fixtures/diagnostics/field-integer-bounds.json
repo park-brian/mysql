@@ -1,0 +1,3729 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_fields268_bounds",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)",
+    "CREATE TABLE real268(id INT PRIMARY KEY,d DOUBLE,f FLOAT,u DOUBLE UNSIGNED,v FLOAT UNSIGNED)",
+    "INSERT INTO real268 VALUES(1,0.5,0.5,ABS(0.5),ABS(0.5)),(2,-0.5,-0.5,ABS(-0.5),ABS(-0.5)),(3,2.5,2.5,ABS(2.5),ABS(2.5)),(4,-2.5,-2.5,ABS(-2.5),ABS(-2.5)),(5,9223372036854774784e0,9223372036854774784e0,ABS(9223372036854774784e0),ABS(9223372036854774784e0)),(6,9223372036854775808e0,9223372036854775808e0,ABS(9223372036854775808e0),ABS(9223372036854775808e0)),(7,-9223372036854775808e0,-9223372036854775808e0,ABS(-9223372036854775808e0),ABS(-9223372036854775808e0)),(8,-9223372036854777856e0,-9223372036854777856e0,ABS(-9223372036854777856e0),ABS(-9223372036854777856e0)),(9,1.844674407370955e19,1.844674407370955e19,ABS(1.844674407370955e19),ABS(1.844674407370955e19))"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT id,CAST((d) AS SIGNED) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          -2
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          -9223372036854776000
+        ],
+        [
+          8,
+          -9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854775e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '-9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '-9.223372036854778e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.844674407370955e19'"
+        ]
+      ],
+      "warningCount": "5",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((d) AS SIGNED) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          -2
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          -9223372036854776000
+        ],
+        [
+          8,
+          -9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854775e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '-9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '-9.223372036854778e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.844674407370955e19'"
+        ]
+      ],
+      "warningCount": "5",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((d) AS SIGNED) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((d) AS UNSIGNED) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          18446744073709552000
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854775e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '-9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '-9.223372036854778e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.844674407370955e19'"
+        ]
+      ],
+      "warningCount": "5",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((d) AS UNSIGNED) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          18446744073709552000
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854775e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '-9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '-9.223372036854778e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.844674407370955e19'"
+        ]
+      ],
+      "warningCount": "5",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((d) AS UNSIGNED) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,0 ^ (d) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          18446744073709552000
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854775e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '-9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '-9.223372036854778e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.844674407370955e19'"
+        ]
+      ],
+      "warningCount": "5",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,0 ^ (d) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          18446744073709552000
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854775e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '-9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '-9.223372036854778e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.844674407370955e19'"
+        ]
+      ],
+      "warningCount": "5",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,0 ^ (d) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,_binary X'8001' << (d) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          {
+            "type": "Buffer",
+            "data": [
+              128,
+              1
+            ]
+          }
+        ],
+        [
+          2,
+          {
+            "type": "Buffer",
+            "data": [
+              128,
+              1
+            ]
+          }
+        ],
+        [
+          3,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ],
+        [
+          4,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          5,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          6,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          7,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          8,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          9,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854775e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '-9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '-9.223372036854778e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.844674407370955e19'"
+        ]
+      ],
+      "warningCount": "5",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,_binary X'8001' << (d) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          {
+            "type": "Buffer",
+            "data": [
+              128,
+              1
+            ]
+          }
+        ],
+        [
+          2,
+          {
+            "type": "Buffer",
+            "data": [
+              128,
+              1
+            ]
+          }
+        ],
+        [
+          3,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ],
+        [
+          4,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          5,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          6,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          7,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          8,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          9,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854775e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '-9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '-9.223372036854778e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.844674407370955e19'"
+        ]
+      ],
+      "warningCount": "5",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,_binary X'8001' << (d) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((f) AS SIGNED) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          -2
+        ],
+        [
+          5,
+          -9223372036854776000
+        ],
+        [
+          6,
+          -9223372036854776000
+        ],
+        [
+          7,
+          -9223372036854776000
+        ],
+        [
+          8,
+          -9223372036854776000
+        ],
+        [
+          9,
+          -9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((f) AS SIGNED) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          -2
+        ],
+        [
+          5,
+          -9223372036854776000
+        ],
+        [
+          6,
+          -9223372036854776000
+        ],
+        [
+          7,
+          -9223372036854776000
+        ],
+        [
+          8,
+          -9223372036854776000
+        ],
+        [
+          9,
+          -9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((f) AS SIGNED) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((f) AS UNSIGNED) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          18446744073709552000
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((f) AS UNSIGNED) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          18446744073709552000
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((f) AS UNSIGNED) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,0 ^ (f) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          18446744073709552000
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,0 ^ (f) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          18446744073709552000
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,0 ^ (f) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,_binary X'8001' << (f) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          {
+            "type": "Buffer",
+            "data": [
+              128,
+              1
+            ]
+          }
+        ],
+        [
+          2,
+          {
+            "type": "Buffer",
+            "data": [
+              128,
+              1
+            ]
+          }
+        ],
+        [
+          3,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ],
+        [
+          4,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          5,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          6,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          7,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          8,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          9,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,_binary X'8001' << (f) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          {
+            "type": "Buffer",
+            "data": [
+              128,
+              1
+            ]
+          }
+        ],
+        [
+          2,
+          {
+            "type": "Buffer",
+            "data": [
+              128,
+              1
+            ]
+          }
+        ],
+        [
+          3,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ],
+        [
+          4,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          5,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          6,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          7,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          8,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          9,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,_binary X'8001' << (f) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((u) AS SIGNED) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854775e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854778e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.844674407370955e19'"
+        ]
+      ],
+      "warningCount": "5",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((u) AS SIGNED) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854775e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854778e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.844674407370955e19'"
+        ]
+      ],
+      "warningCount": "5",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((u) AS SIGNED) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((u) AS UNSIGNED) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854775e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854778e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.844674407370955e19'"
+        ]
+      ],
+      "warningCount": "5",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((u) AS UNSIGNED) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854775e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854778e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.844674407370955e19'"
+        ]
+      ],
+      "warningCount": "5",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((u) AS UNSIGNED) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,0 ^ (u) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854775e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854778e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.844674407370955e19'"
+        ]
+      ],
+      "warningCount": "5",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,0 ^ (u) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854775e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854778e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.844674407370955e19'"
+        ]
+      ],
+      "warningCount": "5",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,0 ^ (u) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,_binary X'8001' << (u) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          {
+            "type": "Buffer",
+            "data": [
+              128,
+              1
+            ]
+          }
+        ],
+        [
+          2,
+          {
+            "type": "Buffer",
+            "data": [
+              128,
+              1
+            ]
+          }
+        ],
+        [
+          3,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ],
+        [
+          4,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ],
+        [
+          5,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          6,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          7,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          8,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          9,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854775e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854778e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.844674407370955e19'"
+        ]
+      ],
+      "warningCount": "5",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,_binary X'8001' << (u) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          {
+            "type": "Buffer",
+            "data": [
+              128,
+              1
+            ]
+          }
+        ],
+        [
+          2,
+          {
+            "type": "Buffer",
+            "data": [
+              128,
+              1
+            ]
+          }
+        ],
+        [
+          3,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ],
+        [
+          4,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ],
+        [
+          5,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          6,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          7,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          8,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          9,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854775e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854776e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '9.223372036854778e18'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.844674407370955e19'"
+        ]
+      ],
+      "warningCount": "5",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,_binary X'8001' << (u) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((v) AS SIGNED) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          -9223372036854776000
+        ],
+        [
+          6,
+          -9223372036854776000
+        ],
+        [
+          7,
+          -9223372036854776000
+        ],
+        [
+          8,
+          -9223372036854776000
+        ],
+        [
+          9,
+          -9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((v) AS SIGNED) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          -9223372036854776000
+        ],
+        [
+          6,
+          -9223372036854776000
+        ],
+        [
+          7,
+          -9223372036854776000
+        ],
+        [
+          8,
+          -9223372036854776000
+        ],
+        [
+          9,
+          -9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((v) AS SIGNED) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((v) AS UNSIGNED) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((v) AS UNSIGNED) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((v) AS UNSIGNED) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,0 ^ (v) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,0 ^ (v) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          9223372036854776000
+        ],
+        [
+          6,
+          9223372036854776000
+        ],
+        [
+          7,
+          9223372036854776000
+        ],
+        [
+          8,
+          9223372036854776000
+        ],
+        [
+          9,
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,0 ^ (v) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,_binary X'8001' << (v) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          {
+            "type": "Buffer",
+            "data": [
+              128,
+              1
+            ]
+          }
+        ],
+        [
+          2,
+          {
+            "type": "Buffer",
+            "data": [
+              128,
+              1
+            ]
+          }
+        ],
+        [
+          3,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ],
+        [
+          4,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ],
+        [
+          5,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          6,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          7,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          8,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          9,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,_binary X'8001' << (v) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          {
+            "type": "Buffer",
+            "data": [
+              128,
+              1
+            ]
+          }
+        ],
+        [
+          2,
+          {
+            "type": "Buffer",
+            "data": [
+              128,
+              1
+            ]
+          }
+        ],
+        [
+          3,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ],
+        [
+          4,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ],
+        [
+          5,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          6,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          7,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          8,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ],
+        [
+          9,
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,_binary X'8001' << (v) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_fields268_bounds",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}
