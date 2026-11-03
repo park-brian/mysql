@@ -20,6 +20,7 @@
 //   - `/` of exact operands is a DECIMAL with `div_precision_increment` (4)
 //     more digits of scale than the dividend, rounded half up.
 import { valueOutOfRange } from './errors.ts'
+import { roundHalfEven } from './encode.ts'
 import {
   MAX_SIGNED,
   MAX_UNSIGNED,
@@ -222,10 +223,30 @@ export function modulo(a: Value, b: Value, expr: ExprLabel = '%'): Value {
 /** An operand of a bitwise operator: its 64-bit two's-complement pattern. */
 function bits(v: Exclude<Value, null>): bigint {
   // Text is read as `val_uint` reads it: '1.5' | 0 is 1 (8.4.11).
-  const n = v.kind === 'string' || v.kind === 'bytes' ? valInt(v) : numericKind(v) === 'int' ? toInteger(v) : toInteger(toDecimal(v))
+  let n: bigint
+  if (v.kind === 'string' || v.kind === 'bytes') n = valInt(v)
+  else if (v.kind === 'double') n = toInteger(double(roundHalfEven(v.v)))
+  else n = numericKind(v) === 'int' ? toInteger(v) : toInteger(toDecimal(v))
   if (n > MAX_UNSIGNED) return MAX_UNSIGNED
   if (n < MIN_SIGNED) return 1n << 63n
   return n & MAX_UNSIGNED
+}
+
+/** Logical big-endian byte shift, preserving width and the input (8.4.11). */
+export function binaryShift(bytes: Uint8Array, count: Exclude<Value, null>, left: boolean): Uint8Array {
+  const result = new Uint8Array(bytes.length)
+  const shift = bits(count)
+  if (shift >= BigInt(bytes.length) * 8n) return result
+  const n = Number(shift)
+  const whole = Math.floor(n / 8)
+  const part = n % 8
+  for (let i = 0; i < bytes.length; i++) {
+    const at = left ? i + whole : i - whole
+    const first = bytes[at] ?? 0
+    const second = bytes[at + (left ? 1 : -1)] ?? 0
+    result[i] = left ? (first << part) | (second >> (8 - part)) : (first >> part) | (second << (8 - part))
+  }
+  return result
 }
 
 /** `|`, `&`, `^`, `<<`, `>>`: always an unsigned BIGINT, whatever went in. */

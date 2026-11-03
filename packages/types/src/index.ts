@@ -156,7 +156,7 @@ export { DERIVATION_NONE, aggregateCollation, aggregateDerivations, charsetOfCol
 export type { Derived } from './compare.ts'
 export { SUM_PRECISION_INCREMENT, avgAccumulator, avgPrecision, bitAccumulator, extremeAccumulator, sumAccumulator, sumPrecision, varianceAccumulator } from './aggregate.ts'
 export type { Accumulator } from './aggregate.ts'
-export { DIV_PRECISION_INCREMENT, add, type ExprLabel, bitNot, bitwise, divide, intDivide, modulo, negate, not } from './arith.ts'
+export { DIV_PRECISION_INCREMENT, add, type ExprLabel, binaryShift, bitNot, bitwise, divide, intDivide, modulo, negate, not } from './arith.ts'
 export { decodeField, encodeField, integerBytes, integerRange, roundHalfEven, roundTime, warn } from './encode.ts'
 export type { Condition, FieldColumn, StoreContext } from './encode.ts'
 export { columnCannotBeNull, columnOutOfRange, dataTooLong, invalidJsonArgument, invalidJsonCharset, invalidJsonText, valueOutOfRange, wrongTemporalValue, wrongValueForColumn } from './errors.ts'

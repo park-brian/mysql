@@ -33,6 +33,7 @@ import {
   equalityKey,
   charsetOfCollation,
   bitNot,
+  binaryShift,
   bitwise,
   bool,
   bytesValue,
@@ -1501,8 +1502,21 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     case '^':
     case '<<':
     case '>>': {
+      const shift = op === '<<' || op === '>>'
+      if (shift && a.type.kind === 'bytes' && a.type.literalInt === undefined) {
+        const count = asNumber(cb, 'INTEGER').eval
+        return stringReal({
+          eval: (r, env) => {
+            const first = at(r, env)
+            if (first === null) return null
+            const second = count(r, env)
+            return second === null ? null : bytesValue(binaryShift(valueBytes(first), second, op === '<<'))
+          },
+          type: { ...stringResultType(byteWidth(a.type), true, CHARSET_BINARY, COERCIBILITY.COERCIBLE), nullable },
+        })
+      }
       const types = [a.type, b.type]
-      if (op !== '<<' && op !== '>>' && types.every((t) => t.kind === 'bytes' || t.kind === 'null') && types.some((t) => t.kind === 'bytes' && t.literalInt === undefined)) {
+      if (!shift && types.every((t) => t.kind === 'bytes' || t.kind === 'null') && types.some((t) => t.kind === 'bytes' && t.literalInt === undefined)) {
         return stringReal({
           eval: (r, env) => {
             const first = at(r, env)
@@ -1520,7 +1534,10 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       // Text is read as an unsigned integer, warning as it goes.
       const x = asNumber(ca, 'INTEGER').eval
       const y = asNumber(cb, 'INTEGER').eval
-      return { eval: (r, env) => bitwise(x(r, env), y(r, env), op), type: intType(21, nullable, true) }
+      return { eval: (r, env) => {
+        const first = x(r, env)
+        return shift && first === null ? null : bitwise(first, y(r, env), op)
+      }, type: intType(21, nullable, true) }
     }
     default: {
       const test = COMPARISONS[op]

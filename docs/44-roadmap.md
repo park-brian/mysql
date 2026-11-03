@@ -58,6 +58,10 @@ The ORM review measured Drizzle's 487 passes and Prisma's 1,122 passes with the
 same reference snapshot failure at two workers. Browser work remains M6;
 InnoDB interchange remains M7, outside the staged Node release.
 
+Current byte-shift work and its remaining shared INTEGER/parameter reader gaps
+are recorded in the verified M5.10 boundary below; no milestone is closed by
+that slice.
+
 **Current bounded function work:** unused set-branch row ordering is now
 removed after the existing admission path. An enclosing LIMIT can retain an
 inner order; an outer ORDER BY overrides it. Plain SELECTs keep their current
@@ -2979,18 +2983,70 @@ scalar query ownership is not bypassed or inferred from an AST shape. Totals
 remain 144/190 and M5 42/53; M5.10 stays partial. All eleven required 688e260 CI
 jobs pass.
 
-Next return to binary shifts, preserving the owned numeric reader policy, then
-the separately captured scalar-cache and raw-parameter reader gaps.
+Binary shifts are now verified below. Next repair the shared INTEGER reader
+boundary exposed by negative floating-point counts, then the separately
+captured scalar-cache and raw-parameter reader gaps.
 
 The original 81-outcome trigger audit improves from 69 to 81 complete matches,
 including its unchanged DECIMAL and unsigned casts. For example,
 `(_binary'123x' & _binary X'FFFFFFFF') + 0` returns 123 quietly on 8.4.11.
-Then audit binary-string shifts at the existing binary operator compiler.
-Preserve raw literal provenance and numeric mode; verify mixed
-operands, NULL, equal-length errors, shift counts, result metadata, input
-immutability and both protocols before choosing a repair. Keep untyped marker
-inference, CONCAT packet overflow and bitwise expression printing explicitly
-open until their own reference-backed slices.
+Binary-string shifts now follow their left operand's provenance at that
+compiler, as verified below. Keep untyped marker inference, CONCAT packet
+overflow and bitwise expression printing explicitly open until their own
+reference-backed slices.
+
+**Binary-string shifts, verified boundary (2026-11-02):** the existing binary
+compiler chooses byte mode from the left binary string, excluding raw hex/bit
+literal integer provenance. Its count retains the shared INTEGER reader and
+unsigned 64-bit conversion. Logical shifts preserve the left declared byte
+width, zero-fill and allocate a fresh array. Empty/large inputs, cross-byte
+carries and counts at or beyond the bit width keep the same rules. The existing
+numeric shift path now also returns on left NULL before reading the count.
+The byte result retains its owned REAL reader and shared binary metadata.
+The canonical bitwise integer reader now reuses roundHalfEven for DOUBLE
+inputs, preserving DECIMAL half-away rounding and text prefix truncation.
+Native tests distinguish 2.5e0 (two) from 2.5 (three), including numeric bit
+operators and prepared DOUBLE counts.
+
+Five native profiles cover 906 complete responses, improving 126 to 868.
+They include all 256 byte values, 65,536-byte inputs, signed/unsigned/fractional
+and text counts, embedded NUL, nullable VARBINARY/BLOB fields, physical BIT
+numeric controls, raw literal controls, input immutability and both protocols.
+Five fixtures retain all 868 complete results, metadata and diagnostic histories;
+older fixtures remain unchanged. Across 11,144 responses, complete agreement
+improves 8,850 to 9,640; every prior complete match remains correct. It preserves
+160,880 of 160,892 previously matching protocol facts. In four negative
+floating-point count executions, twelve matching warning-list/count facts
+change: the predecessor emitted an erroneous left-byte 1292 warning, which
+coincidentally matched the shape/count of MySQL's required right-count 1690
+error. Removing that left-byte conversion exposes the existing missing hybrid
+INTEGER overflow error; neither version fully matched those executions.
+
+Keep all 38 unmatched outcomes explicit: four negative floating-point count
+overflow responses, eight quiet INTEGER function-reader responses, four JSON
+INTEGER source-label responses, four high-byte truncation-message responses,
+sixteen parameter-definition responses and two non-ASCII parameter byte-decoding
+responses. These belong to shared source readers or parameter transport rather
+than byte movement. Next probe the hybrid INTEGER overflow boundary directly,
+preserving left NULL readiness and ordinary literal conversions, before changing
+that owner. A fresh read-only audit pins 120 direct hybrid INTEGER responses,
+with 80 currently complete: computed REAL functions require owned overflow
+errors and expression labels, IF forwards its selected reader, COALESCE owns
+its conversion, and left NULL skips all count reads. Ordinary REAL literals
+and explicit signed-cast rounding retain distinct controls. Establish field,
+scalar-cache and parameter boundaries before extending any shared policy.
+M5.10 stays partial; totals remain 144/190 and M5 42/53.
+
+All 54 focused groups pass locally and natively. Actual 7a1ec52 retains the
+49 older groups and fails all five additions. Typecheck, lint, 20,000 executor
+statements seeded 20261010 and plans at 2,127/2,248 under the unchanged 2,118
+floor pass. The complete official suite retains all 38 passing file identities
+and the exact native baseline. All nine unchanged caps pass at parser/core/
+facade 45,599/333,535/333,457 B gzipped. Fresh Docker --reference passes 1,694
+main/four latency tests, typecheck, lint, nine caps, package/typed smoke, the
+real client and all seven pinned corpora including 1,737 coercion warning
+counts. Source proof matches all 590 tests/fixtures and 206 runtime sources
+plus tooling. All eleven required 7a1ec52 GitHub jobs pass.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

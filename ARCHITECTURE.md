@@ -1950,7 +1950,9 @@ and marker nullability now follow native metadata. An open prepared statement
 retains its SQL mode for string metadata while text queries use the current mode.
 Binary-string AND/OR/XOR now retains native bytes, length errors, NULL order,
 metadata and input immutability within its verified boundary. Untyped marker inference, raw parameter
-byte decoding and binary shifts remain open. Owned DOUBLE readers for byte
+byte decoding remain open. Binary-string shifts now preserve byte width, raw
+literal provenance, unsigned count handling and left-NULL evaluation order;
+shared INTEGER reader diagnostics remain separate. Owned DOUBLE readers for byte
 functions, conditional branches and quiet string-result holders are verified
 within their measured boundary; scalar forwarding/cache remains separate. General
 updatability, definition normalization and schema-driven automatic reprepare
