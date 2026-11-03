@@ -1,0 +1,1861 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_window275_wrapper_retained",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "setup": [
+    "CREATE TABLE t(id INT PRIMARY KEY,d DOUBLE)"
+  ],
+  "beforeEach": [],
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "observations": [
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [
+        "DELETE FROM t",
+        "INSERT INTO t VALUES(1,2.5),(2,1e30),(3,-1e30),(4,NULL)"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          2,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        3
+      ],
+      "before": [],
+      "headers": 1,
+      "rows": [
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        99
+      ],
+      "before": [],
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [
+        "INSERT INTO t VALUES(2,2.5)"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          2,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [
+        "UPDATE t SET d=1e30 WHERE id=2"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          2,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [],
+      "headers": 1,
+      "rows": [
+        [
+          2,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [
+        "DELETE FROM t"
+      ],
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [
+        "INSERT INTO t VALUES(1,2.5),(2,-1e30)"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          2,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t",
+        "INSERT INTO t VALUES(1,2.5),(2,1e30),(3,-1e30),(4,NULL)"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        98
+      ],
+      "before": [],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(2,2.5)"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "UPDATE t SET d=1e30 WHERE id=2"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(1,2.5),(2,-1e30)"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id>? LIMIT 1) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        98
+      ],
+      "before": [],
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id>? LIMIT 1) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t"
+      ],
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id>? LIMIT 1) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(1,2.5),(2,-1e30)"
+      ],
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [
+        "DELETE FROM t",
+        "INSERT INTO t VALUES(1,2.5),(2,1e30),(3,-1e30),(4,NULL)"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          2,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        3
+      ],
+      "before": [],
+      "headers": 1,
+      "rows": [
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        99
+      ],
+      "before": [],
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [
+        "INSERT INTO t VALUES(2,2.5)"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          2,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [
+        "UPDATE t SET d=1e30 WHERE id=2"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          2,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [],
+      "headers": 1,
+      "rows": [
+        [
+          2,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [
+        "DELETE FROM t"
+      ],
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [
+        "INSERT INTO t VALUES(1,2.5),(2,-1e30)"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          2,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t",
+        "INSERT INTO t VALUES(1,2.5),(2,1e30),(3,-1e30),(4,NULL)"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        98
+      ],
+      "before": [],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(2,2.5)"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "UPDATE t SET d=1e30 WHERE id=2"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t WHERE id>?) ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(1,2.5),(2,-1e30)"
+      ],
+      "headers": 1,
+      "rows": [
+        [
+          0,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id>? LIMIT 1) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        98
+      ],
+      "before": [],
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id>? LIMIT 1) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t"
+      ],
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id>? LIMIT 1) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(1,2.5),(2,-1e30)"
+      ],
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrapper_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ],
+  "reuse": true
+}

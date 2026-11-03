@@ -1965,8 +1965,10 @@ EXPLAIN and window output retain the resulting static proof while executions
 read current rows. Materialized query blocks now carry their selected LIMIT
 budget including OFFSET; only a noncorrelated budget of at most one adds the
 planning proof. Noncorrelated implicit aggregates now share their singleton
-reader proof through the existing materialization owner. Set-expression limits
-and correlated sources retain their separate ownership. Plan-owned window readings, scalar caches
+reader proof through the existing materialization owner. Zero-offset ORDER/LIMIT
+wrappers now retain their child's static singleton proof independently of LIMIT
+budgets. OFFSET projection timing remains a separate reader boundary.
+Set-expression limits and correlated sources retain their separate ownership. Plan-owned window readings, scalar caches
 and ROLLUP/query forwarding remain separate. Owned DOUBLE readers for byte
 functions, conditional branches and quiet string-result holders are verified
 within their measured boundary; scalar forwarding/cache remains separate. General

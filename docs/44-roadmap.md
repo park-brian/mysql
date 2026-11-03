@@ -3473,11 +3473,79 @@ passes all 1,747 tests plus four latency checks, typecheck, lint, nine unchanged
 caps, package/client smoke and all seven pinned MySQL 8.4.11 corpora. Source
 proof matches all 643 test files/fixtures and 206 runtime sources.
 
+**Static singleton proof through zero-offset wrappers, verified boundary (2026-11-03):**
+The existing ORDER/LIMIT result wrapper now retains its child's positive
+singleton proof when OFFSET is zero. This includes implicit aggregates and
+physical point inputs through ordering, limits and nested wrappers. Row existence
+remains a fresh execution read; LIMIT budgets and observed row counts do not
+establish the proof. No new reader selector or INTEGER policy is introduced.
+
+An unfenced prototype passed its initial release gate but failed the subsequent
+156-response effect audit: EXPLAIN evaluated LAST_INSERT_ID in a no-FROM
+projection discarded by OFFSET, where MySQL and the predecessor leave it
+unevaluated. That prototype was rejected before commit. The final structural
+OFFSET fence preserves the still-unproved projection lifetime. A dedicated
+negative guard checks the skipped effect through query and execute, explicitly
+allowing the existing local 1235 plan refusal while native returns zero rows.
+Actual SELECT projection timing for that OFFSET remains an open normalization
+gap. Implicit aggregate arguments have their own lifetime and may still execute;
+no blanket singleton-empty short circuit is added.
+
+Four wrapper profiles retain 701 responses, improving 219 to 377 complete
+matches. Four fixtures pin all 377, including 36 newly matching retained
+executions over proved point/implicit owners through writes and empty/restored
+input, plus zero-limit and offset effect controls. Six positive plan observations
+pin structure and fields under the existing cost-independent contract. Unproved
+limited wrappers and nested LIMIT row semantics remain explicit gaps. Eight
+retained PREPARE parameter packets remain separate inference gaps.
+
+Across 19,124 responses agreement improves 16,022 to 16,184, preserving every
+prior complete response and all 327,486 matching facts in the older 17,455
+responses. All other matching new facts are retained except the already observed
+HAVING count/history coincidence: four newly audited EXPLAIN responses replace
+unsupported-query errors with selected zero-row plans, changing one-warning
+counts and one-element histories to four aggregate warnings while native reports
+one. These eight new count/shape facts are explicitly not claimed preserved.
+No committed expectations or thresholds are weakened.
+
+All 114 focused local protocol/window tests, six new native groups, typecheck,
+lint and nine unchanged caps pass at parser/core/facade
+45,599/334,361/334,262 B gzipped; core is at its existing cap. The actual 97e19a2
+predecessor passes 108 protocol groups and fails the five positive new groups,
+retaining the negative effect guard. The 20,000-statement executor run with seed
+20261010 passes; plans remain 2,127/2,248 under the unchanged 2,118 floor. The
+full 1,459-file official run retains the same 38 passing IDs and exact native
+baseline. The preceding 97e19a2 commit passed all eleven required GitHub jobs.
+Fresh Docker verification of the revised implementation passes all 1,753 tests
+plus four latency checks, typecheck, lint, nine unchanged caps, package/client
+smoke and all seven pinned MySQL 8.4.11 corpora. Source proof matches all 648 test
+files/fixtures and 206 runtime sources. Totals remain 144/190 and M5 42/53;
+M5.10 stays partial.
+
+**Next selected-reader prerequisite: nested LIMIT normalization.** The native
+wrapper audit exposes a row-level gap: `((SELECT id,d FROM t LIMIT 1) LIMIT 1
+OFFSET 1)` reads the second base row in MySQL 8.4.11 while the current nested
+iterators return no row. Selected LIMIT ownership also decides whether a
+limited wrapper is buffered. Capture direct, ordered, nested, grouped and set
+controls with complete packets, plans, effects and retained executions; repair
+the existing query-expression normalization owner before choosing conversion
+from an incomplete singleton proof. Keep static proof forwarding distinct from
+LIMIT-budget propagation and from inferred output cardinality.
+
 **Next window reader boundary: INTEGER conversion after selected ownership.**
 Revisit the existing raw-versus-INTEGER native window audit now that constant
 input, bounded/implicit materialization and result provenance have independent
 proofs. Capture exact selected plans, checked/quiet conversions, diagnostics and
 retained executions across those owners before implementing a reader change.
+The fresh 888-response raw/SIGNED/UNSIGNED audit has 544 complete matches across
+eight source owners, four window aggregates, finite values and both overflow
+signs, with 24 selected-plan observations. Buffered DOUBLE window results round
+2.5/-2.5 to 2/-2 natively while the current reader yields 3/-3. Raw values remain
+the comparison control; checked/quiet overflow, diagnostic labels and actual
+header publication are separately recorded. The additional retained audit pins
+point, bounded, multirow and implicit aggregate owners across writes and empty/
+restored input (24 complete matches of 80 responses). These are native research
+observations, not a conversion fix.
 Do not infer conversion from metadata flags or treat absence of a singleton
 proof as a buffered-reader certificate. Keep HAVING activity, correlated/lateral
 values, outer-wrapper proof propagation, parameter inference, Note 1249 and

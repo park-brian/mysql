@@ -273,7 +273,7 @@ function itemTexts(run: Run, node: SelectNode): (string | undefined)[] {
 
 export interface SelectPlan {
   /** Static singleton reader proof; row existence is checked by each execution. */
-  readonly constant?: boolean
+  readonly constant?: boolean | undefined
   /** The selected query block's LIMIT budget before OFFSET. */
   readonly blockLimit?: number | undefined
 
@@ -1899,6 +1899,8 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan, holder?: 
   if (q.limit) stages.push(limitStage(offset, limitCount))
   return {
     columns: plan.columns,
+    // OFFSET can skip projection evaluation; its reader lifetime remains unproved.
+    constant: offset === 0 && plan.constant,
     locking: plan.locking,
     ...(plan.leaves === undefined ? {} : { leaves: plan.leaves }),
     explain() {
