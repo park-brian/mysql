@@ -1,0 +1,1628 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_integer266_scalars",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)",
+    "CREATE TABLE real266(id INT PRIMARY KEY,d DOUBLE,f FLOAT)",
+    "INSERT INTO real266 VALUES(1,2.5,2.5),(2,1e30,1e30),(3,-1e30,-1e30),(4,NULL,NULL)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT CAST(((SELECT -1e30)) AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT -1e30)) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT -1e30)) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT -1e30)) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT -1e30)) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(((SELECT 1e30+0)) AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT 1e30+0)) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT 1e30+0)) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT 1e30+0)) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT 1e30+0)) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(((SELECT CAST(2.5 AS DOUBLE))) AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT CAST(2.5 AS DOUBLE))) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT CAST(2.5 AS DOUBLE))) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT CAST(2.5 AS DOUBLE))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT CAST(2.5 AS DOUBLE))) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT CAST(2.5 AS DOUBLE))) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT CAST(2.5 AS DOUBLE))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(((SELECT -1e30 FROM real266 LIMIT 1)) AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT -1e30 FROM real266 LIMIT 1)) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT -1e30 FROM real266 LIMIT 1)) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT -1e30 FROM real266 LIMIT 1)) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT -1e30 FROM real266 LIMIT 1)) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT -1e30 FROM real266 LIMIT 1)) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT -1e30 FROM real266 LIMIT 1)) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(((SELECT d FROM real266 WHERE id=2)) AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT d FROM real266 WHERE id=2)) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT d FROM real266 WHERE id=2)) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT d FROM real266 WHERE id=2)) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT d FROM real266 WHERE id=2)) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT d FROM real266 WHERE id=2)) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT d FROM real266 WHERE id=2)) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(((SELECT -d FROM real266 WHERE id=2)) AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT -d FROM real266 WHERE id=2)) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT -d FROM real266 WHERE id=2)) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT -d FROM real266 WHERE id=2)) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT -d FROM real266 WHERE id=2)) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT -d FROM real266 WHERE id=2)) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT -d FROM real266 WHERE id=2)) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(((SELECT d+0 FROM real266 WHERE id=2)) AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT d+0 FROM real266 WHERE id=2)) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT d+0 FROM real266 WHERE id=2)) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT d+0 FROM real266 WHERE id=2)) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT d+0 FROM real266 WHERE id=2)) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT d+0 FROM real266 WHERE id=2)) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT d+0 FROM real266 WHERE id=2)) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(((SELECT d FROM real266 WHERE id=1)) AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT d FROM real266 WHERE id=1)) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT d FROM real266 WHERE id=1)) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT d FROM real266 WHERE id=1)) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT d FROM real266 WHERE id=1)) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT d FROM real266 WHERE id=1)) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT d FROM real266 WHERE id=1)) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(((SELECT d FROM real266 WHERE id=4)) AS SIGNED) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(((SELECT d FROM real266 WHERE id=4)) AS SIGNED) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(((SELECT d FROM real266 WHERE id=4)) AS SIGNED) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT d FROM real266 WHERE id=4)) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT d FROM real266 WHERE id=4)) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ((SELECT d FROM real266 WHERE id=4)) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT d FROM real266 WHERE id=4)) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT d FROM real266 WHERE id=4)) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << ((SELECT d FROM real266 WHERE id=4)) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

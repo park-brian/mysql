@@ -41,6 +41,7 @@ import {
   aggregateTypes,
   asNumber,
   stringReal,
+  realInteger,
   choiceOf,
   byteWidth,
   coercibilityOf,
@@ -353,7 +354,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
           : real ? doubleType(argument.nullable)
             : argument.kind === 'int' ? intType(argument.length, argument.nullable, argument.unsigned)
               : expressionOf(argument)
-      return {
+      return realInteger({
         eval: (r, env) => {
           const v = x.eval(r, env)
           if (v === null) return null
@@ -362,7 +363,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
           return sign !== null && sign < 0 ? negate(v) : v
         },
         type,
-      }
+      }, () => printedArgument(e, ctx))
     }
     default:
       throw unregistered(name)
@@ -396,7 +397,7 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
         return null
       }
       const result: Compiled = { decimalPrefix: true, eval: read, type }
-      return isText(type) || type.kind === 'json' ? stringReal(result) : result
+      return isText(type) || type.kind === 'json' ? stringReal(result) : realInteger(result, () => printedArgument(e, ctx))
     }
     case 'ANY_VALUE': {
       // A value from the group, with ONLY_FULL_GROUP_BY's check switched off for it.
@@ -406,7 +407,7 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
       if (type.kind === 'double') type = { ...type, length: type.scale < 31 ? type.length : doubleType(type.nullable).length, unsigned: false }
       const read: Compiled['eval'] = type.kind === 'double' ? (r, env) => convertTo(x.eval(r, env), type) : x.eval
       const result: Compiled = { eval: read, type, decimalPrefix: true }
-      return isText(type) || type.kind === 'json' ? stringReal(result) : result
+      return isText(type) || type.kind === 'json' ? stringReal(result) : realInteger(result, () => printedArgument(e, ctx))
     }
     case 'NULLIF': {
       arity(2)
@@ -447,6 +448,7 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
         }),
         decimalOf: (once) => read(asNumber(x, 'DECIMAL', once).eval),
         realOf: (once) => read(asNumber(x, 'DOUBLE', once).eval),
+        integerOf: (once) => read(asNumber(x, 'INTEGER', once).eval),
         type,
       }
     }

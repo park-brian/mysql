@@ -2983,9 +2983,9 @@ scalar query ownership is not bypassed or inferred from an AST shape. Totals
 remain 144/190 and M5 42/53; M5.10 stays partial. All eleven required 688e260 CI
 jobs pass.
 
-Binary shifts are now verified below. Next repair the shared INTEGER reader
-boundary exposed by negative floating-point counts, then the separately
-captured scalar-cache and raw-parameter reader gaps.
+Binary shifts are now verified below. The computed REAL INTEGER reader boundary is now verified below. Next separate
+REAL literal/field integer conversions from actual scalar-cache conversion,
+retaining the separately captured raw-parameter reader gaps.
 
 The original 81-outcome trigger audit improves from 69 to 81 complete matches,
 including its unchanged DECIMAL and unsigned casts. For example,
@@ -3047,6 +3047,60 @@ main/four latency tests, typecheck, lint, nine caps, package/typed smoke, the
 real client and all seven pinned corpora including 1,737 coercion warning
 counts. Source proof matches all 590 tests/fixtures and 206 runtime sources
 plus tooling. All eleven required 7a1ec52 GitHub jobs pass.
+
+**Owned computed REAL INTEGER readers, verified boundary (2026-11-02):**
+Compiled items now retain an optional INTEGER reader alongside REAL and DECIMAL.
+The numeric adapter invokes it only for a REAL result. Unary minus, REAL
+arithmetic, ABS, REAL COALESCE/IFNULL/ANY_VALUE holders and FLOAT/DOUBLE casts
+own signed-range checks, ties-to-even rounding and native overflow labels.
+IF/CASE and NULLIF retain their selected original REAL reader, including NULLIF
+result rereads. The producers retain their ordinary evaluation, metadata and
+DECIMAL readers.
+The shared expression printer enables canonical FLOAT/DOUBLE cast names and
+parameter markers for diagnostic messages. Stored-expression printers retain
+their controlled refusals and fallback contracts. Nested and prepared overflow
+labels retain their actual expression owner.
+
+Seven native profiles cover 744 complete responses, improving 492 to 666.
+Seven fixtures retain every complete response, including field/cache/literal
+controls, parameter/PREPARE boundaries and all 33 LAST_INSERT_ID activity
+outcomes. All older fixture expectations remain unchanged. Ordinary REAL
+literals, physical FLOAT/DOUBLE fields and actual scalar caches keep distinct
+conversion owners; their remaining mismatches are explicit controls.
+
+The first preservation audit caught a mixed IF regression: the merged result
+was a string, and forwarding its selected numeric argument removed three
+required INTEGER truncation warnings. Restricting the adapter to REAL results
+repairs that regression without changing its expectations. Initial failed logs
+are retained. The first fresh release also caught two stored-printer contract
+regressions: the new nodes must remain controlled refusals in stored forms.
+Explicit diagnostic mode now enables them only for messages, preserving both
+existing refusal/fallback tests and all their expectations. The 61 focused local groups pass after repair. Across 11,888 observations,
+complete agreement improves 10,132 to 10,310, preserving every one of 175,969
+previously matching protocol facts and every prior complete outcome. Seven
+new native groups pass; actual d1fdc06 retains all 54 older groups and the
+scalar/activity controls, failing only the five repaired groups.
+
+Keep the 78 unmatched outcomes explicit: four direct REAL literal signed-cast
+outcomes, eighteen physical-field and selected-field conversions, twenty scalar
+reduction/cache conversions, twenty-four parameter definition/conversion
+outcomes and twelve conditional literal-reader outcomes. Next repair the
+shared REAL literal integer conversion with native field/cache/conditional
+controls, before changing those other owners. Quiet STRING INTEGER readers,
+JSON labels, high-byte diagnostics and other M5.10 gaps remain separate.
+M5.10 and roadmap totals remain partial at 144/190 and M5 42/53.
+
+Final preservation holds all 175,969 matching facts across 11,888 observations.
+All 67 targeted protocol/printer tests and seven new native groups pass. The
+unchanged official suite retains all 38 passing file identities and its exact
+native baseline. Typecheck, lint, 20,000 executor statements seeded 20261010,
+plans at 2,127/2,248 under the unchanged 2,118 floor and nine unchanged caps
+pass. Parser/core/facade measure 45,599/333,772/333,700 B gzipped. Final fresh
+Docker --reference passes all 1,701 main/four latency tests, typecheck, lint,
+size, package/typed smoke, the real client and all seven pinned corpora,
+including 1,737 coercion warning counts. Source proof matches all 597
+tests/fixtures and 206 runtime sources plus tooling. All eleven required
+d1fdc06 GitHub jobs pass. Failed initial audit/release logs remain retained.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

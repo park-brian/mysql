@@ -33,6 +33,8 @@ export interface PrintOptions {
   readonly string: (value: string, charset: string | undefined) => string
   /** The text the expression was parsed from, for a float as it was written. */
   readonly source?: string | undefined
+  /** Messages may name runtime parameters and REAL casts; stored forms retain their refusals. */
+  readonly diagnostic?: true
 }
 
 const OPERATORS: Readonly<Record<string, string>> = { XOR: 'xor', DIV: 'DIV', MOD: '%', '!=': '<>', IS: 'is', 'IS NOT': 'is not' }
@@ -62,6 +64,9 @@ const logicalWord = (op: string): 'and' | 'or' | undefined => op === 'AND' || op
 export function printExpression(e: Expression, o: PrintOptions): string {
   const p = (x: Expression): string => printExpression(x, o)
   switch (e.kind) {
+    case NODE.PLACEHOLDER:
+      if (o.diagnostic) return '?'
+      break
     case NODE.COLUMN:
       return o.column(e.parts)
     case NODE.LITERAL:
@@ -132,6 +137,7 @@ export function printExpression(e: Expression, o: PrintOptions): string {
         const { precision, scale } = decimalCastShape(t)
         type += `(${precision},${scale})`
       }
+      else if (o.diagnostic && (type === 'FLOAT' || type === 'DOUBLE' || type === 'REAL')) type = type === 'FLOAT' && (t.precision ?? 0) <= 24 ? 'FLOAT' : 'DOUBLE'
       else if (type !== 'SIGNED' && type !== 'UNSIGNED') break
       return `cast(${p(e.expr)} as ${type.toLowerCase()})`
     }

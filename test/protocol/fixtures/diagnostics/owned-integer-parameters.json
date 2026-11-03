@@ -1,0 +1,1067 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_integer266_parameters",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT CAST(? AS SIGNED) AS v",
+      "api": "query",
+      "params": [
+        2.5
+      ],
+      "existing": false,
+      "rows": [
+        [
+          3
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(? AS SIGNED) AS v",
+      "api": "query",
+      "params": [
+        -1e+30
+      ],
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT value is out of range in '-(1e+30)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT value is out of range in '-(1e+30)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT CAST(? AS SIGNED) AS v",
+      "api": "query",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(? AS SIGNED) AS v",
+      "api": "execute",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(CAST(? AS DOUBLE) AS SIGNED) AS v",
+      "api": "query",
+      "params": [
+        2.5
+      ],
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(CAST(? AS DOUBLE) AS SIGNED) AS v",
+      "api": "execute",
+      "params": [
+        2.5
+      ],
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(CAST(? AS DOUBLE) AS SIGNED) AS v",
+      "api": "query",
+      "params": [
+        1e+30
+      ],
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT value is out of range in 'cast(1e+30 as double)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT value is out of range in 'cast(1e+30 as double)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT CAST(CAST(? AS DOUBLE) AS SIGNED) AS v",
+      "api": "execute",
+      "params": [
+        1e+30
+      ],
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT value is out of range in 'cast(? as double)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT value is out of range in 'cast(? as double)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT CAST(CAST(? AS DOUBLE) AS SIGNED) AS v",
+      "api": "query",
+      "params": [
+        -1e+30
+      ],
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT value is out of range in 'cast(-(1e+30) as double)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT value is out of range in 'cast(-(1e+30) as double)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT CAST(CAST(? AS DOUBLE) AS SIGNED) AS v",
+      "api": "execute",
+      "params": [
+        -1e+30
+      ],
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT value is out of range in 'cast(? as double)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT value is out of range in 'cast(? as double)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT CAST(CAST(? AS DOUBLE) AS SIGNED) AS v",
+      "api": "query",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(CAST(? AS DOUBLE) AS SIGNED) AS v",
+      "api": "execute",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ? AS v",
+      "api": "query",
+      "params": [
+        2.5
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              8
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ? AS v",
+      "api": "execute",
+      "params": [
+        2.5
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ? AS v",
+      "api": "query",
+      "params": [
+        1e+30
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ? AS v",
+      "api": "execute",
+      "params": [
+        1e+30
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ? AS v",
+      "api": "query",
+      "params": [
+        -1e+30
+      ],
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT value is out of range in '-(1e+30)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT value is out of range in '-(1e+30)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ? AS v",
+      "api": "execute",
+      "params": [
+        -1e+30
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ? AS v",
+      "api": "query",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << ? AS v",
+      "api": "execute",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << CAST(? AS DOUBLE) AS v",
+      "api": "query",
+      "params": [
+        2.5
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << CAST(? AS DOUBLE) AS v",
+      "api": "execute",
+      "params": [
+        2.5
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              4
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << CAST(? AS DOUBLE) AS v",
+      "api": "query",
+      "params": [
+        1e+30
+      ],
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT value is out of range in 'cast(1e+30 as double)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT value is out of range in 'cast(1e+30 as double)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << CAST(? AS DOUBLE) AS v",
+      "api": "execute",
+      "params": [
+        1e+30
+      ],
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT value is out of range in 'cast(? as double)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT value is out of range in 'cast(? as double)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << CAST(? AS DOUBLE) AS v",
+      "api": "query",
+      "params": [
+        -1e+30
+      ],
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT value is out of range in 'cast(-(1e+30) as double)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT value is out of range in 'cast(-(1e+30) as double)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << CAST(? AS DOUBLE) AS v",
+      "api": "execute",
+      "params": [
+        -1e+30
+      ],
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT value is out of range in 'cast(? as double)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT value is out of range in 'cast(? as double)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << CAST(? AS DOUBLE) AS v",
+      "api": "query",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'8001' << CAST(? AS DOUBLE) AS v",
+      "api": "execute",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << CAST(? AS DOUBLE) AS v",
+      "api": "query",
+      "params": [
+        2.5
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << CAST(? AS DOUBLE) AS v",
+      "api": "execute",
+      "params": [
+        2.5
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << CAST(? AS DOUBLE) AS v",
+      "api": "query",
+      "params": [
+        1e+30
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << CAST(? AS DOUBLE) AS v",
+      "api": "execute",
+      "params": [
+        1e+30
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << CAST(? AS DOUBLE) AS v",
+      "api": "query",
+      "params": [
+        -1e+30
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << CAST(? AS DOUBLE) AS v",
+      "api": "execute",
+      "params": [
+        -1e+30
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << CAST(? AS DOUBLE) AS v",
+      "api": "query",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT NULL << CAST(? AS DOUBLE) AS v",
+      "api": "execute",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

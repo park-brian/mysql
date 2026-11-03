@@ -1,0 +1,1698 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_integer266_activity",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((IF(1,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE))) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          1,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((IF(1,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE))) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          1,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((IF(1,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE))) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((CASE WHEN 1 THEN CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) ELSE CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) END) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          1,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((CASE WHEN 1 THEN CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) ELSE CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) END) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          1,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((CASE WHEN 1 THEN CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) ELSE CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) END) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((COALESCE(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),NULL)) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          1,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((COALESCE(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),NULL)) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          1,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((COALESCE(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),NULL)) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((IFNULL(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE))) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          1,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((IFNULL(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE))) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          1,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((IFNULL(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE))) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((ANY_VALUE(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE))) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          1,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((ANY_VALUE(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE))) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          1,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((ANY_VALUE(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE))) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((NULLIF(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),0)) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          2,
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((NULLIF(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),0)) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          2,
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((NULLIF(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),0)) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((NULLIF(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),1)) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          null,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((NULLIF(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),1)) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          null,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((NULLIF(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),1)) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((NULLIF(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),NULL)) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          2,
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((NULLIF(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),NULL)) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          2,
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((NULLIF(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),NULL)) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((IF(0,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),CAST(NULL AS DOUBLE))) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          null,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((IF(0,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),CAST(NULL AS DOUBLE))) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          null,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((IF(0,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE),CAST(NULL AS DOUBLE))) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((-(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE))) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          -1,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((-(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE))) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          -1,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST((-(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE))) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST(((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE))+0) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          1,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST(((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE))+0) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          0,
+          1,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT LAST_INSERT_ID(0) AS z,CAST(((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE))+0) AS SIGNED) AS v,LAST_INSERT_ID() AS n",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "z",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "v",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "n",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

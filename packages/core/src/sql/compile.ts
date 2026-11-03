@@ -33,6 +33,7 @@ import {
   equalityKey,
   charsetOfCollation,
   bitNot,
+  roundHalfEven,
   binaryShift,
   bitwise,
   bool,
@@ -177,6 +178,7 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
       return value === null ? null : doubleValue(toDouble(value))
     } }
   }
+  if (kind === 'INTEGER' && c.type.kind === 'double' && c.integerOf !== undefined) return { ...c, eval: c.integerOf(once) }
   if (kind === 'DECIMAL' && c.decimalOf !== undefined) return { type: c.type, eval: c.decimalOf(once) }
   if (c.type.kind === 'json') return jsonAsNumber(c, kind)
   // my_decimal's nine base-10^9 words hold 81 integer digits. Expanding a
@@ -413,6 +415,7 @@ export function maxPacket(env: Env): number {
 export function printedArgument(a: Expression, ctx: CompileContext): string {
   try {
     return printExpression(a, {
+      diagnostic: true,
       column: (parts) => {
         let c: SourceColumn | undefined
         try {
@@ -578,6 +581,20 @@ export interface Compiled {
   readonly decimalOf?: (once: boolean | Expression) => Compiled['eval']
   /** Read the original string result as DOUBLE, retaining its numeric-reader policy. */
   readonly realOf?: (once: boolean | Expression) => Compiled['eval']
+  /** Read an original REAL result as INTEGER with its producer or selected-branch policy. */
+  readonly integerOf?: (once: boolean | Expression) => Compiled['eval']
+}
+
+/** Computed REAL items check signed integer bounds; fields and literals own other readers. */
+export function realInteger(c: Compiled, label: () => string): Compiled {
+  if (c.type.kind !== 'double') return c
+  return { ...c, integerOf: () => (r, env) => {
+    const value = c.eval(r, env)
+    if (value === null) return null
+    const n = toDouble(value)
+    if (!Number.isFinite(n) || n < Number(MIN_SIGNED) || n >= -Number(MIN_SIGNED)) throw valueOutOfRange(unsignedOf(c.type) ? 'BIGINT UNSIGNED' : 'BIGINT', label())
+    return intValue(BigInt(roundHalfEven(n)), unsignedOf(c.type))
+  } }
 }
 
 /** Read one immutable row slot with its declared metadata. */
@@ -797,9 +814,11 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
     case NODE.VARIABLE:
       return variable(e, ctx)
 
-    case NODE.UNARY:
+    case NODE.UNARY: {
       if (e.op === 'EXISTS' && e.operand.kind === NODE.SUBQUERY) return exists(e.operand, ctx)
-      return unary(e.op, compile(e.operand, ctx), e.op === 'EXISTS', constantNode(e.operand) && e.operand, ctx)
+      const result = unary(e.op, compile(e.operand, ctx), e.op === 'EXISTS', constantNode(e.operand) && e.operand, ctx)
+      return e.op === '-' ? realInteger(result, () => printedArgument(e, ctx)) : result
+    }
 
     case NODE.BINARY:
       return binary(e.op, e.left, e.right, e.extra, ctx)
@@ -1448,9 +1467,9 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       else type = nullArithmetic(a.type, b.type)
       if (type.kind === 'double' && type.scale < 31) {
         const fixed = type
-        return { eval: (r, env) => doubleOf(add(at(r, env), bt(r, env), op, label), fixed), type }
+        return realInteger({ eval: (r, env) => doubleOf(add(at(r, env), bt(r, env), op, label), fixed), type }, label)
       }
-      return { eval: (r, env) => add(at(r, env), bt(r, env), op, label), type }
+      return realInteger({ eval: (r, env) => add(at(r, env), bt(r, env), op, label), type }, label)
     }
     case '/': {
       const kind = arithKind(a.type, b.type)
@@ -1459,8 +1478,8 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       // unspecified doubles produce DOUBLE(23,31); fixed decimals add four.
       const type = kind === 'double' ? divisionDouble(a.type, b.type) : kind === 'null' ? nullDivision(a.type, b.type) : decimalType(intDigits(a.type) + scaleOf(b.type) + s, s, true, unsignedOf(a.type) && unsignedOf(b.type))
       const quotient = byZero(at, bt, (p, q) => divide(p, q, label))
-      if (type.kind === 'double' && type.scale < 31) return { eval: (r, env) => doubleOf(quotient(r, env), type), type }
-      return { eval: quotient, type }
+      if (type.kind === 'double' && type.scale < 31) return realInteger({ eval: (r, env) => doubleOf(quotient(r, env), type), type }, label)
+      return realInteger({ eval: quotient, type }, label)
     }
     case 'DIV': {
       // Digits: the dividend's integer digits and the divisor's decimals, or
@@ -1495,7 +1514,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       // The wider operand's digits and a sign, unsigned or not: `flag % 3` on a TINYINT UNSIGNED is 4.
       // A double keeps the dividend's sign flag (8.4.11: `u % ch` of an INT UNSIGNED is unsigned).
       const type = kind === 'int' ? intType(Math.max(intDigits(a.type), intDigits(b.type), 1) + 1, true, unsignedOf(a.type)) : kind === 'decimal' ? decimalType(Math.max(decimalPrecision(a.type), decimalPrecision(b.type)), Math.max(scaleOf(a.type), scaleOf(b.type)), true) : kind === 'null' ? nullArithmetic(a.type, b.type) : { ...doubleType(true, 23), unsigned: unsignedOf(a.type) }
-      return { eval: byZero(at, bt, (x, y) => modulo(x, y, label)), type }
+      return realInteger({ eval: byZero(at, bt, (x, y) => modulo(x, y, label)), type }, label)
     }
     case '|':
     case '&':
@@ -2475,6 +2494,7 @@ export function choiceOf(xs: readonly Compiled[], select: (row: Row, env: Env) =
     eval: merged,
     decimalOf: (once) => reader(xs.map((x) => asNumber(x, 'DECIMAL', once).eval)),
     realOf: (once) => reader(xs.map((x) => asNumber(x, 'DOUBLE', once).eval)),
+    integerOf: (once) => reader(xs.map((x) => asNumber(x, 'INTEGER', once).eval)),
   }
 }
 
@@ -2695,7 +2715,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
       // the largest one it is 1690 rather than infinity (8.4.11). Wider is DOUBLE.
       if ((t.precision ?? 0) <= 24) {
         const printed = `cast(${printedArgument(e.expr, ctx)} as float)`
-        return {
+        return realInteger({
           eval: (r, env) => {
             const v = x(r, env)
             if (v === null) return null
@@ -2704,11 +2724,11 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
             return { kind: 'double', v: Math.fround(n), float: true }
           },
           type: { ...doubleType(nullable), field: FIELD_TYPE.FLOAT },
-        }
+        }, () => printed)
       }
     case 'DOUBLE':
     case 'REAL':
-      return { eval: (r, env) => { const v = x(r, env); return v === null ? null : doubleValue(toDouble(v)) }, type: doubleType(nullable) }
+      return realInteger({ eval: (r, env) => { const v = x(r, env); return v === null ? null : doubleValue(toDouble(v)) }, type: doubleType(nullable) }, () => printedArgument(e, ctx))
     case 'DATE':
     case 'DATETIME': {
       const type = t.name === 'DATE' ? 'DATE' : 'DATETIME'
