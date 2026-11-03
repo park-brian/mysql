@@ -1,0 +1,2765 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_window271_collation",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)",
+    "CREATE TABLE real268(id INT PRIMARY KEY,d DOUBLE,f FLOAT,u DOUBLE UNSIGNED,v FLOAT UNSIGNED)",
+    "INSERT INTO real268 VALUES(1,2.5,2.5,2.5,2.5),(2,3.5,3.5,3.5,3.5),(3,-2.5,-2.5,2.5,2.5),(4,NULL,NULL,NULL,NULL)",
+    "CREATE TABLE keys271(id INT PRIMARY KEY,a INT,b INT UNIQUE,d DOUBLE,txt VARCHAR(8),KEY(a),UNIQUE(txt(2)))",
+    "INSERT INTO keys271 VALUES(1,2,1,2.5,'ab'),(2,2,2,3.5,'cd'),(3,3,NULL,-2.5,'ef'),(4,4,NULL,NULL,'gh')",
+    "CREATE TABLE text271_ci(id VARCHAR(8) COLLATE utf8mb4_0900_ai_ci PRIMARY KEY,d DOUBLE)",
+    "INSERT INTO text271_ci VALUES('a',2.5),('b',3.5)",
+    "CREATE TABLE text271_bin(id VARCHAR(8) COLLATE utf8mb4_bin PRIMARY KEY,d DOUBLE)",
+    "INSERT INTO text271_bin VALUES('a',2.5),('b',3.5)",
+    "CREATE TABLE text271_pad(id VARCHAR(8) COLLATE utf8mb4_unicode_ci PRIMARY KEY,d DOUBLE)",
+    "INSERT INTO text271_pad VALUES('a',2.5),('b',3.5)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_ci WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_ci",
+          "text271_ci",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_bin WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20611,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_bin",
+          "text271_bin",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'A' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'a ' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'á' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "a",
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM text271_pad WHERE id BETWEEN 'a' AND 'a' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          253,
+          32,
+          20483,
+          0,
+          224,
+          "myjs_window271_collation",
+          "text271_pad",
+          "text271_pad",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

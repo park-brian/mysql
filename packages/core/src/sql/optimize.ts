@@ -29,7 +29,7 @@ import { compareValues, integerRange, truth, type Value } from '@myjs/types'
 
 import { compile, EMPTY_SCOPE, type CompileContext, type Env } from './compile.ts'
 import type { FromPlan } from './from.ts'
-import { pointAccess, splitAnd } from './plan.ts'
+import { equalBounds, pointAccess, splitAnd } from './plan.ts'
 import { accessRows } from './operators.ts'
 import { intersect, rangeOf, type RangeSet } from './ranges.ts'
 import { safeResolve } from './scope.ts'
@@ -149,9 +149,10 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
   }
   const pinned = new Map<number, Expression>()
   for (const c of pool) {
-    if (c.kind !== NODE.BINARY || (c.op !== '=' && c.op !== '<=>')) continue
+    if (c.kind !== NODE.BINARY) continue
     const l = slot(c.left)
     const r = slot(c.right)
+    if (c.op !== '=' && c.op !== '<=>' && !equalBounds(c, env, l === undefined ? undefined : columnAt(l)?.column)) continue
     if (l !== undefined && isConstant(c.right)) pinned.set(find(l), c.right)
     else if (r !== undefined && isConstant(c.left)) pinned.set(find(r), c.left)
   }

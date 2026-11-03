@@ -1,0 +1,4933 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_window271_output",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)",
+    "CREATE TABLE real268(id INT PRIMARY KEY,d DOUBLE,f FLOAT,u DOUBLE UNSIGNED,v FLOAT UNSIGNED)",
+    "INSERT INTO real268 VALUES(1,2.5,2.5,2.5,2.5),(2,3.5,3.5,3.5,3.5),(3,-2.5,-2.5,2.5,2.5),(4,NULL,NULL,NULL,NULL)",
+    "CREATE TABLE keys271(id INT PRIMARY KEY,a INT,b INT UNIQUE,d DOUBLE,txt VARCHAR(8),KEY(a),UNIQUE(txt(2)))",
+    "INSERT INTO keys271 VALUES(1,2,1,2.5,'ab'),(2,2,2,3.5,'cd'),(3,3,NULL,-2.5,'ef'),(4,4,NULL,NULL,'gh')"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          3.5
+        ],
+        [
+          3,
+          -2.5
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          3.5
+        ],
+        [
+          3,
+          -2.5
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          3.5
+        ],
+        [
+          3,
+          -2.5
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          3.5
+        ],
+        [
+          3,
+          -2.5
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          33,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          33,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id=2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 1.5 AND 2.5 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 1.5 AND 2.5 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 1.5 AND 2.5 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 1.5 AND 2.5 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 1.5 AND 2.5 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 1.5 AND 2.5 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 1.5 AND 2.5 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          33,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 1.5 AND 2.5 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          33,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id BETWEEN 1.5 AND 2.5 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,2) ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,2) ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,2) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,2) ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,2) ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,2) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,2) ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          33,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,2) ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          33,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,2) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,3) ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ],
+        [
+          3,
+          -2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,3) ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ],
+        [
+          3,
+          -2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,3) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,3) ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ],
+        [
+          3,
+          -2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,3) ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ],
+        [
+          3,
+          -2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,3) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,3) ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          33,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,3) ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          33,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id IN (2,3) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM real268 WHERE id=99 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "real268",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 WHERE id=2 LIMIT 1) q ORDER BY q.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "q",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 WHERE id=2 LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "q",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 WHERE id=2 LIMIT 1) q ORDER BY q.id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "q",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 WHERE id=2 LIMIT 1) q ORDER BY q.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "q",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 WHERE id=2 LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "q",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 WHERE id=2 LIMIT 1) q ORDER BY q.id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "q",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,ROW_NUMBER() OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 WHERE id=2 LIMIT 1) q ORDER BY q.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "q",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,ROW_NUMBER() OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 WHERE id=2 LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "q",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,ROW_NUMBER() OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 WHERE id=2 LIMIT 1) q ORDER BY q.id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "q",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 LIMIT 1) q ORDER BY q.id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "q",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 LIMIT 1) q ORDER BY q.id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "q",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,ROW_NUMBER() OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 LIMIT 1) q ORDER BY q.id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "q",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT r.id,SUM(r.d) OVER (PARTITION BY r.id) AS v FROM real268 r CROSS JOIN real268 s WHERE r.id=2 AND s.id=1 ORDER BY r.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "r",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT r.id,SUM(r.d) OVER (PARTITION BY r.id) AS v FROM real268 r CROSS JOIN real268 s WHERE r.id=2 AND s.id=1 ORDER BY r.id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "r",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT r.id,SUM(r.d) OVER (PARTITION BY r.id) AS v FROM real268 r CROSS JOIN real268 s WHERE r.id=2 AND s.id=1 ORDER BY r.id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "r",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT r.id,MIN(r.d) OVER (PARTITION BY r.id) AS v FROM real268 r CROSS JOIN real268 s WHERE r.id=2 AND s.id=1 ORDER BY r.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "r",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT r.id,MIN(r.d) OVER (PARTITION BY r.id) AS v FROM real268 r CROSS JOIN real268 s WHERE r.id=2 AND s.id=1 ORDER BY r.id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "r",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT r.id,MIN(r.d) OVER (PARTITION BY r.id) AS v FROM real268 r CROSS JOIN real268 s WHERE r.id=2 AND s.id=1 ORDER BY r.id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "r",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT r.id,ROW_NUMBER() OVER (PARTITION BY r.id) AS v FROM real268 r CROSS JOIN real268 s WHERE r.id=2 AND s.id=1 ORDER BY r.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "r",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT r.id,ROW_NUMBER() OVER (PARTITION BY r.id) AS v FROM real268 r CROSS JOIN real268 s WHERE r.id=2 AND s.id=1 ORDER BY r.id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "r",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT r.id,ROW_NUMBER() OVER (PARTITION BY r.id) AS v FROM real268 r CROSS JOIN real268 s WHERE r.id=2 AND s.id=1 ORDER BY r.id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "r",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT r.id,SUM(r.d) OVER (PARTITION BY r.id) AS v FROM real268 r CROSS JOIN real268 s WHERE r.id=2 ORDER BY r.id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "r",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT r.id,MIN(r.d) OVER (PARTITION BY r.id) AS v FROM real268 r CROSS JOIN real268 s WHERE r.id=2 ORDER BY r.id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "r",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT r.id,ROW_NUMBER() OVER (PARTITION BY r.id) AS v FROM real268 r CROSS JOIN real268 s WHERE r.id=2 ORDER BY r.id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "r",
+          "real268",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE b BETWEEN 2 AND 2 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE b BETWEEN 2 AND 2 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE b BETWEEN 2 AND 2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE b BETWEEN 2 AND 2 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE b BETWEEN 2 AND 2 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE b BETWEEN 2 AND 2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM keys271 WHERE b BETWEEN 2 AND 2 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM keys271 WHERE b BETWEEN 2 AND 2 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM keys271 WHERE b BETWEEN 2 AND 2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE b IS NULL ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          3,
+          -2.5
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE b IS NULL ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          3,
+          -2.5
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE b IS NULL ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE b IS NULL ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          3,
+          -2.5
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE b IS NULL ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          3,
+          -2.5
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE b IS NULL ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM keys271 WHERE b IS NULL ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          33,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM keys271 WHERE b IS NULL ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          33,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM keys271 WHERE b IS NULL ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE a BETWEEN 2 AND 2 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE a BETWEEN 2 AND 2 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE a BETWEEN 2 AND 2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE a BETWEEN 2 AND 2 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE a BETWEEN 2 AND 2 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE a BETWEEN 2 AND 2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM keys271 WHERE a BETWEEN 2 AND 2 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          33,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM keys271 WHERE a BETWEEN 2 AND 2 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          33,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM keys271 WHERE a BETWEEN 2 AND 2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM keys271 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM keys271 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM keys271 WHERE id BETWEEN 2 AND 2 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,SUM(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE txt BETWEEN 'ab' AND 'ab' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,MIN(d) OVER (PARTITION BY id) AS v FROM keys271 WHERE txt BETWEEN 'ab' AND 'ab' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,ROW_NUMBER() OVER (PARTITION BY id) AS v FROM keys271 WHERE txt BETWEEN 'ab' AND 'ab' ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_window271_output",
+          "keys271",
+          "keys271",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

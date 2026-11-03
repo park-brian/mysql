@@ -1,0 +1,269 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_window271_plans",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)",
+    "CREATE TABLE real268(id INT PRIMARY KEY,d DOUBLE,f FLOAT,u DOUBLE UNSIGNED,v FLOAT UNSIGNED)",
+    "INSERT INTO real268 VALUES(1,2.5,2.5,2.5,2.5),(2,1e30,1e30,1e30,1e30),(3,-1e30,-1e30,9.223372036854776e18,9.223372036854776e18),(4,NULL,NULL,NULL,NULL)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT r.id,CAST(SUM(r.d) OVER () AS SIGNED) AS v FROM real268 r WHERE r.id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT r.id,CAST(SUM(r.d) OVER () AS SIGNED) AS v FROM real268 r WHERE r.id IN (2)",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT r.id,CAST(SUM(r.d) OVER () AS SIGNED) AS v FROM real268 r WHERE r.id <=> 2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT r.id,CAST(SUM(r.d) OVER () AS SIGNED) AS v FROM real268 r WHERE r.id BETWEEN 2 AND 2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT r.id,CAST(SUM(r.d) OVER () AS SIGNED) AS v FROM real268 r WHERE r.id=(SELECT 2)",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Note",
+          1249,
+          "Select 2 was reduced during optimization"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,CAST(SUM(q.d) OVER () AS SIGNED) AS v FROM (SELECT 2 AS id,1e30 AS d) q",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,CAST(SUM(q.d) OVER () AS SIGNED) AS v FROM (SELECT id,d FROM real268 WHERE id=2 LIMIT 1) q",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT r.id,CAST(SUM(r.d) OVER () AS SIGNED) AS v FROM real268 r CROSS JOIN real268 s WHERE r.id=2 AND s.id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT id,CAST(SUM(d) OVER (PARTITION BY id) AS SIGNED) AS v FROM real268 WHERE id=?",
+      "api": "query",
+      "params": [
+        2
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

@@ -3291,6 +3291,12 @@ parameterized keys supply positive controls; a two-key range remains buffered.
 Establish the constant-input proof at the real access/planning owner before
 using its absence to select physical-field conversion. These exploratory
 controls are separate from this slice's 600-response measurement.
+A retained-execution audit adds 80 responses (six already complete) across
+key equality, equal/ranged BETWEEN bounds, materialized derived input and
+all-const joins. Each prepared instance survives changed keys, deletion,
+insertion, updates and an emptied/restored source. Parameter-packet type
+inference remains independently open; do not fold it into the window metadata
+phase repair or weaken these controls while establishing the planning proof.
 Totals remain 144/190 and M5 42/53; M5.10 stays partial.
 
 The actual c708bbf predecessor passes 80 focused groups and fails all three
@@ -3302,6 +3308,56 @@ typecheck, lint, nine unchanged caps, package/client smoke and all seven
 pinned MySQL 8.4.11 corpora. Source proof matches all 619 test files/fixtures
 and 206 runtime sources. The preceding c708bbf commit passed all eleven
 required GitHub jobs.
+
+**Constant-input binding and window output ownership, verified boundary (2026-11-02):**
+BETWEEN now shares a pure original-item equality proof across key binding,
+metadata pins and const-table optimizer facts. It preserves literal classes,
+the literals' own collation and separate marker identity. Intersected bounds,
+rounded integer ranges and deduplicated multi-item IN lists do not become
+constant inputs merely because their selected range contains one key.
+Noncorrelated derived sources carry their child's static proof; EXPLAIN and
+window output metadata consume the same proof. Row existence remains a fresh
+execution read. WindowSink supplies item metadata, and the SELECT planner owns
+copied-field metadata, preserving PREPARE separation without a second phase
+flag in WindowSink. Runtime INTEGER readers are unchanged.
+
+Seven native profiles retain 643 responses, improving 249 to 461 complete
+matches. Six permanent protocol fixtures pin 437 full responses, including all
+72 retained raw-output executions through changed keys, deletion, insertion,
+updates and an emptied/restored source. The other 24 full matches remain in the
+strict retained INTEGER audit, whose conversion gaps stay open. Nine positive
+EXPLAIN observations pin plan structure and result fields under the existing
+cost-independent plan contract. Native reduction note 1249 is retained in that
+capture but is still missing locally; plan diagnostics are not claimed complete.
+Across 15,687 responses agreement improves 13,315 to 13,659 while retaining all
+260,624 previously matching facts and every prior complete outcome.
+
+The original physical-point prototype was rejected by rounded-bound and
+multi-item IN controls; a bound-value prototype was rejected by retained marker
+identity controls. Both were repaired at original key binding, with no weaker
+expectations or thresholds. The new audits explicitly retain parameter-packet
+inference, NULL/empty-input metadata, scalar/correlated forwarding, general
+single-row materialization, INTEGER conversion, OVER diagnostic labels,
+MIN/MAX activity and SUM(NULL) shape as separate gaps. A positive static proof
+is not a claim that every other input must use buffered-field conversion.
+
+Verification correction: filtered protocol replays used MYSQL_HOST variables,
+while this harness requires MYSQL_REFERENCE_HOST and MYSQL_REFERENCE_PASSWORD.
+Those commands ran locally. Direct captures and the seven-corpus Docker gate
+already used pinned MySQL. All 90 protocol groups now pass against MySQL
+8.4.11 with the correct settings; the seven new groups also pass a separate
+correctly configured reference replay. All 92 local protocol/window tests,
+typecheck, lint and nine unchanged caps pass at parser/core/facade
+45,599/334,314/334,218 B gzipped. The actual 9803aa5 predecessor passes 83 groups
+and fails all seven new groups. The 20,000-statement executor run with seed
+20261010 passes; plans remain 2,127/2,248 against the unchanged 2,118 floor.
+The full 1,459-file official run retains the same 38 passing IDs and exact
+native baseline. The preceding 9803aa5 commit passed all eleven required
+GitHub jobs. Fresh Docker verification passes all 1,730 tests plus four
+latency checks, typecheck, lint, nine unchanged caps, package/client smoke
+and all seven pinned MySQL 8.4.11 corpora. Source proof matches all 626 test
+files/fixtures and 206 runtime sources. Totals remain 144/190
+and M5 42/53; M5.10 stays partial.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

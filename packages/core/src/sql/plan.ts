@@ -104,6 +104,21 @@ export type OuterColumn = (e: Expression) => Compiled | undefined
 export const isConstant = (e: Expression): boolean =>
   e.kind === NODE.LITERAL || e.kind === NODE.PLACEHOLDER || (e.kind === NODE.UNARY && e.op === '-' && isConstant(e.operand))
 
+/** Bound markers retain item identity even when their current values happen to agree. */
+function fixedConstant(e: Expression): boolean {
+  return e.kind === NODE.LITERAL || (e.kind === NODE.UNARY && e.op === '-' && fixedConstant(e.operand))
+}
+
+/** BETWEEN contributes an equality key only when its original constant items agree. */
+export function equalBounds(e: Expression, env: Env, column: ColumnDef | undefined): boolean {
+  if (e.kind !== NODE.BINARY || e.op !== 'BETWEEN' || e.extra === undefined || !fixedConstant(e.right) || !fixedConstant(e.extra as Expression)) return false
+  const a = constantValue(e.right, env)
+  const b = constantValue(e.extra as Expression, env)
+  if (a === undefined || a === null || b === undefined || b === null || a.kind !== b.kind) return false
+  if (a.kind === 'string' && b.kind === 'string') return a.collationId === b.collationId && (column === undefined || column.type.collationId === CHARSET_BINARY ? a.v === b.v : compareValues(a, b) === 0)
+  return a.kind === 'bytes' && b.kind === 'bytes' ? equalBytes(a.v, b.v) : compareValues(a, b) === 0
+}
+
 /** A condition's top-level `AND`ed conjuncts, appended to `out`. */
 export function splitAnd(e: Expression | undefined, out: Expression[] = []): Expression[] {
   if (e === undefined) return out
@@ -124,7 +139,7 @@ export function tableColumn(e: Expression, def: TableDef, alias: string): Column
   return def.columns.find((c) => c.name.toLowerCase() === name)
 }
 
-function conditionOf(e: Expression, def: TableDef, alias: string, outer: OuterColumn | undefined): Condition | undefined {
+function conditionOf(e: Expression, def: TableDef, alias: string, outer: OuterColumn | undefined, env: Env): Condition | undefined {
   const constant = (x: Expression): boolean => isConstant(x) || outer?.(x) !== undefined
   if (e.kind === NODE.UNARY && e.op === 'IS NULL') {
     const column = tableColumn(e.operand, def, alias)?.name
@@ -134,6 +149,10 @@ function conditionOf(e: Expression, def: TableDef, alias: string, outer: OuterCo
   if (e.op === 'IN' && e.right.kind === NODE.ROW && e.right.items.every(constant)) {
     const column = tableColumn(e.left, def, alias)?.name
     return column === undefined ? undefined : { column, op: 'IN', constants: e.right.items }
+  }
+  if (e.op === 'BETWEEN') {
+    const column = tableColumn(e.left, def, alias)
+    if (column !== undefined && equalBounds(e, env, column)) return { column: column.name, op: '=', constants: [e.right] }
   }
   const op = FLIP[e.op === '<>' || e.op === '!=' ? '' : e.op]
   if (op === undefined) return undefined
@@ -194,7 +213,7 @@ function exact(v: Value, c: ColumnDef): boolean {
 export function chooseAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, outer?: OuterColumn, costing?: RangeCosting, inferred?: InferredRange): Access {
   const conjuncts = splitAnd(inferred?.condition, splitAnd(where))
   const conditions = conjuncts
-    .map((e) => conditionOf(e, def, alias, outer))
+    .map((e) => conditionOf(e, def, alias, outer, env))
     .filter((c): c is Condition => c !== undefined)
   if (costing !== undefined) {
     // A key read by points stays one (`ref`); otherwise the range optimizer's choice.

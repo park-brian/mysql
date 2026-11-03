@@ -1958,7 +1958,10 @@ clipping. Physical REAL field INTEGER readers now preserve native rounding, incl
 DOUBLE clipping/warnings and quiet FLOAT overflow within the verified boundary.
 Grouped numeric aggregates now retain checked INTEGER readers, while REAL
 MIN/MAX use quiet cache conversion. Window PREPARE retains original item
-metadata before execution result fields exist. Plan-owned window readings, scalar caches
+metadata before execution result fields exist. BETWEEN key binding now shares
+original-item equality across access and const-table facts; derived sources,
+EXPLAIN and window output retain the resulting static proof while executions
+read current rows. Plan-owned window readings, scalar caches
 and ROLLUP/query forwarding remain separate. Owned DOUBLE readers for byte
 functions, conditional branches and quiet string-result holders are verified
 within their measured boundary; scalar forwarding/cache remains separate. General

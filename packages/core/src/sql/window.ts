@@ -88,13 +88,10 @@ export class WindowSink {
   readonly #rowCtx: CompileContext
   readonly #named: ReadonlyMap<string, WindowSpec>
   readonly #aggregates: AggregateSink
-  /** PREPARE binds the item before the window result fields exist. */
-  readonly #preparing: boolean
 
   /** `rowCtx` compiles arguments, PARTITION BY and ORDER BY; `named` is the query's WINDOW clause. */
-  constructor(rowCtx: CompileContext, base: number, named: readonly { readonly name: string; readonly spec: WindowSpec }[] = [], preparing = false) {
+  constructor(rowCtx: CompileContext, base: number, named: readonly { readonly name: string; readonly spec: WindowSpec }[] = []) {
     this.#rowCtx = rowCtx
-    this.#preparing = preparing
     this.base = base
     this.#named = new Map(named.map((w) => [w.name.toLowerCase(), w.spec]))
     this.#aggregates = new AggregateSink(rowCtx, 0)
@@ -155,14 +152,14 @@ export class WindowSink {
       args = args.map((a) => ({ type: a.type, eval: (r: Row, env: Env) => convertTo(a.eval(r, env), to) }))
     }
     this.windows.push({ fn: name, args, partition: (spec.partitionBy ?? []).map((p) => compile(p, ctx)), order, frame, slot, ...(aggregate === undefined ? {} : { aggregate }), ...(count === undefined ? {} : { count }) })
-    // A field of the window's temporary table: a number there carries no BINARY.
+    // The SELECT planner supplies copied-field metadata after choosing its input.
     return { eval: (row) => {
       const v = row[this.base + slot] ?? null
       // The temporary field owns its real reading, not the argument's forwarded text.
       if (type.kind === 'double') return fieldValue(v, type)
       // AVG reads its final field; TIME fields also lose the raw expression's negative zero.
       return (name === 'AVG' && type.kind === 'decimal') || type.kind === 'time' ? convertTo(v, type) : v
-    }, type: { ...type, length: copiedLength(type), ...(this.#preparing ? {} : { temporary: 'stream' }) } }
+    }, type: { ...type, length: copiedLength(type) } }
   }
 
   /** The window a call names: its own, or a named one, or a named one it extends. */

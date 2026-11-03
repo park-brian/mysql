@@ -84,6 +84,13 @@ import aggregateIntegerStrict from './fixtures/diagnostics/aggregate-integer-str
 import windowPhaseOwners from './fixtures/diagnostics/window-phase-owners.json' with { type: 'json' }
 import windowPhaseMetadata from './fixtures/diagnostics/window-phase-metadata.json' with { type: 'json' }
 import windowPhaseActivity from './fixtures/diagnostics/window-phase-activity.json' with { type: 'json' }
+import windowPlanningPlanning from './fixtures/diagnostics/window-planning-planning.json' with { type: 'json' }
+import windowPlanningOutput from './fixtures/diagnostics/window-planning-output.json' with { type: 'json' }
+import windowPlanningEdges from './fixtures/diagnostics/window-planning-edges.json' with { type: 'json' }
+import windowPlanningMixed from './fixtures/diagnostics/window-planning-mixed.json' with { type: 'json' }
+import windowPlanningCollation from './fixtures/diagnostics/window-planning-collation.json' with { type: 'json' }
+import windowPlanningRetainedOutput from './fixtures/diagnostics/window-planning-retained-output.json' with { type: 'json' }
+import windowPlanningPlans from './fixtures/diagnostics/window-planning-plans.json' with { type: 'json' }
 import effects from './fixtures/diagnostics/view-target-effects.json' with { type: 'json' }
 
 const fieldsOf = (fields: readonly mysql.FieldPacket[]) => fields.map(f => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName])
@@ -189,7 +196,7 @@ test('M5.10: prepared string metadata retains its SQL mode while text queries us
   }
 })
 
-for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order], ['names', names], ['spelling', spelling], ['view-target-no-db', noDatabase], ['view-target-controls', controls], ['view-merge', merge], ['view-merge-reuse', mergeReuse], ['view-check', check], ['view-check-reuse', checkReuse], ['view-check-projections', projections], ['view-check-projection-reuse', projectionReuse], ['view-check-fields-admission', fieldAdmission], ['view-updatability', updatability], ['view-updatability-types', updatabilityTypes], ['unary-plus-print', plusPrint], ['unary-plus-diagnostics', plusDiagnostics], ['unary-plus-diagnostic-reuse', plusReuse], ['view-updatability-owners', updatabilityOwners], ['view-updatability-order', updatabilityOrder], ['binary-not-values', binaryNotValues], ['binary-not-parameters', binaryNotParameters], ['binary-not-casts', binaryNotCasts], ['binary-not-bytes', binaryNotBytes], ['binary-not-strict-trans', binaryNotStrictTrans], ['binary-not-strict-all', binaryNotStrictAll], ['binary-bitwise-controls', bitwiseControls], ['binary-bitwise-values', bitwiseValues], ['binary-bitwise-order', bitwiseOrder], ['binary-bitwise-columns', bitwiseColumns], ['binary-bitwise-parameters', bitwiseParameters], ['binary-bitwise-provenance', bitwiseProvenance], ['owned-real-direct', realDirect], ['owned-real-values', realValues], ['owned-real-wrappers', realWrappers], ['owned-real-scalars', realScalars], ['owned-real-readiness', realReadiness], ['owned-real-fields', realFields], ['owned-real-effects', realEffects], ['owned-real-mixed', realMixed], ['owned-real-json', realJson], ['owned-real-strict', realStrict], ['binary-shift-shifts', shiftShifts], ['binary-shift-counts', shiftCounts], ['binary-shift-fields', shiftFields], ['binary-shift-parameters', shiftParameters], ['binary-shift-rounding', shiftRounding], ['owned-integer-direct', integerDirect], ['owned-integer-fields', integerFields], ['owned-integer-scalars', integerScalars], ['owned-integer-parameters', integerParameters], ['owned-integer-wrappers', integerWrappers], ['owned-integer-casts', integerCasts], ['owned-integer-activity', integerActivity], ['literal-integer-direct', literalIntegerDirect], ['literal-integer-edges', literalIntegerEdges], ['literal-integer-holders', literalIntegerHolders], ['field-integer-fields', fieldIntegerFields], ['field-integer-contexts', fieldIntegerContexts], ['field-integer-strict-trans', fieldIntegerStrictTrans], ['field-integer-strict-all', fieldIntegerStrictAll], ['field-integer-activity', fieldIntegerActivity], ['field-integer-grouping', fieldIntegerGrouping], ['field-integer-bounds', fieldIntegerBounds], ['field-integer-nulls', fieldIntegerNulls], ['field-integer-fixed', fieldIntegerFixed], ['aggregate-integer-direct', aggregateIntegerDirect], ['aggregate-integer-frames', aggregateIntegerFrames], ['aggregate-integer-activity', aggregateIntegerActivity], ['aggregate-integer-statistics', aggregateIntegerStatistics], ['aggregate-integer-distinct', aggregateIntegerDistinct], ['aggregate-integer-bounds', aggregateIntegerBounds], ['aggregate-integer-strict', aggregateIntegerStrict], ['window-phase-owners', windowPhaseOwners], ['window-phase-metadata', windowPhaseMetadata], ['window-phase-activity', windowPhaseActivity]] as const) test('M5.10: SQL admission matches native: ' + name, async () => {
+for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order], ['names', names], ['spelling', spelling], ['view-target-no-db', noDatabase], ['view-target-controls', controls], ['view-merge', merge], ['view-merge-reuse', mergeReuse], ['view-check', check], ['view-check-reuse', checkReuse], ['view-check-projections', projections], ['view-check-projection-reuse', projectionReuse], ['view-check-fields-admission', fieldAdmission], ['view-updatability', updatability], ['view-updatability-types', updatabilityTypes], ['unary-plus-print', plusPrint], ['unary-plus-diagnostics', plusDiagnostics], ['unary-plus-diagnostic-reuse', plusReuse], ['view-updatability-owners', updatabilityOwners], ['view-updatability-order', updatabilityOrder], ['binary-not-values', binaryNotValues], ['binary-not-parameters', binaryNotParameters], ['binary-not-casts', binaryNotCasts], ['binary-not-bytes', binaryNotBytes], ['binary-not-strict-trans', binaryNotStrictTrans], ['binary-not-strict-all', binaryNotStrictAll], ['binary-bitwise-controls', bitwiseControls], ['binary-bitwise-values', bitwiseValues], ['binary-bitwise-order', bitwiseOrder], ['binary-bitwise-columns', bitwiseColumns], ['binary-bitwise-parameters', bitwiseParameters], ['binary-bitwise-provenance', bitwiseProvenance], ['owned-real-direct', realDirect], ['owned-real-values', realValues], ['owned-real-wrappers', realWrappers], ['owned-real-scalars', realScalars], ['owned-real-readiness', realReadiness], ['owned-real-fields', realFields], ['owned-real-effects', realEffects], ['owned-real-mixed', realMixed], ['owned-real-json', realJson], ['owned-real-strict', realStrict], ['binary-shift-shifts', shiftShifts], ['binary-shift-counts', shiftCounts], ['binary-shift-fields', shiftFields], ['binary-shift-parameters', shiftParameters], ['binary-shift-rounding', shiftRounding], ['owned-integer-direct', integerDirect], ['owned-integer-fields', integerFields], ['owned-integer-scalars', integerScalars], ['owned-integer-parameters', integerParameters], ['owned-integer-wrappers', integerWrappers], ['owned-integer-casts', integerCasts], ['owned-integer-activity', integerActivity], ['literal-integer-direct', literalIntegerDirect], ['literal-integer-edges', literalIntegerEdges], ['literal-integer-holders', literalIntegerHolders], ['field-integer-fields', fieldIntegerFields], ['field-integer-contexts', fieldIntegerContexts], ['field-integer-strict-trans', fieldIntegerStrictTrans], ['field-integer-strict-all', fieldIntegerStrictAll], ['field-integer-activity', fieldIntegerActivity], ['field-integer-grouping', fieldIntegerGrouping], ['field-integer-bounds', fieldIntegerBounds], ['field-integer-nulls', fieldIntegerNulls], ['field-integer-fixed', fieldIntegerFixed], ['aggregate-integer-direct', aggregateIntegerDirect], ['aggregate-integer-frames', aggregateIntegerFrames], ['aggregate-integer-activity', aggregateIntegerActivity], ['aggregate-integer-statistics', aggregateIntegerStatistics], ['aggregate-integer-distinct', aggregateIntegerDistinct], ['aggregate-integer-bounds', aggregateIntegerBounds], ['aggregate-integer-strict', aggregateIntegerStrict], ['window-phase-owners', windowPhaseOwners], ['window-phase-metadata', windowPhaseMetadata], ['window-phase-activity', windowPhaseActivity], ['window-planning-planning', windowPlanningPlanning], ['window-planning-output', windowPlanningOutput], ['window-planning-edges', windowPlanningEdges], ['window-planning-mixed', windowPlanningMixed], ['window-planning-collation', windowPlanningCollation], ['window-planning-retained-output', windowPlanningRetainedOutput]] as const) test('M5.10: SQL admission matches native: ' + name, async () => {
   const { c, db } = await connection()
   const schema = 'schema' in fixture ? fixture.schema : undefined
   let created = false
@@ -207,6 +214,7 @@ for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', rec
       const { sql, api } = expected
       if (!('reuse' in fixture) || !fixture.reuse) c.unprepare(sql)
       if ('beforeEach' in fixture) for (const setup of fixture.beforeEach) await c.query(setup)
+      if ('before' in expected) for (const setup of expected.before) await c.query(setup)
       if ('table' in fixture && 'type' in expected) {
         await c.query('DROP TABLE ' + fixture.table)
         await c.query('CREATE TABLE ' + fixture.table + '(a ' + expected.type + ')')
@@ -230,11 +238,35 @@ for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', rec
         const [rows, fields] = await c.query(fixture.inspect)
         data = { rows: rowsOf(rows), fields: fieldsOf(fields ?? []) }
       } else if ('view' in fixture) data = await storedView(c, fixture.view)
-      assert.deepEqual({ ...actual, ...('limit' in expected ? { limit } : {}), ...('existing' in expected ? { existing: expected.existing } : {}), ...('view' in fixture || 'inspect' in fixture || 'definitions' in fixture ? { data } : {}), ...('type' in expected ? { type: expected.type } : {}), ...('kind' in expected ? { kind: expected.kind } : {}), ...('params' in expected ? { params: expected.params } : {}) }, expected, `${sql} [${api}]`)
+      assert.deepEqual({ ...actual, ...('before' in expected ? { before: expected.before } : {}), ...('limit' in expected ? { limit } : {}), ...('existing' in expected ? { existing: expected.existing } : {}), ...('view' in fixture || 'inspect' in fixture || 'definitions' in fixture ? { data } : {}), ...('type' in expected ? { type: expected.type } : {}), ...('kind' in expected ? { kind: expected.kind } : {}), ...('params' in expected ? { params: expected.params } : {}) }, expected, `${sql} [${api}]`)
       if (!('reuse' in fixture) || !fixture.reuse) c.unprepare(sql)
     }
   } finally {
     if (created) await c.query('DROP DATABASE ' + schema)
+    await c.end()
+    await db?.end()
+  }
+})
+
+test('M5.10: constant-input plan structure and fields match native', async () => {
+  const { c, db } = await connection()
+  const fixture = windowPlanningPlans
+  const withoutCosts = (rows: unknown) => Array.isArray(rows) ? rows.map((row: unknown) => Array.isArray(row) ? row.map((cell: unknown) => typeof cell === 'string' ? cell.replace(/ {2}\(cost=[^)]*\)/g, '') : cell) : row) : rows
+  let created = false
+  try {
+    await c.query('CREATE DATABASE ' + fixture.schema)
+    created = true
+    await c.query('USE ' + fixture.schema)
+    await c.query('SET sql_mode=?', [fixture.sqlMode])
+    for (const sql of fixture.setup) await c.query(sql)
+    for (const expected of fixture.observations) {
+      const params = 'params' in expected ? expected.params : []
+      await c.query(fixture.seed)
+      const actual = await observe(c, expected.sql, expected.api, params)
+      assert.deepEqual({ rows: withoutCosts('rows' in actual ? actual.rows : undefined), fields: 'fields' in actual ? actual.fields : undefined }, { rows: withoutCosts(expected.rows), fields: expected.fields }, expected.sql)
+    }
+  } finally {
+    if (created) await c.query('DROP DATABASE ' + fixture.schema)
     await c.end()
     await db?.end()
   }

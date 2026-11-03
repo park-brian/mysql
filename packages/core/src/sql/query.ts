@@ -19,7 +19,7 @@ import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, copiedLength, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
-import { isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
+import { equalBounds, isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
 import { and, columnRefs, integerLiteral, nativeCallName, queryBody, someNode } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, wrongArgumentsError } from './errors.ts'
@@ -272,6 +272,9 @@ function itemTexts(run: Run, node: SelectNode): (string | undefined)[] {
 }
 
 export interface SelectPlan {
+  /** Static input proof; row existence is checked by each execution. */
+  readonly constant?: boolean
+
   /** An ordinary SELECT's bound single base source; opaque or grouped sources supply no such proof. */
   readonly source?: FromPlan['single']
   /** Validate the bound base source through this invocation's selected access. */
@@ -370,7 +373,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const anti = from === undefined || !semijoin ? undefined : costedAntijoin(run, q, node, from)
   // Window functions (M5.6) write into slots past the FROM row.
   const windowBase = from?.width ?? 0
-  const windows = windowed ? new WindowSink(compileContext(run, lookup, 'window order by'), windowBase, node.windows, run.preparing === true) : undefined
+  const windows = windowed ? new WindowSink(compileContext(run, lookup, 'window order by'), windowBase, node.windows) : undefined
 
   // The select list, `*` expanded. A table a correlated, aggregating scalar
   // subquery in it reads is reported nullable there (8.4.11: `SELECT a.x,
@@ -386,6 +389,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       : readSlot(slot.index, nullableTables.has(scope?.columnAt(slot.index)?.table.alias ?? '') ? { ...slot.type, nullable: true } : slot.type)
     items.push({ ...item, name: selectName(entry, scope), compiled })
   }
+  // Preserve item metadata until the selected input proves whether the window needs fields.
+  const windowTypes = windowed ? items.map((i) => i.compiled.type) : undefined
   // Read through the windows' temporary table: every column a field of it (8.4.11: `id` loses PRI).
   if (run.preparing !== true) windowColumns(items, windows)
   const [limitCount, offset] = queryLimit(run, q)
@@ -581,6 +586,13 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const deduplicate = node.distinct === true && (source === undefined || !distinctKey(source.def, items, lookup, true))
   // An ORDER BY the index the table is read by already gives: read in its order, and nothing to sort.
   const read = source && from!.access(run.env)
+  const constant = from === undefined ||
+    (source !== undefined && (facts?.constTable === true || subqueryPinsKey(source.def, source.alias, node.where, from!.scope))) ||
+    from.tables.every((t) => constants.has(t.alias) || t.derived?.constant === true)
+  if (constant && windowTypes !== undefined) {
+    items.forEach((item, i) => { item.compiled = { ...item.compiled, type: windowTypes[i]! } })
+    dataColumns = undefined
+  }
   // Windows and hash antijoins still sort their delivered rows, even over an ordered index.
   const outerLoop = (semi?.innerFirst === false || anti?.kind === 'materialized' || anti?.kind === 'correlated') && source !== undefined && sortBy === source.alias
   // Reconsider PRIMARY for ordinary scans and the modeled outer-first loop.
@@ -626,6 +638,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   ]
   return {
     ...resultColumns(items, dataColumns),
+    constant,
     source,
     locking,
     ...(source?.table.checkRead === undefined ? {} : {
@@ -641,7 +654,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       if (facts?.impossible === true || provedEmpty(run, from, node, keep)) return [planNode('Zero rows')]
       // A constant table is read while planning: its row, if the WHERE holds of it, is all there is to fetch.
       // An uncorrelated scalar subquery a unique key equals is evaluated while planning too, so it pins the key (8.4.11).
-      if ((from?.single !== undefined && (facts?.constTable === true || subqueryPinsKey(from.single.def, from.single.alias, node.where, from.scope))) || (from !== undefined && from.tables.every((t) => t.derived?.constant === true))) {
+      if (from !== undefined && constant) {
         for (const _ of from.rows(undefined, run.env, { locking: false })) return [planNode('Rows fetched before execution')]
         return [planNode('Zero rows')]
       }
@@ -1572,7 +1585,7 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
   // a + (SELECT COUNT(*) FROM (SELECT a FROM t) d WHERE d.a > t.a)` is 3, 3, 3).
   const source: DerivedSource = {
     columns,
-    constant: lateral === undefined && !hasFrom(query) && query.body.kind === QUERY.SELECT,
+    constant: lateral === undefined && !correlated && plan.constant === true,
     merged,
     explain: (): DerivedPlan | undefined => {
       const body = plan.explain?.()?.[0]
@@ -2182,7 +2195,7 @@ function planGrouped(
   // Windows over the groups (M5.6): run after HAVING, over the grouped rows,
   // so their arguments and keys may be the groups' aggregates. Their slots
   // follow the aggregates', which are all known only once everything compiled.
-  const windows = windowed ? new WindowSink(postCtx('window order by'), 0, node.windows, run.preparing === true) : undefined
+  const windows = windowed ? new WindowSink(postCtx('window order by'), 0, node.windows) : undefined
   const selectCtx = postCtx('field list', lookup, windows)
   for (const item of selectItems) item.compiled = compile(item.expr, selectCtx)
   // Naming and binding complete before the same records become output fields.
@@ -2662,7 +2675,7 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
       if (condition === undefined) return facts
       const columnOf = (e: Expression) => tableColumn(e, def, alias)
       facts.impossible ||= conjuncts.some((e) => impossiblePredicate(e, columnOf))
-      for (const column of def.columns) if (pinOf(condition, column, columnOf) !== undefined) facts.pins.add(column.name.toLowerCase())
+      for (const column of def.columns) if (pinOf(condition, column, columnOf, run.env) !== undefined) facts.pins.add(column.name.toLowerCase())
       facts.constTable = def.indexes.some((i) => i.kind !== 'index' && i.parts.every((p) => p.prefix === undefined && facts.pins.has(p.column.toLowerCase())))
       return facts
     },
@@ -2674,18 +2687,19 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
  * or `undefined` (`check_field_is_const`). A placeholder's key is its own
  * position, so no two are the same.
  */
-function pinOf(cond: Expression, column: ColumnDef, columnOf: (e: Expression) => ColumnDef | undefined): string | undefined {
+function pinOf(cond: Expression, column: ColumnDef, columnOf: (e: Expression) => ColumnDef | undefined, env: Env): string | undefined {
   if (cond.kind === NODE.UNARY && cond.op === 'NOT' && cond.operand.kind === NODE.BINARY && (cond.operand.op === '<>' || cond.operand.op === '!=')) {
-    return pinOf({ ...cond.operand, op: '=' }, column, columnOf)
+    return pinOf({ ...cond.operand, op: '=' }, column, columnOf, env)
   }
   if (cond.kind !== NODE.BINARY) return undefined
-  if (cond.op === 'AND' || cond.op === '&&') return pinOf(cond.left, column, columnOf) ?? pinOf(cond.right, column, columnOf)
+  if (cond.op === 'AND' || cond.op === '&&') return pinOf(cond.left, column, columnOf, env) ?? pinOf(cond.right, column, columnOf, env)
   if (cond.op === 'OR' || cond.op === '||') {
-    const a = pinOf(cond.left, column, columnOf)
-    return a !== undefined && a === pinOf(cond.right, column, columnOf) ? a : undefined
+    const a = pinOf(cond.left, column, columnOf, env)
+    return a !== undefined && a === pinOf(cond.right, column, columnOf, env) ? a : undefined
   }
   let value: Expression | undefined
   if (cond.op === 'IN' && cond.right.kind === NODE.ROW && cond.right.items.length === 1 && columnOf(cond.left) === column) value = cond.right.items[0]
+  else if (columnOf(cond.left) === column && equalBounds(cond, env, column)) value = cond.right
   else if (cond.op === '=' || cond.op === '<=>') {
     if (columnOf(cond.left) === column) value = cond.right
     else if (columnOf(cond.right) === column) value = cond.left
