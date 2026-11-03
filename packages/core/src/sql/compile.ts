@@ -164,9 +164,18 @@ export interface Env {
  * retain fatal invalid-prefix diagnostics; BLOB/TEXT and those functions discard
  * truncation status.
  * Field readers can suppress empty/whitespace warnings; INTEGER casts retain them.
- * ENUM indices and numeric hex literals are quiet. The value passes unchanged.
+ * ENUM indices and numeric hex literals are quiet. An owned REAL reader returns a scalar DOUBLE; other values pass unchanged.
  */
 export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', once: boolean | Expression = false, source: 'field' | 'cast' = 'field'): Compiled {
+  // Numeric callers may subsequently read the same item as DECIMAL. Keep its
+  // precise value and reader capabilities unless this is a STRING_RESULT read.
+  if (kind === 'DOUBLE' && (isText(c.type) || c.type.kind === 'json') && c.realOf !== undefined) {
+    const read = c.realOf(once)
+    return { ...c, eval: (r, env) => {
+      const value = read(r, env)
+      return value === null ? null : doubleValue(toDouble(value))
+    } }
+  }
   if (kind === 'DECIMAL' && c.decimalOf !== undefined) return { type: c.type, eval: c.decimalOf(once) }
   if (c.type.kind === 'json') return jsonAsNumber(c, kind)
   // my_decimal's nine base-10^9 words hold 81 integer digits. Expanding a
@@ -566,6 +575,8 @@ export interface Compiled {
   readonly decimalPrefix?: true
   /** Read the selected original branch as DECIMAL, before result-type merging. */
   readonly decimalOf?: (once: boolean | Expression) => Compiled['eval']
+  /** Read the original string result as DOUBLE, retaining its numeric-reader policy. */
+  readonly realOf?: (once: boolean | Expression) => Compiled['eval']
 }
 
 /** Read one immutable row slot with its declared metadata. */
@@ -1092,6 +1103,14 @@ function nullDivision(a: ResultType, b: ResultType): ResultType {
   return { ...doubleType(true, width), scale }
 }
 
+/** A STRING_RESULT owner that discards DOUBLE conversion status (8.4.11). */
+export function stringReal(c: Compiled): Compiled {
+  return { ...c, realOf: () => (r, env) => {
+    const value = c.eval(r, env)
+    return value === null ? null : stringValue(textOf(value, c.type), c.type.collationId)
+  } }
+}
+
 function unary(op: string, a: Compiled, exists: boolean, constant: false | Expression = false, ctx?: CompileContext): Compiled {
   if (exists) throw notSupported('EXISTS')
   const at = a.eval
@@ -1125,13 +1144,13 @@ function unary(op: string, a: Compiled, exists: boolean, constant: false | Expre
       return a
     case '~': {
       if (a.type.kind === 'bytes' && a.type.literalInt === undefined) {
-        return {
+        return stringReal({
           eval: (r, env) => {
             const value = at(r, env)
             return value === null ? null : bytesValue(valueBytes(value).map((byte) => byte ^ 255))
           },
           type: { ...stringResultType(byteWidth(a.type), true, CHARSET_BINARY, COERCIBILITY.COERCIBLE), nullable: a.type.nullable },
-        }
+        })
       }
       const x = asNumber(a, 'INTEGER').eval
       return { eval: (r, env) => bitNot(x(r, env)), type: intType(21, a.type.nullable, true) }
@@ -1484,7 +1503,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     case '>>': {
       const types = [a.type, b.type]
       if (op !== '<<' && op !== '>>' && types.every((t) => t.kind === 'bytes' || t.kind === 'null') && types.some((t) => t.kind === 'bytes' && t.literalInt === undefined)) {
-        return {
+        return stringReal({
           eval: (r, env) => {
             const first = at(r, env)
             if (first === null) return null
@@ -1496,7 +1515,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
             return bytesValue(bytes.map((byte, i) => op === '&' ? byte & other[i]! : op === '|' ? byte | other[i]! : byte ^ other[i]!))
           },
           type: { ...stringResultType(Math.max(byteWidth(a.type), byteWidth(b.type)), true, CHARSET_BINARY, COERCIBILITY.COERCIBLE), nullable },
-        }
+        })
       }
       // Text is read as an unsigned integer, warning as it goes.
       const x = asNumber(ca, 'INTEGER').eval
@@ -2438,6 +2457,7 @@ export function choiceOf(xs: readonly Compiled[], select: (row: Row, env: Env) =
     type,
     eval: merged,
     decimalOf: (once) => reader(xs.map((x) => asNumber(x, 'DECIMAL', once).eval)),
+    realOf: (once) => reader(xs.map((x) => asNumber(x, 'DOUBLE', once).eval)),
   }
 }
 

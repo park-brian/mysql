@@ -40,6 +40,16 @@ import bitwiseOrder from './fixtures/diagnostics/binary-bitwise-order.json' with
 import bitwiseColumns from './fixtures/diagnostics/binary-bitwise-columns.json' with { type: 'json' }
 import bitwiseParameters from './fixtures/diagnostics/binary-bitwise-parameters.json' with { type: 'json' }
 import bitwiseProvenance from './fixtures/diagnostics/binary-bitwise-provenance.json' with { type: 'json' }
+import realDirect from './fixtures/diagnostics/owned-real-direct.json' with { type: 'json' }
+import realValues from './fixtures/diagnostics/owned-real-values.json' with { type: 'json' }
+import realWrappers from './fixtures/diagnostics/owned-real-wrappers.json' with { type: 'json' }
+import realScalars from './fixtures/diagnostics/owned-real-scalars.json' with { type: 'json' }
+import realReadiness from './fixtures/diagnostics/owned-real-readiness.json' with { type: 'json' }
+import realFields from './fixtures/diagnostics/owned-real-fields.json' with { type: 'json' }
+import realEffects from './fixtures/diagnostics/owned-real-effects.json' with { type: 'json' }
+import realMixed from './fixtures/diagnostics/owned-real-mixed.json' with { type: 'json' }
+import realJson from './fixtures/diagnostics/owned-real-json.json' with { type: 'json' }
+import realStrict from './fixtures/diagnostics/owned-real-strict.json' with { type: 'json' }
 import effects from './fixtures/diagnostics/view-target-effects.json' with { type: 'json' }
 
 const fieldsOf = (fields: readonly mysql.FieldPacket[]) => fields.map(f => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName])
@@ -145,7 +155,7 @@ test('M5.10: prepared string metadata retains its SQL mode while text queries us
   }
 })
 
-for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order], ['names', names], ['spelling', spelling], ['view-target-no-db', noDatabase], ['view-target-controls', controls], ['view-merge', merge], ['view-merge-reuse', mergeReuse], ['view-check', check], ['view-check-reuse', checkReuse], ['view-check-projections', projections], ['view-check-projection-reuse', projectionReuse], ['view-check-fields-admission', fieldAdmission], ['view-updatability', updatability], ['view-updatability-types', updatabilityTypes], ['unary-plus-print', plusPrint], ['unary-plus-diagnostics', plusDiagnostics], ['unary-plus-diagnostic-reuse', plusReuse], ['view-updatability-owners', updatabilityOwners], ['view-updatability-order', updatabilityOrder], ['binary-not-values', binaryNotValues], ['binary-not-parameters', binaryNotParameters], ['binary-not-casts', binaryNotCasts], ['binary-not-bytes', binaryNotBytes], ['binary-not-strict-trans', binaryNotStrictTrans], ['binary-not-strict-all', binaryNotStrictAll], ['binary-bitwise-controls', bitwiseControls], ['binary-bitwise-values', bitwiseValues], ['binary-bitwise-order', bitwiseOrder], ['binary-bitwise-columns', bitwiseColumns], ['binary-bitwise-parameters', bitwiseParameters], ['binary-bitwise-provenance', bitwiseProvenance]] as const) test('M5.10: SQL admission matches native: ' + name, async () => {
+for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order], ['names', names], ['spelling', spelling], ['view-target-no-db', noDatabase], ['view-target-controls', controls], ['view-merge', merge], ['view-merge-reuse', mergeReuse], ['view-check', check], ['view-check-reuse', checkReuse], ['view-check-projections', projections], ['view-check-projection-reuse', projectionReuse], ['view-check-fields-admission', fieldAdmission], ['view-updatability', updatability], ['view-updatability-types', updatabilityTypes], ['unary-plus-print', plusPrint], ['unary-plus-diagnostics', plusDiagnostics], ['unary-plus-diagnostic-reuse', plusReuse], ['view-updatability-owners', updatabilityOwners], ['view-updatability-order', updatabilityOrder], ['binary-not-values', binaryNotValues], ['binary-not-parameters', binaryNotParameters], ['binary-not-casts', binaryNotCasts], ['binary-not-bytes', binaryNotBytes], ['binary-not-strict-trans', binaryNotStrictTrans], ['binary-not-strict-all', binaryNotStrictAll], ['binary-bitwise-controls', bitwiseControls], ['binary-bitwise-values', bitwiseValues], ['binary-bitwise-order', bitwiseOrder], ['binary-bitwise-columns', bitwiseColumns], ['binary-bitwise-parameters', bitwiseParameters], ['binary-bitwise-provenance', bitwiseProvenance], ['owned-real-direct', realDirect], ['owned-real-values', realValues], ['owned-real-wrappers', realWrappers], ['owned-real-scalars', realScalars], ['owned-real-readiness', realReadiness], ['owned-real-fields', realFields], ['owned-real-effects', realEffects], ['owned-real-mixed', realMixed], ['owned-real-json', realJson], ['owned-real-strict', realStrict]] as const) test('M5.10: SQL admission matches native: ' + name, async () => {
   const { c, db } = await connection()
   const schema = 'schema' in fixture ? fixture.schema : undefined
   let created = false

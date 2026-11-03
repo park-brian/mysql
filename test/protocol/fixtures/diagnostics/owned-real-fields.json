@@ -1,0 +1,2649 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_bitwise263",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)",
+    "CREATE TABLE real264(id INT PRIMARY KEY,b VARBINARY(16),g INT)",
+    "INSERT INTO real264 VALUES(1,_binary'123x',1),(2,_binary'x000',0),(3,NULL,1),(4,_binary'123x',0)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT id,((b & _binary X'FFFFFFFF'))+0 AS v FROM real264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,((b & _binary X'FFFFFFFF'))+0 AS v FROM real264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,((b & _binary X'FFFFFFFF'))+0 AS v FROM real264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(IF(g=1,(b & _binary X'FFFFFFFF'),CONCAT(b)))+0 AS v FROM real264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: 'x000'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: '123x'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(IF(g=1,(b & _binary X'FFFFFFFF'),CONCAT(b)))+0 AS v FROM real264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: 'x000'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: '123x'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(IF(g=1,(b & _binary X'FFFFFFFF'),CONCAT(b)))+0 AS v FROM real264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(CASE WHEN g=1 THEN (b & _binary X'FFFFFFFF') ELSE CONCAT(b) END)+0 AS v FROM real264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: 'x000'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: '123x'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(CASE WHEN g=1 THEN (b & _binary X'FFFFFFFF') ELSE CONCAT(b) END)+0 AS v FROM real264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: 'x000'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: '123x'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(CASE WHEN g=1 THEN (b & _binary X'FFFFFFFF') ELSE CONCAT(b) END)+0 AS v FROM real264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(COALESCE((b & _binary X'FFFFFFFF'),_binary'x'))+0 AS v FROM real264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(COALESCE((b & _binary X'FFFFFFFF'),_binary'x'))+0 AS v FROM real264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(COALESCE((b & _binary X'FFFFFFFF'),_binary'x'))+0 AS v FROM real264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(ANY_VALUE((b & _binary X'FFFFFFFF')))+0 AS v FROM real264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(ANY_VALUE((b & _binary X'FFFFFFFF')))+0 AS v FROM real264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(ANY_VALUE((b & _binary X'FFFFFFFF')))+0 AS v FROM real264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(NULLIF((b & _binary X'FFFFFFFF'),_binary'other'))+0 AS v FROM real264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(NULLIF((b & _binary X'FFFFFFFF'),_binary'other'))+0 AS v FROM real264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(NULLIF((b & _binary X'FFFFFFFF'),_binary'other'))+0 AS v FROM real264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(CONCAT((b & _binary X'FFFFFFFF')))+0 AS v FROM real264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: 'x000'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: '123x'"
+        ]
+      ],
+      "warningCount": "3",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(CONCAT((b & _binary X'FFFFFFFF')))+0 AS v FROM real264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: 'x000'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: '123x'"
+        ]
+      ],
+      "warningCount": "3",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(CONCAT((b & _binary X'FFFFFFFF')))+0 AS v FROM real264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,((SELECT (b & _binary X'FFFFFFFF')))+0 AS v FROM real264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(b & _binary X'FFFFFFFF') AS v FROM real264 WHERE (b & _binary X'FFFFFFFF')>0 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          {
+            "type": "Buffer",
+            "data": [
+              49,
+              50,
+              51,
+              120
+            ]
+          }
+        ],
+        [
+          4,
+          {
+            "type": "Buffer",
+            "data": [
+              49,
+              50,
+              51,
+              120
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(b & _binary X'FFFFFFFF') AS v FROM real264 WHERE (b & _binary X'FFFFFFFF')>0 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          {
+            "type": "Buffer",
+            "data": [
+              49,
+              50,
+              51,
+              120
+            ]
+          }
+        ],
+        [
+          4,
+          {
+            "type": "Buffer",
+            "data": [
+              49,
+              50,
+              51,
+              120
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(b & _binary X'FFFFFFFF') AS v FROM real264 WHERE (b & _binary X'FFFFFFFF')>0 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id FROM real264 WHERE NOT((b & _binary X'FFFFFFFF')) ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id FROM real264 WHERE NOT((b & _binary X'FFFFFFFF')) ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id FROM real264 WHERE NOT((b & _binary X'FFFFFFFF')) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(~(b ^ _binary X'FFFFFFFF'))+0 AS v FROM real264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(~(b ^ _binary X'FFFFFFFF'))+0 AS v FROM real264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(~(b ^ _binary X'FFFFFFFF'))+0 AS v FROM real264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(IF(g=1,~(b ^ _binary X'FFFFFFFF'),CONCAT(b)))+0 AS v FROM real264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: 'x000'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: '123x'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(IF(g=1,~(b ^ _binary X'FFFFFFFF'),CONCAT(b)))+0 AS v FROM real264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: 'x000'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: '123x'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(IF(g=1,~(b ^ _binary X'FFFFFFFF'),CONCAT(b)))+0 AS v FROM real264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(CASE WHEN g=1 THEN ~(b ^ _binary X'FFFFFFFF') ELSE CONCAT(b) END)+0 AS v FROM real264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: 'x000'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: '123x'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(CASE WHEN g=1 THEN ~(b ^ _binary X'FFFFFFFF') ELSE CONCAT(b) END)+0 AS v FROM real264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: 'x000'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: '123x'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(CASE WHEN g=1 THEN ~(b ^ _binary X'FFFFFFFF') ELSE CONCAT(b) END)+0 AS v FROM real264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(COALESCE(~(b ^ _binary X'FFFFFFFF'),_binary'x'))+0 AS v FROM real264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(COALESCE(~(b ^ _binary X'FFFFFFFF'),_binary'x'))+0 AS v FROM real264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(COALESCE(~(b ^ _binary X'FFFFFFFF'),_binary'x'))+0 AS v FROM real264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(ANY_VALUE(~(b ^ _binary X'FFFFFFFF')))+0 AS v FROM real264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(ANY_VALUE(~(b ^ _binary X'FFFFFFFF')))+0 AS v FROM real264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(ANY_VALUE(~(b ^ _binary X'FFFFFFFF')))+0 AS v FROM real264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(NULLIF(~(b ^ _binary X'FFFFFFFF'),_binary'other'))+0 AS v FROM real264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(NULLIF(~(b ^ _binary X'FFFFFFFF'),_binary'other'))+0 AS v FROM real264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(NULLIF(~(b ^ _binary X'FFFFFFFF'),_binary'other'))+0 AS v FROM real264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(CONCAT(~(b ^ _binary X'FFFFFFFF')))+0 AS v FROM real264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: 'x000'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: '123x'"
+        ]
+      ],
+      "warningCount": "3",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(CONCAT(~(b ^ _binary X'FFFFFFFF')))+0 AS v FROM real264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: 'x000'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DOUBLE value: '123x'"
+        ]
+      ],
+      "warningCount": "3",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(CONCAT(~(b ^ _binary X'FFFFFFFF')))+0 AS v FROM real264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,((SELECT ~(b ^ _binary X'FFFFFFFF')))+0 AS v FROM real264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,~(b ^ _binary X'FFFFFFFF') AS v FROM real264 WHERE ~(b ^ _binary X'FFFFFFFF')>0 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          {
+            "type": "Buffer",
+            "data": [
+              49,
+              50,
+              51,
+              120
+            ]
+          }
+        ],
+        [
+          4,
+          {
+            "type": "Buffer",
+            "data": [
+              49,
+              50,
+              51,
+              120
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,~(b ^ _binary X'FFFFFFFF') AS v FROM real264 WHERE ~(b ^ _binary X'FFFFFFFF')>0 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          {
+            "type": "Buffer",
+            "data": [
+              49,
+              50,
+              51,
+              120
+            ]
+          }
+        ],
+        [
+          4,
+          {
+            "type": "Buffer",
+            "data": [
+              49,
+              50,
+              51,
+              120
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,~(b ^ _binary X'FFFFFFFF') AS v FROM real264 WHERE ~(b ^ _binary X'FFFFFFFF')>0 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ],
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id FROM real264 WHERE NOT(~(b ^ _binary X'FFFFFFFF')) ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id FROM real264 WHERE NOT(~(b ^ _binary X'FFFFFFFF')) ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id FROM real264 WHERE NOT(~(b ^ _binary X'FFFFFFFF')) ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "real264",
+          "real264",
+          "id"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

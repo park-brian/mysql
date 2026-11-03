@@ -1,0 +1,1416 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_bitwise263",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)",
+    "CREATE TABLE out264(id INT PRIMARY KEY,n DOUBLE)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256",
+    "DELETE FROM out264"
+  ],
+  "observations": [
+    {
+      "sql": "INSERT INTO out264 VALUES(1,(_binary'123x' & _binary X'FFFFFFFF')+0)",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 1,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1,
+            123
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,(_binary'123x' & _binary X'FFFFFFFF')+0)",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 1,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1,
+            123
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,(_binary'123x' & _binary X'FFFFFFFF')+0)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,(_binary'x' & _binary X'FF')+0)",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 1,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1,
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,(_binary'x' & _binary X'FF')+0)",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 1,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1,
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,(_binary'x' & _binary X'FF')+0)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,(~_binary X'cecdcc87')+0)",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 1,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1,
+            123
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,(~_binary X'cecdcc87')+0)",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 1,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1,
+            123
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,(~_binary X'cecdcc87')+0)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,IF(1,(_binary'123x' & _binary X'FFFFFFFF'),CONCAT(_binary'x'))+0)",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 1,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1,
+            123
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,IF(1,(_binary'123x' & _binary X'FFFFFFFF'),CONCAT(_binary'x'))+0)",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 1,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1,
+            123
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,IF(1,(_binary'123x' & _binary X'FFFFFFFF'),CONCAT(_binary'x'))+0)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,IF(0,(_binary'123x' & _binary X'FFFFFFFF'),CONCAT(_binary'x'))+0)",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_TRUNCATED_WRONG_VALUE",
+        "errno": 1292,
+        "state": "22007",
+        "message": "Truncated incorrect DOUBLE value: 'x'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1292,
+          "Truncated incorrect DOUBLE value: 'x'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,IF(0,(_binary'123x' & _binary X'FFFFFFFF'),CONCAT(_binary'x'))+0)",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_TRUNCATED_WRONG_VALUE",
+        "errno": 1292,
+        "state": "22007",
+        "message": "Truncated incorrect DOUBLE value: 'x'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1292,
+          "Truncated incorrect DOUBLE value: 'x'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,IF(0,(_binary'123x' & _binary X'FFFFFFFF'),CONCAT(_binary'x'))+0)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,COALESCE((_binary'123x' & _binary X'FFFFFFFF'),_binary'x')+0)",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 1,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1,
+            123
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,COALESCE((_binary'123x' & _binary X'FFFFFFFF'),_binary'x')+0)",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 1,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1,
+            123
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,COALESCE((_binary'123x' & _binary X'FFFFFFFF'),_binary'x')+0)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,COALESCE(_binary'x',NULL)+0)",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 1,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1,
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,COALESCE(_binary'x',NULL)+0)",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 1,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1,
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,COALESCE(_binary'x',NULL)+0)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,ANY_VALUE(CAST('true' AS JSON))+0)",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 1,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1,
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,ANY_VALUE(CAST('true' AS JSON))+0)",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 1,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1,
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,ANY_VALUE(CAST('true' AS JSON))+0)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,CONCAT(_binary'x')+0)",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_TRUNCATED_WRONG_VALUE",
+        "errno": 1292,
+        "state": "22007",
+        "message": "Truncated incorrect DOUBLE value: 'x'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1292,
+          "Truncated incorrect DOUBLE value: 'x'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,CONCAT(_binary'x')+0)",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_TRUNCATED_WRONG_VALUE",
+        "errno": 1292,
+        "state": "22007",
+        "message": "Truncated incorrect DOUBLE value: 'x'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1292,
+          "Truncated incorrect DOUBLE value: 'x'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,CONCAT(_binary'x')+0)",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,CAST((_binary'x' & _binary X'FF') AS DECIMAL(10,2)))",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_TRUNCATED_WRONG_VALUE",
+        "errno": 1292,
+        "state": "22007",
+        "message": "Truncated incorrect DECIMAL value: 'x'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,CAST((_binary'x' & _binary X'FF') AS DECIMAL(10,2)))",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_TRUNCATED_WRONG_VALUE",
+        "errno": 1292,
+        "state": "22007",
+        "message": "Truncated incorrect DECIMAL value: 'x'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "INSERT INTO out264 VALUES(1,CAST((_binary'x' & _binary X'FF') AS DECIMAL(10,2)))",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "id"
+          ],
+          [
+            "n",
+            5,
+            22,
+            0,
+            31,
+            63,
+            "myjs_bitwise263",
+            "out264",
+            "out264",
+            "n"
+          ]
+        ]
+      }
+    }
+  ],
+  "inspect": "SELECT id,n FROM out264 ORDER BY id"
+}

@@ -1,0 +1,1277 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_bitwise263",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256",
+    "SELECT LAST_INSERT_ID(0)"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT ((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'))+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT ((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'))+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT ((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (IF(1,(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) | _binary X'00')))+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (IF(1,(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) | _binary X'00')))+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (IF(1,(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) | _binary X'00')))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (CASE WHEN 1 THEN (CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF') ELSE (CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) | _binary X'00') END)+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (CASE WHEN 1 THEN (CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF') ELSE (CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) | _binary X'00') END)+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (CASE WHEN 1 THEN (CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF') ELSE (CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) | _binary X'00') END)+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (COALESCE((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) | _binary X'00')))+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (COALESCE((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) | _binary X'00')))+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (COALESCE((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) | _binary X'00')))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (IFNULL((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) | _binary X'00')))+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (IFNULL((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) | _binary X'00')))+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (IFNULL((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) | _binary X'00')))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (ANY_VALUE((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF')))+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (ANY_VALUE((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF')))+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (ANY_VALUE((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF')))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),_binary'0'))+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            2
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),_binary'0'))+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            2
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),_binary'0'))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),_binary'1'))+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),_binary'1'))+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF((CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),_binary'1'))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (IF(LAST_INSERT_ID(LAST_INSERT_ID()+1),(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) | _binary X'00')))+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            2
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (IF(LAST_INSERT_ID(LAST_INSERT_ID()+1),(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) | _binary X'00')))+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            2
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (IF(LAST_INSERT_ID(LAST_INSERT_ID()+1),(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) & _binary X'FF'),(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS BINARY(1)) | _binary X'00')))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "LAST_INSERT_ID()",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    }
+  ],
+  "inspect": "SELECT LAST_INSERT_ID()"
+}

@@ -40,6 +40,7 @@ import {
   aggregateCollations,
   aggregateTypes,
   asNumber,
+  stringReal,
   choiceOf,
   byteWidth,
   coercibilityOf,
@@ -387,17 +388,15 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
       const xs = args()
       const type = aggregate(xs.map((x) => x.type), xs.every((x) => x.type.nullable), conn, name.toLowerCase())
       const chosen = xs.map((x) => chosenOf(x, type))
-      return {
-        decimalPrefix: true,
-        eval: (r, env) => {
-          for (let i = 0; i < xs.length; i++) {
-            const v = (xs[i] as Compiled).eval(r, env)
-            if (v !== null) return (chosen[i] as (v: Exclude<Value, null>, env: Env) => Value)(v, env)
-          }
-          return null
-        },
-        type,
+      const read: Compiled['eval'] = (r, env) => {
+        for (let i = 0; i < xs.length; i++) {
+          const v = (xs[i] as Compiled).eval(r, env)
+          if (v !== null) return (chosen[i] as (v: Exclude<Value, null>, env: Env) => Value)(v, env)
+        }
+        return null
       }
+      const result: Compiled = { decimalPrefix: true, eval: read, type }
+      return isText(type) || type.kind === 'json' ? stringReal(result) : result
     }
     case 'ANY_VALUE': {
       // A value from the group, with ONLY_FULL_GROUP_BY's check switched off for it.
@@ -405,7 +404,9 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
       const [x] = args() as [Compiled]
       let type = expressionOf(x.type)
       if (type.kind === 'double') type = { ...type, length: type.scale < 31 ? type.length : doubleType(type.nullable).length, unsigned: false }
-      return { eval: type.kind === 'double' ? (r, env) => convertTo(x.eval(r, env), type) : x.eval, type, decimalPrefix: true }
+      const read: Compiled['eval'] = type.kind === 'double' ? (r, env) => convertTo(x.eval(r, env), type) : x.eval
+      const result: Compiled = { eval: read, type, decimalPrefix: true }
+      return isText(type) || type.kind === 'json' ? stringReal(result) : result
     }
     case 'NULLIF': {
       arity(2)
@@ -445,6 +446,7 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
           return converted ? converted.result : text && result !== null ? stringValue(textOf(result, x.type), conn) : result
         }),
         decimalOf: (once) => read(asNumber(x, 'DECIMAL', once).eval),
+        realOf: (once) => read(asNumber(x, 'DOUBLE', once).eval),
         type,
       }
     }

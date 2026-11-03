@@ -1,0 +1,6193 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_bitwise263",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)",
+    "CREATE TABLE blend264(id INT PRIMARY KEY,f FLOAT,g INT,j JSON)",
+    "INSERT INTO blend264 VALUES(1,0.1,1,'123'),(2,NULL,0,'[1]'),(3,1.234567,1,'null'),(4,1e-7,1,'true')"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT id,(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.10000000149011612
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.2345670461654663
+        ],
+        [
+          4,
+          1.0000000116860974e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.10000000149011612
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.2345670461654663
+        ],
+        [
+          4,
+          1.0000000116860974e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.10000000149011612
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.2345670461654663
+        ],
+        [
+          4,
+          1.0000000116860974e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.10000000149011612
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.2345670461654663
+        ],
+        [
+          4,
+          1.0000000116860974e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "0.10000000"
+        ],
+        [
+          2,
+          "123.00000000"
+        ],
+        [
+          3,
+          "1.23456705"
+        ],
+        [
+          4,
+          "0.00000010"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: '123x'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "0.10000000"
+        ],
+        [
+          2,
+          "123.00000000"
+        ],
+        [
+          3,
+          "1.23456705"
+        ],
+        [
+          4,
+          "0.00000010"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: '123x'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF'))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.1'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.23457'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.0000001'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF'))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.1'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.23457'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.0000001'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF'))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(CASE WHEN g=1 THEN f ELSE (_binary'123x' & _binary X'FFFFFFFF') END)+0 AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.10000000149011612
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.2345670461654663
+        ],
+        [
+          4,
+          1.0000000116860974e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(CASE WHEN g=1 THEN f ELSE (_binary'123x' & _binary X'FFFFFFFF') END)+0 AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.10000000149011612
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.2345670461654663
+        ],
+        [
+          4,
+          1.0000000116860974e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(CASE WHEN g=1 THEN f ELSE (_binary'123x' & _binary X'FFFFFFFF') END)+0 AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((CASE WHEN g=1 THEN f ELSE (_binary'123x' & _binary X'FFFFFFFF') END) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.10000000149011612
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.2345670461654663
+        ],
+        [
+          4,
+          1.0000000116860974e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((CASE WHEN g=1 THEN f ELSE (_binary'123x' & _binary X'FFFFFFFF') END) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.10000000149011612
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.2345670461654663
+        ],
+        [
+          4,
+          1.0000000116860974e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((CASE WHEN g=1 THEN f ELSE (_binary'123x' & _binary X'FFFFFFFF') END) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((CASE WHEN g=1 THEN f ELSE (_binary'123x' & _binary X'FFFFFFFF') END) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "0.10000000"
+        ],
+        [
+          2,
+          "123.00000000"
+        ],
+        [
+          3,
+          "1.23456705"
+        ],
+        [
+          4,
+          "0.00000010"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: '123x'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((CASE WHEN g=1 THEN f ELSE (_binary'123x' & _binary X'FFFFFFFF') END) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "0.10000000"
+        ],
+        [
+          2,
+          "123.00000000"
+        ],
+        [
+          3,
+          "1.23456705"
+        ],
+        [
+          4,
+          "0.00000010"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: '123x'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((CASE WHEN g=1 THEN f ELSE (_binary'123x' & _binary X'FFFFFFFF') END) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((CASE WHEN g=1 THEN f ELSE (_binary'123x' & _binary X'FFFFFFFF') END) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.1'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.23457'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.0000001'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((CASE WHEN g=1 THEN f ELSE (_binary'123x' & _binary X'FFFFFFFF') END) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.1'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.23457'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.0000001'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((CASE WHEN g=1 THEN f ELSE (_binary'123x' & _binary X'FFFFFFFF') END) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(COALESCE(f,(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.1
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.23457
+        ],
+        [
+          4,
+          1e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(COALESCE(f,(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.1
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.23457
+        ],
+        [
+          4,
+          1e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(COALESCE(f,(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.1
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.23457
+        ],
+        [
+          4,
+          1e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.1
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.23457
+        ],
+        [
+          4,
+          1e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "0.10000000"
+        ],
+        [
+          2,
+          "123.00000000"
+        ],
+        [
+          3,
+          "1.23457000"
+        ],
+        [
+          4,
+          "0.00000010"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          129,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "0.10000000"
+        ],
+        [
+          2,
+          "123.00000000"
+        ],
+        [
+          3,
+          "1.23457000"
+        ],
+        [
+          4,
+          "0.00000010"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          129,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          129,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.1'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.23457'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.0000001'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.1'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.23457'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.0000001'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(IFNULL(f,(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.1
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.23457
+        ],
+        [
+          4,
+          1e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(IFNULL(f,(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.1
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.23457
+        ],
+        [
+          4,
+          1e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(IFNULL(f,(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IFNULL(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.1
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.23457
+        ],
+        [
+          4,
+          1e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IFNULL(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.1
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.23457
+        ],
+        [
+          4,
+          1e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IFNULL(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IFNULL(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "0.10000000"
+        ],
+        [
+          2,
+          "123.00000000"
+        ],
+        [
+          3,
+          "1.23457000"
+        ],
+        [
+          4,
+          "0.00000010"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          129,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IFNULL(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "0.10000000"
+        ],
+        [
+          2,
+          "123.00000000"
+        ],
+        [
+          3,
+          "1.23457000"
+        ],
+        [
+          4,
+          "0.00000010"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          129,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IFNULL(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          129,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IFNULL(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.1'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.23457'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.0000001'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IFNULL(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.1'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.23457'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.0000001'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IFNULL(f,(_binary'123x' & _binary X'FFFFFFFF'))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(ANY_VALUE(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF'))))+0 AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.1
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.23457
+        ],
+        [
+          4,
+          1e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(ANY_VALUE(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF'))))+0 AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.1
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.23457
+        ],
+        [
+          4,
+          1e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(ANY_VALUE(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF'))))+0 AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((ANY_VALUE(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.1
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.23457
+        ],
+        [
+          4,
+          1e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((ANY_VALUE(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.1
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.23457
+        ],
+        [
+          4,
+          1e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((ANY_VALUE(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((ANY_VALUE(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "0.10000000"
+        ],
+        [
+          2,
+          "123.00000000"
+        ],
+        [
+          3,
+          "1.23457000"
+        ],
+        [
+          4,
+          "0.00000010"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((ANY_VALUE(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "0.10000000"
+        ],
+        [
+          2,
+          "123.00000000"
+        ],
+        [
+          3,
+          "1.23457000"
+        ],
+        [
+          4,
+          "0.00000010"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((ANY_VALUE(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((ANY_VALUE(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.1'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.23457'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.0000001'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((ANY_VALUE(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.1'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.23457'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.0000001'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((ANY_VALUE(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(NULLIF(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')),_binary'other'))+0 AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.10000000149011612
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.2345670461654663
+        ],
+        [
+          4,
+          1.0000000116860974e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(NULLIF(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')),_binary'other'))+0 AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.10000000149011612
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.2345670461654663
+        ],
+        [
+          4,
+          1.0000000116860974e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(NULLIF(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')),_binary'other'))+0 AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((NULLIF(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')),_binary'other')) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.10000000149011612
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.2345670461654663
+        ],
+        [
+          4,
+          1.0000000116860974e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((NULLIF(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')),_binary'other')) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.10000000149011612
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.2345670461654663
+        ],
+        [
+          4,
+          1.0000000116860974e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((NULLIF(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')),_binary'other')) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((NULLIF(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')),_binary'other')) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "0.10000000"
+        ],
+        [
+          2,
+          "123.00000000"
+        ],
+        [
+          3,
+          "1.23456705"
+        ],
+        [
+          4,
+          "0.00000010"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: '123x'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((NULLIF(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')),_binary'other')) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "0.10000000"
+        ],
+        [
+          2,
+          "123.00000000"
+        ],
+        [
+          3,
+          "1.23456705"
+        ],
+        [
+          4,
+          "0.00000010"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: '123x'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((NULLIF(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')),_binary'other')) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((NULLIF(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')),_binary'other')) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.1'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.23457'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.0000001'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((NULLIF(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')),_binary'other')) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.1'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.23457'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.0000001'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((NULLIF(IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')),_binary'other')) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(COALESCE(NULL,IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF'))))+0 AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.1
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.23457
+        ],
+        [
+          4,
+          1e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(COALESCE(NULL,IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF'))))+0 AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.1
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.23457
+        ],
+        [
+          4,
+          1e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(COALESCE(NULL,IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF'))))+0 AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(NULL,IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.1
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.23457
+        ],
+        [
+          4,
+          1e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(NULL,IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0.1
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1.23457
+        ],
+        [
+          4,
+          1e-07
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(NULL,IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(NULL,IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "0.10000000"
+        ],
+        [
+          2,
+          "123.00000000"
+        ],
+        [
+          3,
+          "1.23457000"
+        ],
+        [
+          4,
+          "0.00000010"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(NULL,IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "0.10000000"
+        ],
+        [
+          2,
+          "123.00000000"
+        ],
+        [
+          3,
+          "1.23457000"
+        ],
+        [
+          4,
+          "0.00000010"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(NULL,IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(NULL,IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.1'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.23457'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.0000001'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(NULL,IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.1'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '123x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '1.23457'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '0.0000001'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(NULL,IF(g=1,f,(_binary'123x' & _binary X'FFFFFFFF')))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(IF(g=1,j,(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3156,
+          "Invalid JSON value for CAST to DOUBLE from column j at row 3"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(IF(g=1,j,(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3156,
+          "Invalid JSON value for CAST to DOUBLE from column j at row 3"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(IF(g=1,j,(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IF(g=1,j,(_binary'123x' & _binary X'FFFFFFFF'))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3156,
+          "Invalid JSON value for CAST to DOUBLE from column j at row 3"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IF(g=1,j,(_binary'123x' & _binary X'FFFFFFFF'))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          123
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3156,
+          "Invalid JSON value for CAST to DOUBLE from column j at row 3"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IF(g=1,j,(_binary'123x' & _binary X'FFFFFFFF'))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IF(g=1,j,(_binary'123x' & _binary X'FFFFFFFF'))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "123.00000000"
+        ],
+        [
+          2,
+          "123.00000000"
+        ],
+        [
+          3,
+          "0.00000000"
+        ],
+        [
+          4,
+          "1.00000000"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: '123x'"
+        ],
+        [
+          "Warning",
+          3156,
+          "Invalid JSON value for CAST to DECIMAL from column j at row 3"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IF(g=1,j,(_binary'123x' & _binary X'FFFFFFFF'))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "123.00000000"
+        ],
+        [
+          2,
+          "123.00000000"
+        ],
+        [
+          3,
+          "0.00000000"
+        ],
+        [
+          4,
+          "1.00000000"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: '123x'"
+        ],
+        [
+          "Warning",
+          3156,
+          "Invalid JSON value for CAST to DECIMAL from column j at row 3"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IF(g=1,j,(_binary'123x' & _binary X'FFFFFFFF'))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((IF(g=1,j,(_binary'123x' & _binary X'FFFFFFFF'))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(COALESCE(j,(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(COALESCE(j,(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(COALESCE(j,(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(j,(_binary'123x' & _binary X'FFFFFFFF'))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(j,(_binary'123x' & _binary X'FFFFFFFF'))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(j,(_binary'123x' & _binary X'FFFFFFFF'))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(j,(_binary'123x' & _binary X'FFFFFFFF'))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "123.00000000"
+        ],
+        [
+          2,
+          "0.00000000"
+        ],
+        [
+          3,
+          "0.00000000"
+        ],
+        [
+          4,
+          "0.00000000"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          129,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1366,
+          "Incorrect DECIMAL value: '0' for column '' at row -1"
+        ],
+        [
+          "Warning",
+          1366,
+          "Incorrect DECIMAL value: '0' for column '' at row -1"
+        ],
+        [
+          "Warning",
+          1366,
+          "Incorrect DECIMAL value: '0' for column '' at row -1"
+        ]
+      ],
+      "warningCount": "3",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(j,(_binary'123x' & _binary X'FFFFFFFF'))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "123.00000000"
+        ],
+        [
+          2,
+          "0.00000000"
+        ],
+        [
+          3,
+          "0.00000000"
+        ],
+        [
+          4,
+          "0.00000000"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          129,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1366,
+          "Incorrect DECIMAL value: '0' for column '' at row -1"
+        ],
+        [
+          "Warning",
+          1366,
+          "Incorrect DECIMAL value: '0' for column '' at row -1"
+        ],
+        [
+          "Warning",
+          1366,
+          "Incorrect DECIMAL value: '0' for column '' at row -1"
+        ]
+      ],
+      "warningCount": "3",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(j,(_binary'123x' & _binary X'FFFFFFFF'))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          129,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(j,(_binary'123x' & _binary X'FFFFFFFF'))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '[1]'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: 'null'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: 'true'"
+        ]
+      ],
+      "warningCount": "3",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(j,(_binary'123x' & _binary X'FFFFFFFF'))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: '[1]'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: 'null'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect INTEGER value: 'true'"
+        ]
+      ],
+      "warningCount": "3",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((COALESCE(j,(_binary'123x' & _binary X'FFFFFFFF'))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(ANY_VALUE(j))+0 AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(ANY_VALUE(j))+0 AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(ANY_VALUE(j))+0 AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((ANY_VALUE(j)) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((ANY_VALUE(j)) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          4,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((ANY_VALUE(j)) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((ANY_VALUE(j)) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((ANY_VALUE(j)) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(NULLIF(j,CAST('null' AS JSON)))+0 AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3156,
+          "Invalid JSON value for CAST to DOUBLE from column j at row 2"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(NULLIF(j,CAST('null' AS JSON)))+0 AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3156,
+          "Invalid JSON value for CAST to DOUBLE from column j at row 2"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,(NULLIF(j,CAST('null' AS JSON)))+0 AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((NULLIF(j,CAST('null' AS JSON))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3156,
+          "Invalid JSON value for CAST to DOUBLE from column j at row 2"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((NULLIF(j,CAST('null' AS JSON))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          123
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3156,
+          "Invalid JSON value for CAST to DOUBLE from column j at row 2"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((NULLIF(j,CAST('null' AS JSON))) AS DOUBLE) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((NULLIF(j,CAST('null' AS JSON))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "123.00000000"
+        ],
+        [
+          2,
+          "0.00000000"
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          "1.00000000"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3156,
+          "Invalid JSON value for CAST to DECIMAL from column j at row 2"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((NULLIF(j,CAST('null' AS JSON))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1,
+          "123.00000000"
+        ],
+        [
+          2,
+          "0.00000000"
+        ],
+        [
+          3,
+          null
+        ],
+        [
+          4,
+          "1.00000000"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3156,
+          "Invalid JSON value for CAST to DECIMAL from column j at row 2"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((NULLIF(j,CAST('null' AS JSON))) AS DECIMAL(20,8)) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          22,
+          128,
+          8,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT id,CAST((NULLIF(j,CAST('null' AS JSON))) AS UNSIGNED) AS v FROM blend264 ORDER BY id",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "myjs_bitwise263",
+          "blend264",
+          "blend264",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

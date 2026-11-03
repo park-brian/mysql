@@ -1,0 +1,2272 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_bitwise263",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT (IF(1,(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(0,CAST(18446744073709551615+1 AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(0,CAST(18446744073709551615+1 AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(0,CAST(18446744073709551615+1 AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(0,CAST(18446744073709551615+1 AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v WHERE 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(0,CAST(18446744073709551615+1 AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v WHERE 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(0,CAST(18446744073709551615+1 AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v WHERE 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(0,CAST(18446744073709551615+1 AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v LIMIT 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(0,CAST(18446744073709551615+1 AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v LIMIT 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(0,CAST(18446744073709551615+1 AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v LIMIT 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(0,(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(0,(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(0,(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(0,(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(0,(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(0,(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(0,(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CASE WHEN 1 THEN (_binary'123x' & _binary X'FFFFFFFF') ELSE CAST(18446744073709551615+1 AS BINARY(4)) END)+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CASE WHEN 1 THEN (_binary'123x' & _binary X'FFFFFFFF') ELSE CAST(18446744073709551615+1 AS BINARY(4)) END)+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CASE WHEN 1 THEN (_binary'123x' & _binary X'FFFFFFFF') ELSE CAST(18446744073709551615+1 AS BINARY(4)) END)+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CASE WHEN 1 THEN (_binary'123x' & _binary X'FFFFFFFF') ELSE CAST(18446744073709551615+1 AS BINARY(4)) END)+0 AS v WHERE 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CASE WHEN 1 THEN (_binary'123x' & _binary X'FFFFFFFF') ELSE CAST(18446744073709551615+1 AS BINARY(4)) END)+0 AS v WHERE 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CASE WHEN 1 THEN (_binary'123x' & _binary X'FFFFFFFF') ELSE CAST(18446744073709551615+1 AS BINARY(4)) END)+0 AS v WHERE 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CASE WHEN 1 THEN (_binary'123x' & _binary X'FFFFFFFF') ELSE CAST(18446744073709551615+1 AS BINARY(4)) END)+0 AS v LIMIT 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CASE WHEN 1 THEN (_binary'123x' & _binary X'FFFFFFFF') ELSE CAST(18446744073709551615+1 AS BINARY(4)) END)+0 AS v LIMIT 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CASE WHEN 1 THEN (_binary'123x' & _binary X'FFFFFFFF') ELSE CAST(18446744073709551615+1 AS BINARY(4)) END)+0 AS v LIMIT 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CASE WHEN 0 THEN (_binary'123x' & _binary X'FFFFFFFF') ELSE CAST(18446744073709551615+1 AS BINARY(4)) END)+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CASE WHEN 0 THEN (_binary'123x' & _binary X'FFFFFFFF') ELSE CAST(18446744073709551615+1 AS BINARY(4)) END)+0 AS v WHERE 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CASE WHEN 0 THEN (_binary'123x' & _binary X'FFFFFFFF') ELSE CAST(18446744073709551615+1 AS BINARY(4)) END)+0 AS v WHERE 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CASE WHEN 0 THEN (_binary'123x' & _binary X'FFFFFFFF') ELSE CAST(18446744073709551615+1 AS BINARY(4)) END)+0 AS v WHERE 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CASE WHEN 0 THEN (_binary'123x' & _binary X'FFFFFFFF') ELSE CAST(18446744073709551615+1 AS BINARY(4)) END)+0 AS v LIMIT 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CASE WHEN 0 THEN (_binary'123x' & _binary X'FFFFFFFF') ELSE CAST(18446744073709551615+1 AS BINARY(4)) END)+0 AS v LIMIT 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CASE WHEN 0 THEN (_binary'123x' & _binary X'FFFFFFFF') ELSE CAST(18446744073709551615+1 AS BINARY(4)) END)+0 AS v LIMIT 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE(CAST(NULL AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE(CAST(NULL AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE(CAST(NULL AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE(CAST(NULL AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE(CAST(NULL AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE(CAST(NULL AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE(CAST(NULL AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE(CAST(NULL AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (COALESCE(CAST(NULL AS BINARY(4)),(_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IFNULL((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IFNULL((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IFNULL((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IFNULL((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IFNULL((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IFNULL((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IFNULL((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IFNULL((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IFNULL((_binary'123x' & _binary X'FFFFFFFF'),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF((_binary'123x' & _binary X'FFFFFFFF'),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF((_binary'123x' & _binary X'FFFFFFFF'),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF((_binary'123x' & _binary X'FFFFFFFF'),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF((_binary'123x' & _binary X'FFFFFFFF'),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v WHERE 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF((_binary'123x' & _binary X'FFFFFFFF'),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v WHERE 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF((_binary'123x' & _binary X'FFFFFFFF'),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v WHERE 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF((_binary'123x' & _binary X'FFFFFFFF'),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v LIMIT 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF((_binary'123x' & _binary X'FFFFFFFF'),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v LIMIT 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF((_binary'123x' & _binary X'FFFFFFFF'),(_binary'123x' & _binary X'FFFFFFFF')))+0 AS v LIMIT 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF(CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF(CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF(CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF(CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF(CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF(CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF(CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF(CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (NULLIF(CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v WHERE 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "query",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "execute",
+      "existing": false,
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (IF(1,CAST(NULL AS BINARY(4)),CAST(18446744073709551615+1 AS BINARY(4))))+0 AS v LIMIT 0",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

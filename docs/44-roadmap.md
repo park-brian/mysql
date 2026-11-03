@@ -2935,13 +2935,58 @@ control-byte truncation warnings also retain a separate formatting gap. This
 slice does not claim to repair those reader owners. M5.10 and the roadmap totals
 stay partial at 144/190 and M5 42/53. All eleven required ee18407 CI jobs pass.
 
-Next verify the byte-function DOUBLE reader before expanding the operator
-surface. A separate 81-outcome numeric-consumer audit already matches 69,
-including DECIMAL and unsigned casts; twelve query/execute outcomes emit extra
-1292 DOUBLE warnings. For example, `(_binary'123x' & _binary X'FFFFFFFF') + 0`
-returns 123 quietly on 8.4.11. Repair its actual numeric-reader policy without
-changing the underlying bytes, metadata or the verified DECIMAL/INTEGER readers.
-Then audit binary-string shifts at the existing binary operator compiler. Preserve raw literal provenance and numeric mode; verify mixed
+**Owned byte-function DOUBLE readers, verified (2026-11-02):**
+the local Compiled reader now retains an explicit REAL method alongside the
+existing DECIMAL method. Byte-valued bit functions parse their string result
+quietly; IF/CASE and NULLIF forward the selected original reader before result
+merging. COALESCE/IFNULL and ANY_VALUE retain their quiet STRING_RESULT reader,
+including JSON serialization. The shared numeric adapter returns a scalar
+DOUBLE, preserving native overflow clamping without leaking field-copy state.
+Producer bytes, metadata, INTEGER and DECIMAL readers retain their paths. Direct
+strings, CONCAT and string casts keep their own diagnostics; there is no global
+suppression or function-name whitelist.
+
+Eleven native profiles cover 2,547 observations, improving 1,758 to 2,196 complete
+matches. Ten new fixtures retain every complete outcome; all older expectations
+remain unchanged. Cases include unary NOT and AND/OR/XOR, arithmetic, comparisons,
+NOT, explicit casts, invalid/empty/NULL inputs, overflow, conditional selection,
+FLOAT/JSON controls, row-dependent fields, zero limits and producer errors.
+All 27 LAST_INSERT_ID activity observations agree, including NULLIF rereads and
+unselected branches. All thirty strict-write observations agree: byte arithmetic
+no longer raises a spurious 1292 failure, while ordinary strings retain their
+rejection. Across 10,238 observations complete agreement improves 8,286 to 8,724,
+with every one of 147,366 earlier matching facts held. Typecheck and all nine
+unchanged caps pass at parser/core/facade 45,599/333,321/333,248 B gzipped.
+All 49 focused groups pass locally and natively. Actual 688e260 passes the 39
+older groups and the unchanged activity control, and fails all nine repaired
+groups. Lint, 20,000 executor statements seeded 20261010 and plans at
+2,127/2,248 under the unchanged 2,118 floor pass. The complete official suite
+retains all 38 passing identities and its native baseline. The first fresh
+release caught six precise DECIMAL AVG/ROUND/TRUNCATE regressions: the REAL
+adapter had normalized numeric-typed arguments that later require DECIMAL reads.
+The adapter now applies only to string/JSON REAL results and retains the other
+compiled reader capabilities. All six affected cases and the focused fixtures pass after repair; the failed log remains recorded. Final fresh Docker
+--reference passes 1,689 main and four latency tests, typecheck, lint, nine
+unchanged caps, package/typed smoke, the real client and all seven pinned corpora,
+including 1,737 coercion warning counts. Source proof matches 585 tests/fixtures
+and 206 runtime sources plus tooling.
+
+The remaining 351 outcomes keep scalar reduction/cache forwarding, COLLATE and
+other metadata, DECIMAL overflow histories, JSON INTEGER/DECIMAL readers,
+secondary conditions after a producer error and unsupported expression assignment
+explicitly open. The owned method is repaired at its actual producer/holder;
+scalar query ownership is not bypassed or inferred from an AST shape. Totals
+remain 144/190 and M5 42/53; M5.10 stays partial. All eleven required 688e260 CI
+jobs pass.
+
+Next return to binary shifts, preserving the owned numeric reader policy, then
+the separately captured scalar-cache and raw-parameter reader gaps.
+
+The original 81-outcome trigger audit improves from 69 to 81 complete matches,
+including its unchanged DECIMAL and unsigned casts. For example,
+`(_binary'123x' & _binary X'FFFFFFFF') + 0` returns 123 quietly on 8.4.11.
+Then audit binary-string shifts at the existing binary operator compiler.
+Preserve raw literal provenance and numeric mode; verify mixed
 operands, NULL, equal-length errors, shift counts, result metadata, input
 immutability and both protocols before choosing a repair. Keep untyped marker
 inference, CONCAT packet overflow and bitwise expression printing explicitly
