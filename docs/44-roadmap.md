@@ -3646,19 +3646,59 @@ Totals remain 144/190 and M5 42/53; M5.10 remains partial. The predecessor
 CI's first attempt passed ten required jobs and failed the isolated PREPARE
 latency assertion (87 ms versus one third of its 226 ms run); local standalone
 PREPARE and all four bulk-latency tests pass without changes. Its failed job is
-rerunning at that exact SHA; no threshold, assertion or fixture is weakened.
+passed on the same-SHA rerun; all eleven required jobs pass. No threshold,
+assertion or fixture is weakened.
 
-**Next scalar prerequisite: grouped WHERE forwarding.** The grouped planner
-still publishes only source/HAVING cache ownership. Its already-bound WHERE
-resolver can supply the same conditional fact used by ordinary SELECTs; nine
-native FALSE/NULL COUNT and explicit-GROUP-BY fields remain wrong in this audit.
-Forward that fact next, preserving implicit aggregate rows and TRUE controls.
-A follow-up read-only grouped audit has 359 complete responses of 462 before
-repair: 308/378 aggregate/explicit-group/NULL-consumer controls and 51/84
-retained marker executions. Use these to bound the next proof; they do not
-change this slice's 417 fixture outcomes or its preservation totals.
-Broader condition reduction, uncacheable scalar lifetime and LIMIT absorption
-remain open before a renewed COUNT optimization.
+**Grouped scalar WHERE cache metadata, verified boundary (2026-11-10):**
+The grouped planner now forwards the same already-bound conditional-WHERE fact
+as ordinary SELECTs. Implicit COUNT still returns zero when WHERE rejects its
+input; explicit grouping still emits no row. Only the scalar cache metadata
+changes. Text TRUE and retained binary-marker phases keep their existing
+boundaries. The resolver now short-circuits the text phase before the extra
+marker-provenance walks; it never evaluates a predicate again. The unused
+private non-scalar JSON-sort memo-symbol description is removed, preserving
+its identity and once-per-statement warning suppression. All nine unchanged
+caps pass at parser/core/facade 45,599/334,340/334,266 B gzipped; the facade is
+at its existing cap.
+
+Two follow-up native profiles contain 462 responses: implicit/explicit groups,
+COUNT/SUM/MIN/MAX, fixed TRUE/FALSE/NULL, raw/COALESCE/outer COUNT consumers and
+retained marker changes. Complete matches improve 359 to 432 (308 to 348/378
+and 51 to 84/84). Two strict new fixtures pin those 432 complete outcomes;
+nine newly correct native observations append to the existing WHERE boundary
+fixture while preserving its 82 expectations. The thirty remaining query/
+PREPARE field mismatches concern constant-GROUP-BY aggregate holders: binary
+flags and MIN/MAX integer field kinds. They remain separate from nullability,
+row existence and evaluation demand. Across 24,033 responses agreement improves 20,259 to 20,341, preserving
+every prior complete response and all 591,341 matching protocol facts without
+loss. The actual f8c0499 predecessor passes 123 existing groups and fails the
+three expanded/new positive groups. All three focused local/native groups
+pass. Fresh Docker --reference passes 1,765 main, two isolated IN-list and
+four bulk-latency tests, typecheck/lint, all nine unchanged caps, package/typed
+and real-client smoke, and all seven pinned corpora including 1,737 coercion
+warning counts. Source proof matches 661 test files/fixtures, 206 runtime
+sources and reference/generator/census/helper tooling. All 127 focused local
+groups, 20,000 executor statements under seed 20261010, the unchanged plan
+floor (2,127/2,248 versus 2,118 required), and the full 1,459-file official
+run's same 38 passing IDs and exact native baseline pass. Totals remain
+144/190 and M5 42/53; M5.10 remains partial. The prior 4202188 CI rerun now passes all eleven
+required jobs after its earlier isolated PREPARE latency failure; the f8c0499
+run now also passes all eleven required jobs.
+
+**Next scalar prerequisites:** broader condition reduction, uncacheable scalar
+lifetime and LIMIT absorption remain open before a renewed COUNT optimization.
+In particular, an already-proved impossible source-free WHERE still runs an
+earlier volatile conjunct locally while native discards its value demand.
+Reuse the existing rejected predicate, preserving all constructor binding and
+warning order, before broadening Boolean folding. Constant-group holder fields
+remain a separate metadata repair. A fresh 270-response value-demand audit
+has 193 complete matches before repair: definite FALSE/NULL conjuncts retain
+wrong LAST_INSERT_ID effects, division warnings and overflow failures across
+source-free WHERE/HAVING, scalar and implicit aggregate contexts. Constructor
+refusals and true-condition controls retain their existing behavior. Bind every
+conjunct first and reuse the already-rejected predicate; do not recompile or
+reevaluate it to suppress earlier volatile demand. OR TRUE and broader volatile
+condition/cache lifetime remain outside this bounded repair.
 A WHERE containing a row/volatile input without an already-proved false conjunct
 still needs its actual reduction proof, including constant OR folding. Native
 `(SELECT 1 LIMIT 0)` reads 1, and COUNT over it counts every outer row; local

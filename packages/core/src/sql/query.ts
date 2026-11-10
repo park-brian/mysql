@@ -2379,7 +2379,7 @@ function planGrouped(
   ]
 
   return {
-    cached: !!(from || node.having),
+    cached: !!(from || node.having || resolved.conditional),
     ...resultColumns(items, dataColumns),
     constant: strategy === 'implicit',
     blockLimit: q.limit && keep,
@@ -2673,7 +2673,7 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
   }
   return {
     // A false conjunct is decisive; other volatile/row predicates need their own proof.
-    conditional: impossible || (constantNode(condition) && !constantNode(condition, run.protocol === 'text')),
+    conditional: impossible || (run.protocol !== 'text' && constantNode(condition) && !constantNode(condition, false)),
     // New semijoin nodes are verified integer comparisons, in their expanded scope.
     read: (e: Expression, at = ctx) => entries.get(e) ?? compile(e, at),
     predicates: [...entries.values()],

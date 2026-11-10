@@ -218,7 +218,8 @@ export function warnNonScalar(keys: readonly (readonly Value[])[], env: Env): vo
   }
 }
 
-const NON_SCALAR = Symbol('non-scalar JSON sorted')
+/** Private statement-memo key; only identity controls warning suppression. */
+const NON_SCALAR = Symbol()
 
 /**
  * The first of each set of rows equal on every value — `SELECT DISTINCT`, over

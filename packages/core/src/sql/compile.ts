@@ -652,7 +652,7 @@ export interface SubqueryPlan {
   readonly columns: readonly { readonly name: string; readonly type: ResultType }[]
   /** Whether it reads a column of an enclosing query, and must run again for each of its rows. */
   readonly correlated: boolean
-  /** Scalar cache ownership; only an explicit false proves reduction to the item. */
+  /** Scalar value/type cache; false preserves the item reading. Row memoization is separate. */
   readonly cached?: boolean | undefined
   /** Check base-table read visibility under this invocation; not full plan initialization. */
   readonly checkRead?: ((env: Env) => void) | undefined
