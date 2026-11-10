@@ -1,0 +1,3701 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_window282_readers",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "setup": [
+    "CREATE TABLE t(id INT PRIMARY KEY,d DOUBLE)",
+    "CREATE TABLE fixed(id INT PRIMARY KEY,d FLOAT(5,2))",
+    "INSERT INTO fixed VALUES(1,0.10),(2,0.11),(3,NULL)"
+  ],
+  "beforeEach": [
+    "DELETE FROM t",
+    "INSERT INTO t VALUES(1,2.5),(2,3.5),(3,-2.5),(4,NULL)",
+    "SELECT LAST_INSERT_ID(0)"
+  ],
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "observations": [
+    {
+      "sql": "SELECT (id=0) AND (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) AND (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) AND (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) AND (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) AND (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) AND (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) AND (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) AND (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) AND (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) AND (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) AND (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) AND (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) AND (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) AND (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) AND (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) AND (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) AND (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) AND (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) && (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) && (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) && (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) && (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) && (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) && (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) && (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) && (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) && (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) OR (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) OR (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) OR (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) OR (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) OR (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) OR (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) OR (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) OR (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) OR (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) OR (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) OR (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) OR (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) OR (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) OR (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) OR (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) OR (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) OR (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) OR (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) || (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) || (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) || (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) || (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) || (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) || (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) || (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) || (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (NULLIF(id,1)) || (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) XOR (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) XOR (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) XOR (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) XOR (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) XOR (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=0) XOR (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) XOR (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) XOR (LAST_INSERT_ID(LAST_INSERT_ID()+1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) XOR (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) XOR (LAST_INSERT_ID(LAST_INSERT_ID()+1)*0) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) XOR (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (id=1) XOR (NULLIF(LAST_INSERT_ID(LAST_INSERT_ID()+1),1)) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT NULLIF(id,1) = LAST_INSERT_ID(7) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT NULLIF(id,1) = LAST_INSERT_ID(7) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT NULLIF(id,1) <=> NULL AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT NULLIF(id,1) <=> NULL AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS CHAR) = NULLIF(id,1) AS n FROM t WHERE id=1",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS CHAR) = NULLIF(id,1) AS n FROM t WHERE id=1",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT d = 0.10 AS a, d <=> 0.10 AS b FROM fixed ORDER BY id",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          null,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "a",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "b",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT d = 0.10 AS a, d <=> 0.10 AS b FROM fixed ORDER BY id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          null,
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "a",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "b",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+(1)!=-(-1))",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+(1)!=-(-1))",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    }
+  ],
+  "inspect": "SELECT LAST_INSERT_ID() AS n"
+}

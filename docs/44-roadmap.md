@@ -3760,17 +3760,52 @@ passing IDs and exact native baseline pass. All eleven required 49df155 CI
 jobs passed; the full blocking reference gate is unchanged. Totals remain
 144/190 and M5 42/53; M5.10 remains partial.
 
-**Next scalar prerequisite: bounded computed rejection.** Native folds some
-literal arithmetic, comparisons and casts early, but statement-fixed session
-functions alone cannot prove that earlier demand is unused. Prove one bounded
-computed cohort before expanding the syntax reader; preserve the original
-reader, warning/overflow ordering and cached binary marker controls. The
-computed audit still has 96 open value-demand responses. A follow-up native
-audit has 179 complete responses of 390 before repair (132/306 operator/cast/
-session controls, 47/84 retained markers). Start with a proved literal operator
-cohort; do not fold session calls or widen the CAST admission boundary. OR TRUE, dynamic TRUE
-metadata and source effects, constant-group holders, uncacheable scalar
-lifetime and LIMIT absorption remain separate before renewed COUNT work.
+**Direct literal comparisons, bounded rejection (2026-11-10):**
+The existing rejected reader can suppress earlier demand for a direct comparison
+of written integer or NULL literals, including unary signs and null-safe
+equality. The comparison still binds and evaluates in its original phase;
+prepared binary markers retain their reader order. This proof is local to
+query conditions and does not widen range keys. The compiler shares Boolean,
+comparison, fixed DOUBLE arithmetic and binary bitwise reader paths; it
+retains left-first reads, short circuiting, metadata and diagnostics within
+the existing paths.
+
+The operator and retained-marker profiles improve 179 to 236 complete
+responses of 390 against pinned MySQL 8.4.11. A separate Boolean/comparison
+reader profile improves 74 to 76 of 104, including the signed `!=` alias.
+Three strict fixtures pin all 312 complete responses. Six now-matching
+literal comparison responses append to the earlier computed fixture without
+changing its 75 expectations. The reader profile still exposes 18 missing
+`&&`/`||` deprecation warnings and ten existing XOR/null-safe equality
+side-effect mismatches. Keep those separate from this condition proof.
+
+Across 189 profiles and 25,328 responses, complete agreement improves
+21,252 to 21,317. All previous complete responses and 635,030 matching
+protocol facts hold without loss. All four focused groups pass locally and
+against pinned MySQL; actual 33ba185 fails all four. The nine unchanged
+caps pass at parser/core/facade 45,599/334,350/334,263 B gzipped.
+
+Fresh default Docker verification passes 1,774 main, two isolated IN-list
+and four bulk-latency tests, typecheck, lint and installed-package and typed
+example smoke. Source proof matches 670 test files/fixtures and 206 runtime
+sources plus tooling. The seven native corpora reuse the earlier full
+reference result after verifying fourteen unchanged input hashes and the live
+pinned image digest. The full engine replays and blocking CI reference job
+remain unchanged. Seeded executor fuzzing (20,000, 20261010), the plan floor
+(2,127/2,248 versus 2,118 required) and the official 1,459-file mysqltest run's
+same 38 passing IDs with the exact native baseline pass. All eleven required
+33ba185 CI jobs passed. Totals remain 144/190 and M5 42/53; M5.10 is partial.
+
+**Next scalar prerequisite: bounded arithmetic rejection.** A native
+follow-up has 241 complete matches of 449 responses, plus 179 of 336 on
+retained markers, before repair. Start with signed integer and NULL operands
+in literal addition, subtraction and multiplication. Preserve construction warnings, overflow, SQL-mode effects,
+session calls and cached binary marker reads. Division and MOD have their own
+warning paths; casts, text, BIT and temporal arithmetic need separate proof.
+Do not widen CAST admission or assume that being fixed for a statement proves
+a predicate is safe to fold. OR TRUE, dynamic TRUE metadata and source effects,
+constant-group holders, uncacheable scalar lifetime and LIMIT absorption
+remain separate before renewed COUNT work.
 A WHERE containing a row/volatile input without an already-proved false conjunct
 still needs its actual reduction proof, including constant OR folding. Native
 `(SELECT 1 LIMIT 0)` reads 1, and COUNT over it counts every outer row; local

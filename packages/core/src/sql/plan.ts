@@ -52,6 +52,7 @@ import { intersect, normalize, rangeOf, type Constant, type Interval, type Range
 import type { TableStatistics } from './stats.ts'
 import { forwardKeyColumn } from './indexes.ts'
 import { columnIndex } from './scope.ts'
+import { signedOperand } from './ast.ts'
 
 /** Whether a named optimizer transformation is enabled in this statement's session. */
 export function optimizerEnabled(env: Env | undefined, name: string): boolean {
@@ -101,21 +102,16 @@ const FLIP: Readonly<Record<string, Op>> = { '=': '=', '<=>': '<=>', '<': '>', '
  */
 export type OuterColumn = (e: Expression) => Compiled | undefined
 
-function signedKind(e: Expression, plus?: '+'): Expression['kind'] {
-  while (e.kind === NODE.UNARY && (e.op === '-' || e.op === plus)) e = e.operand
-  return e.kind
-}
-
 /** A written literal or marker. Range readers keep the default minus-only grammar. */
 export function isConstant(e: Expression, plus?: '+'): boolean {
-  const kind = signedKind(e, plus)
+  const kind = signedOperand(e, plus).kind
   return kind === NODE.LITERAL || kind === NODE.PLACEHOLDER
 }
 
 /** BETWEEN requires agreeing literal items; bound markers retain their identity. */
 export function equalBounds(e: Expression, env: Env, column: ColumnDef | undefined): boolean {
   if (e.kind !== NODE.BINARY || e.op !== 'BETWEEN' || e.extra === undefined ||
-    signedKind(e.right) !== NODE.LITERAL || signedKind(e.extra as Expression) !== NODE.LITERAL) return false
+    signedOperand(e.right).kind !== NODE.LITERAL || signedOperand(e.extra as Expression).kind !== NODE.LITERAL) return false
   const a = constantValue(e.right, env)
   const b = constantValue(e.extra as Expression, env)
   // Neither NULL nor an unevaluated value can establish a bound.

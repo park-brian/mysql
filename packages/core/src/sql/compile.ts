@@ -12,7 +12,7 @@
 // unknown function in a selected schema is ER_SP_DOES_NOT_EXIST; a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes, type MysqlTime } from '@myjs/bytes'
-import { nativeCallName, someNode } from './ast.ts'
+import { nativeCallName, signedOperand, someNode } from './ast.ts'
 import { notSupported } from './errors.ts'
 import { resolveCollation } from './collation.ts'
 import { decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
@@ -850,7 +850,7 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
 
     case NODE.UNARY: {
       if (e.op === 'EXISTS' && e.operand.kind === NODE.SUBQUERY) return exists(e.operand, ctx)
-      const result = unary(e.op, compile(e.operand, ctx), e.op === 'EXISTS', constantNode(e.operand) && e.operand, ctx)
+      const result = unary(e.op, compile(e.operand, ctx), constantNode(e.operand) && e.operand, ctx)
       return e.op === '-' ? realInteger(result, () => printedArgument(e, ctx)) : result
     }
 
@@ -1172,8 +1172,8 @@ export function stringReal(c: Compiled): Compiled {
   } }
 }
 
-function unary(op: string, a: Compiled, exists: boolean, constant: false | Expression = false, ctx?: CompileContext): Compiled {
-  if (exists) throw notSupported('EXISTS')
+function unary(op: string, a: Compiled, constant: false | Expression, ctx: CompileContext): Compiled {
+  if (op === 'EXISTS') throw notSupported('EXISTS')
   const at = a.eval
   switch (op) {
     case '-': {
@@ -1186,7 +1186,7 @@ function unary(op: string, a: Compiled, exists: boolean, constant: false | Expre
         return { eval: (r, env) => { const v = a.eval(r, env); return v === null ? null : doubleOf(doubleValue(-toDouble(v)), type) }, type }
       }
       // A constant integer whose negation may not fit a BIGINT, a negative one or one past 2^63, is negated as a DECIMAL (8.4.11: `--1` is DECIMAL(1,0)).
-      if (t.kind === 'int' && t.literalInt === undefined && constant !== false && ctx !== undefined) {
+      if (t.kind === 'int' && t.literalInt === undefined && constant !== false) {
         const v = a.eval([], constantEnv(ctx))
         // Not the literal 2^63, whose negation is BIGINT's least, `-9223372036854775808`.
         const least = v !== null && v.kind === 'int' && v.v === 2n ** 63n && constant.kind === NODE.LITERAL
@@ -1227,7 +1227,7 @@ function unary(op: string, a: Compiled, exists: boolean, constant: false | Expre
           const v = at(r, env)
           return v === null ? null : v.kind === 'bytes' ? v : bytesValue(valueBytes(v))
         },
-        type: { ...stringType(byteWidth(a.type), CHARSET_BINARY, a.type.nullable || (ctx !== undefined && modeOf(ctx.preparedSqlMode ?? ctx.session.sqlMode).strict)), coercibility: COERCIBILITY.IMPLICIT },
+        type: { ...stringType(byteWidth(a.type), CHARSET_BINARY, a.type.nullable || modeOf(ctx.preparedSqlMode ?? ctx.session.sqlMode).strict), coercibility: COERCIBILITY.IMPLICIT },
       }
     case 'IS NULL':
       return { eval: (r, env) => bool(at(r, env) === null), type: boolType(false) }
@@ -1258,6 +1258,16 @@ const COMPARISONS: Readonly<Record<string, (c: number) => boolean>> = {
   '<=': (c) => c <= 0,
   '>': (c) => c > 0,
   '>=': (c) => c >= 0,
+}
+
+function integerOrNullLiteral(e: Expression): boolean {
+  const item = signedOperand(e, '+')
+  return item.kind === NODE.LITERAL && (item.type === LITERAL.INT || item.type === LITERAL.NULL)
+}
+
+/** A direct comparison of written integer or NULL items can discard prior demand when it rejects. */
+export function integerLiteralComparison(e: Expression): boolean {
+  return e.kind === NODE.BINARY && (!!COMPARISONS[e.op] || e.op === '<=>') && integerOrNullLiteral(e.left) && integerOrNullLiteral(e.right)
 }
 
 /**
@@ -1307,6 +1317,14 @@ function arithKind(a: ResultType, b: ResultType): 'int' | 'decimal' | 'double' |
   return x === 'double' || y === 'double' ? 'double' : x === 'decimal' || y === 'decimal' ? 'decimal' : 'int'
 }
 
+/** Arithmetic publishes fixed DOUBLE scale before an enclosing integer reader uses it. */
+function arithmeticResult(evalValue: Compiled['eval'], type: ResultType, label: () => string): Compiled {
+  const evalResult = type.kind === 'double' && type.scale < 31
+    ? (r: Row, env: Env) => doubleOf(evalValue(r, env), type)
+    : evalValue
+  return realInteger({ eval: evalResult, type }, label)
+}
+
 function binary(op: string, left: Expression, right: Expression, extra: Expression | readonly Expression[] | undefined, ctx: CompileContext): Compiled {
   // `d + INTERVAL n unit`, `INTERVAL n unit + d` and `d - INTERVAL n unit` (M5.10).
   if (op === '+' && isInterval(right)) return dateAdd(left, right.value, right.unit, false, ctx)
@@ -1333,8 +1351,10 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     const extracted = jsonPathFunction('JSON_EXTRACT', [compile(left, ctx), compile(right, ctx)], 'json_extract')
     return op === '->' ? extracted : unquote(extracted)
   }
-  if (right.kind === NODE.SUBQUERY && right.quantifier !== undefined && COMPARISONS[op] !== undefined) return quantified(op, right.quantifier === 'ALL' ? 'ALL' : 'ANY', left, right, ctx)
-  if ((COMPARISONS[op] !== undefined || op === '<=>') && (isRow(left) || isRow(right))) return rowComparison(op, left, right, ctx)
+  const test = COMPARISONS[op]
+  if (right.kind === NODE.SUBQUERY && right.quantifier !== undefined && test) return quantified(op, right.quantifier === 'ALL' ? 'ALL' : 'ANY', left, right, ctx)
+  const compared = !!test || op === '<=>'
+  if (compared && (isRow(left) || isRow(right))) return rowComparison(op, left, right, ctx)
   const a = compile(left, ctx)
   if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
     const a0 = a
@@ -1415,17 +1435,21 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   if (op === 'LIKE' || op === 'NOT LIKE') return like(op === 'NOT LIKE', a, compile(right, ctx), extra === undefined ? undefined : compile(extra as Expression, ctx))
 
   const b = compile(right, ctx)
-  const [ta, tb] = COMPARISONS[op] !== undefined || op === '<=>' ? temporalOperands(left, right, a, b, ctx) : [a, b]
-  // A string constant compared with a date is read as one first, and one
-  // that is not is the statement's error (8.4.11: `d = '00-00-00'` is 1525).
-  const dated = COMPARISONS[op] !== undefined || op === '<=>'
-  const ca = dated ? numberBesideDate(yearConstant(dateConstant(ta, left, tb, ctx), left, tb, ctx), left, tb, right, ctx) : ta
-  const cb = dated ? numberBesideDate(yearConstant(dateConstant(tb, right, ta, ctx), right, ta, ctx), right, ta, left, ctx) : tb
+  let ca = a, cb = b
+  if (compared) {
+    const [ta, tb] = temporalOperands(left, right, a, b, ctx)
+    // A string constant compared with a date is read as one first, and one
+    // that is not is the statement's error (8.4.11: `d = '00-00-00'` is 1525).
+    const convert = (c: Compiled, e: Expression, other: Compiled, otherWritten: Expression): Compiled =>
+      numberBesideDate(yearConstant(dateConstant(c, e, other, ctx), e, other, ctx), e, other, otherWritten, ctx)
+    ca = convert(ta, left, tb, right)
+    cb = convert(tb, right, ta, left)
+  }
   // A string in arithmetic is read as a double, with 1292 when it is not one.
   const arithmetic = op === '+' || op === '-' || op === '*' || op === '/' || op === '%' || op === 'MOD'
   // And in a comparison with a number, which is of doubles: a constant is
   // converted once a statement (`cache_converted_constant`), a column each row.
-  const comparison = (COMPARISONS[op] !== undefined || op === '<=>') && (textVersusNumber(ca.type, cb.type) || textVersusNumber(cb.type, ca.type))
+  const comparison = compared && (textVersusNumber(ca.type, cb.type) || textVersusNumber(cb.type, ca.type))
   // A logical operator reads its operands' truth as doubles, and a string that is not one warns as it would there.
   const logical = op === 'AND' || op === '&&' || op === 'OR' || op === '||' || op === 'XOR'
   const at = logical ? logicalOperand(ca, left, ctx) : comparison ? numberConstant(ca, left, ctx).eval : arithmetic ? asNumber(ca, 'DOUBLE').eval : ca.eval
@@ -1435,61 +1459,27 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   // Printed only for an error's message: the printing compiles the columns it names.
   let printed: string | undefined
   const label = (): string => (printed ??= printedArgument({ kind: NODE.BINARY, op, left, right, at: left.at }, ctx))
-  if (dated && isText(ca.type) && isText(cb.type)) aggregateCollations([ca.type, cb.type], op === '!=' ? '<>' : op, true)
+  if (compared && isText(ca.type) && isText(cb.type)) aggregateCollations([ca.type, cb.type], op === '!=' ? '<>' : op, true)
 
   switch (op) {
     case 'AND':
     case '&&':
-      return {
-        eval: (r, env) => {
-          const x = truth(at(r, env))
-          if (x === false) return bool(false)
-          const y = truth(bt(r, env))
-          if (y === false) return bool(false)
-          return x === null || y === null ? null : bool(true)
-        },
-        type: boolType(nullable),
-      }
     case 'OR':
     case '||':
+    case 'XOR': {
+      // AND decides on false, OR on true, and XOR always reads both sides.
+      const decisive = op === 'XOR' ? undefined : op === 'OR' || op === '||'
       return {
         eval: (r, env) => {
           const x = truth(at(r, env))
-          if (x === true) return bool(true)
+          if (x === decisive) return bool(x)
           const y = truth(bt(r, env))
-          if (y === true) return bool(true)
-          return x === null || y === null ? null : bool(false)
+          if (y === decisive) return bool(y)
+          if (x === null || y === null) return null
+          return bool(decisive === undefined ? x !== y : !decisive)
         },
         type: boolType(nullable),
       }
-    case 'XOR':
-      return {
-        eval: (r, env) => {
-          const x = truth(at(r, env))
-          const y = truth(bt(r, env))
-          return x === null || y === null ? null : bool(x !== y)
-        },
-        type: boolType(nullable),
-      }
-    case '<=>': {
-      const tolerance = fixedTolerance(a.type, b.type)
-      if (tolerance !== undefined) {
-        const cmp = comparer(a.type, b.type)
-        return {
-          eval: (r, env) => {
-            const x = at(r, env)
-            const y = bt(r, env)
-            return bool(x === null || y === null ? x === y : cmp(x, y) === 0)
-          },
-          type: boolType(false),
-        }
-      }
-      return { eval: (r, env) => {
-        const x = at(r, env)
-        const y = bt(r, env)
-        if (comparison && x !== null && y === null) at(r, env)
-        return bool(nullSafeEqual(x, y))
-      }, type: boolType(false) }
     }
     case '+':
     case '-':
@@ -1506,11 +1496,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
         type = decimalType(digits + s, s, nullable, unsignedOf(a.type) && unsignedOf(b.type))
       } else if (kind === 'double') type = fixedDouble([a.type, b.type], nullable) ?? doubleType(nullable, 23)
       else type = nullArithmetic(a.type, b.type)
-      if (type.kind === 'double' && type.scale < 31) {
-        const fixed = type
-        return realInteger({ eval: (r, env) => doubleOf(add(at(r, env), bt(r, env), op, label), fixed), type }, label)
-      }
-      return realInteger({ eval: (r, env) => add(at(r, env), bt(r, env), op, label), type }, label)
+      return arithmeticResult((r, env) => add(at(r, env), bt(r, env), op, label), type, label)
     }
     case '/': {
       const kind = arithKind(a.type, b.type)
@@ -1518,9 +1504,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       // NULL still inherits the other operand's numeric scale. Text and
       // unspecified doubles produce DOUBLE(23,31); fixed decimals add four.
       const type = kind === 'double' ? divisionDouble(a.type, b.type) : kind === 'null' ? nullDivision(a.type, b.type) : decimalType(intDigits(a.type) + scaleOf(b.type) + s, s, true, unsignedOf(a.type) && unsignedOf(b.type))
-      const quotient = byZero(at, bt, (p, q) => divide(p, q, label))
-      if (type.kind === 'double' && type.scale < 31) return realInteger({ eval: (r, env) => doubleOf(quotient(r, env), type), type }, label)
-      return realInteger({ eval: quotient, type }, label)
+      return arithmeticResult(byZero(at, bt, (p, q) => divide(p, q, label)), type, label)
     }
     case 'DIV': {
       // Digits: the dividend's integer digits and the divisor's decimals, or
@@ -1563,32 +1547,25 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     case '<<':
     case '>>': {
       const shift = op === '<<' || op === '>>'
-      if (shift && a.type.kind === 'bytes' && a.type.literalInt === undefined) {
-        const count = asNumber(cb, 'INTEGER').eval
+      const binaryInput = (t: ResultType): boolean => t.kind === 'bytes' && t.literalInt === undefined
+      const binaryOrNull = (t: ResultType): boolean => t.kind === 'bytes' || t.kind === 'null'
+      const binary = shift ? binaryInput(a.type) : binaryOrNull(a.type) && binaryOrNull(b.type) && (binaryInput(a.type) || binaryInput(b.type))
+      if (binary) {
+        const readRight = shift ? asNumber(cb, 'INTEGER').eval : bt
+        const width = shift ? byteWidth(a.type) : Math.max(byteWidth(a.type), byteWidth(b.type))
         return stringReal({
           eval: (r, env) => {
             const first = at(r, env)
             if (first === null) return null
-            const second = count(r, env)
-            return second === null ? null : bytesValue(binaryShift(valueBytes(first), second, op === '<<'))
-          },
-          type: { ...stringResultType(byteWidth(a.type), true, CHARSET_BINARY, COERCIBILITY.COERCIBLE), nullable },
-        })
-      }
-      const types = [a.type, b.type]
-      if (!shift && types.every((t) => t.kind === 'bytes' || t.kind === 'null') && types.some((t) => t.kind === 'bytes' && t.literalInt === undefined)) {
-        return stringReal({
-          eval: (r, env) => {
-            const first = at(r, env)
-            if (first === null) return null
-            const second = bt(r, env)
+            const second = readRight(r, env)
             if (second === null) return null
             const bytes = valueBytes(first)
+            if (shift) return bytesValue(binaryShift(bytes, second, op === '<<'))
             const other = valueBytes(second)
             if (bytes.length !== other.length) throw sqlError('ER_INVALID_BITWISE_OPERANDS_SIZE', 'Binary operands of bitwise operators must be of equal length')
             return bytesValue(bytes.map((byte, i) => op === '&' ? byte & other[i]! : op === '|' ? byte | other[i]! : byte ^ other[i]!))
           },
-          type: { ...stringResultType(Math.max(byteWidth(a.type), byteWidth(b.type)), true, CHARSET_BINARY, COERCIBILITY.COERCIBLE), nullable },
+          type: { ...stringResultType(width, true, CHARSET_BINARY, COERCIBILITY.COERCIBLE), nullable },
         })
       }
       // Text is read as an unsigned integer, warning as it goes.
@@ -1600,19 +1577,25 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       }, type: intType(21, nullable, true) }
     }
     default: {
-      const test = COMPARISONS[op]
-      if (test === undefined) throw notSupported(`The operator ${op}`)
-      const cmp = comparer(a.type, b.type)
+      if (!compared) throw notSupported(`The operator ${op}`)
+      const nullSafe = !test
+      const matches = test ?? COMPARISONS['=']!
+      const cmp = nullSafe && fixedTolerance(a.type, b.type) === undefined ? undefined : comparer(a.type, b.type)
       return {
-        // The right side is not read when the left is NULL, so its conversion
-        // does not warn (8.4.11's comparators look at the left first).
+        // Ordinary comparisons stop at a left NULL; <=> reads both sides.
         eval: (r, env) => {
           const x = at(r, env)
-          if (x === null) return null
-          const c = cmp(x, bt(r, env))
-          return c === null ? null : bool(test(c))
+          if (x === null && !nullSafe) return null
+          const y = bt(r, env)
+          if (!cmp) {
+            if (comparison && x !== null && y === null) at(r, env)
+            return bool(nullSafeEqual(x, y))
+          }
+          const c = cmp(x, y)
+          if (c === null) return nullSafe ? bool(x === y) : null
+          return bool(matches(c))
         },
-        type: boolType(nullable),
+        type: boolType(!nullSafe && nullable),
       }
     }
   }
@@ -1673,7 +1656,7 @@ export function constantNode(e: unknown, parameters = true, rowInputs = false): 
  * a DATETIME on 1970-01-01, and \`tm = ?\` must find the row. Anything else
  * meets as DATETIME, the TIME added to the statement's date, as CURDATE has it.
  */
-export function temporalOperands(left: Expression, right: Expression, a: Compiled, b: Compiled, ctx?: CompileContext): [Compiled, Compiled] {
+export function temporalOperands(left: Expression, right: Expression, a: Compiled, b: Compiled, ctx: CompileContext): [Compiled, Compiled] {
   const ak = a.type.kind
   const bk = b.type.kind
   const yearDate = (c: Compiled): Compiled => ({
@@ -1694,7 +1677,7 @@ export function temporalOperands(left: Expression, right: Expression, a: Compile
   return ak === 'time' ? [onStatementDate(a), b] : [a, onStatementDate(b)]
 }
 
-function asTimeOfDay(c: Compiled, column: readonly string[], list = false, ctx?: CompileContext): Compiled {
+function asTimeOfDay(c: Compiled, column: readonly string[], list: boolean, ctx: CompileContext): Compiled {
   const self: Compiled = {
     eval: (r, env) => {
       const v = c.eval(r, env)
@@ -1743,7 +1726,7 @@ function asTimeOfDay(c: Compiled, column: readonly string[], list = false, ctx?:
     },
     type: c.type,
   }
-  return ctx === undefined ? self : resolveConstant(self, ctx)
+  return resolveConstant(self, ctx)
 }
 
 /** The session's NO_ZERO_DATE and NO_ZERO_IN_DATE, as a scan's flags. */
@@ -1820,17 +1803,16 @@ const ZERO_DATETIME: Value = { kind: 'datetime', v: { year: 0, month: 0, day: 0,
  * column says (8.4.11: `dt = 10`, `1e300 >= dt`). An invalid constant
  * retains its numeric value for the comparison.
  */
-function numberBesideDate(c: Compiled, written: Expression, other: Compiled, otherWritten: Expression, ctx?: CompileContext): Compiled {
+function numberBesideDate(c: Compiled, written: Expression, other: Compiled, otherWritten: Expression, ctx: CompileContext): Compiled {
   if (other.type.kind !== 'datetime' || otherWritten.kind !== NODE.COLUMN || !isNumber(c.type) || !constantNode(written)) return c
   const what = other.type.field === FIELD_TYPE.DATE || other.type.field === FIELD_TYPE.NEWDATE ? 'date' : 'datetime'
   const column = otherWritten.parts[otherWritten.parts.length - 1] as string
-  const key = written
-  const self: Compiled = {
+  return resolveConstant({
     type: c.type,
     eval: (r, env) => {
       const v = c.eval(r, env)
-      if (v !== null && env.memo?.has(key) !== true) {
-        env.memo?.set(key, true)
+      if (v !== null && env.memo?.has(written) !== true) {
+        env.memo?.set(written, true)
         const whole = v.kind === 'double' ? (Number.isInteger(v.v) && Math.abs(v.v) < 1e15 ? BigInt(v.v) : undefined) : v.kind === 'int' ? v.v : v.kind === 'decimal' ? toInteger(v) : undefined
         if (whole === undefined || numberToDateTime(whole) === undefined) raise(env, 1292, `Incorrect ${what} value: '${toText(v)}' for column '${column}' at row 1`)
         else if (what === 'date') {
@@ -1840,8 +1822,7 @@ function numberBesideDate(c: Compiled, written: Expression, other: Compiled, oth
       }
       return v === null ? null : toDateTime(v, what === 'date' ? 'DATE' : 'DATETIME') ?? v
     },
-  }
-  return ctx === undefined ? self : resolveConstant(self, ctx)
+  }, ctx)
 }
 
 export function columnConstantDiagnostics(c: Compiled, written: Expression, other: Compiled, column: Expression, ctx: CompileContext): void {
@@ -1880,7 +1861,7 @@ function yearConstant(c: Compiled, written: Expression, other: Compiled, ctx: Co
 /** A constant compared with a TIME column, read as a time of day. */
 const NO_TIME = { kind: 'time', v: { negative: true, days: 41, hour: 23, minute: 59, second: 59, microsecond: 999999 }, fsp: 0 } as const satisfies Value
 
-function timeConstant(a: Compiled, left: Expression, e: Expression, c: Compiled, list = false, ctx?: CompileContext): Compiled {
+function timeConstant(a: Compiled, left: Expression, e: Expression, c: Compiled, list: boolean, ctx: CompileContext): Compiled {
   // In an IN list a TIMESTAMP literal compares as a datetime, the column on
   // today's date; a CAST to one is still read as a time of day (8.4.11).
   const kinds = (c.type.kind === 'datetime' && !(list && e.kind === NODE.LITERAL)) || c.type.kind === 'string' || c.type.kind === 'bytes' || c.type.kind === 'int'
