@@ -15963,6 +15963,1776 @@
           ]
         ]
       }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0/1)",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0/1)",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0/1)) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0/1)) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0/1)",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0/1)",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (1/0)",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (1/0)",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (1/0)) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (1/0)) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (1/0)",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (1/0)",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0 DIV 2)",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0 DIV 2)",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0 DIV 2)) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0 DIV 2)) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0 DIV 2)",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0 DIV 2)",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (1 DIV 0)",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (1 DIV 0)",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (1 DIV 0)) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (1 DIV 0)) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (1 DIV 0)",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (1 DIV 0)",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0 MOD 2)",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0 MOD 2)",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0 MOD 2)) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0 MOD 2)) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0 MOD 2)",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (0 MOD 2)",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (1/0)",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='NO_UNSIGNED_SUBTRACTION'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (1/0)",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='NO_UNSIGNED_SUBTRACTION'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (1/0)",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='STRICT_ALL_TABLES,ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (1/0)",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "SET sql_mode='STRICT_ALL_TABLES,ERROR_FOR_DIVISION_BY_ZERO'"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
     }
   ],
   "inspect": "SELECT LAST_INSERT_ID() AS n"

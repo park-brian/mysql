@@ -1260,10 +1260,15 @@ const COMPARISONS: Readonly<Record<string, (c: number) => boolean>> = {
   '>=': (c) => c >= 0,
 }
 
+/** Arithmetic operators that read text as DOUBLE; DIV has its own DECIMAL reader. */
+function doubleArithmeticInput(op: string): boolean {
+  return op === '+' || op === '-' || op === '*' || op === '/' || op === '%' || op === 'MOD'
+}
+
 function integerLiteralExpression(e: Expression, arithmetic = false): boolean {
   const item = signedOperand(e, '+')
   if (item.kind === NODE.LITERAL) return item.type === LITERAL.INT || item.type === LITERAL.NULL
-  return arithmetic && item.kind === NODE.BINARY && (item.op === '+' || item.op === '-' || item.op === '*') &&
+  return arithmetic && item.kind === NODE.BINARY && (item.op === 'DIV' || doubleArithmeticInput(item.op)) &&
     integerLiteralExpression(item.left, true) && integerLiteralExpression(item.right, true)
 }
 
@@ -1330,9 +1335,8 @@ function arithmeticResult(evalValue: Compiled['eval'], type: ResultType, label: 
 
 function binary(op: string, left: Expression, right: Expression, extra: Expression | readonly Expression[] | undefined, ctx: CompileContext): Compiled {
   // `d + INTERVAL n unit`, `INTERVAL n unit + d` and `d - INTERVAL n unit` (M5.10).
-  if (op === '+' && isInterval(right)) return dateAdd(left, right.value, right.unit, false, ctx)
+  if ((op === '+' || op === '-') && isInterval(right)) return dateAdd(left, right.value, right.unit, op === '-', ctx)
   if (op === '+' && isInterval(left)) return dateAdd(right, left.value, left.unit, false, ctx)
-  if (op === '-' && isInterval(right)) return dateAdd(left, right.value, right.unit, true, ctx)
   if (op === 'IN' || op === 'NOT IN') return inList(op === 'NOT IN', left, right, ctx)
   if (op === 'MEMBER OF') return memberOf(compile(left, ctx), compile(right, ctx))
   // `a REGEXP p` is REGEXP_LIKE(a, p), and `RLIKE` is its other spelling.
@@ -1449,7 +1453,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     cb = convert(tb, right, ta, left)
   }
   // A string in arithmetic is read as a double, with 1292 when it is not one.
-  const arithmetic = op === '+' || op === '-' || op === '*' || op === '/' || op === '%' || op === 'MOD'
+  const arithmetic = doubleArithmeticInput(op)
   // And in a comparison with a number, which is of doubles: a constant is
   // converted once a statement (`cache_converted_constant`), a column each row.
   const comparison = compared && (textVersusNumber(ca.type, cb.type) || textVersusNumber(cb.type, ca.type))
@@ -1673,13 +1677,20 @@ export function temporalOperands(left: Expression, right: Expression, a: Compile
   if (a.type.field === FIELD_TYPE.YEAR && bk === 'datetime') return [yearDate(a), b]
   if (b.type.field === FIELD_TYPE.YEAR && ak === 'datetime') return [a, yearDate(b)]
   // A string constant too: `tm = '1970-01-01 14:37:36'` finds 14:37:36.
-  if (ak === 'time' && left.kind === NODE.COLUMN && constantNode(right) && (bk === 'datetime' || bk === 'string' || bk === 'bytes' || bk === 'int')) return [a, asTimeOfDay(b, left.parts, false, ctx)]
-  if (bk === 'time' && right.kind === NODE.COLUMN && constantNode(left) && (ak === 'datetime' || ak === 'string' || ak === 'bytes' || ak === 'int')) return [asTimeOfDay(a, right.parts, false, ctx), b]
+  const convertedRight = timeConstant(a, left, right, b, false, ctx)
+  if (convertedRight !== b) return [a, convertedRight]
+  const convertedLeft = timeConstant(b, right, left, a, false, ctx)
+  if (convertedLeft !== a) return [convertedLeft, b]
   if (!((ak === 'time' && bk === 'datetime') || (ak === 'datetime' && bk === 'time'))) return [a, b]
   return ak === 'time' ? [onStatementDate(a), b] : [a, onStatementDate(b)]
 }
 
 function asTimeOfDay(c: Compiled, column: readonly string[], list: boolean, ctx: CompileContext): Compiled {
+  const report = (v: Exclude<Value, null>, env: Env, level?: Condition['level']): void => {
+    if (env.memo?.has(self) === true) return
+    env.memo?.set(self, true)
+    raise(env, 1292, `Incorrect time value: '${toText(v)}' for column '${column.at(-1) as string}' at row 1`, level)
+  }
   const self: Compiled = {
     eval: (r, env) => {
       const v = c.eval(r, env)
@@ -1692,22 +1703,17 @@ function asTimeOfDay(c: Compiled, column: readonly string[], list: boolean, ctx:
         // A failed conversion keeps the text for ordinary comparisons.
         // In a constant TIME list it prevents building the list, represented
         // by NO_TIME; the conversion warns once as storing into the column does.
-        if (toText(v).trim() === '') return list ? NO_TIME : v
-        const p = parseTime(toText(v))
+        const text = toText(v)
+        if (text.trim() === '') return list ? NO_TIME : v
+        const p = parseTime(text)
         // str_to_time rejects exponent forms without setting a truncation
         // warning; Field_time's failed constant conversion is quiet too.
-        if (p === undefined && numericPrefix(toText(v)).complete && /[eE]/.test(toText(v))) return list ? NO_TIME : v
+        if (p === undefined && numericPrefix(text).complete && /[eE]/.test(text)) return list ? NO_TIME : v
         if (p !== undefined && !p.truncated) {
-          if (p.dateDropped && env.memo?.has(self) !== true) {
-            env.memo?.set(self, true)
-            raise(env, 1292, `Incorrect time value: '${toText(v)}' for column '${column[column.length - 1] as string}' at row 1`, 'Note')
-          }
+          if (p.dateDropped) report(v, env, 'Note')
           return { kind: 'time', v: p.v, fsp: p.fsp }
         }
-        if (env.memo?.has(self) !== true) {
-          env.memo?.set(self, true)
-          raise(env, 1292, `Incorrect time value: '${toText(v)}' for column '${column[column.length - 1] as string}' at row 1`)
-        }
+        report(v, env)
         return list ? NO_TIME : v
       }
       const dt = v.kind === 'datetime' ? v : v.kind === 'int' && v.v >= 10_000_000_000n ? toDateTime(v, 'DATETIME') : undefined
@@ -1716,13 +1722,9 @@ function asTimeOfDay(c: Compiled, column: readonly string[], list: boolean, ctx:
       if (dt !== undefined) t = toTime(dt)
       else if (parsed !== undefined && !parsed.truncated && !parsed.clamped) t = { kind: 'time', v: parsed.v, fsp: parsed.fsp }
       // A number that is no time says so once, as storing it into the column would (8.4.11: `tm <= 20200102`).
-      if (t === undefined && v.kind === 'int' && env.memo?.has(self) !== true) {
-        env.memo?.set(self, true)
-        raise(env, 1292, `Incorrect time value: '${toText(v)}' for column '${column[column.length - 1] as string}' at row 1`)
-      }
-      if (dt !== undefined && v.kind === 'int' && env.memo?.has(self) !== true) {
-        env.memo?.set(self, true)
-        raise(env, 1292, `Incorrect time value: '${toText(v)}' for column '${column[column.length - 1] as string}' at row 1`, 'Note')
+      if (v.kind === 'int') {
+        if (t === undefined) report(v, env)
+        if (dt !== undefined) report(v, env, 'Note')
       }
       return t ?? v
     },

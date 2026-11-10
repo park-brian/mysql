@@ -3831,15 +3831,54 @@ IDs and exact native baseline pass. Preceding 5266397 CI has ten required jobs
 passing and the pinned reference still running, with no reported failure.
 Totals remain 144/190 and M5 42/53; M5.10 remains partial.
 
-**Next scalar prerequisite: division and remainder.** The native audit
-starts at 204 complete matches of 531 written and strict-write responses,
-and 225 of 420 retained-marker responses. Prove `/`, `DIV`, `%` and infix
-`MOD` separately from the `MOD()` call. Keep the original zero-divisor
-warning, overflow and SQL-mode order, and distinguish text from retained
-binary markers. CAST admission, mixed
-types, session calls, OR TRUE, dynamic TRUE metadata and source effects,
-constant-group holders, uncacheable scalar lifetime and LIMIT absorption
-stay separate before renewed COUNT work.
+**Signed integer/NULL infix division and remainder (2026-11-10):**
+The same rejected-reader proof accepts `/`, `DIV`, `%` and infix `MOD` in
+written integer/NULL trees. The compiler still owns zero-divisor diagnostics
+and overflow in the original phase. The proof keeps retained binary markers
+and `MOD()` calls outside its scope. TIME comparisons share the existing
+constant conversion and diagnostic memo, retaining conversion order and
+diagnostic severity. INTERVAL addition and subtraction share the original
+right-operand path.
+
+Two native profiles improve 429 to 775 complete responses of 951:
+written/strict-write controls 204 to 418 of 531 and retained markers
+225 to 357 of 420. Within the written cohort, 72 INSERT SELECT responses
+improve 22 to 50, including 9 to 13 of 24 strict-mode responses. Two strict
+fixtures pin all 775 complete outcomes. Thirty native
+responses append to the earlier 192 comparison expectations and 34 append
+to the earlier 333 arithmetic expectations. The retained gains come from
+text substitution; binary order remains unchanged.
+
+Across 193 profiles and 27,064 responses, complete agreement improves
+22,354 to 22,824 with every earlier complete response and all 693,408
+matching protocol facts retained. All four focused groups pass locally
+and on pinned MySQL; actual 447606a fails all four. The existing TIME
+comparison groups also pass locally, including two that run directly on
+pinned MySQL. All nine unchanged caps pass at parser/core/facade
+45,599/334,339/334,244 B gzipped.
+
+Fresh default Docker passes 1,778 main, two isolated IN-list and four
+bulk-latency tests, typecheck, lint, and package and typed example smoke.
+Source proof matches 674 test files/fixtures and 206 runtime sources plus
+tooling. The seven unchanged native corpora retain the earlier full reference
+result after verifying fourteen input hashes and the live pinned digest;
+full engine replay and blocking CI reference verification stay intact.
+Seeded executor fuzzing (20,000, 20261010), the unchanged plan floor
+(2,127/2,248 versus 2,118 required) and the official mysqltest run's same 38
+passing IDs with the exact native baseline pass. All eleven required 5266397
+CI jobs passed; 447606a has ten passing and pinned reference still running,
+with no reported failure. Totals remain 144/190 and M5 42/53; M5.10 is partial.
+
+**Next scalar prerequisite: native MOD() calls.** The pinned audit starts
+at 178 complete matches of 396 written/mode responses and 111 of 210
+retained-marker responses. Extend the proof only to the unqualified native
+two-argument call. Preserve quoted and schema-qualified lookup, SQL-mode
+warnings and binary markers. Invalid arity currently returns a local
+function-argument error where MySQL gives a parse error; keep that
+admission mismatch separate. CAST admission, mixed types, session calls,
+OR TRUE, dynamic TRUE metadata and source effects, constant-group holders,
+uncacheable scalar lifetime and LIMIT absorption stay separate before
+renewed COUNT work.
 A WHERE containing a row/volatile input without an already-proved false conjunct
 still needs its actual reduction proof, including constant OR folding. Native
 `(SELECT 1 LIMIT 0)` reads 1, and COUNT over it counts every outer row; local
