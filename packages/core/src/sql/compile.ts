@@ -1260,14 +1260,17 @@ const COMPARISONS: Readonly<Record<string, (c: number) => boolean>> = {
   '>=': (c) => c >= 0,
 }
 
-function integerOrNullLiteral(e: Expression): boolean {
+function integerLiteralExpression(e: Expression, arithmetic = false): boolean {
   const item = signedOperand(e, '+')
-  return item.kind === NODE.LITERAL && (item.type === LITERAL.INT || item.type === LITERAL.NULL)
+  if (item.kind === NODE.LITERAL) return item.type === LITERAL.INT || item.type === LITERAL.NULL
+  return arithmetic && item.kind === NODE.BINARY && (item.op === '+' || item.op === '-' || item.op === '*') &&
+    integerLiteralExpression(item.left, true) && integerLiteralExpression(item.right, true)
 }
 
-/** A direct comparison of written integer or NULL items can discard prior demand when it rejects. */
-export function integerLiteralComparison(e: Expression): boolean {
-  return e.kind === NODE.BINARY && (!!COMPARISONS[e.op] || e.op === '<=>') && integerOrNullLiteral(e.left) && integerOrNullLiteral(e.right)
+/** Syntax proof for reusing an already-rejected reader over written integer or NULL items. */
+export function integerLiteralPredicate(e: Expression): boolean {
+  if (e.kind === NODE.BINARY && (COMPARISONS[e.op] || e.op === '<=>')) return integerLiteralExpression(e.left) && integerLiteralExpression(e.right)
+  return integerLiteralExpression(e, true)
 }
 
 /**
@@ -1579,7 +1582,6 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     default: {
       if (!compared) throw notSupported(`The operator ${op}`)
       const nullSafe = !test
-      const matches = test ?? COMPARISONS['=']!
       const cmp = nullSafe && fixedTolerance(a.type, b.type) === undefined ? undefined : comparer(a.type, b.type)
       return {
         // Ordinary comparisons stop at a left NULL; <=> reads both sides.
@@ -1593,7 +1595,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
           }
           const c = cmp(x, y)
           if (c === null) return nullSafe ? bool(x === y) : null
-          return bool(matches(c))
+          return bool(test ? test(c) : c === 0)
         },
         type: boolType(!nullSafe && nullable),
       }

@@ -3796,16 +3796,50 @@ remain unchanged. Seeded executor fuzzing (20,000, 20261010), the plan floor
 same 38 passing IDs with the exact native baseline pass. All eleven required
 33ba185 CI jobs passed. Totals remain 144/190 and M5 42/53; M5.10 is partial.
 
-**Next scalar prerequisite: bounded arithmetic rejection.** A native
-follow-up has 241 complete matches of 449 responses, plus 179 of 336 on
-retained markers, before repair. Start with signed integer and NULL operands
-in literal addition, subtraction and multiplication. Preserve construction warnings, overflow, SQL-mode effects,
-session calls and cached binary marker reads. Division and MOD have their own
-warning paths; casts, text, BIT and temporal arithmetic need separate proof.
-Do not widen CAST admission or assume that being fixed for a statement proves
-a predicate is safe to fold. OR TRUE, dynamic TRUE metadata and source effects,
+**Signed integer/NULL arithmetic rejection (2026-11-10):**
+An already-rejected condition may skip earlier value reads when the written
+expression consists of signed integer/NULL literals and additions,
+subtractions or multiplications. The proof looks through nested signs and
+arithmetic without changing the bound reader. It does not descend through a
+comparison or accept operands with CAST, function calls or binary markers.
+Overflow and warnings still come from the original reader. Range/key syntax
+and the binary-marker phase are unchanged. The fixed-precision null-safe
+comparator now checks its existing comparison result for equality directly.
+
+Two native profiles improve 420 to 578 complete responses of 785:
+written/mixed controls 241 to 333 of 449, retained markers 179 to 245 of
+336. Two strict fixtures pin those complete responses; eighteen now-matching
+native arithmetic responses append to the earlier comparison fixture
+without changing its 174 expectations. The retained gains are text queries
+after substitution; the original binary responses are preserved.
+
+Across 191 profiles and 26,113 responses, complete agreement improves
+21,737 to 21,925 with no loss of earlier full matches or 661,231 matching
+protocol facts. All three focused groups pass locally and on pinned MySQL;
+actual 5266397 fails all three. All nine unchanged caps pass at
+parser/core/facade 45,599/334,358/334,261 B gzipped.
+
+Fresh default Docker verification passes 1,776 main, two isolated IN-list
+and four bulk-latency tests, typecheck, lint and installed-package and typed
+example smoke. Source proof matches 672 test files/fixtures and 206 runtime
+sources plus tooling. The seven native corpora retain the earlier full result
+after fourteen unchanged input hashes and the live pinned image digest match.
+The full engine replay and blocking CI reference job stay intact. Seeded
+executor fuzzing (20,000, 20261010), the unchanged plan floor (2,127/2,248
+versus 2,118 required), and the official 1,459-file mysqltest run's 38 passing
+IDs and exact native baseline pass. Preceding 5266397 CI has ten required jobs
+passing and the pinned reference still running, with no reported failure.
+Totals remain 144/190 and M5 42/53; M5.10 remains partial.
+
+**Next scalar prerequisite: division and remainder.** The native audit
+starts at 204 complete matches of 531 written and strict-write responses,
+and 225 of 420 retained-marker responses. Prove `/`, `DIV`, `%` and infix
+`MOD` separately from the `MOD()` call. Keep the original zero-divisor
+warning, overflow and SQL-mode order, and distinguish text from retained
+binary markers. CAST admission, mixed
+types, session calls, OR TRUE, dynamic TRUE metadata and source effects,
 constant-group holders, uncacheable scalar lifetime and LIMIT absorption
-remain separate before renewed COUNT work.
+stay separate before renewed COUNT work.
 A WHERE containing a row/volatile input without an already-proved false conjunct
 still needs its actual reduction proof, including constant OR folding. Native
 `(SELECT 1 LIMIT 0)` reads 1, and COUNT over it counts every outer row; local
