@@ -1,0 +1,1393 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_window277_scalars",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "setup": [
+    "CREATE TABLE t(id INT PRIMARY KEY,d DOUBLE)"
+  ],
+  "beforeEach": [
+    "DELETE FROM t",
+    "INSERT INTO t VALUES(1,2.5),(2,3.5),(3,-2.5),(4,NULL)",
+    "SELECT LAST_INSERT_ID(0)"
+  ],
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "observations": [
+    {
+      "sql": "SELECT COUNT((SELECT 1)) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          4
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT 1)) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          4
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT 1)) AS n FROM t",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT 1 LIMIT 0)) AS n FROM t",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT 1 WHERE FALSE)) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT 1 WHERE FALSE)) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT 1 WHERE FALSE)) AS n FROM t",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT 1 HAVING FALSE)) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT 1 HAVING FALSE)) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT 1 HAVING FALSE)) AS n FROM t",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT 1 LIMIT 1 OFFSET 1)) AS n FROM t",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT LAST_INSERT_ID(LAST_INSERT_ID()+1))) AS n FROM t",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT LAST_INSERT_ID(LAST_INSERT_ID()+1) LIMIT 0)) AS n FROM t",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT LAST_INSERT_ID(LAST_INSERT_ID()+1) WHERE FALSE)) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT LAST_INSERT_ID(LAST_INSERT_ID()+1) WHERE FALSE)) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT LAST_INSERT_ID(LAST_INSERT_ID()+1) WHERE FALSE)) AS n FROM t",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT LAST_INSERT_ID(LAST_INSERT_ID()+1) LIMIT 1 OFFSET 1)) AS n FROM t",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((WITH r AS (SELECT 1) SELECT LAST_INSERT_ID(LAST_INSERT_ID()+1))) AS n FROM t",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT id FROM t WHERE id=99)) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT id FROM t WHERE id=99)) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT id FROM t WHERE id=99)) AS n FROM t",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT COUNT(*) FROM t WHERE id=99)) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          4
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT COUNT(*) FROM t WHERE id=99)) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          4
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT COUNT(*) FROM t WHERE id=99)) AS n FROM t",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT COUNT(LAST_INSERT_ID(LAST_INSERT_ID()+1)) OVER ())) AS n FROM t",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT LAST_INSERT_ID(LAST_INSERT_ID()+1) WHERE TRUE)) AS n FROM t",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT LAST_INSERT_ID(LAST_INSERT_ID()+1) HAVING TRUE)) AS n FROM t",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT 1 FROM t WHERE id>0 LIMIT 1)) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          4
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT 1 FROM t WHERE id>0 LIMIT 1)) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          4
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT((SELECT 1 FROM t WHERE id>0 LIMIT 1)) AS n FROM t",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    }
+  ],
+  "inspect": "SELECT LAST_INSERT_ID() AS n"
+}

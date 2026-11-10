@@ -158,7 +158,7 @@ export function openTable(run: Run, name: TableName, alias = name.name): { reado
 }
 
 /** The statement's memo entry for the temporary tables it has opened. */
-const OPENED = Symbol('temporary tables opened')
+const OPENED = Symbol()
 
 const defaultDatabase = (run: Run): string | null => (run.database === undefined ? run.env.session.database : run.database)
 

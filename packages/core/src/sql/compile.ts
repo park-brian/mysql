@@ -2841,8 +2841,8 @@ function rowsOf(plan: SubqueryPlan, key: object, row: Row, env: Env): readonly (
 /**
  * `(SELECT …)` as a value: one column, at most one row (1242 otherwise —
  * raised only when it is evaluated, so an empty outer table raises nothing),
- * NULL for none. Its type is its item's as an expression, nullable unless it
- * has no FROM, as 8.4.11 reports `(SELECT 1)` NOT NULL.
+ * NULL for none. Its item supplies the type; a table or HAVING cache is
+ * nullable, while 8.4.11 reports a plain `(SELECT 1)` NOT NULL.
  */
 function scalarSubquery(e: SubqueryNode, ctx: CompileContext): Compiled {
   const plan = planned(e, ctx)
@@ -2864,7 +2864,7 @@ function scalarSubquery(e: SubqueryNode, ctx: CompileContext): Compiled {
       return v?.kind === 'string' && v.ordinal !== undefined ? plainValue(v) : v
     },
     // Its own item, not its inner one: a MIN of a column inside keeps none of that column's flags here.
-    type: { ...type, nullable: t.nullable || plan.hasFrom },
+    type: { ...type, nullable: t.nullable || !!cached },
   }
 }
 

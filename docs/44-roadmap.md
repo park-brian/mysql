@@ -3566,6 +3566,62 @@ targeted runner tests, typecheck and lint pass. The successful final full
 `--full --reference` run includes this fixture repair. The preceding eb352fc commit passed all eleven GitHub jobs. Totals remain
 144/190 and M5 42/53; M5.10 is partial.
 
+**Scalar HAVING cache nullability, verified boundary (2026-11-10):**
+The scalar-subquery constructor now uses its existing table/HAVING cache owner
+for nullable metadata. A nonnullable selected item can still yield NULL when
+HAVING removes its scalar row. Value evaluation, cache lifetime, field names and
+public ASTs keep their existing paths. The private opened-table memo symbol
+omits an unused description while retaining its identity and source comment;
+all nine caps pass at parser/core/facade 45,599/334,354/334,255 B gzipped.
+
+Four native profiles contain 309 responses: scalar HAVING over integer, REAL,
+DECIMAL, text, binary, DATE, NULL and COUNT items with TRUE/FALSE/NULL predicates;
+NULL consumers, cached parameter changes, raw scalar and COUNT controls. Complete
+matches improve 186 to 258; four new strict fixtures pin all 258. The unchanged
+30 COUNT controls include the zero-row scalar cases that reject the unsafe
+COUNT prototype. DATE cache charset/width/flags and uncacheable scalar effects
+remain open. Across 23,049 responses complete agreement improves 19,405 to
+19,477; every prior complete response and all 555,546 matching protocol facts
+hold, with zero losses. Fresh Docker --reference passes 1,759 main, two
+isolated IN-list and four bulk latency tests, typecheck/lint, the nine unchanged
+caps, package/typed and real-client smoke, and all seven pinned 8.4.11 corpora
+including 1,737 coercion warning counts. Source proof matches all 655 test
+files/fixtures, 206 runtime sources and tooling including the shared runner.
+
+All 121 focused local tests and four native groups pass, with typecheck/lint,
+20,000 executor statements under seed 20261010 and the unchanged 2,118 plan
+floor (2,127/2,248). The full 1,459-file official run retains the same 38 passing
+IDs and exact native baseline. The actual a14090e predecessor passes 117
+protocol groups and fails three positive groups; COUNT controls pass there. The preceding a14090e commit passed
+all eleven required CI jobs. Totals remain 144/190 and M5 42/53; M5.10 is partial.
+
+**COUNT draft rejected before commit.** A 549-response native audit supported
+ordinary COUNT skipping statically nonnullable values while window and nullable
+arguments retain evaluation. Its prototype passed a fresh Docker/reference
+release and improved 60 complete responses, but an additional scalar audit
+found six real row regressions: COUNT over source-free WHERE FALSE or HAVING
+FALSE scalars returned 4 instead of native/predecessor 0. The compiler's old
+scalar metadata falsely advertised those values as nonnullable. No COUNT code
+or its prototype fixtures are shipped. The HAVING correction above repairs
+one existing metadata owner first; the four direct COUNT controls now pin the
+known-correct zero-row behavior without accepting the rejected result.
+
+**Next scalar prerequisite:** model WHERE folding at its existing condition and
+scalar-reduction owners before retrying COUNT. Native WHERE TRUE can reduce to
+a nonnullable item, while WHERE FALSE yields a nullable scalar; marking every
+WHERE scalar nullable would lose the TRUE metadata/control. Source-free scalar
+reduction also ignores otherwise written LIMIT in these verified cases: native
+`(SELECT 1 LIMIT 0)` reads 1, and COUNT over it counts every outer row. Retain
+raw values, fields, query/execute/PREPARE and effect controls. HAVING retains
+nullable cache ownership even when TRUE. Uncacheable LAST_INSERT_ID scalars
+still evaluate once locally where native evaluates per outer row; temporal
+HAVING caches still need their native text metadata. Keep those lifetime and
+representation repairs distinct from metadata and from static singleton proofs.
+Then retry COUNT null-reading and its DISTINCT constant prerequisite before
+LIMIT 0/OFFSET input demand and literal-limit absorption. Constructor CAST
+precision, regex nullability, invalid-charset conversion, warning labels and
+header publication remain explicitly separate function gaps.
+
 **Next selected-reader prerequisite: nested LIMIT normalization.** The native
 wrapper audit exposes a row-level gap: `((SELECT id,d FROM t LIMIT 1) LIMIT 1
 OFFSET 1)` reads the second base row in MySQL 8.4.11 while the current nested
