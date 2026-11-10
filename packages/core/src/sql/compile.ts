@@ -2830,9 +2830,9 @@ export function memoValue<T>(memo: Map<unknown, unknown> | undefined, key: unkno
   return value
 }
 
-/** Its rows for this outer row: run again for each if correlated, else once per statement. */
+/** Uncorrelated readers share the optional memo; only correlated readers consume an outer row. */
 function rowsOf(plan: SubqueryPlan, key: object, row: Row, env: Env): readonly (readonly Value[])[] {
-  if (!plan.correlated && env.memo !== undefined) {
+  if (!plan.correlated) {
     return memoValue(env.memo, key, () => [...plan.rows(env)])
   }
   return [...plan.rows({ ...env, outer: [row, ...(env.outer ?? [])] })]

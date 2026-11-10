@@ -20,7 +20,7 @@ import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, c
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { equalBounds, isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
-import { and, columnRefs, integerLiteral, nativeCallName, someNode } from './ast.ts'
+import { and, columnRefs, integerLiteral, nativeCallName, queryBody, someNode } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, wrongArgumentsError } from './errors.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
@@ -247,25 +247,27 @@ function itemTexts(run: Run, node: SelectNode): (string | undefined)[] {
   const out: (string | undefined)[] = []
   let depth = 0
   let first = i
-  for (; i <= tokens.length; i++) {
-    const t = tokens[i]
-    const end = t === undefined || t.kind === TOKEN.EOF || (depth === 0 && (CLAUSE_WORDS.has(queryWord(t)) || t.text === ';' || (t.kind === TOKEN.OPERATOR && t.text === ')')))
-    if (end || (depth === 0 && t?.kind === TOKEN.OPERATOR && t.text === ',')) {
-      const a = tokens[first]
-      const b = tokens[i - 1]
+  for (; i < tokens.length; i++) {
+    // Successful lexing supplies EOF; an unaligned or failed lex returned above.
+    const t = tokens[i]!
+    const end = t.kind === TOKEN.EOF || (depth === 0 && (CLAUSE_WORDS.has(queryWord(t)) || t.text === ';' || (t.kind === TOKEN.OPERATOR && t.text === ')')))
+    if (end || (depth === 0 && t.kind === TOKEN.OPERATOR && t.text === ',')) {
+      // The loop starts after SELECT, and the item start never passes i.
+      const a = tokens[first]!
+      const b = tokens[i - 1]!
       // An item ending in a word — `-id`, `age IS NULL` — runs on to the next
       // token, whitespace and all: `SELECT -id FROM t` names its column `-id `.
       // One ending in a number, a string or a parenthesis ends where it ends.
       // Both read off 8.4.11, and so is the exception: once the session has
       // assigned its own `sql_mode`, the whitespace is not kept.
-      const stop = b !== undefined && b.kind === TOKEN.IDENTIFIER && !run.state.sqlModeAssigned ? (t?.start ?? run.sql.length) : b?.end
-      out.push(a === undefined || b === undefined || i === first ? undefined : run.sql.slice(a.start, stop))
+      const stop = b.kind === TOKEN.IDENTIFIER && !run.state.sqlModeAssigned ? t.start : b.end
+      out.push(i === first ? undefined : run.sql.slice(a.start, stop))
       first = i + 1
       if (end) break
       continue
     }
-    if (t?.kind === TOKEN.OPERATOR && t.text === '(') depth++
-    if (t?.kind === TOKEN.OPERATOR && t.text === ')') depth--
+    if (t.kind === TOKEN.OPERATOR && t.text === '(') depth++
+    if (t.kind === TOKEN.OPERATOR && t.text === ')') depth--
   }
   return out
 }
@@ -1200,8 +1202,7 @@ function withSubqueries(run: Run, n: PlanNode, clause: string): PlanNode {
 
 /** A query block's number: how many SELECTs the statement's text has up to its own. */
 function selectNumber(run: Run, q: QueryExpression): number {
-  let body: QueryBody = q.body
-  while (body.kind === QUERY.QUERY) body = body.body
+  const body = queryBody(q)
   const at = body.kind === QUERY.SELECT ? body.at : q.at
   return queryTokens(run).filter((t) => t.start <= at && queryWord(t) === 'SELECT').length
 }
@@ -2660,14 +2661,18 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
     e, { eval: logicalOperand(compile(e, ctx), e, resolving ? ctx : undefined) },
   ]))
   let impossible = false
+  let folded: Predicate | undefined
   // Only a written constant stops this pass; inferred row facts cannot.
   for (const [e, c] of entries) {
     if (!constantNode(e, run.params !== undefined && (resolving || count !== 0))) continue
     // PREPARE owns fixed-literal diagnostics; bound parameters still execute here.
-    const value = c.eval([], !resolving && constantNode(e, false) ? fixedEnv : run.env)
+    const fixed = !resolving && constantNode(e, false)
+    const value = c.eval([], fixed ? fixedEnv : run.env)
     c.eval = () => value
-    if (truth(value) !== true) {
+    if (!truth(value)) {
       impossible = true
+      // Only written literals or text markers may discard earlier readers here.
+      if (isConstant(e) && (resolving || fixed)) folded = c
       break
     }
   }
@@ -2676,7 +2681,7 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
     conditional: impossible || (run.protocol !== 'text' && constantNode(condition) && !constantNode(condition, false)),
     // New semijoin nodes are verified integer comparisons, in their expanded scope.
     read: (e: Expression, at = ctx) => entries.get(e) ?? compile(e, at),
-    predicates: [...entries.values()],
+    predicates: folded ? [folded] : [...entries.values()],
     facts(def: TableDef, alias: string) {
       // Column names are case-insensitive; share the same pin set with both readers.
       const facts = { impossible, pins: new Set<string>(), constTable: false }

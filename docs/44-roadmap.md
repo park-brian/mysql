@@ -3685,20 +3685,61 @@ run's same 38 passing IDs and exact native baseline pass. Totals remain
 required jobs after its earlier isolated PREPARE latency failure; the f8c0499
 run now also passes all eleven required jobs.
 
-**Next scalar prerequisites:** broader condition reduction, uncacheable scalar
-lifetime and LIMIT absorption remain open before a renewed COUNT optimization.
-In particular, an already-proved impossible source-free WHERE still runs an
-earlier volatile conjunct locally while native discards its value demand.
-Reuse the existing rejected predicate, preserving all constructor binding and
-warning order, before broadening Boolean folding. Constant-group holder fields
-remain a separate metadata repair. A fresh 270-response value-demand audit
-has 193 complete matches before repair: definite FALSE/NULL conjuncts retain
-wrong LAST_INSERT_ID effects, division warnings and overflow failures across
-source-free WHERE/HAVING, scalar and implicit aggregate contexts. Constructor
-refusals and true-condition controls retain their existing behavior. Bind every
-conjunct first and reuse the already-rejected predicate; do not recompile or
-reevaluate it to suppress earlier volatile demand. OR TRUE and broader volatile
-condition/cache lifetime remain outside this bounded repair.
+**Proved predicate rejection and value demand, verified boundary (2026-11-10):**
+The condition resolver still binds every conjunct and evaluates its existing
+constant readers in order. A rejecting written literal (including negative
+literals) or eligible text marker now supplies the sole execution filter. Its
+already-bound reader retains its evaluated FALSE/NULL value and diagnostics;
+no predicate is rebound or reevaluated. Binary bound markers and computed
+statement-fixed expressions retain their reader order. The impossible-plan
+and scalar-cache metadata facts keep their existing authority; they do not by
+themselves prove that earlier value reads can be discarded. Source naming now
+uses the lexer's bounded EOF-terminated token sequence and SELECT numbering
+shares the existing wrapper-body reader. Uncorrelated readers use the existing
+optional memo helper; correlated outer rows and evaluation counts retain their
+contracts. All nine unchanged caps pass at parser/core/facade
+45,599/334,345/334,261 B gzipped.
+
+Four native profiles audit 651 responses: FALSE/NULL effects, division warnings,
+overflow errors, constructor failures, retained binary/text markers, computed
+statement-fixed controls, and numeric, string, binary and temporal literals.
+Complete agreement improves 364 to 510: demand 193 to 253/270, retained 48 to
+68/84, computed controls unchanged at 75/171, literals 48 to 114/126. Four
+new strict fixtures pin those 510 outcomes; four new native observations append
+to the scalar WHERE boundary fixture without changing its 91 expectations.
+An unfenced draft lost 20 previously correct binary-marker responses, and a
+phase-only draft lost 18 computed controls using CONNECTION_ID, CURRENT_USER
+and NOW. Neither draft ships. The final guard preserves both cohorts and
+leaves unsupported computed folds open. Native evidence for the seven unchanged corpora is reused from the e85e73d
+full reference run. All fourteen fixture/tooling/lock/pin input hashes and
+the live MySQL image digest agree. Direct pinned comparison covers the new
+cases; the full engine suite replays the existing corpus locally. All five
+focused local and native groups pass. Actual e85e73d fails the four positive
+groups and passes the computed controls. Across 24,684 responses agreement
+improves 20,705 to 20,855, preserving all prior complete responses and all
+612,884 matching protocol facts. Seeded executor fuzzing (20,000, 20261010),
+the unchanged plan floor (2,127/2,248 versus 2,118 required), and the official
+1,459-file run's same 38 passing IDs and exact native baseline pass. Fresh
+default Docker passes 1,769 main, two isolated IN-list and four bulk-latency
+tests, typecheck/lint, nine unchanged caps, and package/typed smoke. Source
+proof matches all 665 test files/fixtures, 206 runtime sources and tooling.
+Totals remain 144/190 and M5 42/53; M5.10 remains partial. The blocking CI reference
+job retains its full unchanged verification. All eleven required e85e73d CI
+jobs passed.
+
+**Next scalar prerequisites:** extend the literal proof through transparent
+unary plus before broader computed folds. Six native query/execute observations
+of `LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+0)` still read the left item.
+The other six literal differences are TRUE dynamic scalar field flags. A fresh
+unary-sign and retained `+?` audit has 66 complete responses of 150 before
+repair (42/108 written shapes, 24/42 retained markers). Preserve the binary
+reader order and computed-expression controls as the sign proof expands.
+The computed audit still has 96 open value-demand outcomes; statement-fixed
+values alone cannot prove foldability. The retained audit still has 16 prior
+source/metadata differences and the first demand audit has 17 OR TRUE and
+volatile TRUE differences. Keep constructor diagnostics, binary marker reader
+order, constant-group holders, uncacheable scalar lifetime and LIMIT absorption
+separate before a renewed COUNT optimization.
 A WHERE containing a row/volatile input without an already-proved false conjunct
 still needs its actual reduction proof, including constant OR folding. Native
 `(SELECT 1 LIMIT 0)` reads 1, and COUNT over it counts every outer row; local

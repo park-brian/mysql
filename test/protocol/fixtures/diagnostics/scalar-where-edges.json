@@ -4799,6 +4799,234 @@
           ]
         ]
       }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND FALSE) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND FALSE) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT CAST(1.25 AS DOUBLE) WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND FALSE) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT CAST(1.25 AS DOUBLE) WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND FALSE) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
     }
   ],
   "inspect": "SELECT LAST_INSERT_ID() AS n"
