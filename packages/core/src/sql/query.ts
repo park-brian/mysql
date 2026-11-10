@@ -20,7 +20,7 @@ import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, c
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { equalBounds, isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
-import { and, columnRefs, integerLiteral, nativeCallName, queryBody, someNode } from './ast.ts'
+import { and, columnRefs, integerLiteral, nativeCallName, someNode } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, wrongArgumentsError } from './errors.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
@@ -93,7 +93,6 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
     subquery: (q, outer) => {
       let correlated = false
       const plan = planQuery({ ...run, parent: enclosing(outer, () => (correlated = true)) }, q)
-      const checkRead = plan.checkRead?.bind(plan)
       let bound: BoundSubquery = {
         clause,
         query: q,
@@ -102,8 +101,8 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
         get correlated() {
           return correlated
         },
-        hasFrom: hasFrom(q),
-        ...(checkRead === undefined ? {} : { checkRead }),
+        cached: plan.cached,
+        checkRead: plan.checkRead?.bind(plan),
         rows: (env) => plan.rows(env.trx, env),
       }
       bound = finalize?.(bound) ?? bound
@@ -272,6 +271,8 @@ function itemTexts(run: Run, node: SelectNode): (string | undefined)[] {
 }
 
 export interface SelectPlan {
+  /** Scalar cache ownership: a source, HAVING or a proved conditional WHERE. Opaque plans default to a cache. */
+  readonly cached?: boolean | undefined
   /** Static singleton reader proof; row existence is checked by each execution. */
   readonly constant?: boolean | undefined
   /** The selected query block's LIMIT budget before OFFSET. */
@@ -418,7 +419,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       return {
         columns: source.columns,
         get correlated() { return source.correlated },
-        hasFrom: source.hasFrom,
+        cached: source.cached,
         rows(env) {
           const outer = env.outer?.[0]
           if (outer !== undefined && key.eval(outer, env) === null) {
@@ -642,6 +643,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   ]
   return {
     ...resultColumns(items, dataColumns),
+    cached: !!(from || node.having || resolved.conditional),
     constant,
     blockLimit: take && keep,
     source,
@@ -1165,7 +1167,7 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
       const read = compile({ kind: NODE.UNARY, op: 'IS NOT TRUE', at: where.at, operand: {
         kind: NODE.BINARY, op: 'IN', left: outerKey, at: where.at,
         right: { kind: NODE.SUBQUERY, query: projected, at: sub.at },
-      } }, { ...context, subquery: () => ({ columns: plan.columns, correlated: false, hasFrom: true, rows: (env) => plan.rows(env.trx, env) }) })
+      } }, { ...context, subquery: () => ({ columns: plan.columns, correlated: false, rows: (env) => plan.rows(env.trx, env) }) })
       const nullable = definition.columns.find((c) => c.name.toLowerCase() === keyColumn.toLowerCase())?.nullable === true
       return { kind: 'materialized', read, plan: indexLookup('<subquery2>', '<auto_distinct_key>', true, false, [planNode('Materialize with deduplication', [wrap(nullable, 'Filter', described)])]) }
     }
@@ -1443,18 +1445,18 @@ function columnsRead(scope: TableScope, node: SelectNode, q: QueryExpression): M
   const aliases = new Set(scope.tables.map((t) => t.alias))
   const add = (alias: string, column: string): void => { used.set(alias, (used.get(alias) ?? new Set()).add(column.toLowerCase())) }
   const visit = (e: unknown, inside: boolean): boolean => someNode(e, (e) => {
-    const n = e as { kind?: string; parts?: readonly string[]; query?: unknown }
+    const n = e as Expression | TableReference
     if (n.kind === NODE.LITERAL || n.kind === NODE.PLACEHOLDER) return false
     if (n.kind === NODE.SUBQUERY || n.kind === REF.DERIVED) {
       visit(n.query, true)
       return false
     }
     // COUNT(*) counts rows and reads no column.
-    if (n.kind === NODE.CALL && nativeCallName(n as CallNode) === 'COUNT') {
-      const args = (n as { args?: readonly Expression[] }).args ?? []
+    if (n.kind === NODE.CALL && nativeCallName(n) === 'COUNT') {
+      const args = n.args
       if (args.length === 1 && args[0]?.kind === NODE.COLUMN && args[0].parts.length === 1 && args[0].parts[0] === '*') return false
     }
-    if (n.kind === NODE.COLUMN && n.parts !== undefined) {
+    if (n.kind === NODE.COLUMN) {
       const last = n.parts[n.parts.length - 1] as string
       const qualifier = n.parts.length >= 2 ? (n.parts[n.parts.length - 2] as string) : undefined
       if (last === '*') {
@@ -1467,7 +1469,7 @@ function columnsRead(scope: TableScope, node: SelectNode, q: QueryExpression): M
         return false
       }
       const r = safeResolve(scope, n.parts, 'field list')
-      const at = r?.depth === undefined && r !== undefined ? scope.columnAt(r.index) : undefined
+      const at = r !== undefined && r.depth === undefined ? scope.columnAt(r.index) : undefined
       if (at !== undefined) add(at.table.alias, at.column.name)
       return false
     }
@@ -1511,12 +1513,6 @@ interface BoundSubquery extends SubqueryPlan {
   readonly plan: SelectPlan
 }
 
-/** Whether a query reads a table: one with no FROM is a constant row. */
-function hasFrom(q: QueryExpression): boolean {
-  const body = queryBody(q)
-  return body.kind !== QUERY.SELECT || (body.from?.length ?? 0) > 0
-}
-
 /**
  * Whether MySQL merges a derived table or CTE into its outer query rather
  * than materializing it (`derived_merge`): a plain SELECT, with no grouping,
@@ -1528,10 +1524,7 @@ function mergeable(q: QueryExpression): boolean {
   if (q.limit !== undefined || q.with !== undefined) return false
   const body = q.body
   if (body.kind === QUERY.QUERY) return mergeable(body)
-  if (body.kind !== QUERY.SELECT) return false
-  // A derived table with no FROM is a constant row MySQL materializes ("Rows fetched before execution").
-  if (!hasFrom(q)) return false
-  return body.groupBy === undefined && body.having === undefined && body.distinct !== true && body.windows === undefined && !containsAggregate(body.items) && !containsWindow(body.items)
+  return body.kind === QUERY.SELECT && body.windows === undefined && mergeableSelect(body)
 }
 
 /** Logical view algorithm eligibility; WITH and unused WINDOW declarations are not physical merge proofs. */
@@ -1539,8 +1532,13 @@ export function viewMergeable(query: QueryExpression): boolean {
   if (query.limit !== undefined || containsWindow(query.orderBy)) return false
   const body = query.body
   if (body.kind === QUERY.QUERY) return viewMergeable(body)
-  if (body.kind !== QUERY.SELECT || (body.from?.length ?? 0) === 0) return false
-  return body.groupBy === undefined && body.having === undefined && body.distinct !== true && !containsAggregate(body.items) && !containsWindow(body.items)
+  return body.kind === QUERY.SELECT && mergeableSelect(body)
+}
+
+/** Shared SELECT eligibility; wrapper and physical WINDOW-declaration fences stay with their callers. */
+function mergeableSelect(body: SelectNode): boolean {
+  // A source-free SELECT is a constant row MySQL materializes.
+  return !!body.from?.length && body.groupBy === undefined && body.having === undefined && body.distinct !== true && !containsAggregate(body.items) && !containsWindow(body.items)
 }
 
 /** A derived table, or one reference to a CTE: its columns as the outer query sees them, and its rows. */
@@ -1901,6 +1899,7 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan, holder?: 
   if (q.limit) stages.push(limitStage(offset, limitCount))
   return {
     columns: plan.columns,
+    cached: plan.cached,
     // OFFSET can skip projection evaluation; its reader lifetime remains unproved.
     constant: offset === 0 && plan.constant,
     locking: plan.locking,
@@ -2380,6 +2379,7 @@ function planGrouped(
   ]
 
   return {
+    cached: !!(from || node.having),
     ...resultColumns(items, dataColumns),
     constant: strategy === 'implicit',
     blockLimit: q.limit && keep,
@@ -2530,9 +2530,7 @@ function substituteAliases(e: Expression, items: readonly { readonly expr: Expre
         return hit.expr
       }
     }
-    const out: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(x)) out[k] = walk(v)
-    return out
+    return Object.fromEntries(Object.entries(x).map(([k, v]) => [k, walk(v)]))
   }
   return walk(e) as Expression
 }
@@ -2658,10 +2656,9 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
   const { conditions: _conditions, ...fixedEnv } = run.env
   const conjuncts = splitAnd(condition)
   // Binding precedes evaluation, including warnings in an untaken conjunct.
-  const entries = new Map<Expression, Predicate>(conjuncts.map((e) => {
-    const c = compile(e, ctx)
-    return [e, { eval: logicalOperand(c, e, resolving ? ctx : undefined) }]
-  }))
+  const entries = new Map<Expression, Predicate>(conjuncts.map((e) => [
+    e, { eval: logicalOperand(compile(e, ctx), e, resolving ? ctx : undefined) },
+  ]))
   let impossible = false
   // Only a written constant stops this pass; inferred row facts cannot.
   for (const [e, c] of entries) {
@@ -2675,6 +2672,8 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
     }
   }
   return {
+    // A false conjunct is decisive; other volatile/row predicates need their own proof.
+    conditional: impossible || (constantNode(condition) && !constantNode(condition, run.protocol === 'text')),
     // New semijoin nodes are verified integer comparisons, in their expanded scope.
     read: (e: Expression, at = ctx) => entries.get(e) ?? compile(e, at),
     predicates: [...entries.values()],

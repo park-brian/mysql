@@ -3606,17 +3606,67 @@ or its prototype fixtures are shipped. The HAVING correction above repairs
 one existing metadata owner first; the four direct COUNT controls now pin the
 known-correct zero-row behavior without accepting the rejected result.
 
-**Next scalar prerequisite:** model WHERE folding at its existing condition and
-scalar-reduction owners before retrying COUNT. Native WHERE TRUE can reduce to
-a nonnullable item, while WHERE FALSE yields a nullable scalar; marking every
-WHERE scalar nullable would lose the TRUE metadata/control. Source-free scalar
-reduction also ignores otherwise written LIMIT in these verified cases: native
-`(SELECT 1 LIMIT 0)` reads 1, and COUNT over it counts every outer row. Retain
-raw values, fields, query/execute/PREPARE and effect controls. HAVING retains
-nullable cache ownership even when TRUE. Uncacheable LAST_INSERT_ID scalars
-still evaluate once locally where native evaluates per outer row; temporal
-HAVING caches still need their native text metadata. Keep those lifetime and
-representation repairs distinct from metadata and from static singleton proofs.
+**Scalar WHERE cache metadata, verified boundary (2026-11-10):**
+The existing condition resolver now publishes its already-evaluated impossible
+conjunct and marker-phase facts. SELECT planning supplies scalar cache ownership
+for sources, written HAVING and these proved conditional WHERE clauses; wrappers
+forward it. The scalar constructor consumes that proof, with opaque plans
+conservatively retaining a cache. Physical merge eligibility shares its SELECT
+law with logical view eligibility while preserving their different wrapper,
+ORDER-window and WINDOW-declaration fences. HAVING alias cloning and source-read
+binding retain complete AST shapes; optional read checks retain their binding.
+No predicate is evaluated again for metadata, and no row-count/LIMIT proof is
+used to infer reduction. All nine unchanged caps pass at parser/core/facade
+45,599/334,337/334,264 B gzipped.
+
+Four native profiles audit 522 responses: literal TRUE/FALSE/NULL, comparisons,
+conversion warnings, volatile effects, binary/text marker phases, prepared
+metadata, raw scalar/COUNT consumers, implicit/grouped aggregates, HAVING,
+LIMIT/wrapper controls and retained marker changes. Complete agreement improves
+277 to 417 (WHERE 122 to 167/198, parameters 49 to 84/126, boundaries 44 to
+82/114, retained 62 to 84/84). Four strict new fixtures pin all 417 complete
+responses; no old expectation is rewritten. All four focused groups pass both
+locally and against pinned MySQL 8.4.11 in Docker. A broad draft falsely made
+`TRUE OR volatile_call()` nullable; the existing positive controls reject that
+inference. Only an already-proved false conjunct or a statement-fixed marker
+predicate supplies the new conditional-cache fact. Text markers can fold to a
+nonnullable item; binary EXECUTE/PREPARE keep their nullable cache even when
+bound true. Across 23,571 responses agreement improves 19,754 to 19,900; every prior
+complete response and all 574,569 matching protocol facts hold without loss.
+The actual 4202188 predecessor passes 120 existing groups and fails all four
+new groups. Fresh Docker --reference passes 1,763 main, two isolated IN-list and four
+bulk-latency tests, typecheck/lint, all nine unchanged caps, package/typed and
+real-client smoke, and all seven pinned corpora including 1,737 coercion warning
+counts. Source proof matches 659 test files/fixtures, 206 runtime sources and
+reference/generator/census/helper tooling. All 125 focused local groups and
+four native groups pass, along with 20,000 executor statements under seed
+20261010 and the unchanged plan floor (2,127/2,248 versus 2,118 required). The
+1,459-file official run keeps the same 38 passing IDs and exact native baseline.
+Totals remain 144/190 and M5 42/53; M5.10 remains partial. The predecessor
+CI's first attempt passed ten required jobs and failed the isolated PREPARE
+latency assertion (87 ms versus one third of its 226 ms run); local standalone
+PREPARE and all four bulk-latency tests pass without changes. Its failed job is
+rerunning at that exact SHA; no threshold, assertion or fixture is weakened.
+
+**Next scalar prerequisite: grouped WHERE forwarding.** The grouped planner
+still publishes only source/HAVING cache ownership. Its already-bound WHERE
+resolver can supply the same conditional fact used by ordinary SELECTs; nine
+native FALSE/NULL COUNT and explicit-GROUP-BY fields remain wrong in this audit.
+Forward that fact next, preserving implicit aggregate rows and TRUE controls.
+A follow-up read-only grouped audit has 359 complete responses of 462 before
+repair: 308/378 aggregate/explicit-group/NULL-consumer controls and 51/84
+retained marker executions. Use these to bound the next proof; they do not
+change this slice's 417 fixture outcomes or its preservation totals.
+Broader condition reduction, uncacheable scalar lifetime and LIMIT absorption
+remain open before a renewed COUNT optimization.
+A WHERE containing a row/volatile input without an already-proved false conjunct
+still needs its actual reduction proof, including constant OR folding. Native
+`(SELECT 1 LIMIT 0)` reads 1, and COUNT over it counts every outer row; local
+iterators still suppress it. Uncacheable LAST_INSERT_ID scalars still evaluate
+once locally where native evaluates per outer row; DATE HAVING caches still need
+native text metadata. Parameter packet inference stays separate from scalar
+result nullability. Keep these repairs distinct from cache lifetime, temporal
+representation and static singleton/cardinality proofs.
 Then retry COUNT null-reading and its DISTINCT constant prerequisite before
 LIMIT 0/OFFSET input demand and literal-limit absorption. Constructor CAST
 precision, regex nullability, invalid-charset conversion, warning labels and

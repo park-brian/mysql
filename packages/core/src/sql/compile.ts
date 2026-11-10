@@ -12,7 +12,7 @@
 // unknown function in a selected schema is ER_SP_DOES_NOT_EXIST; a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes, type MysqlTime } from '@myjs/bytes'
-import { nativeCallName, queryBody, someNode } from './ast.ts'
+import { nativeCallName, someNode } from './ast.ts'
 import { notSupported } from './errors.ts'
 import { resolveCollation } from './collation.ts'
 import { decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
@@ -652,10 +652,10 @@ export interface SubqueryPlan {
   readonly columns: readonly { readonly name: string; readonly type: ResultType }[]
   /** Whether it reads a column of an enclosing query, and must run again for each of its rows. */
   readonly correlated: boolean
-  /** Whether it has a FROM: one without is a constant row, never empty. */
-  readonly hasFrom: boolean
+  /** Scalar cache ownership; only an explicit false proves reduction to the item. */
+  readonly cached?: boolean | undefined
   /** Check base-table read visibility under this invocation; not full plan initialization. */
-  checkRead?(env: Env): void
+  readonly checkRead?: ((env: Env) => void) | undefined
   rows(env: Env): Iterable<readonly Value[]>
 }
 
@@ -2841,7 +2841,7 @@ function rowsOf(plan: SubqueryPlan, key: object, row: Row, env: Env): readonly (
 /**
  * `(SELECT …)` as a value: one column, at most one row (1242 otherwise —
  * raised only when it is evaluated, so an empty outer table raises nothing),
- * NULL for none. Its item supplies the type; a table or HAVING cache is
+ * NULL for none. Its item supplies the type; a table, WHERE or HAVING cache is
  * nullable, while 8.4.11 reports a plain `(SELECT 1)` NOT NULL.
  */
 function scalarSubquery(e: SubqueryNode, ctx: CompileContext): Compiled {
@@ -2849,9 +2849,7 @@ function scalarSubquery(e: SubqueryNode, ctx: CompileContext): Compiled {
   if (plan.columns.length !== 1) throw operandColumnsError(1)
   const t = (plan.columns[0] as { type: ResultType }).type
   const key = {}
-  const body = queryBody(e.query)
-  // Source-free scalar projections reduce to their item unless HAVING retains a cache.
-  const cached = plan.hasFrom || ('having' in body && body.having)
+  const cached = plan.cached !== false
   const { column: _column, blobBytes: _blobBytes, fieldFlags: _fieldFlags, ownInTemporary: _ownInTemporary, ...type } = t
   return {
     eval: (row, env) => {
@@ -2864,7 +2862,7 @@ function scalarSubquery(e: SubqueryNode, ctx: CompileContext): Compiled {
       return v?.kind === 'string' && v.ordinal !== undefined ? plainValue(v) : v
     },
     // Its own item, not its inner one: a MIN of a column inside keeps none of that column's flags here.
-    type: { ...type, nullable: t.nullable || !!cached },
+    type: { ...type, nullable: t.nullable || cached },
   }
 }
 

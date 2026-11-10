@@ -1971,9 +1971,11 @@ budgets. An unordered wrapper now transfers its LIMIT into a child with no
 LIMIT before projection, preserving skipped effects and implicit aggregate
 argument evaluation within the verified boundary. Combining existing bounds,
 implicit aggregate LIMIT 0 with OFFSET, and prepared OFFSET lifetimes remain open.
-Scalar HAVING caches now retain nullable metadata even for nonnullable selected
-items. Scalar WHERE folding, uncacheable evaluation and temporal cache metadata
-remain open; COUNT value-demand changes wait for those nullability prerequisites.
+Scalar cache ownership now comes from SELECT planning, retaining nullable
+metadata through sources, HAVING and proved conditional WHERE clauses. Fixed
+TRUE predicates can reduce; binary markers keep their nullable cache. Broader
+volatile/row predicate folding, uncacheable evaluation, scalar LIMIT absorption
+and temporal cache metadata remain open before renewed COUNT value-demand work.
 Set-expression limits and correlated sources retain their separate ownership. Plan-owned window readings, scalar caches
 and ROLLUP/query forwarding remain separate. Owned DOUBLE readers for byte
 functions, conditional branches and quiet string-result holders are verified
