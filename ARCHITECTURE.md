@@ -1471,7 +1471,7 @@ a blocker and one without is just a note.
 
 ## 21. Where we are
 
-*A snapshot as of 2026-11-03. The [roadmap](./docs/44-roadmap.md) is the live
+*A snapshot as of 2026-11-10. The [roadmap](./docs/44-roadmap.md) is the live
 version, and wins wherever it disagrees with this section.*
 
 ```mermaid
@@ -1967,7 +1967,10 @@ budget including OFFSET; only a noncorrelated budget of at most one adds the
 planning proof. Noncorrelated implicit aggregates now share their singleton
 reader proof through the existing materialization owner. Zero-offset ORDER/LIMIT
 wrappers now retain their child's static singleton proof independently of LIMIT
-budgets. OFFSET projection timing remains a separate reader boundary.
+budgets. An unordered wrapper now transfers its LIMIT into a child with no
+LIMIT before projection, preserving skipped effects and implicit aggregate
+argument evaluation within the verified boundary. Combining existing bounds,
+implicit aggregate LIMIT 0 with OFFSET, and prepared OFFSET lifetimes remain open.
 Set-expression limits and correlated sources retain their separate ownership. Plan-owned window readings, scalar caches
 and ROLLUP/query forwarding remain separate. Owned DOUBLE readers for byte
 functions, conditional branches and quiet string-result holders are verified

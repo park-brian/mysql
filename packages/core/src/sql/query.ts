@@ -333,9 +333,11 @@ export function planQuery(run: Run, q: QueryExpression): SelectPlan {
     case QUERY.SELECT:
       return planSelect({ ...r, subqueries: [], quantified: new Map(), clauses: { 'where clause': body.where, 'having clause': body.having } }, q, body)
     case QUERY.QUERY: {
-      const plan = planQuery(r, body)
+      // An unordered LIMIT belongs to the child before its projection, not its emitted rows.
+      const pushed = q.orderBy === undefined && q.locking === undefined && q.limit !== undefined && body.limit === undefined
+      const plan = planQuery(r, pushed ? { ...body, limit: q.limit } : body)
       r.admitQuery?.(q, true)
-      return q.orderBy === undefined && q.limit === undefined ? plan : orderedResult(r, q, plan)
+      return pushed ? plan : orderedResult(r, q, plan)
     }
     case QUERY.SET_OPERATION: {
       const plan = planSetOperation(r, body)
@@ -945,7 +947,7 @@ function checkedCorrelatedOutput(node: SelectNode, q: QueryExpression, source: F
   if (equality?.kind !== NODE.BINARY || ![equality.left, equality.right].every((e) => e.kind === NODE.COLUMN && e.parts.every(simple))) return false
   const column = (e: Expression): boolean => e.kind === NODE.COLUMN && e.parts.length === 1 && simple(e.parts[0]!) && source.def.columns.some((c) => c.name === e.parts[0])
   if (!items.length || !items.every((i) => i.alias === undefined && i.compiled.type.column !== undefined && column(i.expr))) return false
-  return (q.orderBy ?? []).every(({ expr }) => column(expr) || (expr.kind === NODE.LITERAL && expr.type === LITERAL.INT && typeof expr.value === 'bigint' && expr.value > 0n && expr.value <= BigInt(items.length)))
+  return (q.orderBy ?? []).every(({ expr }) => column(expr) || (integerLiteral(expr) && expr.value > 0n && expr.value <= BigInt(items.length)))
 }
 
 /** A closed dependent cohort keeps its original binding and filters before the outer sort. */
@@ -995,7 +997,7 @@ function dependentReader(run: Run, q: QueryExpression, node: SelectNode, from: F
 type QualifiedColumn = Extract<Expression, { kind: typeof NODE.COLUMN }> & { readonly parts: readonly [string, string] }
 
 function isQualifiedColumn(e: Expression, alias: string, fold = false): e is QualifiedColumn {
-  return e.kind === NODE.COLUMN && e.parts.length === 2 && typeof e.parts[1] === 'string' && (fold ? e.parts[0]?.toLowerCase() === alias.toLowerCase() : e.parts[0] === alias)
+  return e.kind === NODE.COLUMN && e.parts.length === 2 && (fold ? e.parts[0]?.toLowerCase() === alias.toLowerCase() : e.parts[0] === alias)
 }
 
 /** The qualified equality and at most one residual shared by correlated join candidates. */

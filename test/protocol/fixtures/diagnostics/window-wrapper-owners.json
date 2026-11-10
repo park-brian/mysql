@@ -10595,6 +10595,1350 @@
           ]
         ]
       }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,CAST(SUM(q.d) OVER (PARTITION BY q.id) AS SIGNED) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,CAST(SUM(q.d) OVER (PARTITION BY q.id) AS SIGNED) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,CAST(MIN(q.d) OVER (PARTITION BY q.id) AS SIGNED) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,CAST(MIN(q.d) OVER (PARTITION BY q.id) AS SIGNED) AS v FROM ((SELECT 0 AS id,SUM(d) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=2) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrappers",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=2) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrappers",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,CAST(SUM(q.d) OVER (PARTITION BY q.id) AS SIGNED) AS v FROM ((SELECT id,d FROM t WHERE id=2) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrappers",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,CAST(SUM(q.d) OVER (PARTITION BY q.id) AS SIGNED) AS v FROM ((SELECT id,d FROM t WHERE id=2) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrappers",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=2) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrappers",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT id,d FROM t WHERE id=2) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrappers",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,CAST(MIN(q.d) OVER (PARTITION BY q.id) AS SIGNED) AS v FROM ((SELECT id,d FROM t WHERE id=2) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrappers",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,CAST(MIN(q.d) OVER (PARTITION BY q.id) AS SIGNED) AS v FROM ((SELECT id,d FROM t WHERE id=2) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window275_wrappers",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,2.5 AS d) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          26,
+          128,
+          1,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,2.5 AS d) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          26,
+          128,
+          1,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,CAST(SUM(q.d) OVER (PARTITION BY q.id) AS SIGNED) AS v FROM ((SELECT 0 AS id,2.5 AS d) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,CAST(SUM(q.d) OVER (PARTITION BY q.id) AS SIGNED) AS v FROM ((SELECT 0 AS id,2.5 AS d) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,2.5 AS d) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          4,
+          128,
+          1,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,2.5 AS d) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          4,
+          128,
+          1,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,CAST(MIN(q.d) OVER (PARTITION BY q.id) AS SIGNED) AS v FROM ((SELECT 0 AS id,2.5 AS d) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,CAST(MIN(q.d) OVER (PARTITION BY q.id) AS SIGNED) AS v FROM ((SELECT 0 AS id,2.5 AS d) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
     }
   ],
   "inspect": "SELECT LAST_INSERT_ID() AS n"

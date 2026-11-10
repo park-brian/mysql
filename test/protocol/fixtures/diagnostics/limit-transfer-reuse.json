@@ -1,0 +1,4078 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_window276_reuse",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "setup": [
+    "CREATE TABLE t(id INT PRIMARY KEY,d DOUBLE)"
+  ],
+  "beforeEach": [
+    "DELETE FROM t",
+    "INSERT INTO t VALUES(1,2.5),(2,3.5),(3,-2.5),(4,NULL)",
+    "SELECT LAST_INSERT_ID(0)"
+  ],
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "observations": [
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [],
+      "params": [
+        1,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [],
+      "params": [
+        1,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [],
+      "params": [
+        1,
+        0
+      ],
+      "rows": [
+        [
+          0,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [],
+      "params": [
+        1,
+        0
+      ],
+      "rows": [
+        [
+          0,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [],
+      "params": [
+        0,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [],
+      "params": [
+        0,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [],
+      "params": [
+        2,
+        2
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [],
+      "params": [
+        2,
+        2
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "params": [
+        1,
+        0
+      ],
+      "rows": [
+        [
+          0,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "params": [
+        1,
+        0
+      ],
+      "rows": [
+        [
+          0,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=7.5 WHERE id=2"
+      ],
+      "params": [
+        2,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=7.5 WHERE id=2"
+      ],
+      "params": [
+        2,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "params": [
+        1,
+        0
+      ],
+      "rows": [
+        [
+          0,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "params": [
+        1,
+        0
+      ],
+      "rows": [
+        [
+          0,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "INSERT INTO t VALUES(5,5.5)"
+      ],
+      "params": [
+        2,
+        0
+      ],
+      "rows": [
+        [
+          0,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "INSERT INTO t VALUES(5,5.5)"
+      ],
+      "params": [
+        2,
+        0
+      ],
+      "rows": [
+        [
+          0,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d FROM t WHERE id=?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [],
+      "params": [
+        2,
+        1,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d FROM t WHERE id=?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [],
+      "params": [
+        2,
+        1,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d FROM t WHERE id=?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [],
+      "params": [
+        2,
+        1,
+        0
+      ],
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d FROM t WHERE id=?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [],
+      "params": [
+        2,
+        1,
+        0
+      ],
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d FROM t WHERE id=?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [],
+      "params": [
+        2,
+        0,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d FROM t WHERE id=?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [],
+      "params": [
+        2,
+        0,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d FROM t WHERE id=?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [],
+      "params": [
+        2,
+        2,
+        2
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d FROM t WHERE id=?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [],
+      "params": [
+        2,
+        2,
+        2
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d FROM t WHERE id=?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "params": [
+        2,
+        1,
+        0
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d FROM t WHERE id=?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "params": [
+        2,
+        1,
+        0
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d FROM t WHERE id=?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=7.5 WHERE id=2"
+      ],
+      "params": [
+        2,
+        2,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d FROM t WHERE id=?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=7.5 WHERE id=2"
+      ],
+      "params": [
+        2,
+        2,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d FROM t WHERE id=?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "params": [
+        2,
+        1,
+        0
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d FROM t WHERE id=?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "params": [
+        2,
+        1,
+        0
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d FROM t WHERE id=?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "INSERT INTO t VALUES(5,5.5)"
+      ],
+      "params": [
+        2,
+        2,
+        0
+      ],
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d FROM t WHERE id=?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "INSERT INTO t VALUES(5,5.5)"
+      ],
+      "params": [
+        2,
+        2,
+        0
+      ],
+      "rows": [
+        [
+          2,
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          1,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t WHERE id>?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [],
+      "params": [
+        0,
+        1,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            4
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t WHERE id>?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [],
+      "params": [
+        0,
+        1,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            4
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t WHERE id>?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [],
+      "params": [
+        0,
+        1,
+        0
+      ],
+      "rows": [
+        [
+          0,
+          10
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            4
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t WHERE id>?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [],
+      "params": [
+        0,
+        1,
+        0
+      ],
+      "rows": [
+        [
+          0,
+          10
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            4
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t WHERE id>?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [],
+      "params": [
+        0,
+        2,
+        2
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            4
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t WHERE id>?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [],
+      "params": [
+        0,
+        2,
+        2
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            4
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t WHERE id>?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "params": [
+        0,
+        1,
+        0
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t WHERE id>?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "params": [
+        0,
+        1,
+        0
+      ],
+      "rows": [
+        [
+          0,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t WHERE id>?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=7.5 WHERE id=2"
+      ],
+      "params": [
+        0,
+        2,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            4
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t WHERE id>?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=7.5 WHERE id=2"
+      ],
+      "params": [
+        0,
+        2,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            4
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t WHERE id>?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "params": [
+        0,
+        1,
+        0
+      ],
+      "rows": [
+        [
+          0,
+          6
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            3
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t WHERE id>?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "params": [
+        0,
+        1,
+        0
+      ],
+      "rows": [
+        [
+          0,
+          6
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            3
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t WHERE id>?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "INSERT INTO t VALUES(5,5.5)"
+      ],
+      "params": [
+        0,
+        2,
+        0
+      ],
+      "rows": [
+        [
+          0,
+          15
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            5
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t WHERE id>?) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "INSERT INTO t VALUES(5,5.5)"
+      ],
+      "params": [
+        0,
+        2,
+        0
+      ],
+      "rows": [
+        [
+          0,
+          15
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            5
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,d FROM t ORDER BY id DESC) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [],
+      "params": [
+        1,
+        1
+      ],
+      "rows": [
+        [
+          3,
+          -2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,d FROM t ORDER BY id DESC) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [],
+      "params": [
+        1,
+        1
+      ],
+      "rows": [
+        [
+          3,
+          -2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,d FROM t ORDER BY id DESC) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [],
+      "params": [
+        1,
+        0
+      ],
+      "rows": [
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,d FROM t ORDER BY id DESC) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [],
+      "params": [
+        1,
+        0
+      ],
+      "rows": [
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,d FROM t ORDER BY id DESC) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [],
+      "params": [
+        0,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,d FROM t ORDER BY id DESC) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [],
+      "params": [
+        0,
+        1
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,d FROM t ORDER BY id DESC) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [],
+      "params": [
+        2,
+        2
+      ],
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,d FROM t ORDER BY id DESC) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [],
+      "params": [
+        2,
+        2
+      ],
+      "rows": [
+        [
+          1,
+          2.5
+        ],
+        [
+          2,
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,d FROM t ORDER BY id DESC) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "params": [
+        1,
+        0
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,d FROM t ORDER BY id DESC) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t"
+      ],
+      "params": [
+        1,
+        0
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,d FROM t ORDER BY id DESC) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=7.5 WHERE id=2"
+      ],
+      "params": [
+        2,
+        1
+      ],
+      "rows": [
+        [
+          2,
+          7.5
+        ],
+        [
+          3,
+          -2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,d FROM t ORDER BY id DESC) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "UPDATE t SET d=7.5 WHERE id=2"
+      ],
+      "params": [
+        2,
+        1
+      ],
+      "rows": [
+        [
+          2,
+          7.5
+        ],
+        [
+          3,
+          -2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,d FROM t ORDER BY id DESC) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "params": [
+        1,
+        0
+      ],
+      "rows": [
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,d FROM t ORDER BY id DESC) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "params": [
+        1,
+        0
+      ],
+      "rows": [
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,d FROM t ORDER BY id DESC) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "before": [
+        "INSERT INTO t VALUES(5,5.5)"
+      ],
+      "params": [
+        2,
+        0
+      ],
+      "rows": [
+        [
+          4,
+          null
+        ],
+        [
+          5,
+          5.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,q.d FROM ((SELECT id,d FROM t ORDER BY id DESC) LIMIT ? OFFSET ?) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "before": [
+        "INSERT INTO t VALUES(5,5.5)"
+      ],
+      "params": [
+        2,
+        0
+      ],
+      "rows": [
+        [
+          4,
+          null
+        ],
+        [
+          5,
+          5.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_reuse",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    }
+  ],
+  "inspect": "SELECT LAST_INSERT_ID() AS n",
+  "reuse": true
+}

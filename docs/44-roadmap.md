@@ -3487,8 +3487,8 @@ unevaluated. That prototype was rejected before commit. The final structural
 OFFSET fence preserves the still-unproved projection lifetime. A dedicated
 negative guard checks the skipped effect through query and execute, explicitly
 allowing the existing local 1235 plan refusal while native returns zero rows.
-Actual SELECT projection timing for that OFFSET remains an open normalization
-gap. Implicit aggregate arguments have their own lifetime and may still execute;
+The following LIMIT-transfer repair closes actual SELECT projection timing for
+an unordered wrapper whose child has no LIMIT. Implicit aggregate arguments have their own lifetime and may still execute;
 no blanket singleton-empty short circuit is added.
 
 Four wrapper profiles retain 701 responses, improving 219 to 377 complete
@@ -3522,6 +3522,50 @@ smoke and all seven pinned MySQL 8.4.11 corpora. Source proof matches all 648 te
 files/fixtures and 206 runtime sources. Totals remain 144/190 and M5 42/53;
 M5.10 stays partial.
 
+**Transfer an unowned wrapper LIMIT before projection, verified boundary (2026-11-10):**
+The existing query-expression owner now passes an unordered, nonlocking wrapper
+LIMIT into its child when that child has no LIMIT. A private query copy preserves
+the parsed tree, the child's WITH/ORDER and admission paths. No new reader or
+cardinality heuristic is introduced. Skipped ordinary projections no longer
+assign LAST_INSERT_ID, raise overflow or emit conversion warnings. Positive-count
+implicit aggregate controls retain argument evaluation when OFFSET skips output;
+the zero-count boundary remains open below.
+The typed column proof drops a redundant string check; integer positions share
+the existing written-literal reader. No size cap or test threshold changes.
+
+Six new audits contain 3,616 native responses: normalization (1,344), parameter
+phases (93), projection/aggregate effects (1,890), unsigned bounds/derived-merge
+controls (144), cached executions through writes (64), and admission/scopes (81).
+Complete matches improve 2,915 to 2,981. Across those audits and the prior 19,124
+responses, complete agreement improves 19,099 to 19,219 of 22,740; all 543,367
+previously matching protocol facts and every prior complete response hold.
+Three new fixtures pin 261 complete observations; three older corpora gain 54
+new native observations without altering their existing expectations.
+
+All 117 focused local tests and seven focused native groups pass. The actual
+eb352fc predecessor passes 110 protocol groups and fails six extended/new
+groups. Typecheck, lint, 20,000 executor statements with seed 20261010 and the
+unchanged 2,118 plan floor pass (2,127/2,248). The full 1,459-file official
+run retains all 38 passing IDs and the exact native baseline. The fresh final
+run passes 1,755 main, two isolated IN-list and four bulk latency tests, package
+and typed smoke, and three million-input reader/parser/engine fuzz targets plus
+20,000 executor statements (seed 20261010). All 10,000 crash points pass,
+including 830 recoveries crashed and recovered again. The real MySQL client and
+all seven pinned 8.4.11 corpora pass, including 1,737 coercion warning counts.
+Source proof matches all 651 test files/fixtures, 206 runtime sources and tooling,
+including the updated runner. Parser/core/facade are
+45,599/334,361/334,261 B gzipped under the nine unchanged caps; core remains at
+its existing cap. The first fresh release passed 1,755 of 1,756 main tests;
+the long-IN timing assertion alone measured 1,378 ms against its unchanged
+1,200 ms limit under parallel test load. Both IN-list tests pass in isolation.
+The shared test runner now isolates that file, as it already does bulk latency;
+no assertion, case or threshold changes. The second run exposed three runner
+fixtures missing the new isolated file. Those fixtures now verify discovery,
+phase ordering and failure propagation for both isolated phases; all four
+targeted runner tests, typecheck and lint pass. The successful final full
+`--full --reference` run includes this fixture repair. The preceding eb352fc commit passed all eleven GitHub jobs. Totals remain
+144/190 and M5 42/53; M5.10 is partial.
+
 **Next selected-reader prerequisite: nested LIMIT normalization.** The native
 wrapper audit exposes a row-level gap: `((SELECT id,d FROM t LIMIT 1) LIMIT 1
 OFFSET 1)` reads the second base row in MySQL 8.4.11 while the current nested
@@ -3531,6 +3575,44 @@ controls with complete packets, plans, effects and retained executions; repair
 the existing query-expression normalization owner before choosing conversion
 from an incomplete singleton proof. Keep static proof forwarding distinct from
 LIMIT-budget propagation and from inferred output cardinality.
+The fresh 1,344-response normalization matrix has 1,199 complete matches across
+plain, internally ordered, grouped, implicit aggregate and UNION ALL inputs;
+inner limits absent/0/1/2; outer ORDER; outer counts 0/1/2 and offsets 0/1/2.
+It retains 48 native plans. Forty-four query row cases differ (and the same
+execute cases), concentrated in plain, ordered, grouped and set inputs; implicit
+aggregate row controls agree. For example inner LIMIT 1 followed by outer
+LIMIT 2 OFFSET 1 returns only the second base row natively, so merely deleting
+the inner limit would also be wrong. The follow-up captures 93 parameter
+responses and 1,890 effect responses.
+Text substitution can combine literal counts where prepared count markers keep
+separate levels. With literal counts and two OFFSET markers, native EXECUTE
+can retain prepare-time zero offsets; this is a separate prepared lifetime
+boundary, not a reason to merge bound values. The completed bounded repair
+transfers an otherwise unowned unordered LIMIT before projection, without
+mutating the parsed tree. Combining two existing
+literal bounds, and marker-offset combination, remain open. The broader literal
+prototype improved 265 complete responses but exceeded the unchanged size caps;
+it is not shipped. A further 144-response boundary audit confirms unsigned
+offset wrapping
+and separates outer-ORDER derived-merge behavior: disabling derived_merge
+restores the outer limit in the internally ordered case. Do not flatten that
+ORDER owner as part of LIMIT normalization. Two cached-execution observations
+still skip implicit aggregate arguments at LIMIT 0 OFFSET 1 (native LAST_INSERT_ID
+is 4, current 0); four outer-ORDER observations still add a conversion warning to
+a skipped projection. These wider boundaries remain open; the LIMIT-transfer
+repair does not claim them complete. The next bounded repair should first
+resolve the demonstrated LIMIT 0/OFFSET input-initialization gap at the existing
+limit iterator, with ordinary projection, aggregate, sort/window and retained
+parameter controls. Its current zero-count return prevents any input demand;
+changing that guard alone would incorrectly yield a row, so preserve exact
+skip/take/close semantics. Then return to combining existing literal bounds
+under the unchanged caps. A read-only 180-response initialization audit now
+has 126 complete matches and confirms why these controls matter: LIMIT 0
+OFFSET 1 evaluates one qualifying WHERE row, all implicit SUM/MIN arguments,
+no nonnullable COUNT argument, one grouped/window input, and no unused ordinary
+ORDER expression natively. Current window buffering and unused ORDER already
+over-evaluate; retain those as separate boundaries while repairing the missing
+WHERE/aggregate demand. No follow-up implementation is included in this slice.
 
 **Next window reader boundary: INTEGER conversion after selected ownership.**
 Revisit the existing raw-versus-INTEGER native window audit now that constant

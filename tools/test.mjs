@@ -11,10 +11,10 @@ const files = suites.flatMap((suite) => readdirSync(join('test', suite), { recur
   .filter((file) => file.endsWith('.test.ts'))
   .sort()
   .map((file) => join('test', suite, file)))
-const latency = join('test', 'protocol', 'bulk-latency.test.ts')
-if (!files.includes(latency)) throw new Error('bulk-latency test is missing')
+const isolated = ['mysql2-in-list.test.ts', 'bulk-latency.test.ts'].map((file) => join('test', 'protocol', file))
+for (const file of isolated) if (!files.includes(file)) throw new Error(`${file} is missing`)
 
-for (const phase of [files.filter((file) => file !== latency), [latency]]) {
+for (const phase of [files.filter((file) => !isolated.includes(file)), ...isolated.map((file) => [file])]) {
   if (phase.length === 0) continue
   const result = spawnSync(process.execPath, ['--test', ...options, ...phase], { stdio: 'inherit' })
   if (result.error) throw result.error

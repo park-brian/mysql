@@ -1,0 +1,3506 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_window276_admission",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "setup": [
+    "CREATE TABLE t(id INT PRIMARY KEY,d DOUBLE)"
+  ],
+  "beforeEach": [
+    "DELETE FROM t",
+    "INSERT INTO t VALUES(1,2.5),(2,3.5),(3,-2.5),(4,NULL)",
+    "SELECT LAST_INSERT_ID(0)"
+  ],
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "observations": [
+    {
+      "sql": "SELECT q.d FROM ((SELECT CAST('x' AS DECIMAL) AS d) LIMIT 0) q",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          246,
+          11,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT CAST('x' AS DECIMAL) AS d) LIMIT 0) q",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          246,
+          11,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT CAST('x' AS DECIMAL) AS d) LIMIT 0) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          246,
+          11,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT CAST('x' AS DECIMAL) AS d) LIMIT 1 OFFSET 1) q",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          246,
+          11,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT CAST('x' AS DECIMAL) AS d) LIMIT 1 OFFSET 1) q",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          246,
+          11,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT CAST('x' AS DECIMAL) AS d) LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          246,
+          11,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT CAST('x' AS DECIMAL) AS d) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          246,
+          11,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT CAST(_utf8'x' AS DECIMAL) AS d) LIMIT 0) q",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          246,
+          11,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT CAST(_utf8'x' AS DECIMAL) AS d) LIMIT 0) q",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          246,
+          11,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT CAST(_utf8'x' AS DECIMAL) AS d) LIMIT 0) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          246,
+          11,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT CAST(_utf8'x' AS DECIMAL) AS d) LIMIT 1 OFFSET 1) q",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          246,
+          11,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT CAST(_utf8'x' AS DECIMAL) AS d) LIMIT 1 OFFSET 1) q",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          246,
+          11,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT CAST(_utf8'x' AS DECIMAL) AS d) LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          246,
+          11,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT CAST(_utf8'x' AS DECIMAL) AS d) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          246,
+          11,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT missing(1) AS d) LIMIT 0) q",
+      "api": "query",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT missing(1) AS d) LIMIT 0) q",
+      "api": "execute",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT missing(1) AS d) LIMIT 0) q",
+      "api": "prepare",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT missing(1) AS d) LIMIT 1 OFFSET 1) q",
+      "api": "query",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT missing(1) AS d) LIMIT 1 OFFSET 1) q",
+      "api": "execute",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT missing(1) AS d) LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT missing(1) AS d) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "query",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT missing(1) AS d) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "execute",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT missing(1) AS d) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT LENGTH(1,2) AS d) LIMIT 0) q",
+      "api": "query",
+      "headers": 0,
+      "error": {
+        "code": "ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT",
+        "errno": 1582,
+        "state": "42000",
+        "message": "Incorrect parameter count in the call to native function 'LENGTH'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1582,
+          "Incorrect parameter count in the call to native function 'LENGTH'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT LENGTH(1,2) AS d) LIMIT 0) q",
+      "api": "execute",
+      "headers": 0,
+      "error": {
+        "code": "ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT",
+        "errno": 1582,
+        "state": "42000",
+        "message": "Incorrect parameter count in the call to native function 'LENGTH'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1582,
+          "Incorrect parameter count in the call to native function 'LENGTH'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT LENGTH(1,2) AS d) LIMIT 0) q",
+      "api": "prepare",
+      "headers": 0,
+      "error": {
+        "code": "ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT",
+        "errno": 1582,
+        "state": "42000",
+        "message": "Incorrect parameter count in the call to native function 'LENGTH'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1582,
+          "Incorrect parameter count in the call to native function 'LENGTH'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT LENGTH(1,2) AS d) LIMIT 1 OFFSET 1) q",
+      "api": "query",
+      "headers": 0,
+      "error": {
+        "code": "ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT",
+        "errno": 1582,
+        "state": "42000",
+        "message": "Incorrect parameter count in the call to native function 'LENGTH'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1582,
+          "Incorrect parameter count in the call to native function 'LENGTH'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT LENGTH(1,2) AS d) LIMIT 1 OFFSET 1) q",
+      "api": "execute",
+      "headers": 0,
+      "error": {
+        "code": "ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT",
+        "errno": 1582,
+        "state": "42000",
+        "message": "Incorrect parameter count in the call to native function 'LENGTH'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1582,
+          "Incorrect parameter count in the call to native function 'LENGTH'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT LENGTH(1,2) AS d) LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "error": {
+        "code": "ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT",
+        "errno": 1582,
+        "state": "42000",
+        "message": "Incorrect parameter count in the call to native function 'LENGTH'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1582,
+          "Incorrect parameter count in the call to native function 'LENGTH'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT LENGTH(1,2) AS d) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "query",
+      "headers": 0,
+      "error": {
+        "code": "ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT",
+        "errno": 1582,
+        "state": "42000",
+        "message": "Incorrect parameter count in the call to native function 'LENGTH'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1582,
+          "Incorrect parameter count in the call to native function 'LENGTH'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT LENGTH(1,2) AS d) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "execute",
+      "headers": 0,
+      "error": {
+        "code": "ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT",
+        "errno": 1582,
+        "state": "42000",
+        "message": "Incorrect parameter count in the call to native function 'LENGTH'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1582,
+          "Incorrect parameter count in the call to native function 'LENGTH'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT LENGTH(1,2) AS d) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "error": {
+        "code": "ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT",
+        "errno": 1582,
+        "state": "42000",
+        "message": "Incorrect parameter count in the call to native function 'LENGTH'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1582,
+          "Incorrect parameter count in the call to native function 'LENGTH'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t ORDER BY missing(1)) LIMIT 0) q",
+      "api": "query",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t ORDER BY missing(1)) LIMIT 0) q",
+      "api": "execute",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t ORDER BY missing(1)) LIMIT 0) q",
+      "api": "prepare",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t ORDER BY missing(1)) LIMIT 1 OFFSET 1) q",
+      "api": "query",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t ORDER BY missing(1)) LIMIT 1 OFFSET 1) q",
+      "api": "execute",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t ORDER BY missing(1)) LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t ORDER BY missing(1)) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "query",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t ORDER BY missing(1)) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "execute",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t ORDER BY missing(1)) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "error": {
+        "code": "ER_SP_DOES_NOT_EXIST",
+        "errno": 1305,
+        "state": "42000",
+        "message": "FUNCTION myjs_window276_admission.missing does not exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1305,
+          "FUNCTION myjs_window276_admission.missing does not exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t HAVING 1/0) LIMIT 0) q",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t HAVING 1/0) LIMIT 0) q",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t HAVING 1/0) LIMIT 0) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t HAVING 1/0) LIMIT 1 OFFSET 1) q",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t HAVING 1/0) LIMIT 1 OFFSET 1) q",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t HAVING 1/0) LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t HAVING 1/0) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t HAVING 1/0) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t HAVING 1/0) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT SUM(CAST('x' AS DECIMAL)) AS d FROM t) LIMIT 0) q",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          246,
+          33,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT SUM(CAST('x' AS DECIMAL)) AS d FROM t) LIMIT 0) q",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          246,
+          33,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT SUM(CAST('x' AS DECIMAL)) AS d FROM t) LIMIT 0) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          246,
+          33,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT SUM(CAST('x' AS DECIMAL)) AS d FROM t) LIMIT 1 OFFSET 1) q",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          246,
+          33,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT SUM(CAST('x' AS DECIMAL)) AS d FROM t) LIMIT 1 OFFSET 1) q",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          246,
+          33,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT SUM(CAST('x' AS DECIMAL)) AS d FROM t) LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          246,
+          33,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT SUM(CAST('x' AS DECIMAL)) AS d FROM t) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          246,
+          33,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT SUM(CAST('x' AS DECIMAL)) AS d FROM t) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          246,
+          33,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT SUM(CAST('x' AS DECIMAL)) AS d FROM t) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          246,
+          33,
+          0,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((WITH r AS (SELECT d FROM t) SELECT d FROM r) LIMIT 0) q",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((WITH r AS (SELECT d FROM t) SELECT d FROM r) LIMIT 0) q",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((WITH r AS (SELECT d FROM t) SELECT d FROM r) LIMIT 0) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((WITH r AS (SELECT d FROM t) SELECT d FROM r) LIMIT 1 OFFSET 1) q",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((WITH r AS (SELECT d FROM t) SELECT d FROM r) LIMIT 1 OFFSET 1) q",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((WITH r AS (SELECT d FROM t) SELECT d FROM r) LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((WITH r AS (SELECT d FROM t) SELECT d FROM r) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          -2.5
+        ]
+      ],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((WITH r AS (SELECT d FROM t) SELECT d FROM r) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          -2.5
+        ]
+      ],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((WITH r AS (SELECT d FROM t) SELECT d FROM r) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t FOR SHARE) LIMIT 0) q",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t FOR SHARE) LIMIT 0) q",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t FOR SHARE) LIMIT 0) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t FOR SHARE) LIMIT 1 OFFSET 1) q",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t FOR SHARE) LIMIT 1 OFFSET 1) q",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          3.5
+        ]
+      ],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t FOR SHARE) LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t FOR SHARE) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "query",
+      "headers": 1,
+      "rows": [
+        [
+          -2.5
+        ]
+      ],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t FOR SHARE) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "execute",
+      "headers": 1,
+      "rows": [
+        [
+          -2.5
+        ]
+      ],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.d FROM ((SELECT d FROM t FOR SHARE) ORDER BY d LIMIT 1 OFFSET 1) q",
+      "api": "prepare",
+      "headers": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "d",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "myjs_window276_admission",
+          "q",
+          "t",
+          "d"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    }
+  ],
+  "inspect": "SELECT LAST_INSERT_ID() AS n"
+}

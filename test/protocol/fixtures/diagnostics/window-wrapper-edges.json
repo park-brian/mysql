@@ -3893,6 +3893,1486 @@
           ]
         ]
       }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            4
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            4
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t WHERE id=99) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE)) AS d FROM t WHERE id=99) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(1/0) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          51,
+          128,
+          4,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ],
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ],
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ],
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(1/0) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          51,
+          128,
+          4,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ],
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ],
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ],
+        [
+          "Warning",
+          1365,
+          "Division by 0"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(1/0) AS d FROM t WHERE id=99) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          51,
+          128,
+          4,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(1/0) AS d FROM t WHERE id=99) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          51,
+          128,
+          4,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(CAST(JSON_EXTRACT('bad','$') AS DOUBLE)) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 0,
+      "error": {
+        "code": "ER_INVALID_JSON_TEXT_IN_PARAM",
+        "errno": 3141,
+        "state": "22032",
+        "message": "Invalid JSON text in argument 1 to function json_extract: \"Invalid value.\" at position 0."
+      },
+      "warnings": [
+        [
+          "Error",
+          3141,
+          "Invalid JSON text in argument 1 to function json_extract: \"Invalid value.\" at position 0."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(CAST(JSON_EXTRACT('bad','$') AS DOUBLE)) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 0,
+      "error": {
+        "code": "ER_INVALID_JSON_TEXT_IN_PARAM",
+        "errno": 3141,
+        "state": "22032",
+        "message": "Invalid JSON text in argument 1 to function json_extract: \"Invalid value.\" at position 0."
+      },
+      "warnings": [
+        [
+          "Error",
+          3141,
+          "Invalid JSON text in argument 1 to function json_extract: \"Invalid value.\" at position 0."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(CAST(JSON_EXTRACT('bad','$') AS DOUBLE)) AS d FROM t WHERE id=99) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(CAST(JSON_EXTRACT('bad','$') AS DOUBLE)) AS d FROM t WHERE id=99) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(1e308+1e308) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 0,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "DOUBLE value is out of range in '(1e308 + 1e308)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "DOUBLE value is out of range in '(1e308 + 1e308)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(1e308+1e308) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 0,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "DOUBLE value is out of range in '(1e308 + 1e308)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "DOUBLE value is out of range in '(1e308 + 1e308)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(1e308+1e308) AS d FROM t WHERE id=99) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(1e308+1e308) AS d FROM t WHERE id=99) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(CAST('x' AS DECIMAL)) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          55,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(CAST('x' AS DECIMAL)) AS d FROM t) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          55,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ],
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect DECIMAL value: 'x'"
+        ]
+      ],
+      "warningCount": "4",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(CAST('x' AS DECIMAL)) AS d FROM t WHERE id=99) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          55,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,SUM(CAST('x' AS DECIMAL)) AS d FROM t WHERE id=99) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          55,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,CAST(LAST_INSERT_ID(LAST_INSERT_ID()+1) AS DOUBLE) AS d) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,1/0 AS d) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          29,
+          128,
+          4,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,1/0 AS d) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          246,
+          29,
+          128,
+          4,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,CAST(JSON_EXTRACT('bad','$') AS DOUBLE) AS d) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "query",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM ((SELECT 0 AS id,CAST(JSON_EXTRACT('bad','$') AS DOUBLE) AS d) LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "headers": 1,
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "q",
+          "",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
     }
   ],
   "inspect": "SELECT LAST_INSERT_ID() AS n"
