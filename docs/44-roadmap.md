@@ -3727,19 +3727,50 @@ Totals remain 144/190 and M5 42/53; M5.10 remains partial. The blocking CI refer
 job retains its full unchanged verification. All eleven required e85e73d CI
 jobs passed.
 
-**Next scalar prerequisites:** extend the literal proof through transparent
-unary plus before broader computed folds. Six native query/execute observations
-of `LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+0)` still read the left item.
-The other six literal differences are TRUE dynamic scalar field flags. A fresh
-unary-sign and retained `+?` audit has 66 complete responses of 150 before
-repair (42/108 written shapes, 24/42 retained markers). Preserve the binary
-reader order and computed-expression controls as the sign proof expands.
-The computed audit still has 96 open value-demand outcomes; statement-fixed
-values alone cannot prove foldability. The retained audit still has 16 prior
-source/metadata differences and the first demand audit has 17 OR TRUE and
-volatile TRUE differences. Keep constructor diagnostics, binary marker reader
-order, constant-group holders, uncacheable scalar lifetime and LIMIT absorption
-separate before a renewed COUNT optimization.
+**Unary-sign predicate rejection, verified boundary (2026-11-10):**
+Only the literal-demand proof looks through positive and negative signs,
+including nested `-(+0)`. The original AST and compiled predicate still own
+value evaluation, diagnostics and metadata. A shared syntax reader classifies
+literal/marker leaves; range and key readers keep their existing minus-only
+input grammar. BETWEEN still requires original literal items of the same kind
+and uses its existing collation and byte equality rules. Table qualification
+keeps its guards and shares the case-insensitive first-column lookup. All nine
+unchanged caps pass at parser/core/facade 45,599/334,352/334,266 B gzipped;
+the facade is at its existing cap.
+
+Two native profiles audit 150 responses, improving 66 to 138 complete matches
+(written signs 42 to 102/108; retained `+?` 24 to 36/42). Two strict fixtures
+pin all 138 complete outcomes, including cached binary and session-function
+controls. Six native `(+0)` responses append to the earlier literal fixture
+without changing its 114 expectations. Six CAST effect responses and six
+TRUE scalar-field responses remain open. The original reader and complete
+binding map are retained, and the binary marker phase is unchanged. Existing
+reference inputs and the live pinned MySQL image match the prior full
+verification (fourteen matching input hashes and the same image digest).
+All four focused local and direct native groups pass; actual 49df155 fails
+three positive groups and preserves the computed controls. Across 24,834
+responses complete agreement improves 20,921 to 20,999 while every prior
+complete response and all 618,334 matching protocol facts hold without loss.
+Fresh default Docker passes 1,771 main, two isolated IN-list and four bulk
+latency tests, typecheck/lint, all nine unchanged caps and package/typed smoke.
+Source proof matches 667 test files/fixtures, 206 runtime sources and tooling.
+Seeded executor fuzzing (20,000, 20261010), the unchanged plan floor
+(2,127/2,248 versus 2,118 required), and the official 1,459-file run's same 38
+passing IDs and exact native baseline pass. All eleven required 49df155 CI
+jobs passed; the full blocking reference gate is unchanged. Totals remain
+144/190 and M5 42/53; M5.10 remains partial.
+
+**Next scalar prerequisite: bounded computed rejection.** Native folds some
+literal arithmetic, comparisons and casts early, but statement-fixed session
+functions alone cannot prove that earlier demand is unused. Prove one bounded
+computed cohort before expanding the syntax reader; preserve the original
+reader, warning/overflow ordering and cached binary marker controls. The
+computed audit still has 96 open value-demand responses. A follow-up native
+audit has 179 complete responses of 390 before repair (132/306 operator/cast/
+session controls, 47/84 retained markers). Start with a proved literal operator
+cohort; do not fold session calls or widen the CAST admission boundary. OR TRUE, dynamic TRUE
+metadata and source effects, constant-group holders, uncacheable scalar
+lifetime and LIMIT absorption remain separate before renewed COUNT work.
 A WHERE containing a row/volatile input without an already-proved false conjunct
 still needs its actual reduction proof, including constant OR folding. Native
 `(SELECT 1 LIMIT 0)` reads 1, and COUNT over it counts every outer row; local

@@ -2671,8 +2671,8 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
     c.eval = () => value
     if (!truth(value)) {
       impossible = true
-      // Only written literals or text markers may discard earlier readers here.
-      if (isConstant(e) && (resolving || fixed)) folded = c
+      // Signs affect the bound reader's value, not the literal proof.
+      if (isConstant(e, '+') && (resolving || fixed)) folded = c
       break
     }
   }

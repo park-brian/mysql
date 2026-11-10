@@ -129,9 +129,10 @@ WHERE clauses while preserving implicit aggregate rows. Fixed
 TRUE predicates can reduce; binary markers keep their nullable cache. Broader
 volatile/row predicate folding, uncacheable evaluation, scalar LIMIT absorption
 and temporal cache metadata remain open before renewed COUNT value-demand work.
-A written false/NULL literal or eligible text marker now discards earlier
-value demand after full binding. Computed conditions and binary markers retain
-their reader order; source naming uses the lexer's bounded token sequence.
+Written false/NULL literals and eligible text markers discard earlier value
+demand after full binding, including through nested unary signs. Range/key
+readers keep their prior syntax rules; computed conditions and binary markers
+retain reader order. Source naming uses the lexer’s bounded token sequence.
 Set-expression limits and correlated sources retain their separate ownership. Plan-owned window readings, scalar caches
 and ROLLUP/query forwarding remain separate. Owned DOUBLE readers for byte
 functions, conditional branches and quiet string-result holders are verified

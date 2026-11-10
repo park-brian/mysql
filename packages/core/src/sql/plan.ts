@@ -51,6 +51,7 @@ import { rangeBaseline, rangeCost, type RangeShape, type RangeRead } from './cos
 import { intersect, normalize, rangeOf, type Constant, type Interval, type RangeSet } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
 import { forwardKeyColumn } from './indexes.ts'
+import { columnIndex } from './scope.ts'
 
 /** Whether a named optimizer transformation is enabled in this statement's session. */
 export function optimizerEnabled(env: Env | undefined, name: string): boolean {
@@ -100,23 +101,30 @@ const FLIP: Readonly<Record<string, Op>> = { '=': '=', '<=>': '<=>', '<': '>', '
  */
 export type OuterColumn = (e: Expression) => Compiled | undefined
 
-/** A constant the planner may evaluate before the scan: a literal, or a `?`. */
-export const isConstant = (e: Expression): boolean =>
-  e.kind === NODE.LITERAL || e.kind === NODE.PLACEHOLDER || (e.kind === NODE.UNARY && e.op === '-' && isConstant(e.operand))
-
-/** Bound markers retain item identity even when their current values happen to agree. */
-function fixedConstant(e: Expression): boolean {
-  return e.kind === NODE.LITERAL || (e.kind === NODE.UNARY && e.op === '-' && fixedConstant(e.operand))
+function signedKind(e: Expression, plus?: '+'): Expression['kind'] {
+  while (e.kind === NODE.UNARY && (e.op === '-' || e.op === plus)) e = e.operand
+  return e.kind
 }
 
-/** BETWEEN contributes an equality key only when its original constant items agree. */
+/** A written literal or marker. Range readers keep the default minus-only grammar. */
+export function isConstant(e: Expression, plus?: '+'): boolean {
+  const kind = signedKind(e, plus)
+  return kind === NODE.LITERAL || kind === NODE.PLACEHOLDER
+}
+
+/** BETWEEN requires agreeing literal items; bound markers retain their identity. */
 export function equalBounds(e: Expression, env: Env, column: ColumnDef | undefined): boolean {
-  if (e.kind !== NODE.BINARY || e.op !== 'BETWEEN' || e.extra === undefined || !fixedConstant(e.right) || !fixedConstant(e.extra as Expression)) return false
+  if (e.kind !== NODE.BINARY || e.op !== 'BETWEEN' || e.extra === undefined ||
+    signedKind(e.right) !== NODE.LITERAL || signedKind(e.extra as Expression) !== NODE.LITERAL) return false
   const a = constantValue(e.right, env)
   const b = constantValue(e.extra as Expression, env)
-  if (a === undefined || a === null || b === undefined || b === null || a.kind !== b.kind) return false
-  if (a.kind === 'string' && b.kind === 'string') return a.collationId === b.collationId && (column === undefined || column.type.collationId === CHARSET_BINARY ? a.v === b.v : compareValues(a, b) === 0)
-  return a.kind === 'bytes' && b.kind === 'bytes' ? equalBytes(a.v, b.v) : compareValues(a, b) === 0
+  // Neither NULL nor an unevaluated value can establish a bound.
+  if (!a || !b || a.kind !== b.kind) return false
+  if (a.kind === 'string') {
+    const text = b as typeof a
+    return a.collationId === text.collationId && (column && column.type.collationId !== CHARSET_BINARY ? compareValues(a, text) === 0 : a.v === text.v)
+  }
+  return a.kind === 'bytes' ? equalBytes(a.v, (b as typeof a).v) : compareValues(a, b) === 0
 }
 
 /** A condition's top-level `AND`ed conjuncts, appended to `out`. */
@@ -135,8 +143,7 @@ export function tableColumn(e: Expression, def: TableDef, alias: string): Column
   const parts = e.parts
   if (parts.length >= 2 && parts.at(-2) !== alias) return undefined
   if (parts.length === 3 && parts[0] !== def.schema) return undefined
-  const name = parts.at(-1)!.toLowerCase()
-  return def.columns.find((c) => c.name.toLowerCase() === name)
+  return def.columns[columnIndex(def.columns, parts.at(-1)!)]
 }
 
 function conditionOf(e: Expression, def: TableDef, alias: string, outer: OuterColumn | undefined, env: Env): Condition | undefined {

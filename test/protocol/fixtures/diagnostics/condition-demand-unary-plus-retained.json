@@ -1,0 +1,1862 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_window281_retained",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "setup": [
+    "CREATE TABLE t(id INT PRIMARY KEY,d DOUBLE)"
+  ],
+  "beforeEach": [
+    "DELETE FROM t",
+    "INSERT INTO t VALUES(1,2.5),(2,3.5),(3,-2.5),(4,NULL)",
+    "SELECT LAST_INSERT_ID(0)"
+  ],
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "observations": [
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        1
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        1
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        null
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        null
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        2
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        2
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        1
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        1
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        null
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT 1 AS n WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        null
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        0
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        0
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        null
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        null
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        0
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        0
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)) AS n FROM t",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        null
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT (SELECT 1 WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)) AS n FROM t",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        null
+      ],
+      "rows": [
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ],
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        1
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        1
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        null
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        null
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        2
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        2
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        1
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        1
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "query",
+      "headers": 1,
+      "params": [
+        null
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            0
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "SELECT COUNT(*) AS n HAVING LAST_INSERT_ID(LAST_INSERT_ID()+1) AND (+?)",
+      "api": "execute",
+      "headers": 1,
+      "params": [
+        null
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "n",
+          8,
+          21,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "fields": [
+          [
+            "n",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      }
+    }
+  ],
+  "inspect": "SELECT LAST_INSERT_ID() AS n",
+  "reuse": true
+}
