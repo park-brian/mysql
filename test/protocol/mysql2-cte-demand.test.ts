@@ -288,7 +288,9 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
     await c.query('CREATE TABLE empty_t LIKE t')
     await c.query('INSERT INTO t VALUES (1,2.5),(2,NULL)')
     await c.query('CREATE TABLE big_t(id BIGINT PRIMARY KEY,d INT)')
-    await c.query('INSERT INTO big_t VALUES (1,1),(9007199254740992,92),(9007199254740993,93),(9007199254740996,96)')
+    await c.query('INSERT INTO big_t VALUES (1,1),(9007199254740992,92),(9007199254740993,93),(9007199254740996,96),(90071992547409935,35)')
+    await c.query('CREATE TABLE terminal_t LIKE t')
+    await c.query('INSERT INTO terminal_t VALUES (2,2),(15,15)')
     for (const { sql, rows, text, execution, demanded = true } of cases) {
       await seed()
       const [queried, fields] = await c.query(sql)
@@ -463,6 +465,10 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='9007199254740993.49y' WHERE a.d='2.5x'", rows: [[93]], fixed: ['9007199254740993.49y'], demanded: ['2.5x'] },
       { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='9.00719925474099349e15y' WHERE a.id='2x'", rows: [[null]], fixed: ['9.00719925474099349e15y'], demanded: ['2x', '9.00719925474099349e15y'] },
       { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='9007199254740992.49y' WHERE a.id='2x'", rows: [[92]], fixed: ['9007199254740992.49y'], demanded: ['2x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN terminal_t b ON b.id='1.5e+' WHERE a.d='2.5x'", rows: [[15]], fixed: [], demanded: ['2.5x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN terminal_t b ON b.id='1.5e+' WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x', '1.5e+'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN terminal_t b ON b.id='1.5e+ ' WHERE a.d='2.5x'", rows: [[2]], fixed: [], demanded: ['2.5x'] },
+      { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='9007199254740993.5e+' WHERE a.d='2.5x'", rows: [[35]], fixed: ['9007199254740993.5e+'], demanded: ['2.5x'] },
     ]) {
       await seed()
       const [queried, fields] = await c.query(sql)

@@ -2796,18 +2796,22 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     const leftTable = tables[0]!.def
     const decimal = fractional && leftTable
     const safe = Number.isSafeInteger(decimal ? Math.trunc(value) : value)
-    // A terminal exponent sign without digits leaves the physical lookup empty.
-    const noKey = decimal && !exponent && /^[eE][+-]$/.test(source.trimStart().slice(text.length))
+    const terminal = decimal && !exponent && /^[eE][+-]$/.test(source.trimStart().slice(text.length))
+    const max = Number(MAX_UNSIGNED)
     // Adjacent BIGINT keys can have the same DOUBLE representation.
-    const wideKey = !safe && wide && !noKey && (decimal || !fractional) && Math.abs(value) <= Number(MAX_UNSIGNED)
+    const wideKey = !safe && wide && !terminal && (decimal || !fractional) && Math.abs(value) <= max
     let key: bigint | undefined
     if (safe || wideKey) {
       // Rescaling the mantissa shifts its coefficient before half-away rounding.
       key = decimal && value ? rescale(parseDecimal(mantissa), Number(exponent ?? 0)).v : BigInt(wideKey ? text : value)
     }
+    // A terminal exponent sign uses the unscaled coefficient when it fits.
+    const digits = terminal && mantissa.replace('.', '')
+    const coefficient = digits && Math.abs(Number(digits)) <= max ? BigInt(digits) : undefined
+    const terminalPoint = coefficient === undefined ? undefined : pointAccess(index, column, intValue(coefficient))
     const empty = { ranges: [] }
-    const point = key === undefined ? undefined : pointAccess(index, column, intValue(key))
-    const access = safe && noKey ? empty : point
+    const point = terminalPoint ?? (key === undefined ? undefined : pointAccess(index, column, intValue(key)))
+    const access = safe && terminal && !terminalPoint ? empty : point
     // Out-of-range keys cannot produce rows. A const-left warning still
     // depends on finding the endpoint of the right column's range.
     const range = !point && leftTable && !wide ? integerRange(column.type) : undefined
@@ -2815,7 +2819,7 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     if (!on.lookup) return false
     if (wide) {
       on.binding = condition
-      on.recheck = point === access && value !== Number(key)
+      on.recheck = point === access && value !== Number(terminalPoint ? coefficient : key)
     }
     if (decimal || wideKey || !access) on.rounded = { condition, access: access ?? empty }
     return true
