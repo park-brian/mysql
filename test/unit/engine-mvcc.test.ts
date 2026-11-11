@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { MemoryVfs, type VfsFile } from '@myjs/vfs'
-import { ClusteredIndex, EngineError, ReadView, SecondaryIndex, Store, verifyStore, type FieldBytes, type KeyColumn, type RecordLayout, type Trx } from '@myjs/engine'
+import { ClusteredIndex, EngineError, ReadView, SECONDARY_HEADER, SecondaryIndex, Store, encodeUndo, readEntryUndo, rollPtrOf, verifyStore, writeRollPtr, type FieldBytes, type KeyColumn, type RecordLayout, type Trx } from '@myjs/engine'
 
 const PAGE = 1024
 const RUNS = Number(process.env.ENGINE_RUNS ?? 40)
@@ -139,6 +139,51 @@ test('M4.21: a secondary index answers each view through a key change, a delete 
   assert.deepEqual([seen(v3, 1), seen(v3, 2)], [[], []], 'v3: deleted')
   assert.deepEqual([seen(v4, 1), seen(v4, 2)], [[1], []], 'v4: back')
   for (const v of [v1, v2, v3, v4]) v.commit()
+})
+
+test('M4.21: one writer can create more row versions than there are transaction IDs', async () => {
+  const { store, clustered } = await table()
+  const row = (id: number, n: number) => [be(id), Uint8Array.of(n), null]
+  clustered.insert(row(1, 0))
+  const writer = store.transactions.begin()
+  clustered.insert(row(2, 0), writer)
+  clustered.delete(be(2), writer)
+  clustered.insert(row(2, 1), writer)
+  for (let n = 2; n <= 12; n++) {
+    clustered.update(row(1, n), writer)
+    clustered.update(row(2, n), writer)
+  }
+  assert.deepEqual(clustered.get(be(1)), row(1, 0), 'the reader reaches the previous commit')
+  assert.equal(clustered.get(be(2)), undefined, 'the reader reaches the original insert')
+  assert.deepEqual([...clustered.scan()].map(([, fields]) => fields), [row(1, 0)])
+  assert.deepEqual(clustered.get(be(2), writer), row(2, 12))
+  writer.commit()
+  assert.deepEqual([...clustered.scan()].map(([, fields]) => fields), [row(1, 12), row(2, 12)])
+  store.purge()
+  verify(store, clustered)
+})
+
+test('M4.21: a repeated undo position in a version chain is corruption', async () => {
+  const { store, clustered } = await table()
+  const key = be(1)
+  const row = (n: number) => [key, Uint8Array.of(n), null]
+  const writer = store.transactions.begin()
+  clustered.insert(row(1), writer)
+  clustered.update(row(2), writer)
+  const older = rollPtrOf(clustered.tree.get(key)!)!
+  clustered.update(row(3), writer)
+  const newer = rollPtrOf(clustered.tree.get(key)!)!
+  const undo = readEntryUndo(store.pool, older)
+  assert.ok(undo.old)
+  writeRollPtr(undo.old, SECONDARY_HEADER, newer)
+  const body = encodeUndo(undo)
+  // Replace the small, single-page record in the cached undo page.
+  store.pool.read(older.page, (page) => {
+    const length = new DataView(page.buffer, page.byteOffset).getUint32(older.offset)
+    assert.equal(length, body.length)
+    page.set(body, older.offset + 4)
+  })
+  assert.throws(() => clustered.get(key), (error) => error instanceof EngineError && error.code === 'ENGINE_CORRUPT_PAGE' && /version chain/.test(error.message))
 })
 
 // --- the model ----------------------------------------------------------------

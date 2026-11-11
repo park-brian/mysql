@@ -157,6 +157,28 @@ Do not weaken thresholds or hide mismatches in captures. Full Docker release
 validation is described in [43](./43-testing.md); retain Prisma's worker count
 when comparing fresh ORM runs. Monitoring stays within the active session.
 
+**M4.21: valid version chains and CI (2026-11-10).** The main test job
+on d994581 caught a valid chain falsely reported as corrupt. One writer
+inserted, deleted, reinserted and repeatedly updated the same row, and an
+autocommit reader had to walk back to absence. The old guard used the next
+transaction ID as a limit on the number of row versions. The reader now
+detects repeated undo positions in constant space, while retaining the
+same visibility, delete-mark and insert boundaries. No persisted bytes
+or write/rollback/purge paths change. The exact CI counterexample reproduces
+in Docker before the fix; the deterministic regressions also cover a
+previously committed row and a two-position cycle. An engine property run
+with 1,000 cases and a two-connection query/execute probe against MySQL
+8.4.11 pass. Fresh Docker `--reference` passes 1,789 main, two isolated
+IN-list and four bulk-latency tests, typecheck/lint, all nine unchanged size
+caps, installed-package and typed smoke, the real client and all seven
+pinned corpora including 1,737 coercion warning counts. Parser, core, facade
+and engine measure 45,599/334,358/334,259/56,750 B gzipped. Source proof
+matches 683 test files/fixtures, 206 runtime sources and tooling. The
+10,000-point crash run, seeded executor fuzz, plan floor and all 38 official
+passing files with exact native baseline pass. All eleven required jobs on
+6425196 passed; d994581's seeded failure remains in its history. The text
+comparison repair is separate. M4.21 stays complete; no roadmap count changes.
+
 **CI reference repair (2026-10-24):** the first 6d90b36 run failed because
 the moving apt release installed 8.4.13's 1,465-file suite against the committed
 8.4.11 denominator (1,459). Commit 5a6bfb8 pins versioned packages and checks

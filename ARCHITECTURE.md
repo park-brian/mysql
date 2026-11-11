@@ -976,7 +976,9 @@ Each clustered record carries the id of the transaction that last wrote it and
 a roll pointer into undo, in InnoDB's own layout. `REPEATABLE READ` takes a
 read view at its first consistent read, and `READ COMMITTED` takes one per
 statement. A reader that finds a version too new for its view follows the roll
-pointer and rebuilds the version it is allowed to see.
+pointer and rebuilds the version it is allowed to see. A transaction can
+produce many versions of the same row. The reader detects cycles by repeated
+undo positions in constant space, with no limit based on transaction IDs.
 
 Undo is kept **per index entry, not per row**. An undo record says "index *i*:
 key *k* was inserted" or "key *k* had value *v*", and it holds the old value

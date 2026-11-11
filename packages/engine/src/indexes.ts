@@ -323,17 +323,24 @@ export class ClusteredIndex {
    */
   #visible(value: Uint8Array, view: ReadView | null): Uint8Array | undefined {
     if (view?.expired === true) throw snapshotTooOld()
-    let v = value
-    for (let hops = 0; ; hops++) {
+    let v: Uint8Array | null = value
+    let checkpoint = 0, nextCheckpoint = 1
+    for (let hop = 1; v !== null; hop++) {
       const version = versionOf(v)
       if (view === null || view.isVisible(version.trxId)) return version.marked ? undefined : v.subarray(CLUSTERED_HEADER)
       const ptr = rollPtrOf(v)
       if (ptr === null || ptr.isInsert) return undefined
-      if (hops > this.#sys.nextTrxId) throw corrupt(ptr.page, 'a version chain that does not end')
-      const old = readEntryUndo(this.tree.space.pool, ptr).old
-      if (old === null) return undefined
-      v = old
+      // A transaction can create many versions. Detect repeated undo positions
+      // with Brent's doubling checkpoints, without keeping the chain in memory.
+      const position = ptr.page * 0x10000 + ptr.offset // 32-bit page and 16-bit offset fit exactly.
+      if (position === checkpoint) throw corrupt(ptr.page, 'a version chain that does not end')
+      if (hop === nextCheckpoint) {
+        checkpoint = position
+        nextCheckpoint *= 2
+      }
+      v = readEntryUndo(this.tree.space.pool, ptr).old
     }
+    return undefined
   }
 
   #change<T>(trx: Trx | undefined, change: (t: Trx) => T): T {

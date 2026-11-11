@@ -335,7 +335,10 @@ and closes it.
 
 A **clustered read** walks the version chain until the trx id is visible. A
 delete-marked version means the row is absent, and an `isInsert` roll pointer
-means there is nothing older. A **current read** takes the writer slot and
+means there is nothing older. One transaction can create many versions of a
+row. The reader detects cycles by repeated undo positions (page and offset)
+using constant space, so a long valid chain still reaches the right version.
+A **current read** takes the writer slot and
 reads the latest version. With one writer, that version is committed or the
 transaction's own. That is all this document's "current read" quirk needs.
 
