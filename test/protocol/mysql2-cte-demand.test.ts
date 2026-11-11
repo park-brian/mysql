@@ -234,15 +234,16 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
     await c.query('SELECT LAST_INSERT_ID(0)')
     await c.query('SELECT 1/0')
   }
-  const check = async (text: string, warns: boolean, label: string) => {
+  const checkWarnings = async (texts: readonly string[], label: string) => {
     assert.deepEqual(await conditionsOf(c), {
-      warnings: warns ? [['Warning', 1292, `Truncated incorrect DOUBLE value: '${text}'`]] : [],
-      warningCount: warns ? '1' : '0',
+      warnings: texts.map((text) => ['Warning', 1292, `Truncated incorrect DOUBLE value: '${text}'`]),
+      warningCount: String(texts.length),
       errorCount: '0',
     }, label)
     const [last] = await c.query<RowDataPacket[]>('SELECT LAST_INSERT_ID()')
     assert.deepEqual(last, [[0]], label)
   }
+  const check = (text: string, warns: boolean, label: string) => checkWarnings(warns ? [text] : [], label)
   const cases = [
     { sql: "SELECT 1 AS n WHERE 'x'=1", rows: [], text: 'x' },
     { sql: "SELECT 1 AS n WHERE 1='x'", rows: [], text: 'x' },
@@ -376,6 +377,38 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
         warnings: [divisionWarning, ['Error', 1054, "Unknown column 'bad_name' in 'where clause'"]],
         warningCount: '2', errorCount: '1',
       }, `${failedDivision} ${api}`)
+    }
+    for (const [clause, name] of [['GROUP BY', 'group statement'], ['HAVING', 'having clause'], ['ORDER BY', 'order clause']]) {
+      const sql = `SELECT id AS n FROM t WHERE id='x' ${clause} bad_name`
+      for (const api of ['query', 'prepare'] as const) {
+        await seed()
+        await assert.rejects(c[api](sql), { errno: 1054 })
+        assert.deepEqual(await conditionsOf(c), {
+          warnings: [['Error', 1054, `Unknown column 'bad_name' in '${name}'`]], warningCount: '1', errorCount: '1',
+        }, `${sql} ${api}`)
+      }
+    }
+    for (const { sql, rows, fixed, demanded } of [
+      { sql: "SELECT id AS n FROM t WHERE id='1x' HAVING '1y'=1", rows: [[1]], fixed: ['1y'], demanded: ['1x'] },
+      { sql: "SELECT id AS n FROM t WHERE d='2x' AND id='x'", rows: [], fixed: [], demanded: ['2x', 'x'] },
+      { sql: "SELECT id AS n FROM empty_t WHERE id='x' GROUP BY id", rows: [], fixed: [], demanded: ['x'] },
+    ]) {
+      await seed()
+      const [queried, fields] = await c.query(sql)
+      assert.deepEqual(queried, rows, sql)
+      await checkWarnings([...fixed, ...demanded], `${sql} QUERY`)
+      await seed()
+      const statement = await c.prepare(sql)
+      try {
+        await checkWarnings(fixed, `${sql} PREPARE`)
+        for (let i = 0; i < 2; i++) {
+          await seed()
+          const [result, actualFields] = await statement.execute([])
+          assert.deepEqual(result, rows, sql)
+          assert.deepEqual(fieldsOf(actualFields), fieldsOf(fields), sql)
+          await checkWarnings(demanded, `${sql} EXECUTE ${i + 1}`)
+        }
+      } finally { await statement.close(); c.unprepare(sql) }
     }
     const marker = 'SELECT 1 AS n WHERE ?=0e0'
     const prepared = await c.prepare(marker)

@@ -893,7 +893,9 @@ export class SqlExecutor implements Executor {
     if (writes(statement)) return this.#write(run, statement)
     switch (statement.kind) {
       case STATEMENT.QUERY: {
-        const plan = planQuery({ ...run, preparedQuery: run.prepared !== undefined }, statement)
+        const pending: Condition[] = []
+        const plan = planQuery({ ...run, preparedQuery: run.prepared !== undefined }, statement, pending)
+        for (const condition of pending) run.env.conditions?.push(condition)
         if (this.catalog === undefined) return resultSet(run, plan, undefined)
         return state.steps(this.catalog.store, plan.locking, (trx) => resultSteps(run, plan, trx, emit))
       }

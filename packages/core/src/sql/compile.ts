@@ -680,8 +680,8 @@ export interface CompileContext {
   readonly session: Session
   /** The open prepared instance owns string-result metadata across SQL-mode changes. */
   readonly preparedSqlMode?: string | undefined
-  /** The numeric value can bind without a conversion warning when no read is demanded. */
-  readonly skipRowNumberConditions?: boolean
+  /** False skips the warning. A list holds it until the statement binds. */
+  readonly rowNumberConditions?: Condition[] | false | undefined
   readonly state: SessionValues
   readonly serverVersion: string
   /**
@@ -1265,6 +1265,10 @@ function plainTextLiteral(item: Expression | undefined): string | null | undefin
   return undefined
 }
 
+export function textBesideColumn(left: Expression, right: Expression): boolean {
+  return plainTextLiteral(left.kind === NODE.COLUMN ? right : right.kind === NODE.COLUMN ? left : undefined) != null
+}
+
 export function numberLiteral(item: LiteralNode): boolean {
   // Nonfinite DOUBLE spellings are rejected before binding.
   return numericKind(item.type)
@@ -1491,12 +1495,12 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   const arithmetic = doubleArithmeticInput(op)
   // And in a comparison with a number, which is of doubles: a constant is
   // converted once a statement (`cache_converted_constant`), a column each row.
-  const besideColumn = left.kind === NODE.COLUMN ? right : right.kind === NODE.COLUMN ? left : undefined
-  // A written string beside a numeric column only needs its value during metadata binding.
+  const conditions = ctx.rowNumberConditions !== undefined && textBesideColumn(left, right) ? ctx.rowNumberConditions : undefined
   const comparison = compared && (textVersusNumber(ca.type, cb.type) || textVersusNumber(cb.type, ca.type)) &&
-    !(ctx.skipRowNumberConditions && plainTextLiteral(besideColumn) != null)
-  const at = comparison ? numberConstant(ca, left, ctx).eval : arithmetic ? asNumber(ca, 'DOUBLE').eval : ca.eval
-  const bt = comparison ? numberConstant(cb, right, ctx).eval : arithmetic ? asNumber(cb, 'DOUBLE').eval : cb.eval
+    conditions !== false
+  const numberCtx = comparison && conditions ? { ...ctx, conditions } : ctx
+  const at = comparison ? numberConstant(ca, left, numberCtx).eval : arithmetic ? asNumber(ca, 'DOUBLE').eval : ca.eval
+  const bt = comparison ? numberConstant(cb, right, numberCtx).eval : arithmetic ? asNumber(cb, 'DOUBLE').eval : cb.eval
   // What an overflow names, as MySQL's message does: the expression's text.
   // Printed only for an error's message: the printing compiles the columns it names.
   let printed: string | undefined
@@ -1788,7 +1792,7 @@ export function dateConverter(c: Compiled, written: Expression, other: Compiled,
     }
     if (isTextValue(v)) {
       const p = parseDateTime(toText(v), flags)
-      if (p === undefined) return invalid(v, ctx.skipRowNumberConditions && other.type.column === undefined && plainTextLiteral(written) != null ? ctx : undefined)
+      if (p === undefined) return invalid(v, ctx.rowNumberConditions === false && other.type.column === undefined && plainTextLiteral(written) != null ? ctx : undefined)
       if (p.deprecation !== undefined) {
         const { code, message } = temporalDeprecation(p.deprecation, toText(v), 1)
         raise(ctx, code, message)
