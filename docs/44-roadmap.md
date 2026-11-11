@@ -59,10 +59,11 @@ One independent scalar projection over a base table now follows the outer
 WHERE and respects its startup demand. Bounded two-base-table INNER JOINs
 publish WHERE warnings before ON warnings, including with one exact integer
 equality between the inputs. A two-table LEFT JOIN shares that warning phase
-when a bound WHERE condition rejects NULL on the right. A preserved LEFT JOIN
-with an exact integral right const key now checks ON warning demand against the
-visible right row. Fractional right const keys still need conversion and
-recheck rules. Nonunique right-side conditions remain open.
+when a bound WHERE condition rejects NULL on the right. A preserved two-table
+LEFT JOIN checks ON warning demand against a visible right const row for a
+single integer primary key. In-range plain decimal text rounds for the right
+lookup, and a const left input rechecks the original comparison. Exponent
+notation, out-of-range keys and nonunique right-side conditions remain open.
 M5.10 remains partial, with M5.47, M5.49 and M5.50 work before browser work.
 [Row-dependent DOUBLE conversion](#row-dependent-double-conversion)
 
@@ -4429,14 +4430,29 @@ responses, up from 270. The preserved LEFT JOIN reuses the left const proof
 and checks the exact right key in the execution transaction. Focused query
 and execute tests cover right-key insertion and deletion in a transaction.
 Another 544 responses cover fixed true, false and NULL ON conditions.
-The 136 fractional controls retain their responses. A fractional text bound
-can change both the warning phase and the row a right const lookup returns,
-so its key conversion needs a separate proof. Grouping the system-variable
-capture by shared flags preserves all 619 definitions and the rows, order and
-metadata of both `SHOW VARIABLES` and `SHOW GLOBAL VARIABLES`. The parser,
-core and facade measure 45,599, 334,326 and 334,242 B gzipped under the
-existing caps. Across 32,803 replayed responses, the 27,469 complete matches
-and 886,912 matching protocol facts all hold.
+The integral repair left the 136 fractional responses unchanged. They exposed
+differences in both warning demand and the returned right row. Grouping the
+system-variable capture by shared flags preserves all 619 definitions and
+the rows, order and metadata of both `SHOW VARIABLES` and `SHOW GLOBAL
+VARIABLES`. The parser, core and facade measure 45,599, 334,326 and 334,242 B
+gzipped under the existing caps. Across 32,803 replayed responses, the 27,469
+complete matches and 886,912 matching protocol facts all hold.
+The fractional-key repair rounds plain decimal text half away from zero for
+the right lookup when the key fits the integer column and the safe-integer
+proof holds. A left scan returns the held right row. A const left input
+still rechecks the original DOUBLE comparison on a right hit. The signed
+INT matrix matches all 1,050 responses, up from 438. All 952 earlier integral
+responses still match and the earlier 136 fractional responses now all
+match, up from 42. A decimal followed immediately by a terminal exponent
+sign produces an empty lookup. All 312 responses in the malformed-exponent
+matrix agree with MySQL. Exponent notation with digits and out-of-range keys
+require separate proofs. Shared name prefixes in the variable capture
+preserve the 619 definitions and both SHOW outputs. The parser, core and
+facade measure 45,599, 334,350 and 334,258 B gzipped under the existing caps.
+Docker passes all 1,800 tests, typecheck, lint, package smoke and the MySQL
+8.4.11 client check. The 32,803-response replay preserves all 27,469 complete
+matches and 886,912 matching protocol facts. Seeded fuzzing, 2,127 of 2,248
+matching plans and all 38 passing MySQL test IDs retain their results.
 Other computed ON conditions, multiple scalar
 projections, correlated and other subquery roles, inferred conditions, IN and
 BETWEEN, strict INSERT SELECT and marker inference still need their own rules.
@@ -10896,7 +10912,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,326 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-11. The facade is 334,242 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
+| Core bundle, gzipped | 334,350 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-11. The facade is 334,258 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

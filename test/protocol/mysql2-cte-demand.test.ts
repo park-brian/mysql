@@ -432,6 +432,13 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='9x' WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x'] },
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1x' AND FALSE WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x'] },
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1x' WHERE a.id='2x' LIMIT 0 OFFSET 1", rows: [], fixed: [], demanded: ['2x', '1x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1.49999999999999999x' WHERE a.d='2.5x'", rows: [[1]], fixed: [], demanded: ['2.5x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON '1.5'=b.id WHERE a.d='2.5x'", rows: [[2]], fixed: [], demanded: ['2.5x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1.5x' WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x', '1.5x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1.5x' WHERE a.id='2x' LIMIT 0 OFFSET 1", rows: [], fixed: [], demanded: ['2x', '1.5x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1.5x' WHERE a.id='2x' LIMIT 0", rows: [], fixed: [], demanded: [] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1.5e+' WHERE a.d='2.5x'", rows: [[null]], fixed: [], demanded: ['2.5x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1.5e+ ' WHERE a.d='2.5x'", rows: [[2]], fixed: [], demanded: ['2.5x'] },
     ]) {
       await seed()
       const [queried, fields] = await c.query(sql)
@@ -453,6 +460,7 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
     for (const [constLookup, missed, hit, hitWarnings] of [
       [`SELECT ${scalar} AS n FROM empty_t WHERE id='2x'`, [], [[1]], ['2x', '1x']],
       ["SELECT b.id AS n FROM t a LEFT JOIN empty_t b ON b.id='2y' WHERE a.id='2x'", [[null]], [[2]], ['2x', '2y']],
+      ["SELECT b.id AS n FROM t a LEFT JOIN empty_t b ON b.id='1.5y' WHERE a.id='2x'", [[null]], [[null]], ['2x', '1.5y']],
     ] as const) {
       await c.query('START TRANSACTION')
       const lookup = await c.prepare(constLookup)

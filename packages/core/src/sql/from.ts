@@ -182,6 +182,8 @@ export interface FromPlan {
   distinctReads(aliases: ReadonlySet<string>): void
   /** The const tables: those joined as constant rows (a STRAIGHT_JOIN's after its first non-const table), those read ahead and absent from the plan, and the tables an impossible ON NULL-complements (M5.48). Given before the plan is first asked for. */
   constants(rows: ReadonlySet<string>, readAhead: ReadonlySet<string>, nullTables?: ReadonlySet<string>, outerConstants?: ReadonlyMap<string, readonly Expression[]>): void
+  /** A plain decimal literal's rounded key on a preserved LEFT JOIN's right primary key. */
+  rounded?: { readonly condition: Expression; readonly access: Access }
   /** Read the one base table whole in an index's order, for an ORDER BY or a grouping it gives; `force` drops a range on another index for it, and `reverse` reads it descending. */
   readInOrder(index: string, force: boolean, reverse?: boolean, alias?: string): void
   /** The FROM as 8.4.11's iterators (M5.44): the tree `rows` runs, as EXPLAIN shows it. */
@@ -684,6 +686,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       settings.hidden = readAhead
       if (nullTables !== undefined) settings.nullTables = nullTables
       if (outerConstants !== undefined) settings.outerConstants = outerConstants
+      settings.rounded = this.rounded
     },
     sortedBy(alias, limit) {
       sort = alias === undefined ? undefined : { alias, limit }
@@ -880,6 +883,7 @@ interface LeafSettings {
   nullTables?: ReadonlySet<string>
   /** Outer joins' inner tables their ON holds by a key to constants, and those conditions (`OptimizerFacts.outerConstants`). */
   outerConstants?: ReadonlyMap<string, readonly Expression[]>
+  rounded?: FromPlan['rounded']
   readonly covering: ReadonlyMap<string, string>
   /** The columns the query reads of each table (`reads`). */
   readonly read: Map<string, ReadonlySet<string> | 'all'>
@@ -1658,14 +1662,14 @@ function fillTable(t: FromTable, values: readonly Value[], row: Value[]): Value[
 }
 
 /** A base or derived table, read by `leafAccess`, each row as wide as the whole FROM. */
-function tableOp(t: FromTable, settings: LeafSettings): Op {
+function tableOp(t: FromTable, settings: LeafSettings, held?: Access): Op {
   return {
     *rows(run, context) {
       if (t.derived !== undefined) {
         for (const values of t.derived.rows(run.trx, run.env, t.lateral ? context : undefined, run.ready)) yield joined(fillTable(t, values, context?.slice() ?? new Array<Value>(run.width).fill(null)))
         return
       }
-      yield* scanTable(t, leafAccess(t, settings, run.env), run, context)
+      yield* scanTable(t, held ?? leafAccess(t, settings, run.env), run, context)
     },
     describe(env) {
       if (t.def === undefined) {
@@ -1918,7 +1922,10 @@ function constJoinOp(outer: Op, inner: Op, innerSlots: readonly number[], on: re
  * STRAIGHT_JOIN's constant table keeps the ordinary inner-loop boundary.
  */
 function constantRowOp(outer: Op, t: FromTable, slots: readonly number[], own: readonly Placed[], on: readonly Placed[], settings: LeafSettings, heldKey?: readonly Expression[]): Op {
-  const leaf = filterOp(tableOp(t, settings), own)
+  const point = heldKey && settings.rounded
+  // A const left input retains the DOUBLE comparison after the rounded read.
+  const predicates = point && !settings.hidden?.size ? own.filter((c) => c.e !== point.condition) : own
+  const leaf = filterOp(tableOp(t, settings, point?.access), predicates)
   return {
     *rows(run, context) {
       let inner: JoinedRow[] | undefined

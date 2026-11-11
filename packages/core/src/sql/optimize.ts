@@ -266,6 +266,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     if (!j.left || converted.has(n)) return
     for (const a of j.innerAliases) nullable.delete(a)
     const never = splitAnd(j.on, []).some((c) => {
+      if (c === from.rounded?.condition) return false
       if (impossible(c, true, j.innerAliases)) return true
       const v = partialTruth(c, () => undefined, ctx, env, true)
       return v === false || v === null

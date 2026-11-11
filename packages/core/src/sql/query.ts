@@ -12,7 +12,7 @@
 import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, PreparedStatement, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
-import { MAX_UNSIGNED, MIN_SIGNED, intValue, numericPrefix, storageWidth, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
+import { MAX_UNSIGNED, MIN_SIGNED, intValue, numericPrefix, parseDecimal, rescale, storageWidth, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
 import { appendConditions, compile, constantNode, isComparison, literalPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, textBesideColumn, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
@@ -385,6 +385,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   const refs = node.from ?? []
   const on = !grouped && (pending || run.preparing === 'wire') ? joinConditions(q, node, pending) : undefined
   let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run, on), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'))
+  if (from && on?.rounded) from.rounded = on.rounded
   run.admitQuery?.(q, true)
   const scope = from?.scope
   let source = from?.single
@@ -2740,6 +2741,7 @@ interface JoinWarnings {
   readonly leftFilters: readonly Expression[] | undefined
   active?: boolean
   lookup?: Access | undefined
+  rounded?: FromPlan['rounded']
 }
 
 function joinConditions(q: QueryExpression, node: SelectNode, pending: Condition[] | undefined): JoinWarnings | undefined {
@@ -2762,8 +2764,8 @@ function joinConditions(q: QueryExpression, node: SelectNode, pending: Condition
 
 function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
   const { key, leftFilters } = on
-  const rightTable = (scope as TableScope).tables[1]!
-  const boundary = rightTable.offset
+  const { tables } = scope as TableScope
+  const { offset: boundary, def } = tables[1]!
   // A resolved right slot proves the LEFT JOIN's null-complemented row cannot survive.
   if (leftFilters && !rejectsNullExtension(leftFilters, (e) => localColumn(e, scope), (i) => i >= boundary)) {
     const condition = on.parts.find(rowComparison)
@@ -2771,12 +2773,24 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     const [ref, literal] = condition.left.kind === NODE.COLUMN ? [condition.left, condition.right] : [condition.right, condition.left]
     const slot = ref.kind === NODE.COLUMN ? safeResolve(scope, ref.parts, 'on clause') : undefined
     if (!slot || slot.index < boundary || !exactInteger(slot) || literal.kind !== NODE.LITERAL) return false
-    const def = rightTable.def!
+    if (!def) return false
     const column = def.columns[slot.index - boundary]!
     const index = def.indexes.find((i) => i.kind === 'primary' && i.parts.length === 1 && i.parts[0]!.column === column.name)
-    const value = Number(numericPrefix(literal.value as string).text)
-    on.lookup = index && Number.isSafeInteger(value) ? pointAccess(index, column, intValue(BigInt(value))) : undefined
-    return on.lookup !== undefined
+    if (!index) return false
+    const source = literal.value as string
+    const { text } = numericPrefix(source)
+    const value = Number(text)
+    // Read the first fractional digit from text: DOUBLE can round a near half to a tie.
+    const decimal = tables[0]!.def && /^([+-]?\d*\.\d)\d*$/.exec(text)?.[1]
+    if (!Number.isSafeInteger(decimal ? Math.trunc(value) : value)) return false
+    const key = decimal ? rescale(parseDecimal(decimal), 0).v : BigInt(value)
+    // A terminal exponent sign without digits produces no const key.
+    const noKey = decimal && source.trimStart().length === text.length + 2 && /[eE][+-]$/.test(source)
+    const access = noKey ? { ranges: [] } : pointAccess(index, column, intValue(key))
+    if (!access) return false
+    on.lookup = access
+    if (decimal) on.rounded = { condition, access }
+    return true
   }
   if (!key) return true
   const left = safeResolve(scope, key[0], 'on clause')

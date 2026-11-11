@@ -31,7 +31,8 @@ function variables(): ReadonlyMap<string, SystemVariable> {
   if (registry !== undefined) return registry
   const out = new Map<string, SystemVariable>()
   for (const group of SYSTEM_VARIABLES) {
-    const [flags, ...lines] = group.split('\n') as [string, ...string[]]
+    const [header, ...lines] = group.split('\n') as [string, ...string[]]
+    const [flags, prefix] = header.split('\t') as [string, string]
     const kind = KINDS[flags[2] as keyof typeof KINDS]
     const nullable = flags.includes('n', 3)
     const traits = {
@@ -42,12 +43,13 @@ function variables(): ReadonlyMap<string, SystemVariable> {
       kind,
     }
     for (const line of lines) {
-      const [name, text, min, max] = line.split('\t') as [string, string, string?, string?]
+      const [suffix, text, min, max] = line.split('\t') as [string, string, string?, string?]
+      const name = prefix + suffix
       out.set(name, {
         ...traits,
         name,
         value: text === '\u0000' ? undefined : nullable && text === '' ? null : parsed(kind, text),
-        ...(kind === 'int' && min !== undefined && max !== undefined ? { min: BigInt(min), max: BigInt(max) } : {}),
+        ...(kind === 'int' ? { min: BigInt(min!), max: BigInt(max!) } : {}),
       })
     }
   }
