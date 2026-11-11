@@ -460,6 +460,9 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='1.5y' WHERE a.id='2x'", rows: [[null]], fixed: ['1.5y'], demanded: ['2x'] },
       { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='9007199254740993y' WHERE a.d='2.5x'", rows: [[93]], fixed: ['9007199254740993y'], demanded: ['2.5x'] },
       { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='9007199254740997y' WHERE a.id='2x'", rows: [[null]], fixed: ['9007199254740997y'], demanded: ['2x'] },
+      { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='9007199254740993.49y' WHERE a.d='2.5x'", rows: [[93]], fixed: ['9007199254740993.49y'], demanded: ['2.5x'] },
+      { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='9.00719925474099349e15y' WHERE a.id='2x'", rows: [[null]], fixed: ['9.00719925474099349e15y'], demanded: ['2x', '9.00719925474099349e15y'] },
+      { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='9007199254740992.49y' WHERE a.id='2x'", rows: [[92]], fixed: ['9007199254740992.49y'], demanded: ['2x'] },
     ]) {
       await seed()
       const [queried, fields] = await c.query(sql)

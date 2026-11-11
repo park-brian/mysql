@@ -2796,16 +2796,15 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     const leftTable = tables[0]!.def
     const decimal = fractional && leftTable
     const safe = Number.isSafeInteger(decimal ? Math.trunc(value) : value)
-    // Adjacent BIGINT keys can have the same DOUBLE representation.
-    const wideInteger = !safe && wide && !fractional && Math.abs(value) <= Number(MAX_UNSIGNED)
-    let key: bigint | undefined
-    if (wideInteger) key = BigInt(text)
-    else if (safe) {
-      // Rescaling the mantissa shifts its coefficient before half-away rounding.
-      key = decimal && value ? rescale(parseDecimal(mantissa), Number(exponent ?? 0)).v : BigInt(value)
-    }
     // A terminal exponent sign without digits leaves the physical lookup empty.
     const noKey = decimal && !exponent && /^[eE][+-]$/.test(source.trimStart().slice(text.length))
+    // Adjacent BIGINT keys can have the same DOUBLE representation.
+    const wideKey = !safe && wide && !noKey && (decimal || !fractional) && Math.abs(value) <= Number(MAX_UNSIGNED)
+    let key: bigint | undefined
+    if (safe || wideKey) {
+      // Rescaling the mantissa shifts its coefficient before half-away rounding.
+      key = decimal && value ? rescale(parseDecimal(mantissa), Number(exponent ?? 0)).v : BigInt(wideKey ? text : value)
+    }
     const empty = { ranges: [] }
     const point = key === undefined ? undefined : pointAccess(index, column, intValue(key))
     const access = safe && noKey ? empty : point
@@ -2818,7 +2817,7 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
       on.binding = condition
       on.recheck = point === access && value !== Number(key)
     }
-    if (decimal || wideInteger || !access) on.rounded = { condition, access: access ?? empty }
+    if (decimal || wideKey || !access) on.rounded = { condition, access: access ?? empty }
     return true
   }
   if (!key) return true
