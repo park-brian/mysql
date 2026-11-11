@@ -24,7 +24,14 @@ export function hasDirectFields(query: QueryExpression): boolean {
 /** Read-only AST proofs: true matches, false prunes, undefined visits children. */
 export function someNode(e: unknown, check: (node: object) => boolean | undefined): boolean {
   if (e === null || typeof e !== 'object') return false
-  return check(e) ?? Object.values(e).flat().some((child) => someNode(child, check))
+  const match = check(e)
+  if (match !== undefined) return match
+  for (const child of Object.values(e)) {
+    if (Array.isArray(child)) {
+      for (const item of child) if (someNode(item, check)) return true
+    } else if (someNode(child, check)) return true
+  }
+  return false
 }
 /** Window calls owned here; subqueries retain their own window scope. */
 export function containsWindow(e: unknown): boolean {

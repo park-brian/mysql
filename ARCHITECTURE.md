@@ -970,6 +970,11 @@ pause, and it rolls back as on any error. Purge is cut to fit: a commit
 purges a bounded number of undo records, and the rest is purged a slice at
 a time while no writer holds the slot.
 
+Large PREPAREs also give the loop a turn around parsing and during metadata
+packet delivery. The AST searches between those turns keep their visit order
+without copying flattened child lists. IN finds nullable operands without
+constructing an argument list for the whole predicate.
+
 ### Reading the past
 
 Each clustered record carries the id of the transaction that last wrote it and

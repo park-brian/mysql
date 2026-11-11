@@ -2130,7 +2130,7 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
   const constantsKey = {}
   return {
     eval: (r, env) => {
-      const constants = cachedConstants ? memoValue(env.memo, constantsKey, () => items.map((i) => i.eval(r, env))) : undefined
+      let values = cachedConstants ? memoValue(env.memo, constantsKey, () => items.map((i) => i.eval(r, env))) : undefined
       const v = a.eval(r, env)
       if (compiled.type.kind === 'null') return null
       if (v === null && items.length === 1 && !cachedConstants) return null
@@ -2143,29 +2143,23 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
         const found = sorted === undefined ? undefined : searchItems(sorted, v)
         if (found !== undefined) return found === null ? null : bool(found !== negated)
       }
-      let sawNull = false
       if (timed) {
         // One item that is no time and the TIME column is in none of them:
         // the server's list of times could not be built (8.4.11: `t IN
         // ('10:00:00', 'x')` is false for 10:00:00, NULL with a NULL item).
-        const values = items.map((i) => i.eval(r, env))
+        values = items.map((i) => i.eval(r, env))
         if (v === null) return null
         if (values.includes(NO_TIME)) return values.includes(null) ? null : bool(negated)
-        for (let i = 0; i < values.length; i++) {
-          const c = compareItem(v, values[i] as Value, i)
-          if (c === 0) return bool(!negated)
-          if (c === null) sawNull = true
-        }
-        return sawNull ? null : bool(negated)
       }
+      let sawNull = false
       for (let i = 0; i < items.length; i++) {
-        const c = compareItem(v, constants === undefined ? (items[i] as Compiled).eval(r, env) : constants[i] as Value, i)
+        const c = compareItem(v, values === undefined ? (items[i] as Compiled).eval(r, env) : values[i] as Value, i)
         if (c === 0) return bool(!negated)
         if (c === null) sawNull = true
       }
       return sawNull ? null : bool(negated)
     },
-    type: boolType(!notNull(a.type, ...items.map((i) => i.type))),
+    type: boolType(a.type.nullable || items.some((i) => i.type.nullable)),
   }
 }
 

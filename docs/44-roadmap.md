@@ -4164,6 +4164,35 @@ emitted code. The 20,000-statement seeded executor run, the plan floor
 the exact native baseline are unchanged. All eleven required
 jobs for 1181ac2 passed. Totals stay at 144/190 and M5 42/53; M5.10 is partial.
 
+**M5.37: less work before large PREPARE metadata (2026-11-10).** The
+[19c57a1 GitHub run](https://github.com/park-brian/mysql/actions/runs/42944513360)
+passed ten required jobs, including the pinned reference, but its
+32,000-parameter PREPARE probe waited 86 ms during a 219 ms command
+(16 replies), beyond the unchanged one-third bound. Sixteen exact local
+repetitions passed. Phase measurements found the longest ordinary gap in
+preload and planning before the existing packet yields. AST searches now
+visit each child in order without flattening intermediate arrays. IN derives
+nullability directly from its items without a large argument list and shares
+one result loop. Admission, diagnostic order, result metadata, packet yields
+and session interruption retain their existing ownership.
+
+In twelve identical instrumented Docker repetitions on each revision, the
+median maximum probe gap falls from 38.54 to 28.16 ms and the largest gap from
+51.90 to 31.53 ms. The worst gap divided by command time falls from 0.281 to
+0.199. All eight additional single-test runs per revision with optimization
+disabled also pass. A direct pinned MySQL 8.4.11 probe agrees through QUERY
+and EXECUTE on IN, NOT IN and NULL with 32,000 markers, including marker
+count, result metadata, rows and diagnostics. The tests and thresholds are
+unchanged. All 27,469 complete matches and 886,912 matching protocol facts
+are unchanged across 32,803 responses. Fresh Docker passes 1,794 main, two
+isolated IN-list and four bulk tests, typecheck, lint, package/typed smoke,
+and nine size caps (parser/core/facade: 45,599/334,349/334,263 B gzipped).
+The tested snapshot matches 687 test files/fixtures, 206 runtime sources and
+tooling. Fourteen input hashes and the live pin match the fresh seven-corpus
+reference run on 19c57a1. Seeded executor fuzz, the 2,127/2,248 plan score
+and all 38 official passing file IDs retain their exact baseline. Totals
+stay 144/190 and M5 42/53.
+
 **Next scalar prerequisite: row-dependent DOUBLE warning phases.** A row
 column compared to a written truncating string can warn at PREPARE locally,
 where native waits for EXECUTE (plain WHERE and inner JOIN ON, in both
