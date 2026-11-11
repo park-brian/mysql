@@ -2772,20 +2772,20 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     if (condition?.kind !== NODE.BINARY || condition.op !== '=' || !on.parts.every((e) => e === condition || literalPredicate(e, true) || writtenFalse(e))) return false
     const [ref, literal] = condition.left.kind === NODE.COLUMN ? [condition.left, condition.right] : [condition.right, condition.left]
     const slot = ref.kind === NODE.COLUMN ? safeResolve(scope, ref.parts, 'on clause') : undefined
-    if (!slot || slot.index < boundary || !exactInteger(slot) || literal.kind !== NODE.LITERAL) return false
-    if (!def) return false
+    if (!def || !slot || slot.index < boundary || !exactInteger(slot) || literal.kind !== NODE.LITERAL) return false
     const column = def.columns[slot.index - boundary]!
     const index = def.indexes.find((i) => i.kind === 'primary' && i.parts.length === 1 && i.parts[0]!.column === column.name)
     if (!index) return false
     const source = literal.value as string
-    const { text } = numericPrefix(source)
+    const { text, fractional } = numericPrefix(source)
     const value = Number(text)
-    // Read the first fractional digit from text: DOUBLE can round a near half to a tie.
-    const decimal = tables[0]!.def && /^([+-]?\d*\.\d)\d*$/.exec(text)?.[1]
+    const [mantissa, exponent] = text.split(/[eE]/) as [string, string?]
+    const decimal = fractional && tables[0]!.def
     if (!Number.isSafeInteger(decimal ? Math.trunc(value) : value)) return false
-    const key = decimal ? rescale(parseDecimal(decimal), 0).v : BigInt(value)
+    // Rescaling the mantissa shifts its coefficient before half-away rounding.
+    const key = decimal && value ? rescale(parseDecimal(mantissa), Number(exponent ?? 0)).v : BigInt(value)
     // A terminal exponent sign without digits produces no const key.
-    const noKey = decimal && source.trimStart().length === text.length + 2 && /[eE][+-]$/.test(source)
+    const noKey = decimal && !exponent && /^[eE][+-]$/.test(source.trimStart().slice(text.length))
     const access = noKey ? { ranges: [] } : pointAccess(index, column, intValue(key))
     if (!access) return false
     on.lookup = access

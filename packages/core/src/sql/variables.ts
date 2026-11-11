@@ -58,10 +58,7 @@ function variables(): ReadonlyMap<string, SystemVariable> {
 }
 
 function parsed(kind: SystemVariable['kind'], text: string): SqlValue {
-  if (kind === 'bool') return text === 'ON' ? 1 : 0
-  if (kind === 'int') return BigInt(text)
-  if (kind === 'double') return Number(text)
-  return text
+  return kind === 'string' ? text : kind === 'int' ? BigInt(text) : Number(text)
 }
 
 export function systemVariableInfo(name: string): SystemVariable | undefined {

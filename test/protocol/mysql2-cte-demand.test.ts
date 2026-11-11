@@ -439,6 +439,9 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1.5x' WHERE a.id='2x' LIMIT 0", rows: [], fixed: [], demanded: [] },
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1.5e+' WHERE a.d='2.5x'", rows: [[null]], fixed: [], demanded: ['2.5x'] },
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1.5e+ ' WHERE a.d='2.5x'", rows: [[2]], fixed: [], demanded: ['2.5x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='149999999999999999e-17x' WHERE a.d='2.5x'", rows: [[1]], fixed: [], demanded: ['2.5x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='150000000000000001e-17x' WHERE a.d='2.5x'", rows: [[2]], fixed: [], demanded: ['2.5x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='149999999999999999e-17x' WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x', '149999999999999999e-17x'] },
     ]) {
       await seed()
       const [queried, fields] = await c.query(sql)
