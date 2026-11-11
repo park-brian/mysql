@@ -4103,15 +4103,46 @@ unchanged plan floor (2,127/2,248 versus 2,118 required), and the official
 All eleven required 6425196 CI jobs passed; 9f43a08 CI is running with
 no reported failure. Totals remain 144/190 and M5 42/53; M5.10 is partial.
 
-**Next scalar prerequisite: mixed string/number comparisons.** A pinned
-phase audit starts at 240 complete matches of 444 written, projection and
-mode responses and 249 of 336 retained-marker responses. Separate early
-value demand from cached DOUBLE conversion warnings. MySQL may report a
-truncation in the text query or PREPARE without repeating it at EXECUTE.
-Keep the original comparator, collation, NULL order and retained binary
-marker reads, and prove each warning phase before changing it. Introduced
-or collated text, BIT/HEX, temporal readers, CAST admission, session calls,
-OR TRUE, dynamic TRUE metadata and source effects, constant-group holders,
+**Mixed literal comparisons with complete DOUBLE conversion (2026-11-10):**
+A direct comparison may reuse its rejected reader when one operand is a
+plain string whose numeric prefix is complete and finite and the other is a
+numeric literal with optional unary signs. The same check that admits a
+DOUBLE conversion without truncation supplies the syntax proof. The bound
+comparator still owns the value, collation, NULL order and diagnostics.
+Strings with incomplete, missing or overflowing prefixes, numeric
+expressions on the other side, explicit collations, and binary markers
+stay outside this extension. CASE comparisons share their existing input
+list, numeric readers share the conversion wrapper and the existing constant
+cache keeps its statement ownership.
+
+Four pinned profiles improve 755 to 1,009 complete responses of 1,446.
+The two focused profiles improve 164 to 354 of 456 written/mode cases and
+102 to 144 of 210 retained-marker cases; their strict fixtures pin all 498
+complete outcomes. The broader mixed profiles improve 240 to 256 of 444
+and 249 to 255 of 336. Thirty-six native responses append to the earlier
+289 text-comparison expectations without changing them. Across 208 profiles,
+agreement improves from 27,136 to 27,462 complete responses of 32,803. Every
+prior complete response and all 886,450 matching protocol facts are retained.
+Fresh Docker passes 1,793 main, two isolated IN-list and four bulk-latency
+checks, typecheck, lint and all nine unchanged size caps. Parser, core and
+facade are 45,599, 334,341 and 334,265 B gzipped; the snapshot matches 687
+test files/fixtures, 206 runtime sources and tooling. Fourteen reference input
+hashes and the live pin match the 9f43a08 run of all seven corpora; the full
+reference CI gate is unchanged.
+All three focused groups pass locally and directly on pinned MySQL 8.4.11;
+the previous SQL readers fail all three. Seeded executor fuzz, the unchanged
+plan floor (2,127/2,248 versus 2,118 required) and all 38 official passing
+file IDs with the exact native baseline pass. All eleven required jobs for
+d3fd63b and 9f43a08 have passed. Totals stay at 144/190 and M5 42/53; M5.10
+remains partial.
+
+**Next scalar prerequisite: cached DOUBLE warning phases.** The mixed
+profiles still show warnings that MySQL reports at PREPARE but does not
+repeat at EXECUTE for written conditions. Prove that lifetime separately
+from projection and retained marker readers. Preserve truncation severity,
+conditions on failure, collation and value demand. Introduced or collated
+text, BIT/HEX, temporal readers, CAST admission, session calls, OR TRUE,
+dynamic TRUE metadata and source effects, constant-group holders,
 uncacheable scalar lifetime and LIMIT absorption remain separate before
 renewed COUNT work.
 A WHERE containing a row/volatile input without an already-proved false conjunct

@@ -134,8 +134,9 @@ demand after full binding. The same holds for proved arithmetic and direct
 comparisons over numeric or NULL literal trees, including integer, DECIMAL,
 finite DOUBLE, unary signs and native two-argument MOD(). Plain strings
 without introducers or explicit collations may be arithmetic operands or
-compared directly with plain strings or NULL. The bound reader keeps its
-collation, scale, signedness and diagnostics. Range/key readers keep their prior
+compared directly with plain strings or NULL. A plain string that converts
+fully to finite DOUBLE can also compare directly with a numeric literal.
+The bound reader keeps its collation, scale, signedness and diagnostics. Range/key readers keep their prior
 syntax rules; CAST, session calls and binary markers retain reader order.
 Source naming uses the lexer’s bounded token sequence.
 Set-expression limits and correlated sources retain their separate ownership. Plan-owned window readings, scalar caches

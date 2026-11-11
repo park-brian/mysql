@@ -160,6 +160,13 @@ export interface Env {
   readonly conditions?: Condition[] | undefined
 }
 
+function doubleReader(read: Compiled['eval']): Compiled['eval'] {
+  return (r, env) => {
+    const value = read(r, env)
+    return value === null ? null : doubleValue(toDouble(value))
+  }
+}
+
 /**
  * An operand read as a number, with its source reader's diagnostics. Text
  * normally draws 1292 for truncation. DECIMAL fields and function prefix readers
@@ -171,13 +178,7 @@ export interface Env {
 export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', once: boolean | Expression = false, source: 'field' | 'cast' = 'field'): Compiled {
   // Numeric callers may subsequently read the same item as DECIMAL. Keep its
   // precise value and reader capabilities unless this is a STRING_RESULT read.
-  if (kind === 'DOUBLE' && (isText(c.type) || c.type.kind === 'json') && c.realOf !== undefined) {
-    const read = c.realOf(once)
-    return { ...c, eval: (r, env) => {
-      const value = read(r, env)
-      return value === null ? null : doubleValue(toDouble(value))
-    } }
-  }
+  if (kind === 'DOUBLE' && (isText(c.type) || c.type.kind === 'json') && c.realOf !== undefined) return { ...c, eval: doubleReader(c.realOf(once)) }
   if (kind === 'INTEGER' && c.type.kind === 'double' && c.integerOf !== undefined) return { ...c, eval: c.integerOf(once) }
   if (kind === 'DECIMAL' && c.decimalOf !== undefined) return { type: c.type, eval: c.decimalOf(once) }
   if (c.type.kind === 'json') return jsonAsNumber(c, kind)
@@ -235,14 +236,11 @@ export function numberConstant(c: Compiled, written: Expression, ctx: CompileCon
   const constant = constantNode(written)
   const read = asNumber(c, 'DOUBLE', constant && written)
   if (!constant || (!resolving && ctx.clause !== 'where clause' && ctx.clause !== 'on clause') || (written.kind === NODE.PLACEHOLDER && ctx.params === undefined)) return read
-  let cache = ctx.conditions === undefined ? undefined : NUMBER_CONSTANTS.get(ctx.conditions)
-  if (cache?.has(written)) return cache.get(written) as Compiled
-  const value = resolveConstant(read, ctx)
-  if (ctx.conditions !== undefined) {
-    if (cache === undefined) { cache = new Map(); NUMBER_CONSTANTS.set(ctx.conditions, cache) }
-    cache.set(written, value)
-  }
-  return value
+  const conditions = ctx.conditions
+  if (conditions === undefined) return resolveConstant(read, ctx)
+  let cache = NUMBER_CONSTANTS.get(conditions)
+  if (cache === undefined) NUMBER_CONSTANTS.set(conditions, cache = new Map())
+  return memoValue(cache, written, () => resolveConstant(read, ctx))
 }
 
 function resolveConstant(c: Compiled, ctx: CompileContext): Compiled {
@@ -253,9 +251,16 @@ function resolveConstant(c: Compiled, ctx: CompileContext): Compiled {
 function unconvertedBytes(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL'): number {
   if (!isTextValue(v)) return 0
   const text = toText(v)
-  const m = (kind === 'INTEGER' ? /^[ \t\n\r]*[+-]?\d+/ : /^(?:[ \t\n\r]*[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)?/).exec(text)
-  if (m === null) return -1
-  const rest = text.slice(m[0].length)
+  let end: number
+  if (kind === 'INTEGER') {
+    const m = /^[ \t\n\r]*[+-]?\d+/.exec(text)
+    if (m === null) return -1
+    end = m[0].length
+  } else {
+    const prefix = numericPrefix(text)
+    end = prefix.valid ? text.indexOf(prefix.text) + prefix.text.length : 0
+  }
+  const rest = text.slice(end)
   return v.kind === 'bytes' ? rest.length : new TextEncoder().encode(rest).length
 }
 
@@ -335,6 +340,10 @@ function jsonTime(value: JsonDoc, name: string, env: Env): MysqlTime | null {
   return null
 }
 
+function completeDouble(prefix: ReturnType<typeof numericPrefix>): boolean {
+  return prefix.complete && Number.isFinite(Number(prefix.text))
+}
+
 /** `asNumber`'s check, for one value. */
 function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env, c: Compiled, diagnosticKind?: ResultType['kind']): void {
   if (integerPrefix(v) === undefined) return
@@ -348,12 +357,9 @@ function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECI
     if (c.decimalPrefix || (column && c.type.field === FIELD_TYPE.BLOB)) return
   }
   // An integer past 64 bits is truncated too, to the largest there is.
-  const overflow =
-    kind === 'INTEGER'
-      ? p.complete && !p.fractional && (BigInt(p.text) > MAX_UNSIGNED || BigInt(p.text) < MIN_SIGNED)
-      : // And a double past the largest, which is read as it (8.4.11: `'1e400' + 0`).
-        kind === 'DOUBLE' && p.complete && !Number.isFinite(Number(p.text))
-  if (p.complete && !(kind === 'INTEGER' && p.fractional) && !overflow) return
+  // A double past the largest is truncated as well (8.4.11: `'1e400' + 0`).
+  if (kind === 'DOUBLE' ? completeDouble(p) : p.complete &&
+    (kind !== 'INTEGER' || (!p.fractional && BigInt(p.text) <= MAX_UNSIGNED && BigInt(p.text) >= MIN_SIGNED))) return
   // INTEGER casts warn even for empty or whitespace-only strings and bytes.
   if (!p.complete && kind !== 'DECIMAL' && diagnosticKind === undefined && /^[ \t\n\r]*$/.test(text)) return
   let diagnostic: string
@@ -1265,9 +1271,16 @@ function doubleArithmeticInput(op: string): boolean {
   return op === '+' || op === '-' || op === '*' || op === '/' || op === '%' || op === 'MOD'
 }
 
-function textOrNullLiteral(item: Expression): boolean {
-  return item.kind === NODE.LITERAL &&
-    (item.type === LITERAL.NULL || (item.type === LITERAL.STRING && item.charset === undefined && item.collation === undefined))
+function plainTextLiteral(item: Expression): string | null | undefined {
+  if (item.kind !== NODE.LITERAL) return undefined
+  if (item.type === LITERAL.NULL) return null
+  if (item.type === LITERAL.STRING && item.charset === undefined && item.collation === undefined) return item.value as string
+  return undefined
+}
+
+function numberLiteral(item: LiteralNode): boolean {
+  // Nonfinite DOUBLE spellings are rejected before binding.
+  return item.type === LITERAL.INT || item.type === LITERAL.DECIMAL || item.type === LITERAL.DOUBLE
 }
 
 function literalNumericOperand(e: Expression, arithmetic = false): boolean {
@@ -1277,15 +1290,20 @@ function literalNumericOperand(e: Expression, arithmetic = false): boolean {
   if (item.kind === NODE.BINARY) return (item.op === 'DIV' || doubleArithmeticInput(item.op)) &&
     literalNumericOperand(item.left, true) && literalNumericOperand(item.right, true)
   if (item.kind !== NODE.LITERAL) return false
-  // Nonfinite DOUBLE spellings are rejected before binding.
-  return item.type === LITERAL.INT || item.type === LITERAL.DECIMAL || item.type === LITERAL.DOUBLE || item.type === LITERAL.NULL ||
-    (arithmetic && textOrNullLiteral(item))
+  return numberLiteral(item) || item.type === LITERAL.NULL || (arithmetic && plainTextLiteral(item) !== undefined)
 }
 
 /** Syntax proof for reusing an already-rejected arithmetic or comparison reader. */
 export function literalPredicate(e: Expression): boolean {
   if (e.kind === NODE.BINARY && (COMPARISONS[e.op] || e.op === '<=>')) {
-    return (textOrNullLiteral(e.left) && textOrNullLiteral(e.right)) || (literalNumericOperand(e.left) && literalNumericOperand(e.right))
+    const left = plainTextLiteral(e.left), right = plainTextLiteral(e.right)
+    if (left !== undefined && right !== undefined) return true
+    const text = left ?? right
+    if (typeof text === 'string') {
+      const numeric = signedOperand(left === undefined ? e.left : e.right, '+')
+      return numeric.kind === NODE.LITERAL && numeric.collation === undefined && numberLiteral(numeric) && completeDouble(numericPrefix(text))
+    }
+    return literalNumericOperand(e.left) && literalNumericOperand(e.right)
   }
   return literalNumericOperand(e)
 }
@@ -1401,7 +1419,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       if (numeric) {
         if (exact) return x
         const checked = a0.type.field === FIELD_TYPE.LONGLONG && left.kind === NODE.COLUMN ? numberConstant(x, written, ctx, true) : asNumber(x, 'DOUBLE')
-        return { eval: (r, env) => { const v = checked.eval(r, env); return v === null ? null : doubleValue(toDouble(v)) }, type: x.type }
+        return { eval: doubleReader(checked.eval), type: x.type }
       }
       if (!dated) return comparisonText(x)
       if (x.type.kind === 'time') return onStatementDate(x)
@@ -2540,21 +2558,19 @@ export function choiceOf(xs: readonly Compiled[], select: (row: Row, env: Env) =
 function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
   const given = e.operand === undefined ? undefined : compile(e.operand, ctx)
   const compiled = e.whens.map((w) => ({ when: compile(w.when, ctx), then: compile(w.then, ctx) }))
+  const rawWhens = compiled.map((w) => w.when)
+  const compared = given === undefined ? rawWhens : [given, ...rawWhens]
   // `CASE x WHEN y`: one comparison type for x and every y, text read as a
   // double beside a number (`agg_cmp_type`); a searched CASE reads each WHEN's truth as one.
   const ordinal = given?.type.column !== undefined && (given.type.column.flags & (COLUMN_FLAG.ENUM | COLUMN_FLAG.SET)) !== 0
-  const numeric = given !== undefined && ([given, ...compiled.map((w) => w.when)].some((x) => isNumber(x.type)) || (ordinal && compiled.some((w) => w.when.type.literalInt !== undefined)))
-  const exact = [given, ...compiled.map((w) => w.when)].every((c) => c === undefined || c.type.kind === 'int' || c.type.kind === 'decimal' || c.type.kind === 'null')
+  const numeric = given !== undefined && (compared.some((x) => isNumber(x.type)) || (ordinal && rawWhens.some((w) => w.type.literalInt !== undefined)))
+  const exact = compared.every((c) => c.type.kind === 'int' || c.type.kind === 'decimal' || c.type.kind === 'null')
   const number = (c: Compiled): Compiled => {
     if (exact) return c
-    const checked = asNumber(c, 'DOUBLE')
-    return { type: c.type, eval: (r, env) => {
-      const v = checked.eval(r, env)
-      const numericValue = ordinal && c.type.literalInt !== undefined ? withoutHex(v) : v
-      return numericValue === null ? null : doubleValue(toDouble(numericValue))
-    } }
+    const read = asNumber(c, 'DOUBLE').eval
+    return { type: c.type, eval: doubleReader(ordinal && c.type.literalInt !== undefined ? (r, env) => withoutHex(read(r, env)) : read) }
   }
-  const jsonText = !numeric && [given, ...compiled.map((w) => w.when)].some((c) => c?.type.kind === 'json')
+  const jsonText = !numeric && compared.some((c) => c.type.kind === 'json')
   const whenComparison = (c: Compiled, written: Expression): Compiled => {
     if (given?.type.kind === 'datetime' && !numeric) return c.type.kind === 'time' ? onStatementDate(c) : dateConstant(c.type.kind === 'json' ? comparisonText(c) : c, written, given, ctx, false)
     if (given?.type.kind === 'time' && !numeric) {
@@ -2564,12 +2580,12 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
     return jsonText ? comparisonText(c) : c
   }
   const operand = given === undefined ? undefined : numeric ? number(given) : jsonText ? comparisonText(given) : given
-  const whens = compiled.map((w, i) => numeric ? number(w.when) : given === undefined ? asNumber(w.when, 'DOUBLE') : whenComparison(w.when, (e.whens[i] as CaseNode['whens'][number]).when))
+  const whens = rawWhens.map((w, i) => numeric ? number(w) : given === undefined ? asNumber(w, 'DOUBLE') : whenComparison(w, e.whens[i]!.when))
   const otherwise = e.else === undefined ? lit(null, NULL_TYPE) : compile(e.else, ctx)
   const results = [...compiled.map((w) => w.then), otherwise]
   const type = aggregate(results.map((x) => x.type), results.some((x) => x.type.nullable), ctx.connectionCollation, 'case')
   // `CASE x WHEN y`: the operand and every WHEN compare in one collation.
-  if (given !== undefined && isText(given.type) && compiled.every((w) => isText(w.when.type))) aggregateCollations([given.type, ...compiled.map((w) => w.when.type)], 'case', true)
+  if (given !== undefined && compared.every((w) => isText(w.type))) aggregateCollations(compared.map((w) => w.type), 'case', true)
   return choiceOf(results, (r, env) => {
     const subject = operand?.eval(r, env)
     for (let i = 0; i < whens.length; i++) {
@@ -2767,7 +2783,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
       }
     case 'DOUBLE':
     case 'REAL':
-      return realInteger({ eval: (r, env) => { const v = x(r, env); return v === null ? null : doubleValue(toDouble(v)) }, type: doubleType(nullable) }, () => printedArgument(e, ctx))
+      return realInteger({ eval: doubleReader(x), type: doubleType(nullable) }, () => printedArgument(e, ctx))
     case 'DATE':
     case 'DATETIME': {
       const type = t.name === 'DATE' ? 'DATE' : 'DATETIME'
