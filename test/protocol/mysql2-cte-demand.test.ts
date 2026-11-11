@@ -226,6 +226,84 @@ async function conditionsOf(c: mysql.Connection) {
   return { warnings, warningCount, errorCount }
 }
 
+test('M5.10: fixed DOUBLE comparison warnings belong to SELECT preparation', async () => {
+  const { c, db } = await connection()
+  const schema = 'myjs_fixed_double_phase'
+  let created = false
+  const seed = async () => {
+    await c.query('SELECT LAST_INSERT_ID(0)')
+    await c.query('SELECT 1/0')
+  }
+  const check = async (text: string, warns: boolean, label: string) => {
+    assert.deepEqual(await conditionsOf(c), {
+      warnings: warns ? [['Warning', 1292, `Truncated incorrect DOUBLE value: '${text}'`]] : [],
+      warningCount: warns ? '1' : '0',
+      errorCount: '0',
+    }, label)
+    const [last] = await c.query<RowDataPacket[]>('SELECT LAST_INSERT_ID()')
+    assert.deepEqual(last, [[0]], label)
+  }
+  const cases = [
+    { sql: "SELECT 1 AS n WHERE 'x'=1", rows: [], text: 'x' },
+    { sql: "SELECT 1 AS n WHERE 1='x'", rows: [], text: 'x' },
+    { sql: "SELECT 1 AS n WHERE '0x'<=>0", rows: [[1]], text: '0x' },
+    { sql: "SELECT 1 AS n WHERE 0<=>'0x'", rows: [[1]], text: '0x' },
+    { sql: "SELECT 1 AS n WHERE '1x'=+1", rows: [[1]], text: '1x' },
+    { sql: "SELECT 1 AS n WHERE 'x'>=-1", rows: [[1]], text: 'x' },
+    { sql: "SELECT 1 AS n WHERE 'x'<0.1", rows: [[1]], text: 'x' },
+    { sql: "SELECT 1 AS n WHERE 1e0<>'x'", rows: [[1]], text: 'x' },
+    { sql: "SELECT (SELECT 1 WHERE 'x'=1) AS n", rows: [[null]], text: 'x' },
+    { sql: "SELECT id AS n FROM t WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND 'x'=1", rows: [], text: 'x' },
+    { sql: "SELECT COUNT(*) AS n HAVING 'x'=1", rows: [], text: 'x' },
+    { sql: "SELECT 'x'=1 AS n", rows: [[0]], text: 'x', projection: true },
+  ]
+  try {
+    if (!db) assert.match(String((await c.query<RowDataPacket[]>('SELECT VERSION()'))[0][0]![0]), /^8\.4\.11(?:-|$)/)
+    await c.query("SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'")
+    await c.query(`CREATE DATABASE ${schema}`)
+    created = true
+    await c.query(`USE ${schema}`)
+    await c.query('CREATE TABLE t(id INT PRIMARY KEY)')
+    await c.query('INSERT INTO t VALUES (1),(2)')
+    for (const { sql, rows, text, projection } of cases) {
+      await seed()
+      const [queried, fields] = await c.query(sql)
+      assert.deepEqual(queried, rows, sql)
+      await check(text, true, `${sql} QUERY`)
+      await seed()
+      const prepared = await c.prepare(sql)
+      try {
+        await check(text, !projection, `${sql} PREPARE`)
+        for (let i = 0; i < 3; i++) {
+          await seed()
+          const [result, actualFields] = await prepared.execute([])
+          assert.deepEqual(result, rows, sql)
+          assert.deepEqual(fieldsOf(actualFields), fieldsOf(fields), sql)
+          await check(text, projection === true, `${sql} EXECUTE ${i + 1}`)
+        }
+      } finally {
+        await prepared.close()
+        c.unprepare(sql)
+      }
+    }
+    const marker = 'SELECT 1 AS n WHERE ?=0e0'
+    const prepared = await c.prepare(marker)
+    try {
+      await check('x', false, `${marker} PREPARE`)
+      for (const value of ['x', 0, 'x']) {
+        await seed()
+        const [result] = await prepared.execute([value])
+        assert.deepEqual(result, [[1]], marker)
+        await check('x', value === 'x', `${marker} EXECUTE ${value}`)
+      }
+    } finally { await prepared.close(); c.unprepare(marker) }
+  } finally {
+    if (created) await c.query(`DROP DATABASE ${schema}`)
+    await c.end()
+    await db?.end()
+  }
+})
+
 test('M5.10: prepared string metadata retains its SQL mode while text queries use the current mode', async () => {
   const { c, db } = await connection()
   let statement: mysql.PreparedStatementInfo | undefined

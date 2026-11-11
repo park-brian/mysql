@@ -1986,8 +1986,11 @@ finite DOUBLE, unary signs and native two-argument MOD(). Plain strings
 without introducers or explicit collations may be arithmetic operands or
 compared directly with plain strings or NULL. A plain string that converts
 fully to finite DOUBLE can also compare directly with a numeric literal.
-The bound reader keeps its collation, scale, signedness and diagnostics. Range/key readers keep their prior
-syntax rules; CAST, session calls and binary markers retain reader order.
+The bound reader keeps its collation, scale, signedness and diagnostics.
+For proved fixed predicates in SELECT, PREPARE owns binding diagnostics;
+a repeated EXECUTE uses the same comparison without reporting them again.
+Range/key readers keep their syntax rules; CAST, session calls and binary
+markers retain reader order.
 Source naming uses the lexer’s bounded token sequence.
 Set-expression limits and correlated sources retain their separate ownership. Plan-owned window readings, scalar caches
 and ROLLUP/query forwarding remain separate. Owned DOUBLE readers for byte

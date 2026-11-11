@@ -237,9 +237,7 @@ export function numberConstant(c: Compiled, written: Expression, ctx: CompileCon
   const read = asNumber(c, 'DOUBLE', constant && written)
   if (!constant || (!resolving && ctx.clause !== 'where clause' && ctx.clause !== 'on clause') || (written.kind === NODE.PLACEHOLDER && ctx.params === undefined)) return read
   const conditions = ctx.conditions
-  if (conditions === undefined) return resolveConstant(read, ctx)
-  let cache = NUMBER_CONSTANTS.get(conditions)
-  if (cache === undefined) NUMBER_CONSTANTS.set(conditions, cache = new Map())
+  const cache = conditions === undefined ? undefined : memoValue(NUMBER_CONSTANTS, conditions, () => new Map<Expression, Compiled>())
   return memoValue(cache, written, () => resolveConstant(read, ctx))
 }
 
@@ -1293,15 +1291,15 @@ function literalNumericOperand(e: Expression, arithmetic = false): boolean {
   return numberLiteral(item) || item.type === LITERAL.NULL || (arithmetic && plainTextLiteral(item) !== undefined)
 }
 
-/** Syntax proof for reusing an already-rejected arithmetic or comparison reader. */
-export function literalPredicate(e: Expression): boolean {
+/** Syntax proof for literal readers; truncating DOUBLE pairs also have fixed diagnostics. */
+export function literalPredicate(e: Expression, truncatedDouble = false): boolean {
   if (e.kind === NODE.BINARY && (COMPARISONS[e.op] || e.op === '<=>')) {
     const left = plainTextLiteral(e.left), right = plainTextLiteral(e.right)
     if (left !== undefined && right !== undefined) return true
     const text = left ?? right
     if (typeof text === 'string') {
       const numeric = signedOperand(left === undefined ? e.left : e.right, '+')
-      return numeric.kind === NODE.LITERAL && numeric.collation === undefined && numberLiteral(numeric) && completeDouble(numericPrefix(text))
+      return numeric.kind === NODE.LITERAL && numeric.collation === undefined && numberLiteral(numeric) && (truncatedDouble || completeDouble(numericPrefix(text)))
     }
     return literalNumericOperand(e.left) && literalNumericOperand(e.right)
   }
@@ -1969,15 +1967,15 @@ function rowComparison(op: string, left: Expression, right: Expression, ctx: Com
   const a = shapeOf(left, ctx)
   const b = shapeOf(right, ctx)
   sameShape(a, b)
-  if (op === '<=>') return { eval: (r, env) => bool(compareShapes(a, b, r, env, 'nullSafe') === 0), type: boolType(false) }
+  const nullSafe = op === '<=>'
   const test = COMPARISONS[op] as (c: number) => boolean
-  const mode = op === '=' || op === '<>' || op === '!=' ? 'equality' : 'order'
+  const mode = nullSafe ? 'nullSafe' : op === '=' || op === '<>' || op === '!=' ? 'equality' : 'order'
   return {
     eval: (r, env) => {
       const c = compareShapes(a, b, r, env, mode)
-      return c === null ? null : bool(test(c))
+      return c === null ? null : bool(nullSafe ? c === 0 : test(c))
     },
-    type: boolType(true),
+    type: boolType(!nullSafe),
   }
 }
 
@@ -2025,25 +2023,20 @@ function searchItems(list: SortedItems, v: Exclude<Value, null>): boolean | null
     // Equality is all IN asks: the items' sort keys in a set, and the row's
     // key looked up, rather than a sort and a search that re-encode both
     // sides at every comparison (Prisma's chunks are 32,766 long).
-    let keys = list.keysByCollation.get(id)
-    if (keys === undefined) {
+    const keys = memoValue(list.keysByCollation, id, () => {
       try {
-        keys = new Set(list.sorted.map((x) => equalityKey((x as StringValue).v, id)))
+        return new Set(list.sorted.map((x) => equalityKey((x as StringValue).v, id)))
       } catch (e) {
         expectTyped(e)
         // A collation with no sort key (an `Intl` fallback) is searched as below.
-        keys = null
+        return null
       }
-      list.keysByCollation.set(id, keys)
-    }
+    })
     if (keys !== null) return keys.has(equalityKey(v.v, id)) ? true : list.sawNull ? null : false
-    let inId = list.byCollation.get(id)
-    if (inId === undefined) {
+    sorted = memoValue(list.byCollation, id, () => {
       const as = (x: Exclude<Value, null>): Value => ({ ...(x as StringValue), collationId: id })
-      inId = [...list.sorted].sort((x, y) => compareValues(as(x), as(y)) ?? 0)
-      list.byCollation.set(id, inId)
-    }
-    sorted = inId
+      return [...list.sorted].sort((x, y) => compareValues(as(x), as(y)) ?? 0)
+    })
   }
   let lo = 0
   let hi = sorted.length - 1
@@ -2206,15 +2199,11 @@ function like(negated: boolean, a: Compiled, pattern: Compiled, escape: Compiled
 const CHARACTER_KEYS = new Map<number, Map<string, string>>()
 
 function characterKey(ch: string, collationId: number): string {
-  let keys = CHARACTER_KEYS.get(collationId)
-  if (keys === undefined) CHARACTER_KEYS.set(collationId, (keys = new Map()))
-  let k = keys.get(ch)
-  if (k === undefined) {
+  const keys = memoValue(CHARACTER_KEYS, collationId, () => new Map<string, string>())
+  return memoValue(keys, ch, () => {
     if (keys.size >= 65536) keys.clear()
-    k = equalityKey(ch, collationId)
-    keys.set(ch, k)
-  }
-  return k
+    return equalityKey(ch, collationId)
+  })
 }
 
 function matchLike(s: readonly string[], p: readonly string[], escape: string, collationId: number): boolean {
@@ -2834,13 +2823,12 @@ function planned(e: SubqueryNode, ctx: CompileContext): SubqueryPlan {
   return ctx.subquery(e.query, ctx.scope)
 }
 
-/** Reuse a statement-owned value; only successful initializers publish, and undefined remains a miss. */
-export function memoValue<T>(memo: Map<unknown, unknown> | undefined, key: unknown, read: () => T): T {
-  let value = memo?.get(key) as T | undefined
-  if (value === undefined) {
-    value = read()
-    memo?.set(key, value)
-  }
+/** Reuse a cached value; only successful initializers publish, and undefined remains a miss. */
+export function memoValue<K, T>(memo: { get(key: K): unknown; set(key: K, value: NoInfer<T>): unknown } | undefined, key: K, read: () => T): T {
+  const cached = memo?.get(key)
+  if (cached !== undefined) return cached as T
+  const value = read()
+  memo?.set(key, value)
   return value
 }
 

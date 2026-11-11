@@ -58,6 +58,8 @@ export interface Run {
   readonly params?: readonly Value[]
   /** Planning for COM_STMT_PREPARE's metadata: what MySQL reports before it optimizes. */
   readonly preparing?: boolean
+  /** Executing a prepared SELECT, whose fixed WHERE diagnostics belonged to PREPARE. */
+  readonly preparedQuery?: boolean
   /** The enclosing query's scope, where a subquery's correlated names resolve (M5.1). */
   readonly parent?: Scope
   /** The common table expressions in scope, by name. */
@@ -2656,9 +2658,10 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
   const resolving = run.preparing || run.protocol === 'text'
   const { conditions: _conditions, ...fixedEnv } = run.env
   const conjuncts = splitAnd(condition)
+  // PREPARE owns a fixed literal's binding diagnostics as well as its evaluation.
   // Binding precedes evaluation, including warnings in an untaken conjunct.
   const entries = new Map<Expression, Predicate>(conjuncts.map((e) => [
-    e, { eval: logicalOperand(compile(e, ctx), e, resolving ? ctx : undefined) },
+    e, { eval: logicalOperand(compile(e, run.preparedQuery && literalPredicate(e, true) ? { ...ctx, conditions: undefined } : ctx), e, resolving ? ctx : undefined) },
   ]))
   let impossible = false
   let folded: Predicate | undefined

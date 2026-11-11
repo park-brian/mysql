@@ -4136,15 +4136,45 @@ file IDs with the exact native baseline pass. All eleven required jobs for
 d3fd63b and 9f43a08 have passed. Totals stay at 144/190 and M5 42/53; M5.10
 remains partial.
 
-**Next scalar prerequisite: cached DOUBLE warning phases.** The mixed
-profiles still show warnings that MySQL reports at PREPARE but does not
-repeat at EXECUTE for written conditions. Prove that lifetime separately
-from projection and retained marker readers. Preserve truncation severity,
-conditions on failure, collation and value demand. Introduced or collated
-text, BIT/HEX, temporal readers, CAST admission, session calls, OR TRUE,
-dynamic TRUE metadata and source effects, constant-group holders,
-uncacheable scalar lifetime and LIMIT absorption remain separate before
-renewed COUNT work.
+**Fixed SELECT comparison warnings (2026-11-10):** Binding a proved literal
+predicate in a prepared SELECT no longer repeats its PREPARE diagnostics.
+A plain text/number literal comparison with a truncating DOUBLE read now
+warns at QUERY and PREPARE, and stays quiet across repeated EXECUTE. The
+bound comparator still owns the value; the stricter syntax proof for early
+rejection still requires a complete finite conversion. The statement root
+sets the phase, so writes do not inherit SELECT's suppression. Projection
+continues to warn at EXECUTE, HAVING keeps its existing phase, and retained
+markers keep their own readers. Comparison and collation caches share the
+existing cache initializer, with the same owners and limits.
+
+The pinned matrix gains 684 complete matches (1,264 to 1,948 of 2,448), with
+no previously matching detail lost. Across 208 earlier profiles, agreement
+improves 27,462 to 27,469 of 32,803; all 886,776 previously matching protocol
+facts are retained. The protocol regression checks both operand orders,
+ordinary and NULL-safe comparisons, nested SELECT, source effects and
+repeated EXECUTE on one prepared instance. It passes locally and on MySQL
+8.4.11 and fails on 1181ac2. Fresh Docker passes 1,794 main, two isolated
+IN-list and four bulk-latency checks, typecheck, lint, package and typed smoke,
+real-client smoke and all nine unchanged size caps. The pinned reference
+replays all seven corpora, including 1,737 coercion warning counts. Parser,
+core and facade measure 45,599, 334,355 and 334,266 B gzipped. The snapshot matches 687 test
+files/fixtures and 206 runtime sources except for one comment with identical
+emitted code. The 20,000-statement seeded executor run, the plan floor
+(2,127/2,248 versus 2,118 required) and all 38 official passing file IDs with
+the exact native baseline are unchanged. All eleven required
+jobs for 1181ac2 passed. Totals stay at 144/190 and M5 42/53; M5.10 is partial.
+
+**Next scalar prerequisite: row-dependent DOUBLE warning phases.** A row
+column compared to a written truncating string can warn at PREPARE locally,
+where native waits for EXECUTE (plain WHERE and inner JOIN ON, in both
+orders). Prove the binding, rows, diagnostics on errors and empty source
+behavior together. Keep the wire phase distinct from metadata-only planning
+of stored views. Outer JOIN warning demand, constant short-circuit order,
+IN/BETWEEN, strict INSERT SELECT and marker inference are separate. Introduced
+or collated text, BIT/HEX, temporal readers, CAST admission, session calls,
+OR TRUE, dynamic TRUE metadata and source effects, constant-group holders,
+uncacheable scalar lifetime and LIMIT absorption remain open before renewed
+COUNT work.
 A WHERE containing a row/volatile input without an already-proved false conjunct
 still needs its actual reduction proof, including constant OR folding. Native
 `(SELECT 1 LIMIT 0)` reads 1, and COUNT over it counts every outer row; local
