@@ -1265,17 +1265,22 @@ function doubleArithmeticInput(op: string): boolean {
   return op === '+' || op === '-' || op === '*' || op === '/' || op === '%' || op === 'MOD'
 }
 
-function integerLiteralExpression(e: Expression, arithmetic = false): boolean {
+function integerOrNull(item: Expression): boolean {
+  return item.kind === NODE.LITERAL && (item.type === LITERAL.INT || item.type === LITERAL.NULL)
+}
+
+function integerLiteralExpression(e: Expression): boolean {
   const item = signedOperand(e, '+')
-  if (item.kind === NODE.LITERAL) return item.type === LITERAL.INT || item.type === LITERAL.NULL
-  return arithmetic && item.kind === NODE.BINARY && (item.op === 'DIV' || doubleArithmeticInput(item.op)) &&
-    integerLiteralExpression(item.left, true) && integerLiteralExpression(item.right, true)
+  if (item.kind === NODE.CALL) return item.args.length === 2 && nativeCallName(item) === 'MOD' && item.args.every(integerLiteralExpression)
+  if (item.kind === NODE.BINARY) return (item.op === 'DIV' || doubleArithmeticInput(item.op)) &&
+    integerLiteralExpression(item.left) && integerLiteralExpression(item.right)
+  return integerOrNull(item)
 }
 
 /** Syntax proof for reusing an already-rejected reader over written integer or NULL items. */
 export function integerLiteralPredicate(e: Expression): boolean {
-  if (e.kind === NODE.BINARY && (COMPARISONS[e.op] || e.op === '<=>')) return integerLiteralExpression(e.left) && integerLiteralExpression(e.right)
-  return integerLiteralExpression(e, true)
+  if (e.kind === NODE.BINARY && (COMPARISONS[e.op] || e.op === '<=>')) return integerOrNull(signedOperand(e.left, '+')) && integerOrNull(signedOperand(e.right, '+'))
+  return integerLiteralExpression(e)
 }
 
 /**
@@ -1384,22 +1389,27 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     if (json) warnAtCompile(ctx, 1235, "This version of MySQL doesn't yet support 'comparison of JSON in the BETWEEN operator'")
     const dateOf = all.find((x) => x.type.kind === 'datetime')
     const dated = !numeric && dateOf !== undefined
-    const operand = (x: Compiled, written: Expression | false): Compiled => {
+    const operand = (x: Compiled, written: Expression): Compiled => {
       // A constant bound warns each row it is compared, unlike `=`'s once (8.4.11: `tm BETWEEN 'a' AND db` warns for every row).
       if (numeric) {
         if (exact) return x
-        const checked = a0.type.field === FIELD_TYPE.LONGLONG && left.kind === NODE.COLUMN && written !== false ? numberConstant(x, written, ctx, true) : asNumber(x, 'DOUBLE')
+        const checked = a0.type.field === FIELD_TYPE.LONGLONG && left.kind === NODE.COLUMN ? numberConstant(x, written, ctx, true) : asNumber(x, 'DOUBLE')
         return { eval: (r, env) => { const v = checked.eval(r, env); return v === null ? null : doubleValue(toDouble(v)) }, type: x.type }
       }
-      if (dated && x.type.kind === 'time') return onStatementDate(x)
+      if (!dated) return comparisonText(x)
+      if (x.type.kind === 'time') return onStatementDate(x)
       const text = x.type.kind === 'json' ? comparisonText(x) : x
-      if (dated && isText(text.type) && written !== false) return dateConstant(text, written, dateOf as Compiled, ctx, false)
-      return !dated ? comparisonText(text) : text
+      return isText(text.type) ? dateConstant(text, written, dateOf, ctx, false) : text
     }
     const subject = operand(a0, left)
     const lo = operand(lo0, right)
     const hi = operand(hi0, extra as Expression)
     const negated = op === 'NOT BETWEEN'
+    const result = (x: number | null, y: number | null): Value => {
+      // Three-valued: a known failure on either side decides it.
+      if ((x !== null && x < 0) || (y !== null && y > 0)) return bool(negated)
+      return x === null || y === null ? null : bool(!negated)
+    }
     if (isText(a0.type) && isText(lo0.type) && isText(hi0.type)) aggregateCollations([a0.type, lo0.type, hi0.type], 'between', true)
     // Each bound is its own comparison, fixed decimals and all.
     const low = comparer(subject.type, lo.type)
@@ -1425,16 +1435,12 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
             const subjectValue = integer(a0.eval(r, env))
             const x = compareValues(subjectValue, bound(intLo.eval(r, env), convertedLo))
             const y = compareValues(subjectValue, bound(intHi.eval(r, env), convertedHi))
-            if ((x !== null && x < 0) || (y !== null && y > 0)) return bool(negated)
-            return x === null || y === null ? null : bool(!negated)
+            return result(x, y)
           }
         }
         const x = low(v, lo.eval(r, env))
         const y = high(dated ? subject.eval(r, env) : v, hi.eval(r, env))
-        // Three-valued: a known failure on either side decides it.
-        if ((x !== null && x < 0) || (y !== null && y > 0)) return bool(negated)
-        if (x === null || y === null) return null
-        return bool(!negated)
+        return result(x, y)
       },
       type: boolType(!notNull(a.type, lo.type, hi.type)),
     }

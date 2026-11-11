@@ -3869,16 +3869,54 @@ passing IDs with the exact native baseline pass. All eleven required 5266397
 CI jobs passed; 447606a has ten passing and pinned reference still running,
 with no reported failure. Totals remain 144/190 and M5 42/53; M5.10 is partial.
 
-**Next scalar prerequisite: native MOD() calls.** The pinned audit starts
-at 178 complete matches of 396 written/mode responses and 111 of 210
-retained-marker responses. Extend the proof only to the unqualified native
-two-argument call. Preserve quoted and schema-qualified lookup, SQL-mode
-warnings and binary markers. Invalid arity currently returns a local
-function-argument error where MySQL gives a parse error; keep that
-admission mismatch separate. CAST admission, mixed types, session calls,
-OR TRUE, dynamic TRUE metadata and source effects, constant-group holders,
-uncacheable scalar lifetime and LIMIT absorption stay separate before
-renewed COUNT work.
+**Native MOD() call rejection (2026-11-10):**
+A bound, unqualified native `MOD(a,b)` can skip earlier value demand once its
+existing reader rejects, when both operands have the signed integer/NULL
+arithmetic proof. This includes nested calls and signs. Native name
+resolution and the already-compiled modulo reader supply the lookup,
+conversion, diagnostics and result. Quoted/schema-qualified names,
+invalid arity, mixed operand types and retained binary markers keep their
+original behavior. Invalid arity still returns a local function-argument
+error where MySQL gives a parse error. BETWEEN now shares its three-valued
+result test and keeps the original reader order in both paths.
+
+Two native profiles improve 289 to 512 complete responses of 606:
+written/mode controls 178 to 314 of 396 and retained markers 111 to 198 of
+210. The written cohort's 45 INSERT SELECT responses improve 17 to 39,
+including 6 to 12 of 15 strict-mode responses. Two strict fixtures pin
+all 512 complete outcomes, and 34 native responses append to the earlier
+418 division expectations.
+
+Across 195 profiles and 27,670 responses, complete agreement improves
+23,113 to 23,415 with every earlier complete response and 713,448 matching
+protocol facts retained. All three focused groups pass locally and directly
+on pinned MySQL; actual 406a67c fails all three. Eight existing comparison
+and coercion groups pass locally, including four direct native groups.
+All nine unchanged caps pass at parser/core/facade 45,599/334,313/334,226 B
+gzipped.
+
+Fresh default Docker passes 1,780 main, two isolated IN-list and four
+bulk-latency tests, typecheck, lint, and package and typed example smoke.
+Source proof matches 676 test files/fixtures and 206 runtime sources plus
+tooling. The seven unchanged native corpora retain the earlier full reference
+result after verifying fourteen input hashes and the live pinned digest;
+full engine replay and blocking CI reference verification stay intact.
+Seeded executor fuzzing (20,000, 20261010), the unchanged plan floor
+(2,127/2,248 versus 2,118 required), and the official 1,459-file run's same 38
+passing IDs and exact native baseline pass. All eleven required 447606a CI
+jobs passed. The preceding 406a67c run has ten jobs passing, including pinned
+reference, with its main test job still running and no reported failure.
+Totals remain 144/190 and M5 42/53; M5.10 remains partial.
+
+**Next scalar prerequisite: comparisons of proved arithmetic.** The pinned
+audit starts at 223 complete matches of 468 written and strict-write
+responses and 157 of 294 retained-marker responses. Start with direct
+comparisons over already-proved signed integer/NULL trees. Preserve comparison
+NULL order, zero-divisor and overflow diagnostics, binary marker phases and
+the original reader. CAST admission, mixed types,
+session calls, OR TRUE, dynamic TRUE metadata and source effects,
+constant-group holders, uncacheable scalar lifetime and LIMIT absorption
+stay separate before renewed COUNT work.
 A WHERE containing a row/volatile input without an already-proved false conjunct
 still needs its actual reduction proof, including constant OR folding. Native
 `(SELECT 1 LIMIT 0)` reads 1, and COUNT over it counts every outer row; local

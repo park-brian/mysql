@@ -1977,12 +1977,12 @@ WHERE clauses while preserving implicit aggregate rows. Fixed
 TRUE predicates can reduce; binary markers keep their nullable cache. Broader
 volatile/row predicate folding, uncacheable evaluation, scalar LIMIT absorption
 and temporal cache metadata remain open before renewed COUNT value-demand work.
-Written false/NULL literals, eligible text markers, direct comparisons and
-infix arithmetic over signed integer or NULL literals discard earlier value
-demand after full binding. The original reader supplies the outcome and its
-diagnostics. Range/key readers keep their prior syntax rules; the MOD() call,
-CAST, session calls and binary markers retain reader order. Source naming uses
-the lexer’s bounded token sequence.
+Written false/NULL literals, eligible text markers, direct comparisons,
+infix arithmetic and native two-argument MOD() over signed integer or NULL
+literals discard earlier value demand after full binding. The original reader
+supplies the outcome and diagnostics. Range/key readers keep their prior
+syntax rules; CAST, session calls and binary markers retain reader order.
+Source naming uses the lexer’s bounded token sequence.
 Set-expression limits and correlated sources retain their separate ownership. Plan-owned window readings, scalar caches
 and ROLLUP/query forwarding remain separate. Owned DOUBLE readers for byte
 functions, conditional branches and quiet string-result holders are verified
