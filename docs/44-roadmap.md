@@ -3796,10 +3796,10 @@ remain unchanged. Seeded executor fuzzing (20,000, 20261010), the plan floor
 same 38 passing IDs with the exact native baseline pass. All eleven required
 33ba185 CI jobs passed. Totals remain 144/190 and M5 42/53; M5.10 is partial.
 
-**Signed integer/NULL arithmetic rejection (2026-11-10):**
+**Integer/NULL arithmetic rejection (2026-11-10):**
 An already-rejected condition may skip earlier value reads when the written
-expression consists of signed integer/NULL literals and additions,
-subtractions or multiplications. The proof looks through nested signs and
+expression consists of integer or NULL literals, optional unary signs, and
+additions, subtractions or multiplications. The proof looks through nested signs and
 arithmetic without changing the bound reader. It does not descend through a
 comparison or accept operands with CAST, function calls or binary markers.
 Overflow and warnings still come from the original reader. Range/key syntax
@@ -3831,7 +3831,7 @@ IDs and exact native baseline pass. Preceding 5266397 CI has ten required jobs
 passing and the pinned reference still running, with no reported failure.
 Totals remain 144/190 and M5 42/53; M5.10 remains partial.
 
-**Signed integer/NULL infix division and remainder (2026-11-10):**
+**Integer/NULL infix division and remainder (2026-11-10):**
 The same rejected-reader proof accepts `/`, `DIV`, `%` and infix `MOD` in
 written integer/NULL trees. The compiler still owns zero-divisor diagnostics
 and overflow in the original phase. The proof keeps retained binary markers
@@ -3871,10 +3871,11 @@ with no reported failure. Totals remain 144/190 and M5 42/53; M5.10 is partial.
 
 **Native MOD() call rejection (2026-11-10):**
 A bound, unqualified native `MOD(a,b)` can skip earlier value demand once its
-existing reader rejects, when both operands have the signed integer/NULL
-arithmetic proof. This includes nested calls and signs. Native name
-resolution and the already-compiled modulo reader supply the lookup,
-conversion, diagnostics and result. Quoted/schema-qualified names,
+existing reader rejects, when both operands have the integer/NULL arithmetic
+proof. This accepts integer and NULL literals with optional unary signs and
+includes nested calls. The bound reader preserves operand signedness,
+including unsigned BIGINT. Native name resolution and the already-compiled
+modulo reader supply the lookup, conversion, diagnostics and result. Quoted/schema-qualified names,
 invalid arity, mixed operand types and retained binary markers keep their
 original behavior. Invalid arity still returns a local function-argument
 error where MySQL gives a parse error. BETWEEN now shares its three-valued
@@ -3908,15 +3909,49 @@ jobs passed. The preceding 406a67c run has ten jobs passing, including pinned
 reference, with its main test job still running and no reported failure.
 Totals remain 144/190 and M5 42/53; M5.10 remains partial.
 
-**Next scalar prerequisite: comparisons of proved arithmetic.** The pinned
-audit starts at 223 complete matches of 468 written and strict-write
-responses and 157 of 294 retained-marker responses. Start with direct
-comparisons over already-proved signed integer/NULL trees. Preserve comparison
-NULL order, zero-divisor and overflow diagnostics, binary marker phases and
-the original reader. CAST admission, mixed types,
-session calls, OR TRUE, dynamic TRUE metadata and source effects,
-constant-group holders, uncacheable scalar lifetime and LIMIT absorption
-stay separate before renewed COUNT work.
+**Comparisons of proved arithmetic (2026-11-10):**
+A direct comparison reuses the existing arithmetic proof for each operand.
+After binding and rejection, it can skip earlier value demand for
+comparisons of integer and NULL trees, including nested arithmetic and
+native `MOD()`. The bound comparator still owns NULL read order, signedness,
+overflow and zero-divisor diagnostics. SQL modes, range/key grammar and
+retained binary marker phases are unchanged. The integer/NULL leaf test
+now lives only in the shared proof.
+
+Two pinned profiles improve 380 to 619 complete responses of 762:
+written/mode responses 223 to 369 of 468 and retained markers 157 to
+250 of 294. Two strict fixtures pin all 619 complete outcomes. Eighteen
+native responses append to the earlier 367 arithmetic expectations,
+including six already recovered by the MOD() slice and twelve from this one.
+
+Across 197 profiles and 28,432 responses, complete agreement improves
+23,795 to 24,061 with every earlier complete response and all 738,921
+matching protocol facts retained. All three focused groups pass locally
+and directly on pinned MySQL; actual 6aee920 fails all three. All nine
+unchanged caps pass at parser/core/facade 45,599/334,297/334,205 B gzipped.
+
+Fresh default Docker passes 1,782 main, two isolated IN-list and four
+bulk-latency tests, typecheck, lint, and package and typed example smoke.
+Source proof matches 678 test files/fixtures and 206 runtime sources plus
+tooling. The seven unchanged native corpora retain their earlier full
+reference verification after fourteen input hashes and the live pinned
+image digest match. Full engine replay and blocking CI reference verification
+stay intact. Seeded executor fuzzing (20,000, 20261010), the unchanged plan
+floor (2,127/2,248 versus 2,118 required) and the official 1,459-file run's
+same 38 passing IDs with exact native baseline pass. All eleven required
+406a67c CI jobs passed; nine 6aee920 jobs have passed, with main and reference
+still running and no reported failure. Totals remain 144/190 and M5 42/53;
+M5.10 remains partial.
+
+**Next scalar prerequisite: numeric literal classes.** A pinned audit of
+written DECIMAL and finite DOUBLE trees starts at 201 complete matches of
+495 written/mode responses and 129 of 252 retained-marker responses. Prove
+these literal classes under the existing reader, preserving unsigned and
+fixed-scale rules, warning order, native admission failures and binary
+markers. Text, BIT/HEX and temporal readers,
+CAST admission, session calls, OR TRUE, dynamic TRUE metadata and source
+effects, constant-group holders, uncacheable scalar lifetime and LIMIT
+absorption remain separate before renewed COUNT work.
 A WHERE containing a row/volatile input without an already-proved false conjunct
 still needs its actual reduction proof, including constant OR folding. Native
 `(SELECT 1 LIMIT 0)` reads 1, and COUNT over it counts every outer row; local
