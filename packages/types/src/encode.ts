@@ -139,8 +139,7 @@ export const integerBytes = (field: number): number | undefined => INT_WIDTH[fie
 export function integerRange(t: { readonly type: number; readonly unsigned?: boolean }): { readonly min: bigint; readonly max: bigint } | undefined {
   const width = integerBytes(t.type)
   if (width === undefined) return undefined
-  const bits = BigInt(width * 8)
-  return t.unsigned === true ? { min: 0n, max: 2n ** bits - 1n } : { min: -(2n ** (bits - 1n)), max: 2n ** (bits - 1n) - 1n }
+  return t.unsigned === true ? unsignedRange(width) : signedRange(width)
 }
 
 /** BLOB and TEXT's byte limits, from `Field_blob`'s pack length. */

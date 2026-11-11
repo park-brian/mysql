@@ -12,7 +12,7 @@
 import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, PreparedStatement, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
-import { MAX_UNSIGNED, MIN_SIGNED, intValue, numericPrefix, parseDecimal, rescale, storageWidth, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
+import { MAX_UNSIGNED, MIN_SIGNED, intValue, integerRange, numericPrefix, parseDecimal, rescale, storageWidth, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
 import { appendConditions, compile, constantNode, isComparison, literalPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, textBesideColumn, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
@@ -2780,16 +2780,22 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     const { text, fractional } = numericPrefix(source)
     const value = Number(text)
     const [mantissa, exponent] = text.split(/[eE]/) as [string, string?]
-    const decimal = fractional && tables[0]!.def
-    if (!Number.isSafeInteger(decimal ? Math.trunc(value) : value)) return false
+    const leftTable = tables[0]!.def
+    const decimal = fractional && leftTable
+    const safe = Number.isSafeInteger(decimal ? Math.trunc(value) : value)
     // Rescaling the mantissa shifts its coefficient before half-away rounding.
-    const key = decimal && value ? rescale(parseDecimal(mantissa), Number(exponent ?? 0)).v : BigInt(value)
-    // A terminal exponent sign without digits produces no const key.
+    const key = safe ? decimal && value ? rescale(parseDecimal(mantissa), Number(exponent ?? 0)).v : BigInt(value) : undefined
+    // A terminal exponent sign without digits leaves the physical lookup empty.
     const noKey = decimal && !exponent && /^[eE][+-]$/.test(source.trimStart().slice(text.length))
-    const access = noKey ? { ranges: [] } : pointAccess(index, column, intValue(key))
-    if (!access) return false
-    on.lookup = access
-    if (decimal) on.rounded = { condition, access }
+    const empty = { ranges: [] }
+    const point = key === undefined ? undefined : pointAccess(index, column, intValue(key))
+    const access = safe && noKey ? empty : point
+    // Out-of-range keys cannot produce rows. A const-left warning still
+    // depends on finding the endpoint of the right column's range.
+    const range = !point && leftTable && column.type.type !== FIELD_TYPE.LONGLONG ? integerRange(column.type) : undefined
+    on.lookup = range ? pointAccess(index, column, intValue(value < 0 ? range.min : range.max)) : access
+    if (!on.lookup) return false
+    if (decimal || !access) on.rounded = { condition, access: access ?? empty }
     return true
   }
   if (!key) return true

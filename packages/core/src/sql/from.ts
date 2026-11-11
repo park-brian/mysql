@@ -182,7 +182,7 @@ export interface FromPlan {
   distinctReads(aliases: ReadonlySet<string>): void
   /** The const tables: those joined as constant rows (a STRAIGHT_JOIN's after its first non-const table), those read ahead and absent from the plan, and the tables an impossible ON NULL-complements (M5.48). Given before the plan is first asked for. */
   constants(rows: ReadonlySet<string>, readAhead: ReadonlySet<string>, nullTables?: ReadonlySet<string>, outerConstants?: ReadonlyMap<string, readonly Expression[]>): void
-  /** A plain decimal literal's rounded key on a preserved LEFT JOIN's right primary key. */
+  /** Right primary-key access for a preserved LEFT JOIN whose text key needs conversion. */
   rounded?: { readonly condition: Expression; readonly access: Access }
   /** Read the one base table whole in an index's order, for an ORDER BY or a grouping it gives; `force` drops a range on another index for it, and `reverse` reads it descending. */
   readInOrder(index: string, force: boolean, reverse?: boolean, alias?: string): void

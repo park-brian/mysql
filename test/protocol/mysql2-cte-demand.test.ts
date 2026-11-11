@@ -442,6 +442,8 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='149999999999999999e-17x' WHERE a.d='2.5x'", rows: [[1]], fixed: [], demanded: ['2.5x'] },
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='150000000000000001e-17x' WHERE a.d='2.5x'", rows: [[2]], fixed: [], demanded: ['2.5x'] },
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='149999999999999999e-17x' WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x', '149999999999999999e-17x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='2147483648x' WHERE a.d='2.5x'", rows: [[null]], fixed: [], demanded: ['2.5x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='2147483648x' WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x'] },
     ]) {
       await seed()
       const [queried, fields] = await c.query(sql)
@@ -460,17 +462,19 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
         }
       } finally { await statement.close(); c.unprepare(sql) }
     }
-    for (const [constLookup, missed, hit, hitWarnings] of [
-      [`SELECT ${scalar} AS n FROM empty_t WHERE id='2x'`, [], [[1]], ['2x', '1x']],
-      ["SELECT b.id AS n FROM t a LEFT JOIN empty_t b ON b.id='2y' WHERE a.id='2x'", [[null]], [[2]], ['2x', '2y']],
-      ["SELECT b.id AS n FROM t a LEFT JOIN empty_t b ON b.id='1.5y' WHERE a.id='2x'", [[null]], [[null]], ['2x', '1.5y']],
+    for (const [constLookup, rightId, missed, hit, hitWarnings] of [
+      [`SELECT ${scalar} AS n FROM empty_t WHERE id='2x'`, 2, [], [[1]], ['2x', '1x']],
+      ["SELECT b.id AS n FROM t a LEFT JOIN empty_t b ON b.id='2y' WHERE a.id='2x'", 2, [[null]], [[2]], ['2x', '2y']],
+      ["SELECT b.id AS n FROM t a LEFT JOIN empty_t b ON b.id='1.5y' WHERE a.id='2x'", 2, [[null]], [[null]], ['2x', '1.5y']],
+      ["SELECT b.id AS n FROM t a LEFT JOIN empty_t b ON b.id='2147483648x' WHERE a.id='2x'", 2147483647, [[null]], [[null]], ['2x', '2147483648x']],
+      ["SELECT b.id AS n FROM t a LEFT JOIN empty_t b ON b.id='2147483648.5e+' WHERE a.id='2x'", 2147483647, [[null]], [[null]], ['2x', '2147483648.5e+']],
     ] as const) {
       await c.query('START TRANSACTION')
       const lookup = await c.prepare(constLookup)
       try {
         for (const [sql, rows, warnings] of [
           ['DELETE FROM empty_t', missed, ['2x']],
-          ['INSERT INTO empty_t VALUES (2, NULL)', hit, hitWarnings],
+          [`INSERT INTO empty_t VALUES (${rightId}, NULL)`, hit, hitWarnings],
           ['DELETE FROM empty_t', missed, ['2x']],
         ] as const) {
           await c.query(sql)
