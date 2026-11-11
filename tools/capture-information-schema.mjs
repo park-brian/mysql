@@ -244,22 +244,17 @@ export async function runScript(conn, schema, statements, columns) {
   return out
 }
 
-/** Render captured definitions with one layout for each repeated set of wire fields. */
+/** Render captured definitions with one layout for each distinct set of wire fields. */
 export function renderDefinitions(defs, version) {
-  const counts = new Map()
-  for (const columns of Object.values(defs)) {
-    for (const { name: _name, ...layout } of columns) {
-      const key = JSON.stringify(layout)
-      counts.set(key, (counts.get(key) ?? 0) + 1)
-    }
-  }
-  const layouts = [...counts].filter(([, count]) => count > 1).map(([layout]) => layout)
-  const indices = new Map(layouts.map((layout, index) => [layout, index]))
+  const layouts = new Map()
   const lines = Object.entries(defs).map(([table, columns]) => {
-    const entries = columns.map((column) => {
-      const { name, ...layout } = column
-      const index = indices.get(JSON.stringify(layout))
-      return index === undefined ? JSON.stringify(column) : `column(${JSON.stringify(name)}, layouts[${index}]!)`
+    const entries = columns.map(({ name, type, length, flags, decimals, text, column, collation, streamed }) => {
+      const wire = [type, length, flags, decimals]
+      const layout = [...wire, text, column, collation]
+      if (!wire.every((value, i) => value === streamed[i])) layout.push(streamed)
+      const key = JSON.stringify(layout)
+      if (!layouts.has(key)) layouts.set(key, layouts.size)
+      return `column(${JSON.stringify(name)}, layouts[${layouts.get(key)}]!)`
     })
     return `  ${table}: [\n${entries.map((entry) => `    ${entry},`).join('\n')}\n  ],`
   })
@@ -269,9 +264,9 @@ export function renderDefinitions(defs, version) {
     '// utf8mb4 connection (lengths are in its bytes), whether each is a dictionary\n' +
     '// column or a computed one, and the collation it compares in (M5.12).\n' +
     'export interface InformationSchemaColumn {\n  readonly name: string\n  readonly type: number\n  readonly length: number\n  readonly flags: number\n  readonly decimals: number\n  readonly text: boolean\n  readonly column: boolean\n  readonly collation: string | null\n  /** `[type, length, flags, decimals]` under a sort over the view, which streams through a temporary table. */\n  readonly streamed: readonly [number, number, number, number]\n}\n\n' +
-    "type ColumnLayout = Omit<InformationSchemaColumn, 'name'>\n\n" +
-    `const layouts: readonly ColumnLayout[] = [\n${layouts.map((layout) => `  ${layout},`).join('\n')}\n]\n\n` +
-    'function column(name: string, layout: ColumnLayout): InformationSchemaColumn {\n  return { name, ...layout }\n}\n\n' +
+    "type ColumnLayout = readonly [type: number, length: number, flags: number, decimals: number, text: boolean, column: boolean, collation: string | null, streamed?: InformationSchemaColumn['streamed']]\n\n" +
+    `const layouts: readonly ColumnLayout[] = [\n${[...layouts.keys()].map((layout) => `  ${layout},`).join('\n')}\n]\n\n` +
+    'function column(name: string, [type, length, flags, decimals, text, column, collation, streamed = [type, length, flags, decimals]]: ColumnLayout): InformationSchemaColumn {\n  return { name, type, length, flags, decimals, text, column, collation, streamed }\n}\n\n' +
     `export const INFORMATION_SCHEMA: Readonly<Record<string, readonly InformationSchemaColumn[]>> = {\n${lines.join('\n')}\n}\n`
 }
 

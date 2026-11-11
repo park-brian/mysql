@@ -81,7 +81,7 @@ export interface Run {
   readonly clauses?: Readonly<Record<string, Expression | undefined>>
 }
 
-export function compileContext(run: Run, scope: Scope, clause: string, windows?: WindowSink, finalize?: (bound: BoundSubquery) => BoundSubquery): CompileContext {
+export function compileContext(run: Run, scope: Scope, clause: string, windows?: WindowSink, finalize?: (bound: BoundSubquery) => BoundSubquery, scalarConditions?: Condition[]): CompileContext {
   const { env: { session, conditions }, params } = run
   return {
     scope,
@@ -95,7 +95,11 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
     params,
     subquery: (q, outer) => {
       let correlated = false
-      const plan = planQuery({ ...run, parent: enclosing(outer, () => (correlated = true)) }, q)
+      const plan = planQuery({ ...run, parent: enclosing(outer, () => (correlated = true)) }, q, scalarConditions)
+      if (correlated && scalarConditions) {
+        for (const condition of scalarConditions) conditions?.push(condition)
+        scalarConditions.length = 0
+      }
       let bound: BoundSubquery = {
         clause,
         query: q,
@@ -365,7 +369,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   run.admitQuery?.(q, true)
   const scope = from?.scope
   let source = from?.single
-  if (pending && (!source || q.with !== undefined || !deferWhere(q, node.where))) pending = undefined
+  const scalarConditions: Condition[] | undefined = pending && source && deferProjection(q, node) ? [] : undefined
+  if (pending && (!source || q.with !== undefined || (!scalarConditions && !deferWhere(q, node.where)))) pending = undefined
   const lookup: Scope = scope ?? run.parent ?? EMPTY_SCOPE
   const reads = scope === undefined ? undefined : columnsRead(scope, node, q)
   if (from !== undefined && reads !== undefined) from.reads(reads)
@@ -393,7 +398,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   const nullableTables = scope === undefined ? new Set<string>() : aggregatingSubqueryTables(node, scope)
   const selectScope: Scope = nullableTables.size === 0 || scope === undefined ? lookup : nullableView(scope, nullableTables)
   const items: { name: string; compiled: Compiled; alias?: string; expr: Expression }[] = []
-  const selectCtx = compileContext(run, selectScope, 'field list', windows)
+  const selectCtx = compileContext(run, selectScope, 'field list', windows, undefined, scalarConditions)
   for (const entry of selectList(run, node, scope)) {
     const { item, slot } = entry
     const compiled = slot === undefined ? compile(item.expr, selectCtx)
@@ -658,6 +663,13 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
       checkRead(env: Env) { source.table.checkRead!(env.trx, locking ? 'current' : 'consistent', from!.access(env).index) },
     }),
     optimize(trx) {
+      // A missing const row can stop startup. An empty scan still demands it.
+      if (scalarConditions?.length && keep !== 0 && !facts?.impossible) {
+        const quiet = { ...run, env: { ...run.env, trx, conditions: undefined } }
+        if (!provedEmpty(quiet, from, node, undefined)) {
+          for (const condition of scalarConditions) run.env.conditions?.push(condition)
+        }
+      }
       if (!initialize.length) return
       const env = executionEnv(run, trx)
       for (const read of initialize) read.eval([], env)
@@ -2651,10 +2663,24 @@ function distinctKey(def: TableDef, items: readonly { readonly expr: Expression 
   return def.indexes.some((i) => (uniqueKey(def, i) && covered(i.parts)) || (!whole && onlyColumns && i.invisible !== true && covered(i.parts, named.size)))
 }
 
+function rowComparison(e: Expression): boolean {
+  return e.kind === NODE.BINARY && (isComparison(e.op) || e.op === '<=>') && textBesideColumn(e.left, e.right)
+}
+
 function deferWhere(query: QueryExpression, where: Expression | undefined): boolean {
-  const rowComparison = (e: Expression) => e.kind === NODE.BINARY && (isComparison(e.op) || e.op === '<=>') && textBesideColumn(e.left, e.right)
   const parts = splitAnd(where)
   return parts.some(rowComparison) && parts.every((e) => rowComparison(e) || literalPredicate(e, true) || writtenFalse(e)) && constantNode(query, false, true)
+}
+
+/** A single scalar projection whose startup has no other query block or row effects. */
+function deferProjection(q: QueryExpression, node: SelectNode): boolean {
+  const scalar = node.items[0]?.expr
+  if (node.items.length !== 1 || scalar?.kind !== NODE.SUBQUERY || !unhintedBase(q, node) || node.groupBy || node.having || node.distinct || q.locking) return false
+  const inner = scalar.query.body
+  if (inner.kind !== QUERY.SELECT || !unhintedBase(scalar.query, inner) || inner.items.length !== 1 || inner.items[0]?.expr.kind !== NODE.COLUMN || inner.groupBy || inner.having || inner.distinct || scalar.query.locking || !deferWhere(scalar.query, inner.where)) return false
+  return constantNode([node.where, q.limit, q.orderBy], false, true) && splitAnd(node.where).every((e) =>
+    rowComparison(e) || literalPredicate(e, true) || writtenFalse(e) || (e.kind === NODE.BINARY && isComparison(e.op) &&
+      (isConstant(e.left, '+') && isConstant(e.right, '+') || e.left.kind === NODE.COLUMN && isConstant(e.right, '+'))))
 }
 
 /** A clause's readers and written constant outcomes, bound in its own context. */

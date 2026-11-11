@@ -378,8 +378,14 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
         warningCount: '2', errorCount: '1',
       }, `${failedDivision} ${api}`)
     }
-    for (const [clause, name] of [['GROUP BY', 'group statement'], ['HAVING', 'having clause'], ['ORDER BY', 'order clause']]) {
-      const sql = `SELECT id AS n FROM t WHERE id='x' ${clause} bad_name`
+    const scalar = "(SELECT id FROM t WHERE id='1x' LIMIT 1)"
+    for (const [sql, name] of [
+      ["SELECT id AS n FROM t WHERE id='x' GROUP BY bad_name", 'group statement'],
+      ["SELECT id AS n FROM t WHERE id='x' HAVING bad_name", 'having clause'],
+      ["SELECT id AS n FROM t WHERE id='x' ORDER BY bad_name", 'order clause'],
+      [`SELECT ${scalar} AS n FROM t WHERE d='2.5x' ORDER BY bad_name`, 'order clause'],
+      ["SELECT (SELECT id FROM t WHERE id='1x' ORDER BY bad_name LIMIT 1) AS n FROM t WHERE d='2.5x'", 'order clause'],
+    ] as const) {
       for (const api of ['query', 'prepare'] as const) {
         await seed()
         await assert.rejects(c[api](sql), { errno: 1054 })
@@ -392,6 +398,15 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       { sql: "SELECT id AS n FROM t WHERE id='1x' HAVING '1y'=1", rows: [[1]], fixed: ['1y'], demanded: ['1x'] },
       { sql: "SELECT id AS n FROM t WHERE d='2x' AND id='x'", rows: [], fixed: [], demanded: ['2x', 'x'] },
       { sql: "SELECT id AS n FROM empty_t WHERE id='x' GROUP BY id", rows: [], fixed: [], demanded: ['x'] },
+      { sql: `SELECT ${scalar} AS n FROM t WHERE d='2.5x'`, rows: [[1]], fixed: [], demanded: ['2.5x', '1x'] },
+      { sql: `SELECT ${scalar} AS n FROM empty_t WHERE d='2.5x'`, rows: [], fixed: [], demanded: ['2.5x', '1x'] },
+      { sql: `SELECT ${scalar} AS n FROM empty_t WHERE id='2x'`, rows: [], fixed: [], demanded: ['2x'] },
+      { sql: `SELECT ${scalar} AS n FROM t WHERE d='2.5x' AND id=999`, rows: [], fixed: [], demanded: ['2.5x'] },
+      { sql: `SELECT ${scalar} AS n FROM t WHERE d='2.5x' AND FALSE`, rows: [], fixed: [], demanded: [] },
+      { sql: `SELECT ${scalar} AS n FROM t WHERE d='2.5x' AND 2=3`, rows: [], fixed: [], demanded: [] },
+      { sql: `SELECT ${scalar} AS n FROM t WHERE d='2.5x' LIMIT 0`, rows: [], fixed: [], demanded: [] },
+      { sql: `SELECT ${scalar} AS n FROM t WHERE d='2.5x' LIMIT 0 OFFSET 1`, rows: [], fixed: [], demanded: ['2.5x', '1x'] },
+      { sql: "SELECT (SELECT id FROM t WHERE id>'0x') AS n FROM empty_t WHERE d='2.5x'", rows: [], fixed: [], demanded: ['2.5x', '0x'] },
     ]) {
       await seed()
       const [queried, fields] = await c.query(sql)
@@ -409,6 +424,26 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
           await checkWarnings(demanded, `${sql} EXECUTE ${i + 1}`)
         }
       } finally { await statement.close(); c.unprepare(sql) }
+    }
+    const constLookup = `SELECT ${scalar} AS n FROM empty_t WHERE id='2x'`
+    await c.query('START TRANSACTION')
+    const lookup = await c.prepare(constLookup)
+    try {
+      for (const [sql, rows, warnings] of [
+        ['DELETE FROM empty_t', [], ['2x']],
+        ['INSERT INTO empty_t VALUES (2, NULL)', [[1]], ['2x', '1x']],
+        ['DELETE FROM empty_t', [], ['2x']],
+      ] as const) {
+        await c.query(sql)
+        await seed()
+        const [result] = await lookup.execute([])
+        assert.deepEqual(result, rows, sql)
+        await checkWarnings(warnings, sql)
+      }
+    } finally {
+      await lookup.close()
+      c.unprepare(constLookup)
+      await c.query('ROLLBACK')
     }
     const marker = 'SELECT 1 AS n WHERE ?=0e0'
     const prepared = await c.prepare(marker)

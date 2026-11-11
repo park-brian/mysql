@@ -55,9 +55,10 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 and proved literal expressions suppress undemanded DOUBLE warnings while
 preserving fixed warnings in source order and later name errors. Ordinary
 single-table reads publish demanded WHERE warnings after successful binding.
-Next, verify and repair warning startup for independent scalar subqueries
-before extending the rule to JOIN or write readers. M5.10 remains partial,
-with M5.47, M5.49 and M5.50 work before browser work.
+One independent scalar projection over a base table now follows the outer
+WHERE and respects its startup demand. Next, verify warning order in the
+bounded two-base-table INNER JOIN cohort before extending the rule to writes.
+M5.10 remains partial, with M5.47, M5.49 and M5.50 work before browser work.
 [Row-dependent DOUBLE conversion](#row-dependent-double-conversion)
 
 **0.3 is staged**, with exact workspace versions and installed-package smoke
@@ -4329,15 +4330,35 @@ MySQL test IDs retain their results. Fresh Docker passes typecheck, lint,
 1,794 main tests, two isolated IN tests, four bulk tests, installed and
 typed package smoke, and the MySQL 8.4.11 client check.
 
-A scalar subquery can emit its conversion warning after the outer one even
-when an outer scan produces no rows. A missing outer primary-key point
-lookup, written false outer predicate or zero LIMIT with zero offset can
-suppress the inner warning. A separate 180-response probe finds two
-independent scalar projections warning from right to left after the outer
-WHERE. Start with one independent scalar projection and distinguish a scan
-from a const-table lookup. The 442-response probe also finds a WHERE warning
-before INNER JOIN's ON warning. JOIN, inferred conditions, IN and BETWEEN,
-strict INSERT SELECT and marker inference need their own demand evidence.
+One independent scalar SELECT-list projection now publishes its WHERE
+conversion warnings during outer optimizer startup, after both blocks bind
+and after the outer warning. An empty scan still demands the inner warning.
+A missing const-table row, proved false outer predicate or zero LIMIT with
+zero offset can suppress it. The startup check uses the delivery transaction.
+The scalar keeps its own evaluation, cardinality and cache. The focused
+regression passes with QUERY, PREPARE and repeated EXECUTE on both engines
+and fails on 569371b. It also changes const-row presence within a transaction
+between executions and leaves an undemanded multirow scalar unevaluated.
+The two probes improve from 92 to 187 complete matches across 236 responses
+and preserve all 3,905 previously matching details. Generated
+INFORMATION_SCHEMA layouts store streamed wire fields only when they differ,
+preserving all 165 expanded definitions. All nine existing caps pass at
+45,599 B parser, 334,294 B core and 334,207 B facade gzipped.
+The broader replay retains 27,469 complete matches and 886,912 protocol
+facts across 32,803 responses. The 20,000-statement executor fuzz,
+2,127/2,248 plan score and all 38 passing MySQL test IDs retain their results.
+Fresh Docker passes typecheck, lint, 1,794 main tests, two isolated IN tests,
+four bulk tests, installed and typed package smoke and the MySQL 8.4.11
+client check.
+
+The 180-response probe also finds two independent scalar projections
+warning from right to left after the outer WHERE. A 140-response JOIN probe
+finds fixed warnings first, then demanded WHERE warnings, then INNER JOIN's
+ON warnings. A written false INNER JOIN condition or zero LIMIT with zero
+offset can suppress both row conversions. LEFT JOIN's ON demand can differ
+when the outer filter rejects every row. Multiple scalar projections,
+correlated and other subquery roles, inferred conditions, IN and BETWEEN,
+strict INSERT SELECT and marker inference still need their own demand rules.
 Introduced or collated text, BIT/HEX, temporal readers, CAST admission,
 session calls, OR TRUE, dynamic TRUE metadata and source effects,
 constant-group holders, uncacheable scalar lifetime and LIMIT absorption
@@ -10794,7 +10815,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,232 B (326.4 KiB) for the browser entry chunk, measured on 2026-11-11. The facade is 334,134 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
+| Core bundle, gzipped | 334,294 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-11. The facade is 334,207 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |
