@@ -391,6 +391,7 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       ["SELECT a.id AS n FROM t a JOIN t b ON a.id=b.id AND b.id='1x' WHERE a.d='2.5x' ORDER BY bad_name", 'order clause'],
       ["SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1x' WHERE a.d='2.5x' AND b.id IS NOT NULL ORDER BY bad_name", 'order clause'],
       ["SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='1y' WHERE a.id='2x' ORDER BY bad_name", 'order clause', '1y'],
+      ["SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='1.4y' WHERE a.id='2x' ORDER BY bad_name", 'order clause', '1.4y'],
     ] as const) {
       for (const api of ['query', 'prepare'] as const) {
         await seed()
@@ -453,6 +454,10 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='1y' WHERE a.id='2x'", rows: [[1]], fixed: ['1y'], demanded: ['2x'] },
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='9y' WHERE a.id='2x'", rows: [[null]], fixed: ['9y'], demanded: ['2x'] },
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='9y' WHERE a.id='2x' LIMIT 0", rows: [], fixed: ['9y'], demanded: [] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='1.4y' WHERE a.d='2.5x'", rows: [[1]], fixed: ['1.4y'], demanded: ['2.5x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='1.4y' WHERE a.id='2x'", rows: [[null]], fixed: ['1.4y'], demanded: ['2x', '1.4y'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='1.0y' WHERE a.id='2x'", rows: [[1]], fixed: ['1.0y'], demanded: ['2x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='1.5y' WHERE a.id='2x'", rows: [[null]], fixed: ['1.5y'], demanded: ['2x'] },
     ]) {
       await seed()
       const [queried, fields] = await c.query(sql)

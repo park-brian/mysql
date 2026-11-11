@@ -43,14 +43,16 @@ function variables(): ReadonlyMap<string, SystemVariable> {
       kind,
     }
     for (const line of lines) {
-      const [suffix, text, min, max] = line.split('\t') as [string, string, string?, string?]
-      const name = prefix + suffix
-      out.set(name, {
+      const [suffixes, text, min, max] = line.split('\t') as [string, string, string?, string?]
+      const fields = {
         ...traits,
-        name,
         value: text === '\u0000' ? undefined : nullable && text === '' ? null : parsed(kind, text),
         ...(kind === 'int' ? { min: BigInt(min!), max: BigInt(max!) } : {}),
-      })
+      }
+      for (const suffix of suffixes.split(' ')) {
+        const name = prefix + suffix
+        out.set(name, { ...fields, name })
+      }
     }
   }
   registry = out

@@ -145,11 +145,18 @@ export function fromContext(run: Run, on?: JoinWarnings): FromContext {
         if (written && on.active === undefined) on.active = boundJoinWarnings(on, scope)
         if (on.active) {
           const binding = e === on.binding
+          const pending = written && (!binding || on.recheck) ? on.pending : undefined
+          const bindingConditions = binding && !run.preparedQuery ? pending : undefined
+          const before = bindingConditions?.length ?? 0
           ctx = {
             ...ctx,
             conditions: written && !(run.preparedQuery && (binding || literalPredicate(e, true))) ? ctx.conditions : undefined,
-            rowNumberConditions: written && !binding ? on.pending ?? ctx.rowNumberConditions : undefined,
+            rowNumberConditions: pending ?? (written && !binding ? ctx.rowNumberConditions : undefined),
           }
+          const compiled = compile(e, ctx)
+          // BIGINT can warn at binding and again if a const join rechecks the text.
+          if (bindingConditions) appendConditions(run.env.conditions, bindingConditions.slice(before))
+          return compiled
         }
       }
       return compile(e, ctx)
@@ -2746,6 +2753,7 @@ interface JoinWarnings {
   lookup?: Access | undefined
   rounded?: FromPlan['rounded']
   binding?: Expression
+  recheck?: boolean
 }
 
 function joinConditions(q: QueryExpression, node: SelectNode, pending: Condition[] | undefined): JoinWarnings | undefined {
@@ -2800,7 +2808,10 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     const range = !point && leftTable && !wide ? integerRange(column.type) : undefined
     on.lookup = range ? pointAccess(index, column, intValue(value < 0 ? range.min : range.max)) : access
     if (!on.lookup) return false
-    if (wide && !fractional) on.binding = condition
+    if (wide) {
+      on.binding = condition
+      on.recheck = point === access && value !== Number(key)
+    }
     if (decimal || !access) on.rounded = { condition, access: access ?? empty }
     return true
   }
