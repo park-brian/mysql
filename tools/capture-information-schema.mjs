@@ -252,8 +252,10 @@ export function renderDefinitions(defs, version) {
     const indices = columns.map(({ type, length, flags, decimals, text, column, collation, streamed }) => {
       const wire = [type, length, flags, decimals]
       if (!collations.has(collation)) collations.set(collation, collations.size)
-      const layout = [...wire, text, column, collations.get(collation)]
-      if (type !== streamed[0] || length !== streamed[1] || decimals !== streamed[3]) layout.push(streamed)
+      const attributes = (collations.get(collation) << 2) | (text ? 1 : 0) | (column ? 2 : 0)
+      const layout = [...wire, attributes]
+      if (type !== streamed[0] || length !== streamed[1]) layout.push(streamed)
+      else if (decimals !== streamed[3]) layout.push(streamed.slice(2))
       else if (flags !== streamed[2]) layout.push(streamed[2])
       const key = JSON.stringify(layout)
       if (!layouts.has(key)) layouts.set(key, layouts.size)
@@ -268,10 +270,10 @@ export function renderDefinitions(defs, version) {
     '// utf8mb4 connection (lengths are in its bytes), whether each is a dictionary\n' +
     '// column or a computed one, and the collation it compares in (M5.12).\n' +
     'export interface InformationSchemaColumn {\n  readonly name: string\n  readonly type: number\n  readonly length: number\n  readonly flags: number\n  readonly decimals: number\n  readonly text: boolean\n  readonly column: boolean\n  readonly collation: string | null\n  /** `[type, length, flags, decimals]` under a sort over the view, which streams through a temporary table. */\n  readonly streamed: readonly [number, number, number, number]\n}\n\n' +
-    "// A numeric streamed override changes only flags.\ntype ColumnLayout = readonly [type: number, length: number, flags: number, decimals: number, text: boolean, column: boolean, collation: number, streamed?: number | InformationSchemaColumn['streamed']]\n\n" +
+    "// Attributes pack the collation index above the text (1) and dictionary-column (2) bits.\n// Streamed overrides store flags, flags and decimals, or the full tuple.\ntype ColumnLayout = readonly [type: number, length: number, flags: number, decimals: number, attributes: number, streamed?: number | readonly [flags: number, decimals: number] | InformationSchemaColumn['streamed']]\n\n" +
     `const collations = ${JSON.stringify([...collations.keys()])} as const\n\n` +
     `const layouts: readonly ColumnLayout[] = [\n${[...layouts.keys()].map((layout) => `  ${layout},`).join('\n')}\n]\n\n` +
-    'function table(names: readonly string[], indices: readonly number[]): readonly InformationSchemaColumn[] {\n  return names.map((name, i) => {\n    const [type, length, flags, decimals, text, column, collation, streamed = flags] = layouts[indices[i]!]!\n    return { name, type, length, flags, decimals, text, column, collation: collations[collation]!, streamed: typeof streamed === "number" ? [type, length, streamed, decimals] : streamed }\n  })\n}\n\n' +
+    'function table(names: readonly string[], indices: readonly number[]): readonly InformationSchemaColumn[] {\n  return names.map((name, i) => {\n    const [type, length, flags, decimals, attributes, override = flags] = layouts[indices[i]!]!\n    const streamed = typeof override === "number" ? [type, length, override, decimals] as const\n      : override.length === 2 ? [type, length, ...override] as const : override\n    return { name, type, length, flags, decimals, text: (attributes & 1) !== 0, column: (attributes & 2) !== 0, collation: collations[attributes >>> 2]!, streamed }\n  })\n}\n\n' +
     `export const INFORMATION_SCHEMA: Readonly<Record<string, readonly InformationSchemaColumn[]>> = {\n${lines.join('\n')}\n}\n`
 }
 

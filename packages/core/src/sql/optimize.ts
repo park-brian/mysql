@@ -27,7 +27,7 @@ import type { ColumnDef, IndexDef, Table, TableDef, Trx } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
 import { compareValues, integerRange, truth, type Value } from '@myjs/types'
 
-import { compile, EMPTY_SCOPE, type CompileContext, type Env } from './compile.ts'
+import { compile, EMPTY_SCOPE, isComparison, type CompileContext, type Env } from './compile.ts'
 import type { FromPlan } from './from.ts'
 import { equalBounds, pointAccess, splitAnd } from './plan.ts'
 import { accessRows } from './operators.ts'
@@ -110,7 +110,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     changed = false
     from.joins.forEach((j, n) => {
       if (!j.left || converted.has(n)) return
-      const rejects = pool.some((c) => nullRejected(c, slot, aliasOf).some((i) => j.innerAliases.has(aliasOf(i) ?? '')))
+      const rejects = rejectsNullExtension(pool, slot, (i) => j.innerAliases.has(aliasOf(i) ?? ''), aliasOf)
       if (!rejects) return
       converted.add(n)
       changed = true
@@ -414,8 +414,13 @@ export function constTablesHaveRows(facts: OptimizerFacts, ctx: CompileContext, 
   return true
 }
 
-/** The table slots a condition rejects NULL on: a comparison, BETWEEN, IN or LIKE with the column as its operand. */
-export function nullRejected(c: Expression, slot: (e: Expression) => number | undefined, tableOf?: (i: number) => string | undefined): number[] {
+/** Whether a conjunct rejects a NULL-extended row from these slots. */
+export function rejectsNullExtension(pool: readonly Expression[], slot: (e: Expression) => number | undefined, nullable: (i: number) => boolean, tableOf?: (i: number) => string | undefined): boolean {
+  return pool.some((c) => nullRejected(c, slot, tableOf).some(nullable))
+}
+
+/** The table slots a condition rejects NULL on. */
+function nullRejected(c: Expression, slot: (e: Expression) => number | undefined, tableOf?: (i: number) => string | undefined): number[] {
   // An OR rejects NULL on a table both its sides reject it on (`not_null_tables`): `ch.id BETWEEN … OR ch.id BETWEEN …`.
   if (tableOf !== undefined && c.kind === NODE.BINARY && (c.op === 'OR' || c.op === '||')) {
     const right = new Set(nullRejected(c.right, slot, tableOf).map(tableOf))
@@ -425,13 +430,14 @@ export function nullRejected(c: Expression, slot: (e: Expression) => number | un
     const i = slot(c.operand)
     return i === undefined ? [] : [i]
   }
-  if (c.kind === NODE.BINARY && ['=', '<', '<=', '>', '>=', '<>', '!=', 'BETWEEN', 'IN', 'LIKE', 'NOT IN', 'NOT BETWEEN', 'NOT LIKE'].includes(c.op)) {
+  if (c.kind === NODE.BINARY) {
+    const comparison = isComparison(c.op)
+    if (!comparison && !['BETWEEN', 'IN', 'LIKE', 'NOT IN', 'NOT BETWEEN', 'NOT LIKE'].includes(c.op)) return []
     const out: number[] = []
-    for (const side of [c.left, c.op === '=' || c.op === '<' || c.op === '<=' || c.op === '>' || c.op === '>=' || c.op === '<>' || c.op === '!=' ? c.right : undefined]) {
-      if (side === undefined) continue
-      const i = slot(side)
-      if (i !== undefined) out.push(i)
-    }
+    const left = slot(c.left)
+    const right = comparison ? slot(c.right) : undefined
+    if (left !== undefined) out.push(left)
+    if (right !== undefined) out.push(right)
     return out
   }
   return []

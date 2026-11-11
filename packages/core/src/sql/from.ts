@@ -50,7 +50,7 @@ import { columnResultType } from './meta.ts'
 import { chooseStrategy } from './group.ts'
 import { clusteredIndex, forwardKeyColumn, indexParts } from './indexes.ts'
 import { accessRows, distinct, sort as sortRows, type SortKey } from './operators.ts'
-import { neverEqual, nullRejected } from './optimize.ts'
+import { neverEqual, rejectsNullExtension } from './optimize.ts'
 import type { TableStatistics } from './stats.ts'
 import { unknownColumnError, safeResolve, TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
 
@@ -718,6 +718,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
  */
 function innerWherePossible(root: Node, where: Expression | undefined, scope: TableScope): Node {
   const slot = (e: Expression): number | undefined => e.kind === NODE.COLUMN ? localSlot(e.parts, scope) : undefined
+  const aliasOf = (i: number) => scope.columnAt(i)?.table.alias
   let pool: Expression[] = []
   const converted = new Set<Node>()
   // The ONs that hold as a WHERE does: an inner join's, or a converted one's, outside any nullable side.
@@ -733,7 +734,7 @@ function innerWherePossible(root: Node, where: Expression | undefined, scope: Ta
     let changed = visit(n.outer, nullable)
     if (n.left && !converted.has(n) && !nullable) {
       const inner = leafAliases(n.inner)
-      if (pool.some((c) => nullRejected(c, slot, (i) => scope.columnAt(i)?.table.alias).some((i) => inner.has(scope.columnAt(i)?.table.alias ?? '')))) {
+      if (rejectsNullExtension(pool, slot, (i) => inner.has(aliasOf(i) ?? ''), aliasOf)) {
         converted.add(n)
         pool.push(...splitAnd(n.onAst))
         changed = true

@@ -387,6 +387,7 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       ["SELECT (SELECT id FROM t WHERE id='1x' ORDER BY bad_name LIMIT 1) AS n FROM t WHERE d='2.5x'", 'order clause'],
       ["SELECT a.id AS n FROM t a JOIN t b ON b.id='1x' WHERE a.d='2.5x' ORDER BY bad_name", 'order clause'],
       ["SELECT a.id AS n FROM t a JOIN t b ON a.id=b.id AND b.id='1x' WHERE a.d='2.5x' ORDER BY bad_name", 'order clause'],
+      ["SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1x' WHERE a.d='2.5x' AND b.id IS NOT NULL ORDER BY bad_name", 'order clause'],
     ] as const) {
       for (const api of ['query', 'prepare'] as const) {
         await seed()
@@ -420,6 +421,12 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       { sql: "SELECT a.id AS n FROM t a JOIN t b ON a.id=b.id AND b.id='1x' WHERE a.id='2x'", rows: [], fixed: [], demanded: ['2x', '1x'] },
       { sql: "SELECT a.id AS n FROM t a JOIN t b ON a.id=b.id AND b.id='1x' WHERE a.id='1y' AND FALSE", rows: [], fixed: [], demanded: [] },
       { sql: "SELECT a.id AS n FROM t a JOIN t b ON a.id=b.id AND b.id='1x' WHERE a.id='1y' LIMIT 0 OFFSET 1", rows: [], fixed: [], demanded: ['1y', '1x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1x' AND '4x'=4 WHERE a.d='2.5x' AND b.id IS NOT NULL", rows: [[1]], fixed: ['4x'], demanded: ['2.5x', '1x'] },
+      { sql: "SELECT b.id AS n FROM empty_t a LEFT JOIN t b ON b.id='1x' WHERE a.d='2.5x' AND b.id IS NOT NULL", rows: [], fixed: [], demanded: ['2.5x', '1x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN empty_t b ON b.id='1x' WHERE a.d='2.5x' AND b.id>0", rows: [], fixed: [], demanded: ['2.5x', '1x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1x' AND FALSE WHERE a.d='2.5x' AND b.id IS NOT NULL", rows: [], fixed: [], demanded: [] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1x' WHERE a.d='2.5x' AND b.id IS NOT NULL LIMIT 0", rows: [], fixed: [], demanded: [] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1x' WHERE a.d='2.5x' AND b.id IS NOT NULL LIMIT 0 OFFSET 1", rows: [], fixed: [], demanded: ['2.5x', '1x'] },
     ]) {
       await seed()
       const [queried, fields] = await c.query(sql)

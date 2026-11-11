@@ -31,7 +31,7 @@ import { firstKey, rowKey, valueKey } from './keys.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
 import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts'
 import { convert as convertSetValue, checkSetWidth, nestedNullability, setOperation, setOperationType } from './setop.ts'
-import { constTablesHaveRows, neverEqual, optimizerFacts, plannedTruth, uniqueKey, type OptimizerFacts } from './optimize.ts'
+import { constTablesHaveRows, neverEqual, optimizerFacts, plannedTruth, rejectsNullExtension, uniqueKey, type OptimizerFacts } from './optimize.ts'
 import { informationSchemaTable } from './information-schema.ts'
 import { performanceSchemaTable } from './performance-schema.ts'
 import { statisticsOf } from './stats.ts'
@@ -129,6 +129,11 @@ function executionEnv(run: Run, trx: Trx | undefined, given?: Env): Env {
   return given ?? { ...run.env, trx: trx ?? run.env.trx }
 }
 
+/** A speculative proof uses the same read view without publishing conditions. */
+function quietRun(run: Run, trx: Trx | undefined): Run {
+  return { ...run, env: { ...run.env, trx, conditions: undefined } }
+}
+
 /** What planning a FROM needs from the statement: its tables, and a compiler for ON clauses. */
 export function fromContext(run: Run, on?: JoinWarnings): FromContext {
   const catalog = run.catalog
@@ -137,11 +142,11 @@ export function fromContext(run: Run, on?: JoinWarnings): FromContext {
     compileOn(e, scope, written) {
       let ctx = compileContext(run, scope, 'on clause')
       if (on) {
-        if (written && on.active === undefined) on.active = integerJoinKey(on.key, scope)
+        if (written && on.active === undefined) on.active = boundJoinWarnings(on, scope)
         if (on.active) ctx = {
           ...ctx,
           conditions: written && !(run.preparedQuery && literalPredicate(e, true)) ? ctx.conditions : undefined,
-          rowNumberConditions: written ? on.pending : undefined,
+          rowNumberConditions: written ? on.pending ?? ctx.rowNumberConditions : undefined,
         }
       }
       return compile(e, ctx)
@@ -373,10 +378,12 @@ export function planQuery(run: Run, q: QueryExpression, pending?: Condition[]): 
 function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Condition[]): SelectPlan {
   node = pushCountCondition(run, node)
   const order = q.orderBy ?? []
+  // An aggregate in the select list or HAVING makes the query grouped.
+  const grouped = node.groupBy !== undefined || containsAggregate([node.items, node.having])
 
   // The parser normalizes unquoted DUAL; every retained reference names a table.
   const refs = node.from ?? []
-  const on = pending && joinConditions(q, node, pending)
+  const on = !grouped && (pending || run.preparing === 'wire') ? joinConditions(q, node, pending) : undefined
   let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run, on), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'))
   run.admitQuery?.(q, true)
   const scope = from?.scope
@@ -388,10 +395,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   const reads = scope === undefined ? undefined : columnsRead(scope, node, q)
   if (from !== undefined && reads !== undefined) from.reads(reads)
 
-  // An aggregate anywhere in the select list or HAVING makes the query a
-  // grouped one, even with no GROUP BY; one in ORDER BY alone does not, and
-  // is 3029 (8.4.11).
-  const grouped = node.groupBy !== undefined || containsAggregate([node.items, node.having])
+  // An aggregate in ORDER BY alone is 3029 (8.4.11).
   if (!grouped) {
     const at = order.findIndex(containsAggregate)
     if (at >= 0) throw sqlError('ER_AGGREGATE_ORDER_NON_AGG_QUERY', `Expression #${at + 1} of ORDER BY contains aggregate function and applies to the result of a non-aggregated query`)
@@ -463,7 +467,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
     if ((limitCount === 0 && offset === 0) || resolved.conditional || on.parts.some(writtenFalse)) pending.length = 0
     else appendConditions(pending, pending.splice(0, onCount))
   }
-  const constants = constRows(run, from, node)
+  const factRun = on?.active ? quietRun(run, run.env.trx) : run
+  const constants = constRows(factRun, from, node)
 
   // An ORDER BY item that reads only a STRAIGHT_JOIN's const tables is a constant, which nothing sorts by (8.4.11).
   const constantKey = (o: OrderItem): boolean => constants.size > 0 && !refersToRow(sortExpression(o.expr, items), lookup, constants)
@@ -529,7 +534,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
     // is copied, a column losing its key flags without gaining GROUP_FLAG, an
     // expression keeping only NOT_NULL (8.4.11, M5.18's corpus) — unless the
     // optimizer proved the result empty, when there is no table at all.
-    const facts = selectFacts(run, from, node, keep)
+    const facts = selectFacts(factRun, from, node, keep)
     // A sort over the first table alone, ahead of nested-loop joins or a
     // nested-loop semijoin, needs no stream.
     // An ORDER BY on columns the WHERE holds to constants orders nothing, and
@@ -682,8 +687,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
     optimize(trx) {
       // A missing const row can stop startup. An empty scan still demands it.
       if (scalarConditions?.length && keep !== 0 && !facts?.impossible) {
-        const quiet = { ...run, env: { ...run.env, trx, conditions: undefined } }
-        if (!provedEmpty(quiet, from, node, undefined)) {
+        if (!provedEmpty(quietRun(run, trx), from, node, undefined)) {
           appendConditions(run.env.conditions, scalarConditions)
         }
       }
@@ -732,7 +736,7 @@ function pushCountCondition(run: Run, node: SelectNode): SelectNode {
   if (parts.length !== 1 && !(parts.length === 2 && parts[0]?.toLowerCase() === ref.alias.toLowerCase())) return node
   const query = ref.query
   const body = query.body
-  if (query.with !== undefined || query.limit !== undefined || query.orderBy !== undefined || query.locking !== undefined || body.kind !== QUERY.SELECT || body.groupBy === undefined || body.groupBy.rollup === true || body.having !== undefined || body.windows !== undefined || body.distinct === true || (body.options?.length ?? 0) > 0) return node
+  if (body.kind !== QUERY.SELECT || !unhintedSelect(query, body) || query.limit !== undefined || query.orderBy !== undefined || query.locking !== undefined || body.groupBy === undefined || body.groupBy.rollup === true || body.having !== undefined || body.distinct === true) return node
   const count = (e: Expression): boolean => e.kind === NODE.CALL && nativeCallName(e) === 'COUNT' && e.over === undefined && e.args.length === 1 && e.args[0]?.kind === NODE.COLUMN
   // Columns and COUNT of a column or star cannot assign variables or evaluate volatile expressions.
   if (!body.items.every((i) => i.expr.kind === NODE.COLUMN || count(i.expr)) || !body.groupBy.items.every((e) => e.kind === NODE.COLUMN || integerLiteral(e))) return node
@@ -913,8 +917,8 @@ function quantifiedPlan(run: Run, query: QueryExpression, how: QuantifiedSubquer
   const alias = ref.alias ?? ref.table.name
   const column = tableColumn(item, def, alias)
   if (column === undefined) return undefined
-  const equality = (how.op === '=' && how.quantifier === 'ANY') || (how.op === '<>' && how.quantifier === 'ALL')
-  if (!equality && !(how.op === '=' && how.quantifier === 'ALL') && !(how.op === '<>' && how.quantifier === 'ANY')) return undefined
+  if (how.op !== '=' && how.op !== '<>') return undefined
+  const equality = how.op === '=' ? how.quantifier === 'ANY' : how.quantifier === 'ALL'
   const nulls = !top || !equality || how.op === '<>'
   const read = keyReads(column.name, body.where)
   const index = def.indexes.find((i) => i.invisible !== true && i.parts[0]?.column === column.name && i.parts[0].prefix === undefined)
@@ -2715,34 +2719,39 @@ function directCondition(e: Expression): boolean {
 
 interface JoinWarnings {
   readonly parts: readonly Expression[]
-  readonly pending: Condition[]
+  readonly pending: Condition[] | undefined
   readonly key: readonly [readonly string[], readonly string[]] | undefined
+  readonly leftFilters: readonly Expression[] | undefined
   active?: boolean
 }
 
-function joinConditions(q: QueryExpression, node: SelectNode, pending: Condition[]): JoinWarnings | undefined {
+function joinConditions(q: QueryExpression, node: SelectNode, pending: Condition[] | undefined): JoinWarnings | undefined {
   const join = node.from?.[0]
-  if (node.from?.length !== 1 || join?.kind !== REF.JOIN || join.type !== 'INNER' || join.left.kind !== REF.TABLE || join.right.kind !== REF.TABLE ||
+  if (node.from?.length !== 1 || join?.kind !== REF.JOIN || (join.type !== 'INNER' && join.type !== 'LEFT') || join.left.kind !== REF.TABLE || join.right.kind !== REF.TABLE ||
     join.left.indexHints || join.right.indexHints || !unhintedSelect(q, node) || !plainProjection(q, node)) return undefined
   const parts = splitAnd(join.on)
-  if (!parts.some(rowComparison) || !splitAnd(node.where).every(directCondition) || !constantNode(q, false, true)) return undefined
-  if (containsAggregate(node.items)) return undefined
+  const where = splitAnd(node.where)
+  const left = join.type === 'LEFT'
+  if (!parts.some(rowComparison) || !constantNode(q, false, true) || !where.every((e) =>
+    directCondition(e) || (left && e.kind === NODE.UNARY && e.op === 'IS NOT NULL' && e.operand.kind === NODE.COLUMN))) return undefined
   let key: JoinWarnings['key']
   for (const e of parts) {
     if (directCondition(e)) continue
     if (key || e.kind !== NODE.BINARY || e.op !== '=' || e.left.kind !== NODE.COLUMN || e.right.kind !== NODE.COLUMN) return undefined
     key = [e.left.parts, e.right.parts]
   }
-  return { parts, pending, key }
+  return { parts, pending, key, leftFilters: left ? where : undefined }
 }
 
-function integerJoinKey(key: JoinWarnings['key'], scope: Scope): boolean {
+function boundJoinWarnings({ key, leftFilters }: JoinWarnings, scope: Scope): boolean {
+  const boundary = (scope as TableScope).tables[1]!.offset
+  // A resolved right slot proves the LEFT JOIN's null-complemented row cannot survive.
+  if (leftFilters && !rejectsNullExtension(leftFilters, (e) => localColumn(e, scope), (i) => i >= boundary)) return false
   if (!key) return true
   const left = safeResolve(scope, key[0], 'on clause')
   const right = safeResolve(scope, key[1], 'on clause')
   // Unbound names still fail in their written positions, before publication.
   if (!left || !right) return true
-  const boundary = (scope as TableScope).tables[1]!.offset
   return exactInteger(left) && exactInteger(right) && (left.index < boundary) !== (right.index < boundary)
 }
 
