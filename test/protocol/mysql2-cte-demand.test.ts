@@ -287,6 +287,8 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
     await c.query('CREATE TABLE t(id INT PRIMARY KEY,d DOUBLE)')
     await c.query('CREATE TABLE empty_t LIKE t')
     await c.query('INSERT INTO t VALUES (1,2.5),(2,NULL)')
+    await c.query('CREATE TABLE big_t(id BIGINT PRIMARY KEY)')
+    await c.query('INSERT INTO big_t VALUES (1)')
     for (const { sql, rows, text, execution, demanded = true } of cases) {
       await seed()
       const [queried, fields] = await c.query(sql)
@@ -379,7 +381,7 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       }, `${failedDivision} ${api}`)
     }
     const scalar = "(SELECT id FROM t WHERE id='1x' LIMIT 1)"
-    for (const [sql, name] of [
+    for (const [sql, name, warning] of [
       ["SELECT id AS n FROM t WHERE id='x' GROUP BY bad_name", 'group statement'],
       ["SELECT id AS n FROM t WHERE id='x' HAVING bad_name", 'having clause'],
       ["SELECT id AS n FROM t WHERE id='x' ORDER BY bad_name", 'order clause'],
@@ -388,12 +390,16 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       ["SELECT a.id AS n FROM t a JOIN t b ON b.id='1x' WHERE a.d='2.5x' ORDER BY bad_name", 'order clause'],
       ["SELECT a.id AS n FROM t a JOIN t b ON a.id=b.id AND b.id='1x' WHERE a.d='2.5x' ORDER BY bad_name", 'order clause'],
       ["SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='1x' WHERE a.d='2.5x' AND b.id IS NOT NULL ORDER BY bad_name", 'order clause'],
+      ["SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='1y' WHERE a.id='2x' ORDER BY bad_name", 'order clause', '1y'],
     ] as const) {
       for (const api of ['query', 'prepare'] as const) {
         await seed()
         await assert.rejects(c[api](sql), { errno: 1054 })
         assert.deepEqual(await conditionsOf(c), {
-          warnings: [['Error', 1054, `Unknown column 'bad_name' in '${name}'`]], warningCount: '1', errorCount: '1',
+          warnings: [
+            ...(warning === undefined ? [] : [['Warning', 1292, `Truncated incorrect DOUBLE value: '${warning}'`]]),
+            ['Error', 1054, `Unknown column 'bad_name' in '${name}'`],
+          ], warningCount: warning === undefined ? '1' : '2', errorCount: '1',
         }, `${sql} ${api}`)
       }
     }
@@ -444,6 +450,9 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='149999999999999999e-17x' WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x', '149999999999999999e-17x'] },
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='2147483648x' WHERE a.d='2.5x'", rows: [[null]], fixed: [], demanded: ['2.5x'] },
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN t b ON b.id='2147483648x' WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='1y' WHERE a.id='2x'", rows: [[1]], fixed: ['1y'], demanded: ['2x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='9y' WHERE a.id='2x'", rows: [[null]], fixed: ['9y'], demanded: ['2x'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='9y' WHERE a.id='2x' LIMIT 0", rows: [], fixed: ['9y'], demanded: [] },
     ]) {
       await seed()
       const [queried, fields] = await c.query(sql)

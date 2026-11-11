@@ -143,10 +143,13 @@ export function fromContext(run: Run, on?: JoinWarnings): FromContext {
       let ctx = compileContext(run, scope, 'on clause')
       if (on) {
         if (written && on.active === undefined) on.active = boundJoinWarnings(on, scope)
-        if (on.active) ctx = {
-          ...ctx,
-          conditions: written && !(run.preparedQuery && literalPredicate(e, true)) ? ctx.conditions : undefined,
-          rowNumberConditions: written ? on.pending ?? ctx.rowNumberConditions : undefined,
+        if (on.active) {
+          const binding = e === on.binding
+          ctx = {
+            ...ctx,
+            conditions: written && !(run.preparedQuery && (binding || literalPredicate(e, true))) ? ctx.conditions : undefined,
+            rowNumberConditions: written && !binding ? on.pending ?? ctx.rowNumberConditions : undefined,
+          }
         }
       }
       return compile(e, ctx)
@@ -2742,6 +2745,7 @@ interface JoinWarnings {
   active?: boolean
   lookup?: Access | undefined
   rounded?: FromPlan['rounded']
+  binding?: Expression
 }
 
 function joinConditions(q: QueryExpression, node: SelectNode, pending: Condition[] | undefined): JoinWarnings | undefined {
@@ -2774,6 +2778,7 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     const slot = ref.kind === NODE.COLUMN ? safeResolve(scope, ref.parts, 'on clause') : undefined
     if (!def || !slot || slot.index < boundary || !exactInteger(slot) || literal.kind !== NODE.LITERAL) return false
     const column = def.columns[slot.index - boundary]!
+    const wide = column.type.type === FIELD_TYPE.LONGLONG
     const index = def.indexes.find((i) => i.kind === 'primary' && i.parts.length === 1 && i.parts[0]!.column === column.name)
     if (!index) return false
     const source = literal.value as string
@@ -2792,9 +2797,10 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     const access = safe && noKey ? empty : point
     // Out-of-range keys cannot produce rows. A const-left warning still
     // depends on finding the endpoint of the right column's range.
-    const range = !point && leftTable && column.type.type !== FIELD_TYPE.LONGLONG ? integerRange(column.type) : undefined
+    const range = !point && leftTable && !wide ? integerRange(column.type) : undefined
     on.lookup = range ? pointAccess(index, column, intValue(value < 0 ? range.min : range.max)) : access
     if (!on.lookup) return false
+    if (wide && !fractional) on.binding = condition
     if (decimal || !access) on.rounded = { condition, access: access ?? empty }
     return true
   }
