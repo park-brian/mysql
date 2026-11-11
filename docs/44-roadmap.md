@@ -4069,12 +4069,48 @@ same 38 passing IDs with the exact native baseline pass. All eleven required
 still running and no reported failure. Totals remain 144/190 and M5 42/53;
 M5.10 remains partial.
 
-**Next scalar prerequisite: direct plain string comparisons.** The pinned
-audit starts at 183 complete matches of 516 written, collation and mode
-responses, and 174 of 336 retained-marker responses. Prove unintroduced and
-uncollated literals against text, numbers and NULL. Preserve collation,
-conversion warnings, comparator NULL order and retained binary markers. Introduced or
-collated text, BIT/HEX, temporal readers, CAST admission, session calls,
+**Plain string comparison rejection (2026-11-10):**
+Direct comparisons of plain strings with plain strings or NULL can reuse the
+already-rejected comparator. The original connection collation, NULL read
+order, metadata and diagnostic phase still apply. Mixed string/number pairs,
+introduced or explicitly collated strings, and retained binary markers keep
+their original paths. Quantified comparisons share their row loop and still
+use the existing membership cache only for eligible uncorrelated subqueries.
+
+Two pinned profiles improve 357 to 505 complete responses of 852:
+written, collation and mode responses 183 to 289 of 516, retained markers
+174 to 216 of 336. Two strict fixtures pin all 505 complete outcomes.
+Twelve native observations append to the earlier 405 text-arithmetic
+expectations without changing them. Across 204 profiles and 31,357
+responses, complete agreement improves 26,221 to 26,381 with every earlier
+complete response and all 837,744 matching protocol facts retained.
+
+All three focused groups pass locally and directly on pinned MySQL; the
+actual predecessor SQL readers fail all three. Thirty-seven existing
+quantified/subquery groups pass locally, and the direct quantified native
+control passes. All nine unchanged caps pass with the MVCC repair present:
+parser/core/facade 45,599/334,360/334,262 B gzipped.
+
+Fresh default Docker passes 1,791 main, two isolated IN-list and four
+bulk-latency tests, typecheck, lint, package and typed example smoke.
+The isolated snapshot matches the working tree's runtime, 685 test files
+and fixtures, and tooling. The seven native corpora retain the full
+reference result from 9f43a08 after matching fourteen input hashes and
+the live pinned digest. Full engine replay and blocking CI reference
+verification stay intact. Seeded executor fuzzing (20,000, 20261010), the
+unchanged plan floor (2,127/2,248 versus 2,118 required), and the official
+1,459-file run's same 38 passing IDs and exact native baseline pass.
+All eleven required 6425196 CI jobs passed; 9f43a08 CI is running with
+no reported failure. Totals remain 144/190 and M5 42/53; M5.10 is partial.
+
+**Next scalar prerequisite: mixed string/number comparisons.** A pinned
+phase audit starts at 240 complete matches of 444 written, projection and
+mode responses and 249 of 336 retained-marker responses. Separate early
+value demand from cached DOUBLE conversion warnings. MySQL may report a
+truncation in the text query or PREPARE without repeating it at EXECUTE.
+Keep the original comparator, collation, NULL order and retained binary
+marker reads, and prove each warning phase before changing it. Introduced
+or collated text, BIT/HEX, temporal readers, CAST admission, session calls,
 OR TRUE, dynamic TRUE metadata and source effects, constant-group holders,
 uncacheable scalar lifetime and LIMIT absorption remain separate before
 renewed COUNT work.

@@ -1265,6 +1265,11 @@ function doubleArithmeticInput(op: string): boolean {
   return op === '+' || op === '-' || op === '*' || op === '/' || op === '%' || op === 'MOD'
 }
 
+function textOrNullLiteral(item: Expression): boolean {
+  return item.kind === NODE.LITERAL &&
+    (item.type === LITERAL.NULL || (item.type === LITERAL.STRING && item.charset === undefined && item.collation === undefined))
+}
+
 function literalNumericOperand(e: Expression, arithmetic = false): boolean {
   const item = signedOperand(e, '+')
   if (item.kind === NODE.CALL) return item.args.length === 2 && nativeCallName(item) === 'MOD' &&
@@ -1272,14 +1277,16 @@ function literalNumericOperand(e: Expression, arithmetic = false): boolean {
   if (item.kind === NODE.BINARY) return (item.op === 'DIV' || doubleArithmeticInput(item.op)) &&
     literalNumericOperand(item.left, true) && literalNumericOperand(item.right, true)
   if (item.kind !== NODE.LITERAL) return false
-  if (item.type === LITERAL.STRING) return arithmetic && item.charset === undefined && item.collation === undefined
   // Nonfinite DOUBLE spellings are rejected before binding.
-  return item.type === LITERAL.INT || item.type === LITERAL.DECIMAL || item.type === LITERAL.DOUBLE || item.type === LITERAL.NULL
+  return item.type === LITERAL.INT || item.type === LITERAL.DECIMAL || item.type === LITERAL.DOUBLE || item.type === LITERAL.NULL ||
+    (arithmetic && textOrNullLiteral(item))
 }
 
-/** Syntax proof for reusing an already-rejected numeric reader, including plain text in arithmetic. */
-export function numericLiteralPredicate(e: Expression): boolean {
-  if (e.kind === NODE.BINARY && (COMPARISONS[e.op] || e.op === '<=>')) return literalNumericOperand(e.left) && literalNumericOperand(e.right)
+/** Syntax proof for reusing an already-rejected arithmetic or comparison reader. */
+export function literalPredicate(e: Expression): boolean {
+  if (e.kind === NODE.BINARY && (COMPARISONS[e.op] || e.op === '<=>')) {
+    return (textOrNullLiteral(e.left) && textOrNullLiteral(e.right)) || (literalNumericOperand(e.left) && literalNumericOperand(e.right))
+  }
   return literalNumericOperand(e)
 }
 
@@ -2884,13 +2891,13 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
   if (plan.columns.length !== as.length) throw operandColumnsError(as.length)
   if (as.length === 1) ctx.quantified?.(right.query, { op, quantifier, outerNullable: (as[0] as Compiled).type.nullable, correlated: plan.correlated })
   const test = COMPARISONS[op] as (c: number) => boolean
+  const all = quantifier === 'ALL'
   const compareRow = (vs: readonly Value[], r: readonly Value[]): number | null => {
-    if (vs.length === 1) return compareValues(vs[0] ?? null, r[0] ?? null)
     let unknown = false
     for (let i = 0; i < vs.length; i++) {
       const c = compareValues(vs[i] ?? null, r[i] ?? null)
       if (c === null) unknown = true
-      else if (c !== 0) return 1
+      else if (c !== 0) return c
     }
     return unknown ? null : 0
   }
@@ -2905,13 +2912,15 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
   const exactNumber = (k: string): boolean => k === 'int' || k === 'decimal'
   const keyed =
     as.length === 1 &&
-    ((op === '=' && quantifier === 'ANY') || (op === '<>' && quantifier === 'ALL')) &&
+    (all ? op === '<>' : op === '=') &&
     ((exactNumber(a0.type.kind) && exactNumber(sub.kind)) || (a0.type.kind === 'string' && sub.kind === 'string' && a0.type.collationId === sub.collationId))
+  const type = boolType(true)
+  if (!keyed || plan.correlated) return { eval: compareAll, type }
   const setKey = {}
-  if (keyed) {
-    const membership = (env: Env): { readonly keys: ReadonlySet<string>; readonly empty: boolean; readonly sawNull: boolean } | undefined => {
-      if (plan.correlated || env.memo === undefined) return undefined
-      return memoValue(env.memo, setKey, () => {
+  return {
+    eval: (row, env) => {
+      if (env.memo === undefined) return compareAll(row, env)
+      const m = memoValue(env.memo, setKey, () => {
         const keys = new Set<string>()
         let empty = true
         let sawNull = false
@@ -2923,41 +2932,26 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
         }
         return { keys, empty, sawNull }
       })
-    }
-    const loop = compareAll()
-    return {
-      eval: (row, env) => {
-        const m = membership(env)
-        if (m === undefined) return loop(row, env)
-        if (m.empty) return bool(quantifier === 'ALL')
-        const v = a0.eval(row, env)
-        if (v !== null && m.keys.has(valueKey(v))) return bool(quantifier === 'ANY')
-        return v === null || m.sawNull ? null : bool(quantifier === 'ALL')
-      },
-      type: boolType(true),
-    }
+      if (m.empty) return bool(all)
+      const v = a0.eval(row, env)
+      if (v !== null && m.keys.has(valueKey(v))) return bool(!all)
+      return v === null || m.sawNull ? null : bool(all)
+    },
+    type,
   }
-  return { eval: compareAll(), type: boolType(true) }
 
   /** Every subquery row compared in turn. */
-  function compareAll(): Compiled['eval'] {
-    return (row, env) => {
-      const rows = rowsOf(plan, key, row, env)
-      if (rows.length === 0) return bool(quantifier === 'ALL')
-      const v = as.map((a) => a.eval(row, env))
-      let sawNull = false
-      for (const r of rows) {
-        const c = compareRow(v, r)
-        if (c === null) {
-          sawNull = true
-          continue
-        }
-        const hit = test(c)
-        if (quantifier === 'ANY' && hit) return bool(true)
-        if (quantifier === 'ALL' && !hit) return bool(false)
-      }
-      return sawNull ? null : bool(quantifier === 'ALL')
+  function compareAll(row: Row, env: Env): Value {
+    const rows = rowsOf(plan, key, row, env)
+    if (rows.length === 0) return bool(all)
+    const v = as.map((a) => a.eval(row, env))
+    let sawNull = false
+    for (const r of rows) {
+      const c = compareRow(v, r)
+      if (c === null) sawNull = true
+      else if (test(c) !== all) return bool(!all)
     }
+    return sawNull ? null : bool(all)
   }
 }
 

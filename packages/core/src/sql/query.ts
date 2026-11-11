@@ -13,7 +13,7 @@ import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, PreparedStatement, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { MAX_UNSIGNED, MIN_SIGNED, intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
-import { compile, constantNode, numericLiteralPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
+import { compile, constantNode, literalPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, copiedLength, intType, type ResultType } from './meta.ts'
@@ -2672,7 +2672,7 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
     if (!truth(value)) {
       impossible = true
       // The syntax proof does not replace the bound reader or its value.
-      if ((resolving || fixed) && (isConstant(e, '+') || numericLiteralPredicate(e))) folded = c
+      if ((resolving || fixed) && (isConstant(e, '+') || literalPredicate(e))) folded = c
       break
     }
   }
