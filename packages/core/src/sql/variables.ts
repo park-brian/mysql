@@ -30,21 +30,26 @@ let registry: ReadonlyMap<string, SystemVariable> | undefined
 function variables(): ReadonlyMap<string, SystemVariable> {
   if (registry !== undefined) return registry
   const out = new Map<string, SystemVariable>()
-  for (const line of SYSTEM_VARIABLES.split('\n')) {
-    const [name, flags, text, min, max] = line.split('\t') as [string, string, string, string?, string?]
+  for (const group of SYSTEM_VARIABLES) {
+    const [flags, ...lines] = group.split('\n') as [string, ...string[]]
     const kind = KINDS[flags[2] as keyof typeof KINDS]
-    const machine = text === '\u0000'
     const nullable = flags.includes('n', 3)
-    out.set(name, {
-      name,
+    const traits = {
       scope: SCOPES[flags[0] as keyof typeof SCOPES],
       readOnly: flags[1] === 'r',
       globalOnly: flags[1] === 'g',
       zeroDefault: flags.includes('z', 3),
       kind,
-      value: machine ? undefined : nullable && text === '' ? null : parsed(kind, text),
-      ...(kind === 'int' && min !== undefined && max !== undefined ? { min: BigInt(min), max: BigInt(max) } : {}),
-    })
+    }
+    for (const line of lines) {
+      const [name, text, min, max] = line.split('\t') as [string, string, string?, string?]
+      out.set(name, {
+        ...traits,
+        name,
+        value: text === '\u0000' ? undefined : nullable && text === '' ? null : parsed(kind, text),
+        ...(kind === 'int' && min !== undefined && max !== undefined ? { min: BigInt(min), max: BigInt(max) } : {}),
+      })
+    }
   }
   registry = out
   return out
@@ -61,9 +66,9 @@ export function systemVariableInfo(name: string): SystemVariable | undefined {
   return variables().get(name)
 }
 
-/** Every variable's name, in SHOW VARIABLES' order. */
-export function systemVariableNames(): readonly string[] {
-  return [...variables().keys()]
+/** Captured variable names, for the server to merge and sort with its own. */
+export function systemVariableNames(): Iterable<string> {
+  return variables().keys()
 }
 
 /**

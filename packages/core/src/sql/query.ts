@@ -12,14 +12,14 @@
 import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, PreparedStatement, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
-import { MAX_UNSIGNED, MIN_SIGNED, intValue, storageWidth, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
+import { MAX_UNSIGNED, MIN_SIGNED, intValue, numericPrefix, storageWidth, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
 import { appendConditions, compile, constantNode, isComparison, literalPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, textBesideColumn, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, copiedLength, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
-import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
-import { equalBounds, isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
+import { accessRows, distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
+import { equalBounds, isConstant, optimizerEnabled, pointAccess, splitAnd, tableColumn, type Access } from './plan.ts'
 import { and, columnRefs, integerLiteral, nativeCallName, queryBody, rewriteExpression, signedOperand, someNode } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, wrongArgumentsError } from './errors.ts'
@@ -463,9 +463,16 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
     } }
   }
   const resolved = resolveCondition(run, whereCtx, node.where, limitCount, offset, pending)
+  let lookupWarnings: Condition[] | undefined
   if (on?.active && pending) {
-    if ((limitCount === 0 && offset === 0) || resolved.conditional || on.parts.some(writtenFalse)) pending.length = 0
-    else appendConditions(pending, pending.splice(0, onCount))
+    const falseOn = on.parts.some(writtenFalse)
+    if ((limitCount === 0 && offset === 0) || resolved.conditional || (falseOn && !on.lookup)) pending.length = 0
+    else {
+      const conditions = pending.splice(0, onCount)
+      if (on.lookup) {
+        if (!falseOn) lookupWarnings = conditions
+      } else appendConditions(pending, conditions)
+    }
   }
   const factRun = on?.active ? quietRun(run, run.env.trx) : run
   const constants = constRows(factRun, from, node)
@@ -685,6 +692,15 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
       checkRead(env: Env) { source.table.checkRead!(env.trx, locking ? 'current' : 'consistent', from!.access(env).index) },
     }),
     optimize(trx) {
+      if (on?.lookup && lookupWarnings?.length && constants.has(from!.tables[0]!.alias)) {
+        const right = from!.tables[1]!
+        if (!constants.has(right.alias)) {
+          for (const _ of accessRows(right.table!, on.lookup, trx)) {
+            appendConditions(run.env.conditions, lookupWarnings)
+            break
+          }
+        }
+      }
       // A missing const row can stop startup. An empty scan still demands it.
       if (scalarConditions?.length && keep !== 0 && !facts?.impossible) {
         if (!provedEmpty(quietRun(run, trx), from, node, undefined)) {
@@ -2723,6 +2739,7 @@ interface JoinWarnings {
   readonly key: readonly [readonly string[], readonly string[]] | undefined
   readonly leftFilters: readonly Expression[] | undefined
   active?: boolean
+  lookup?: Access | undefined
 }
 
 function joinConditions(q: QueryExpression, node: SelectNode, pending: Condition[] | undefined): JoinWarnings | undefined {
@@ -2743,10 +2760,24 @@ function joinConditions(q: QueryExpression, node: SelectNode, pending: Condition
   return { parts, pending, key, leftFilters: left ? where : undefined }
 }
 
-function boundJoinWarnings({ key, leftFilters }: JoinWarnings, scope: Scope): boolean {
-  const boundary = (scope as TableScope).tables[1]!.offset
+function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
+  const { key, leftFilters } = on
+  const rightTable = (scope as TableScope).tables[1]!
+  const boundary = rightTable.offset
   // A resolved right slot proves the LEFT JOIN's null-complemented row cannot survive.
-  if (leftFilters && !rejectsNullExtension(leftFilters, (e) => localColumn(e, scope), (i) => i >= boundary)) return false
+  if (leftFilters && !rejectsNullExtension(leftFilters, (e) => localColumn(e, scope), (i) => i >= boundary)) {
+    const condition = on.parts.find(rowComparison)
+    if (condition?.kind !== NODE.BINARY || condition.op !== '=' || !on.parts.every((e) => e === condition || literalPredicate(e, true) || writtenFalse(e))) return false
+    const [ref, literal] = condition.left.kind === NODE.COLUMN ? [condition.left, condition.right] : [condition.right, condition.left]
+    const slot = ref.kind === NODE.COLUMN ? safeResolve(scope, ref.parts, 'on clause') : undefined
+    if (!slot || slot.index < boundary || !exactInteger(slot) || literal.kind !== NODE.LITERAL) return false
+    const def = rightTable.def!
+    const column = def.columns[slot.index - boundary]!
+    const index = def.indexes.find((i) => i.kind === 'primary' && i.parts.length === 1 && i.parts[0]!.column === column.name)
+    const value = Number(numericPrefix(literal.value as string).text)
+    on.lookup = index && Number.isSafeInteger(value) ? pointAccess(index, column, intValue(BigInt(value))) : undefined
+    return on.lookup !== undefined
+  }
   if (!key) return true
   const left = safeResolve(scope, key[0], 'on clause')
   const right = safeResolve(scope, key[1], 'on clause')
