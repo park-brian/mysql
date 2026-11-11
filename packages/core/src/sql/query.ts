@@ -88,7 +88,7 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
     clause,
     connectionCollation: session.characterSet,
     preparedSqlMode: run.prepared instanceof PreparedStatement ? run.prepared.sqlMode : undefined,
-    preparingQuery: run.preparing === 'wire',
+    skipRowNumberConditions: run.preparing === 'wire',
     session,
     state: run.state,
     serverVersion: run.serverVersion,
@@ -439,7 +439,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       }
     } }
   }
-  const resolved = resolveCondition(run, whereCtx, node.where, limitCount)
+  const resolved = resolveCondition(run, whereCtx, node.where, limitCount, offset)
   const constants = constRows(run, from, node)
 
   // An ORDER BY item that reads only a STRAIGHT_JOIN's const tables is a constant, which nothing sorts by (8.4.11).
@@ -2211,7 +2211,7 @@ function planGrouped(
   // Naming and binding complete before the same records become output fields.
   const items = selectItems as (GroupItem & { compiled: Compiled })[]
   const [limitCount, offset] = queryLimit(run, q)
-  const resolved = resolveCondition(run, compileContext(run, lookup, 'where clause'), node.where, limitCount)
+  const resolved = resolveCondition(run, compileContext(run, lookup, 'where clause'), node.where, limitCount, offset)
   const keep = offset + (limitCount ?? Infinity)
   const constants = constRows(run, from, node)
   const remaining = from?.tables.filter((table) => !constants.has(table.alias))
@@ -2654,11 +2654,14 @@ function distinctKey(def: TableDef, items: readonly { readonly expr: Expression 
 }
 
 /** A clause's readers and written constant outcomes, bound in its own context. */
-function resolveCondition(run: Run, ctx: CompileContext, condition: Expression | undefined, count: number | undefined) {
+function resolveCondition(run: Run, ctx: CompileContext, condition: Expression | undefined, count: number | undefined, whereOffset?: number) {
   type Predicate = { eval: Compiled['eval'] }
   const resolving = run.preparing !== undefined || run.protocol === 'text'
   const { conditions: _conditions, ...fixedEnv } = run.env
   const conjuncts = splitAnd(condition)
+  if (run.preparedQuery !== undefined && count === 0 && whereOffset === 0) {
+    ctx = { ...ctx, skipRowNumberConditions: true }
+  }
   // PREPARE owns a fixed literal's binding diagnostics as well as its evaluation.
   // Binding precedes evaluation, including warnings in an untaken conjunct.
   const entries = new Map<Expression, Predicate>(conjuncts.map((e) => [

@@ -178,26 +178,15 @@ const BLOB_BYTES: Readonly<Record<number, number>> = {
   [FIELD_TYPE.LONG_BLOB]: 4294967295,
 }
 
-export const NULL_TYPE: ResultType = {
-  kind: 'null',
-  field: FIELD_TYPE.NULL,
-  nullable: true,
-  unsigned: false,
-  length: 0,
-  scale: 0,
-  collationId: CHARSET_BINARY,
+/** Metadata shared by scalar types that do not carry a character collation. */
+function scalarType(kind: ResultType['kind'], field: number, length: number, scale: number, nullable: boolean, unsigned = false): ResultType {
+  return { kind, field, nullable, unsigned, length, scale, collationId: CHARSET_BINARY }
 }
 
+export const NULL_TYPE = scalarType('null', FIELD_TYPE.NULL, 0, 0, true)
+
 /** A BIGINT expression `width` characters wide. */
-export const intType = (width: number, nullable: boolean, unsigned = false): ResultType => ({
-  kind: 'int',
-  field: FIELD_TYPE.LONGLONG,
-  nullable,
-  unsigned,
-  length: width,
-  scale: 0,
-  collationId: CHARSET_BINARY,
-})
+export const intType = (width: number, nullable: boolean, unsigned = false): ResultType => scalarType('int', FIELD_TYPE.LONGLONG, width, 0, nullable, unsigned)
 
 /** A boolean: `a = b`, `a IS NULL`, `NOT a`. */
 /** A boolean result: an INT(1), and `true` or `false` when it meets JSON (8.4.11: `JSON_ARRAY(1 = 1)` is `[true]`). */
@@ -220,28 +209,13 @@ export const CHARSET_UTF8MB4_BIN = 46
 /** utf8mb3_general_ci (`strings/ctype-utf8.cc`): the system charset, which COLLATION() and CHARSET() answer in. */
 export const CHARSET_UTF8MB3_GENERAL_CI = 33
 
-export const jsonType = (nullable: boolean): ResultType => ({ kind: 'json', field: FIELD_TYPE.JSON, nullable, unsigned: false, length: JSON_MAX, scale: 0, collationId: CHARSET_BINARY })
+export const jsonType = (nullable: boolean): ResultType => scalarType('json', FIELD_TYPE.JSON, JSON_MAX, 0, nullable)
 
-export const decimalType = (precision: number, scale: number, nullable: boolean, unsigned = false): ResultType => ({
-  kind: 'decimal',
-  field: FIELD_TYPE.NEWDECIMAL,
-  nullable,
-  unsigned,
-  length: Math.min(65, Math.max(precision, scale, 1)),
-  scale: Math.min(30, scale),
-  collationId: CHARSET_BINARY,
-})
+export const decimalType = (precision: number, scale: number, nullable: boolean, unsigned = false): ResultType =>
+  scalarType('decimal', FIELD_TYPE.NEWDECIMAL, Math.min(65, Math.max(precision, scale, 1)), Math.min(30, scale), nullable, unsigned)
 
 /** A DOUBLE: a column is 22 wide, and every double an expression makes is 23 (8.4.11). */
-export const doubleType = (nullable: boolean, length = 23): ResultType => ({
-  kind: 'double',
-  field: FIELD_TYPE.DOUBLE,
-  nullable,
-  unsigned: false,
-  length,
-  scale: 31,
-  collationId: CHARSET_BINARY,
-})
+export const doubleType = (nullable: boolean, length = 23): ResultType => scalarType('double', FIELD_TYPE.DOUBLE, length, 31, nullable)
 
 /**
  * A DOUBLE with fixed decimals, from FLOAT(M,D) operands: when every operand
@@ -288,15 +262,8 @@ export function stringResultType(chars: number | undefined, binary: boolean, col
   return result
 }
 
-export const datetimeType = (field: number, fsp: number, nullable: boolean): ResultType => ({
-  kind: field === FIELD_TYPE.TIME ? 'time' : 'datetime',
-  field,
-  nullable,
-  unsigned: false,
-  length: 0,
-  scale: fsp,
-  collationId: CHARSET_BINARY,
-})
+export const datetimeType = (field: number, fsp: number, nullable: boolean): ResultType =>
+  scalarType(field === FIELD_TYPE.TIME ? 'time' : 'datetime', field, 0, fsp, nullable)
 
 /** A copied TIME field uses the general base width; other lengths survive copying. */
 export const copiedLength = (t: ResultType): number => t.kind === 'time' ? 0 : t.length

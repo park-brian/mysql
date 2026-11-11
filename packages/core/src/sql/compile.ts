@@ -91,6 +91,7 @@ import {
   toInteger,
   toJsonDoc,
   temporalDeprecation,
+  MERGE_TYPES,
   mergeTypes,
   type MergeType,
   type JsonDoc,
@@ -679,7 +680,8 @@ export interface CompileContext {
   readonly session: Session
   /** The open prepared instance owns string-result metadata across SQL-mode changes. */
   readonly preparedSqlMode?: string | undefined
-  readonly preparingQuery?: boolean
+  /** The numeric value can bind without a conversion warning when no read is demanded. */
+  readonly skipRowNumberConditions?: boolean
   readonly state: SessionValues
   readonly serverVersion: string
   /**
@@ -1488,7 +1490,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   const besideColumn = left.kind === NODE.COLUMN ? right : right.kind === NODE.COLUMN ? left : undefined
   // A written string beside a numeric column only needs its value during metadata binding.
   const comparison = compared && (textVersusNumber(ca.type, cb.type) || textVersusNumber(cb.type, ca.type)) &&
-    !(ctx.preparingQuery && plainTextLiteral(besideColumn) != null)
+    !(ctx.skipRowNumberConditions && plainTextLiteral(besideColumn) != null)
   const at = comparison ? numberConstant(ca, left, ctx).eval : arithmetic ? asNumber(ca, 'DOUBLE').eval : ca.eval
   const bt = comparison ? numberConstant(cb, right, ctx).eval : arithmetic ? asNumber(cb, 'DOUBLE').eval : cb.eval
   // What an overflow names, as MySQL's message does: the expression's text.
@@ -1782,7 +1784,7 @@ export function dateConverter(c: Compiled, written: Expression, other: Compiled,
     }
     if (isTextValue(v)) {
       const p = parseDateTime(toText(v), flags)
-      if (p === undefined) return invalid(v, ctx.preparingQuery && other.type.column === undefined && plainTextLiteral(written) != null ? ctx : undefined)
+      if (p === undefined) return invalid(v, ctx.skipRowNumberConditions && other.type.column === undefined && plainTextLiteral(written) != null ? ctx : undefined)
       if (p.deprecation !== undefined) {
         const { code, message } = temporalDeprecation(p.deprecation, toText(v), 1)
         raise(ctx, code, message)
@@ -2267,11 +2269,11 @@ export function aggregate(types: readonly ResultType[], nullable: boolean, conne
     case 'VARCHAR':
       // A BIT among temporals or numbers that merge to a string makes it a binary one, as wide as the widest (8.4.11: `COALESCE(tm, bt, 1.5)` is VARBINARY(10)).
       if (type.kind === 'string' && live.some(isBits)) return { ...stringType(Math.max(...live.map((t) => (isBits(t) ? t.length : byteWidth(t)))), CHARSET_BINARY, nullable), field, coercibility: COERCIBILITY.IMPLICIT }
-      return type.kind === 'string' || type.kind === 'bytes' ? { ...type, field } : type
+      // Fall through to the field update shared by the other text holders.
     case 'ENUM':
     case 'SET':
     case 'LONG_BLOB':
-      return type.kind === 'string' || type.kind === 'bytes' ? { ...type, field } : type
+      return isText(type) ? { ...type, field } : type
     default:
       return type
   }
@@ -2303,25 +2305,6 @@ function mergeTypeOf(t: ResultType): MergeType {
   if ((flags & COLUMN_FLAG.ENUM) !== 0 || t.field === FIELD_TYPE.ENUM) return 'ENUM'
   if ((flags & COLUMN_FLAG.SET) !== 0 || t.field === FIELD_TYPE.SET) return 'SET'
   switch (t.field) {
-    case FIELD_TYPE.TINY:
-    case FIELD_TYPE.SHORT:
-    case FIELD_TYPE.INT24:
-    case FIELD_TYPE.LONG:
-    case FIELD_TYPE.LONGLONG:
-    case FIELD_TYPE.YEAR:
-    case FIELD_TYPE.BIT:
-    case FIELD_TYPE.NEWDECIMAL:
-    case FIELD_TYPE.FLOAT:
-    case FIELD_TYPE.DOUBLE:
-    case FIELD_TYPE.DATE:
-    case FIELD_TYPE.TIME:
-    case FIELD_TYPE.DATETIME:
-    case FIELD_TYPE.TIMESTAMP:
-    case FIELD_TYPE.STRING:
-    case FIELD_TYPE.TINY_BLOB:
-    case FIELD_TYPE.MEDIUM_BLOB:
-    case FIELD_TYPE.LONG_BLOB:
-      return MERGE_NAME[t.field] as MergeType
     case FIELD_TYPE.DECIMAL:
       return 'NEWDECIMAL'
     case FIELD_TYPE.NEWDATE:
@@ -2331,11 +2314,12 @@ function mergeTypeOf(t: ResultType): MergeType {
       return bytes <= 255 ? 'TINY_BLOB' : bytes <= 65535 ? 'BLOB' : bytes <= 16777215 ? 'MEDIUM_BLOB' : 'LONG_BLOB'
     }
     default:
-      return 'VARCHAR'
+      return MERGE_NAME[t.field] ?? 'VARCHAR'
   }
 }
 
-const MERGE_NAME: Readonly<Record<number, string>> = Object.fromEntries(Object.entries(FIELD_TYPE).map(([name, code]) => [code, name]))
+// NULL and JSON are selected from the value kind above.
+const MERGE_NAME: Readonly<Partial<Record<number, MergeType>>> = Object.fromEntries(MERGE_TYPES.filter((name) => name !== 'NULL' && name !== 'JSON').map((name) => [FIELD_TYPE[name], name]))
 
 /**
  * A branch's value as the merged type holds it: a DATE or a TIME where the
