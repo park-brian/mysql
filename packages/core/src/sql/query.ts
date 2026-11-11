@@ -130,18 +130,18 @@ function executionEnv(run: Run, trx: Trx | undefined, given?: Env): Env {
 }
 
 /** What planning a FROM needs from the statement: its tables, and a compiler for ON clauses. */
-export function fromContext(run: Run, on?: Condition[]): FromContext {
+export function fromContext(run: Run, on?: JoinWarnings): FromContext {
   const catalog = run.catalog
-  let joining = false
   return {
     open: (name, alias) => openTable(run, name, alias),
     compileOn(e, scope, written) {
       let ctx = compileContext(run, scope, 'on clause')
-      if (on && (joining ||= written === true)) {
-        ctx = {
+      if (on) {
+        if (written && on.active === undefined) on.active = integerJoinKey(on.key, scope)
+        if (on.active) ctx = {
           ...ctx,
           conditions: written && !(run.preparedQuery && literalPredicate(e, true)) ? ctx.conditions : undefined,
-          rowNumberConditions: written ? on : undefined,
+          rowNumberConditions: written ? on.pending : undefined,
         }
       }
       return compile(e, ctx)
@@ -376,15 +376,14 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
 
   // The parser normalizes unquoted DUAL; every retained reference names a table.
   const refs = node.from ?? []
-  const on = pending && joinConditions(q, node)
-  let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run, on && pending), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'))
+  const on = pending && joinConditions(q, node, pending)
+  let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run, on), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'))
   run.admitQuery?.(q, true)
   const scope = from?.scope
   let source = from?.single
-  const joined = on && from?.tables.every((table) => table.table !== undefined) ? on : undefined
   const onCount = pending?.length ?? 0
   const scalarConditions: Condition[] | undefined = pending && source && deferProjection(q, node) ? [] : undefined
-  if (pending && !joined && (!source || q.with !== undefined || (!scalarConditions && !deferWhere(q, node.where)))) pending = undefined
+  if (pending && !on?.active && (!source || q.with !== undefined || (!scalarConditions && !deferWhere(q, node.where)))) pending = undefined
   const lookup: Scope = scope ?? run.parent ?? EMPTY_SCOPE
   const reads = scope === undefined ? undefined : columnsRead(scope, node, q)
   if (from !== undefined && reads !== undefined) from.reads(reads)
@@ -460,8 +459,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
     } }
   }
   const resolved = resolveCondition(run, whereCtx, node.where, limitCount, offset, pending)
-  if (joined && pending) {
-    if ((limitCount === 0 && offset === 0) || resolved.conditional || joined.some(writtenFalse)) pending.length = 0
+  if (on?.active && pending) {
+    if ((limitCount === 0 && offset === 0) || resolved.conditional || on.parts.some(writtenFalse)) pending.length = 0
     else appendConditions(pending, pending.splice(0, onCount))
   }
   const constants = constRows(run, from, node)
@@ -958,13 +957,17 @@ type BaseSubquery = SelectNode & { readonly from: readonly [Extract<TableReferen
 
 function boundedSubquery(q: QueryExpression): BaseSubquery | undefined {
   const body = q.body
-  return q.limit === undefined && q.orderBy === undefined && q.locking === undefined && body.kind === QUERY.SELECT && unhintedBase(q, body) !== undefined && body.items.length === 1 && body.groupBy === undefined && body.having === undefined && body.distinct !== true ? body as BaseSubquery : undefined
+  return q.limit === undefined && q.orderBy === undefined && body.kind === QUERY.SELECT && unhintedBase(q, body) !== undefined && body.items.length === 1 && plainProjection(q, body) ? body as BaseSubquery : undefined
 }
 
 /** The unhinted single base-table shape shared by outer and inner join proofs. */
 function unhintedBase(q: QueryExpression, node: SelectNode) {
   const table = node.from?.[0]
-  return node.from?.length === 1 && table?.kind === REF.TABLE && table.indexHints === undefined && q.with === undefined && node.windows === undefined && (node.options?.length ?? 0) === 0 ? table : undefined
+  return node.from?.length === 1 && table?.kind === REF.TABLE && table.indexHints === undefined && unhintedSelect(q, node) ? table : undefined
+}
+
+function unhintedSelect(q: QueryExpression, node: SelectNode): boolean {
+  return !q.with && !node.windows && !node.options?.length
 }
 
 /** Written binding/initialization fences, after the caller proves its source shape. */
@@ -1192,11 +1195,13 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
       // The proved correlated alternative keeps its original predicate, with
       // the same outer access/sort placement as the materialized alternative.
       if (strategy === 'lookup') return { kind: 'correlated', query: sub, key: outerKey, explicitLimit: !optimizerEnabled(run.env, 'firstmatch') }
-      const { where: _correlation, ...source } = body
-      const projected: QueryExpression = { ...sub, body: { ...source, items: [{ expr: innerKey }] } }
-      const plan = planQuery(run, projected)
-      const described = plan.explain?.()?.[0]
-      if (described === undefined) return undefined
+    }
+    const { where: _correlation, ...source } = body
+    const projected: QueryExpression = { ...sub, body: { ...source, items: [{ expr: innerKey }], ...(extra && { where: extra }) } }
+    const plan = planQuery(run, projected)
+    const described = plan.explain?.()?.[0]
+    if (described === undefined) return undefined
+    if (extra === undefined) {
       // Exact one-column equality: IN's FALSE and UNKNOWN both mean no matching row.
       // Reuse its invocation-owned membership build, including NULL and failed-build rules.
       const { quantified: _quantified, ...context } = compileContext(run, from.scope, 'where clause')
@@ -1207,10 +1212,6 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
       const nullable = definition.columns.find((c) => c.name.toLowerCase() === keyColumn.toLowerCase())?.nullable === true
       return { kind: 'materialized', read, plan: indexLookup('<subquery2>', '<auto_distinct_key>', true, false, [planNode('Materialize with deduplication', [wrap(nullable, 'Filter', described)])]) }
     }
-    const projected: QueryExpression = { ...sub, body: { ...body, items: [{ expr: innerKey }], where: extra } }
-    const plan = planQuery(run, projected)
-    const described = plan.explain?.()?.[0]
-    if (described === undefined) return undefined
     return { kind: alternative.usesLookup(innerAlias) ? 'lookup' : 'hash', key: compile(outerKey, compileContext(run, from.scope, 'where clause')), inner: plan, plan: described }
   } catch (error) {
     expectTyped(error)
@@ -2687,7 +2688,7 @@ function rowComparison(e: Expression): boolean {
 
 function deferWhere(query: QueryExpression, where: Expression | undefined): boolean {
   const parts = splitAnd(where)
-  return parts.some(rowComparison) && parts.every((e) => rowComparison(e) || literalPredicate(e, true) || writtenFalse(e)) && constantNode(query, false, true)
+  return parts.some(rowComparison) && parts.every(warningCondition) && constantNode(query, false, true)
 }
 
 /** A single scalar projection whose startup has no other query block or row effects. */
@@ -2703,19 +2704,46 @@ function plainProjection(q: QueryExpression, node: SelectNode): boolean {
   return !node.groupBy && !node.having && !node.distinct && !q.locking
 }
 
+function warningCondition(e: Expression): boolean {
+  return rowComparison(e) || literalPredicate(e, true) || writtenFalse(e)
+}
+
 function directCondition(e: Expression): boolean {
-  return rowComparison(e) || literalPredicate(e, true) || writtenFalse(e) || (e.kind === NODE.BINARY && isComparison(e.op) &&
+  return warningCondition(e) || (e.kind === NODE.BINARY && isComparison(e.op) &&
     e.left.kind === NODE.COLUMN && isConstant(e.right, '+'))
 }
 
-function joinConditions(q: QueryExpression, node: SelectNode): Expression[] | undefined {
+interface JoinWarnings {
+  readonly parts: readonly Expression[]
+  readonly pending: Condition[]
+  readonly key: readonly [readonly string[], readonly string[]] | undefined
+  active?: boolean
+}
+
+function joinConditions(q: QueryExpression, node: SelectNode, pending: Condition[]): JoinWarnings | undefined {
   const join = node.from?.[0]
   if (node.from?.length !== 1 || join?.kind !== REF.JOIN || join.type !== 'INNER' || join.left.kind !== REF.TABLE || join.right.kind !== REF.TABLE ||
-    join.left.indexHints || join.right.indexHints || q.with || node.windows || node.options?.length || !plainProjection(q, node)) return undefined
+    join.left.indexHints || join.right.indexHints || !unhintedSelect(q, node) || !plainProjection(q, node)) return undefined
   const parts = splitAnd(join.on)
-  if (!parts.some(rowComparison) || !parts.every(directCondition) || !splitAnd(node.where).every(directCondition) || !constantNode(q, false, true)) return undefined
+  if (!parts.some(rowComparison) || !splitAnd(node.where).every(directCondition) || !constantNode(q, false, true)) return undefined
   if (containsAggregate(node.items)) return undefined
-  return parts
+  let key: JoinWarnings['key']
+  for (const e of parts) {
+    if (directCondition(e)) continue
+    if (key || e.kind !== NODE.BINARY || e.op !== '=' || e.left.kind !== NODE.COLUMN || e.right.kind !== NODE.COLUMN) return undefined
+    key = [e.left.parts, e.right.parts]
+  }
+  return { parts, pending, key }
+}
+
+function integerJoinKey(key: JoinWarnings['key'], scope: Scope): boolean {
+  if (!key) return true
+  const left = safeResolve(scope, key[0], 'on clause')
+  const right = safeResolve(scope, key[1], 'on clause')
+  // Unbound names still fail in their written positions, before publication.
+  if (!left || !right) return true
+  const boundary = (scope as TableScope).tables[1]!.offset
+  return exactInteger(left) && exactInteger(right) && (left.index < boundary) !== (right.index < boundary)
 }
 
 /** A clause's readers and written constant outcomes, bound in its own context. */
