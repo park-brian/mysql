@@ -3943,15 +3943,49 @@ same 38 passing IDs with exact native baseline pass. All eleven required
 still running and no reported failure. Totals remain 144/190 and M5 42/53;
 M5.10 remains partial.
 
-**Next scalar prerequisite: numeric literal classes.** A pinned audit of
-written DECIMAL and finite DOUBLE trees starts at 201 complete matches of
-495 written/mode responses and 129 of 252 retained-marker responses. Prove
-these literal classes under the existing reader, preserving unsigned and
-fixed-scale rules, warning order, native admission failures and binary
-markers. Text, BIT/HEX and temporal readers,
-CAST admission, session calls, OR TRUE, dynamic TRUE metadata and source
-effects, constant-group holders, uncacheable scalar lifetime and LIMIT
-absorption remain separate before renewed COUNT work.
+**DECIMAL literal predicate rejection (2026-11-10):**
+The existing arithmetic and comparison proof now admits written DECIMAL
+leaves alongside integers and NULL. Optional unary signs do not change
+the original reader's signedness or fixed-scale arithmetic. The compiler
+still owns division, rounding, overflow and warning order, and the proof
+runs only after the bound condition rejects. Finite DOUBLE and mixed
+DECIMAL/DOUBLE trees, native admission errors, range/key syntax and retained
+binary marker phases are unchanged.
+
+The two pinned profiles improve 330 to 550 complete responses of 747:
+written/mode cases 201 to 361 of 495, retained markers 129 to 189 of 252.
+Within the written cohort, 45 INSERT SELECT responses improve 16 to 32,
+including 6 to 10 of 15 strict-mode responses. Two strict fixtures pin all
+550 complete outcomes, including the matching DOUBLE controls. Six native responses append to the earlier 369 arithmetic
+comparison expectations without changing them.
+
+Across 199 profiles and 29,179 responses, complete agreement improves
+24,391 to 24,635 with every earlier complete response and all 763,467
+matching protocol facts retained. All three focused groups pass locally
+and directly on pinned MySQL; actual 308c962 fails all three. All nine
+unchanged caps pass at parser/core/facade 45,599/334,298/334,203 B gzipped.
+
+Fresh default Docker passes 1,784 main, two isolated IN-list and four
+bulk-latency tests, typecheck, lint, and package and typed example smoke.
+Source proof matches 680 test files/fixtures and 206 runtime sources plus
+tooling. The seven unchanged native corpora retain their earlier full
+reference verification after fourteen input hashes and the live pinned
+digest match. Full engine replay and blocking CI reference verification
+stay intact. Seeded executor fuzzing (20,000, 20261010), the unchanged plan
+floor (2,127/2,248 versus 2,118 required), and the official 1,459-file run's
+same 38 passing IDs with exact native baseline pass. All eleven required
+6aee920 jobs passed; nine 308c962 jobs have passed with main and reference
+still running and no reported failure. Totals remain 144/190 and M5 42/53;
+M5.10 remains partial.
+
+**Next scalar prerequisite: finite DOUBLE literals.** Reuse the same pinned
+profiles and the supplemental audit (184 complete matches of 459 before
+repair) to prove written finite DOUBLE leaves and mixed exact/approximate
+trees. Keep nonfinite admission, underflow, overflow, signedness and warning
+order in the compiler and preserve the retained binary marker phase.
+Text, BIT/HEX and temporal readers, CAST admission, session calls, OR TRUE,
+dynamic TRUE metadata and source effects, constant-group holders, uncacheable
+scalar lifetime and LIMIT absorption remain separate before renewed COUNT work.
 A WHERE containing a row/volatile input without an already-proved false conjunct
 still needs its actual reduction proof, including constant OR folding. Native
 `(SELECT 1 LIMIT 0)` reads 1, and COUNT over it counts every outer row; local
