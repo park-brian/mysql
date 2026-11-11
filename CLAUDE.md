@@ -142,7 +142,9 @@ a repeated EXECUTE uses the same comparison without reporting them again.
 A direct numeric column comparison with a plain string literal can defer
 its DOUBLE warning past wire PREPARE. The ordinary SELECT WHERE resolver
 also omits this warning at zero LIMIT and zero offset while binding names
-and fixed predicates. Stored views retain their own metadata phase.
+and fixed predicates. A written false literal omits the row-dependent warning
+and preserves fixed DOUBLE warnings before the false conjunct. Later names
+and DATE constructors still bind. Stored views keep their own metadata phase.
 Range/key readers keep their syntax rules; CAST, session calls and binary
 markers retain reader order.
 Source naming uses the lexer’s bounded token sequence.

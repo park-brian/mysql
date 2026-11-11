@@ -13,14 +13,14 @@ import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, PreparedStatement, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { MAX_UNSIGNED, MIN_SIGNED, intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
-import { compile, constantNode, literalPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
+import { compile, constantNode, isComparison, literalPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, copiedLength, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { equalBounds, isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
-import { and, columnRefs, integerLiteral, nativeCallName, queryBody, someNode } from './ast.ts'
+import { and, columnRefs, integerLiteral, nativeCallName, queryBody, signedOperand, someNode } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, wrongArgumentsError } from './errors.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
@@ -696,7 +696,7 @@ function pushCountCondition(run: Run, node: SelectNode): SelectNode {
   const ref = node.from?.[0]
   const where = node.where
   if (node.from?.length !== 1 || ref?.kind !== REF.DERIVED || ref.lateral === true || ref.columns !== undefined || ref.alias === undefined) return node
-  if (where?.kind !== NODE.BINARY || !['=', '<>', '!=', '<', '<=', '>', '>='].includes(where.op) || where.left.kind !== NODE.COLUMN) return node
+  if (where?.kind !== NODE.BINARY || !isComparison(where.op) || where.left.kind !== NODE.COLUMN) return node
   if (where.right.kind !== NODE.PLACEHOLDER && !(where.right.kind === NODE.LITERAL && (where.right.type === LITERAL.INT || where.right.type === LITERAL.NULL))) return node
   const parts = where.left.parts
   if (parts.length !== 1 && !(parts.length === 2 && parts[0]?.toLowerCase() === ref.alias.toLowerCase())) return node
@@ -1078,7 +1078,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   }
   if (!column(innerKey, innerAlias) || !column(outerKey, outerAlias)) return undefined
   const innerColumn = innerKey.parts.at(-1) as string
-  if (extra !== undefined && !(extra.kind === NODE.BINARY && ['=', '<>', '!=', '<', '<=', '>', '>='].includes(extra.op) && column(extra.left, innerAlias) && extra.right.kind === NODE.LITERAL && numeric(extra.right))) return undefined
+  if (extra !== undefined && !(extra.kind === NODE.BINARY && isComparison(extra.op) && column(extra.left, innerAlias) && extra.right.kind === NODE.LITERAL && numeric(extra.right))) return undefined
   try {
     const def = nonTemporaryDefinition(run, inner.table)
     if (def === undefined) return undefined
@@ -1133,7 +1133,7 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
   if (pair === undefined) return undefined
   const { innerKey, outerKey, extra } = pair
   if (extra !== undefined) {
-    if (extra.kind !== NODE.BINARY || !['=', '<>', '!=', '<', '<=', '>', '>='].includes(extra.op)) return undefined
+    if (extra.kind !== NODE.BINARY || !isComparison(extra.op)) return undefined
     if (!isQualifiedColumn(extra.left, innerAlias, true) || !integerLiteral(extra.right)) return undefined
   } else if (run.preparing || run.env.memo === undefined || q.locking !== undefined || node.distinct === true || node.having !== undefined || someNode([node.items, q.orderBy], (n) => {
     const kind = (n as Expression).kind
@@ -2659,14 +2659,17 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
   const resolving = run.preparing !== undefined || run.protocol === 'text'
   const { conditions: _conditions, ...fixedEnv } = run.env
   const conjuncts = splitAnd(condition)
-  if (run.preparedQuery !== undefined && count === 0 && whereOffset === 0) {
+  const selectWhere = whereOffset !== undefined && (run.preparedQuery !== undefined || ctx.skipRowNumberConditions)
+  const falseAt = selectWhere ? conjuncts.findIndex(writtenFalse) : -1
+  if (falseAt >= 0 || (selectWhere && count === 0 && whereOffset === 0)) {
     ctx = { ...ctx, skipRowNumberConditions: true }
   }
-  // PREPARE owns a fixed literal's binding diagnostics as well as its evaluation.
-  // Binding precedes evaluation, including warnings in an untaken conjunct.
-  const entries = new Map<Expression, Predicate>(conjuncts.map((e) => [
-    e, { eval: logicalOperand(compile(e, run.preparedQuery && literalPredicate(e, true) ? { ...ctx, conditions: undefined } : ctx), e, resolving ? ctx : undefined) },
-  ]))
+  // Bind every name, even after a written false. Earlier fixed diagnostics
+  // still belong to QUERY or PREPARE. Later fixed conversions are silent.
+  const entries = new Map<Expression, Predicate>(conjuncts.map((e, i) => {
+    const quiet = (run.preparedQuery || (falseAt >= 0 && i > falseAt)) && literalPredicate(e, true)
+    return [e, { eval: logicalOperand(compile(e, quiet ? { ...ctx, conditions: undefined } : ctx), e, resolving ? ctx : undefined) }]
+  }))
   let impossible = false
   let folded: Predicate | undefined
   // Only a written constant stops this pass; inferred row facts cannot.
@@ -2700,6 +2703,15 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
       return facts
     },
   }
+}
+
+/** Signed zero and NULL need no coercion to prove a written false conjunct. */
+function writtenFalse(e: Expression): boolean {
+  const item = signedOperand(e, '+')
+  if (item.kind !== NODE.LITERAL || item.collation !== undefined) return false
+  const { type, value } = item
+  return value === null || value === false || value === 0 ||
+    (type === LITERAL.INT && value === 0n) || (type === LITERAL.DECIMAL && !/[1-9]/.test(value as string))
 }
 
 /**

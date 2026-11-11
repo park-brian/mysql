@@ -268,6 +268,11 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
     { sql: "SELECT id AS n FROM t WHERE id='x' LIMIT 0 OFFSET 1", rows: [], text: 'x', execution: true },
     { sql: "SELECT id AS n FROM t WHERE id='x' GROUP BY id LIMIT 0", rows: [], text: 'x', execution: true, demanded: false },
     { sql: "SELECT id AS n FROM t WHERE id='x' AND '1y'=1 LIMIT 0", rows: [], text: '1y' },
+    { sql: "SELECT id AS n FROM t WHERE id='x' AND FALSE AND '1y'=1", rows: [], text: 'x', execution: true, demanded: false },
+    { sql: "SELECT id AS n FROM t WHERE id='x' AND '1y'=1 AND FALSE", rows: [], text: '1y' },
+    { sql: "SELECT id AS n FROM t WHERE NULL AND 'x'=id", rows: [], text: 'x', execution: true, demanded: false },
+    { sql: "SELECT id AS n FROM t WHERE id='x' AND -0.0", rows: [], text: 'x', execution: true, demanded: false },
+    { sql: "SELECT id AS n FROM t WHERE 0e0 AND id='x' LIMIT 0 OFFSET 1", rows: [], text: 'x', execution: true, demanded: false },
   ]
   try {
     if (!db) assert.match(String((await c.query<RowDataPacket[]>('SELECT VERSION()'))[0][0]![0]), /^8\.4\.11(?:-|$)/)
@@ -307,12 +312,16 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       },
     ]
     for (const { condition, errno, warnings } of failed) {
-      await seed()
-      await assert.rejects(c.prepare(`SELECT id AS n FROM t WHERE id='x' AND ${condition}`), { errno })
-      assert.deepEqual(await conditionsOf(c), { warnings, warningCount: String(warnings.length), errorCount: '1' }, condition)
-      await seed()
-      await assert.rejects(c.query(`SELECT id AS n FROM t WHERE id='x' AND ${condition} LIMIT 0`), { errno })
-      assert.deepEqual(await conditionsOf(c), { warnings, warningCount: String(warnings.length), errorCount: '1' }, `${condition} LIMIT 0`)
+      for (const [api, tail] of [
+        ['prepare', condition],
+        ['query', `${condition} LIMIT 0`],
+        ['query', `FALSE AND '1y'=1 AND ${condition}`],
+        ['prepare', `FALSE AND '1y'=1 AND ${condition}`],
+      ] as const) {
+        await seed()
+        await assert.rejects(c[api](`SELECT id AS n FROM t WHERE id='x' AND ${tail}`), { errno })
+        assert.deepEqual(await conditionsOf(c), { warnings, warningCount: String(warnings.length), errorCount: '1' }, `${api} ${tail}`)
+      }
     }
     const limits = "SELECT id AS n FROM t WHERE id='x' LIMIT ? OFFSET ?"
     const limited = await c.prepare(limits)
@@ -327,6 +336,18 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
         await check('x', count !== 0 || offset !== 0, `${limits} EXECUTE ${count} ${offset}`)
       }
     } finally { await limited.close(); c.unprepare(limits) }
+    for (const written of [false, true]) {
+      const sql = "SELECT id AS n FROM t WHERE id='x' AND ?" + (written ? ' AND FALSE' : '')
+      const marked = await c.prepare(sql)
+      try {
+        await check('x', false, `${sql} PREPARE`)
+        for (const value of [0, 1, 0]) {
+          await seed()
+          assert.deepEqual((await marked.execute([value]))[0], [], sql)
+          await check('x', !written, `${sql} EXECUTE ${value}`)
+        }
+      } finally { await marked.close(); c.unprepare(sql) }
+    }
     const marker = 'SELECT 1 AS n WHERE ?=0e0'
     const prepared = await c.prepare(marker)
     try {

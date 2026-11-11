@@ -1249,6 +1249,10 @@ const COMPARISONS: Readonly<Record<string, (c: number) => boolean>> = {
   '>=': (c) => c >= 0,
 }
 
+export function isComparison(op: string): boolean {
+  return Object.hasOwn(COMPARISONS, op)
+}
+
 /** Arithmetic operators that read text as DOUBLE; DIV has its own DECIMAL reader. */
 function doubleArithmeticInput(op: string): boolean {
   return op === '+' || op === '-' || op === '*' || op === '/' || op === '%' || op === 'MOD'
@@ -2238,9 +2242,9 @@ function matchLike(s: readonly string[], p: readonly string[], escape: string, c
  * CHAR, a DATE beside a TIME a DATETIME, a YEAR beside an INT an INT.
  */
 export function aggregate(types: readonly ResultType[], nullable: boolean, connectionCollation: number, operation?: string, compare = false): ResultType {
-  const type = holderOf(types, nullable, connectionCollation, operation, compare)
   const live = types.filter((t) => t.kind !== 'null')
-  if (live.length === 0) return type
+  if (live.length === 0) return NULL_TYPE
+  const type = holderOf(types, live, nullable, connectionCollation, operation, compare)
   // JSON among other types is a LONGBLOB wherever it stands, which a left fold would lose (8.4.11: `COALESCE(js, tm, d)`).
   const json = live.some((t) => t.kind === 'json')
   const merged = signedness(live, json ? 'LONG_BLOB' : live.map(mergeTypeOf).reduce((a, b) => mergeTypes(a, b) as MergeType))
@@ -2258,7 +2262,7 @@ export function aggregate(types: readonly ResultType[], nullable: boolean, conne
     case 'LONG':
     case 'LONGLONG':
     case 'YEAR':
-      return type.kind === 'int' ? { ...type, field } : { ...intType(Math.max(...live.map((t) => t.length)), nullable, live.every((t) => t.unsigned)), field }
+      return { ...(type.kind === 'int' ? type : integerHolder(live, nullable)), field }
     case 'NEWDECIMAL':
       // BIGINT UNSIGNED beside a signed integer: a DECIMAL of as many digits as the widest (8.4.11: 21 wide).
       return type.kind === 'int' ? decimalType(Math.max(...live.map(intDigits)), 0, nullable) : type
@@ -2336,14 +2340,12 @@ export function asMerged(v: Value, result: ResultType, env: Env): Value {
   return v
 }
 
-function holderOf(types: readonly ResultType[], nullable: boolean, connectionCollation: number, operation?: string, compare = false): ResultType {
-  let live = types.filter((t) => t.kind !== 'null')
-  if (live.length === 0) return NULL_TYPE
+function holderOf(types: readonly ResultType[], live: readonly ResultType[], nullable: boolean, connectionCollation: number, operation: string | undefined, compare: boolean): ResultType {
   // JSON with JSON is JSON; JSON with anything else is its text, in JSON's
   // collation, utf8mb4_bin (8.4.11, M5.21).
   if (live.every((t) => t.kind === 'json')) return jsonType(nullable)
   if (live.some((t) => t.kind === 'json')) live = live.map((t) => (t.kind === 'json' ? jsonAsText(t.nullable) : t))
-  if (live.some((t) => t.kind === 'string' || t.kind === 'bytes')) {
+  if (live.some(isText)) {
     // A BIT beside text is a binary string as wide as it has bits, a
     // column's, so its bytes decide the result (8.4.11: `IF(1, b, 'a')` of
     // a BIT(8) is VARBINARY(8)).
@@ -2356,7 +2358,7 @@ function holderOf(types: readonly ResultType[], nullable: boolean, connectionCol
     // beats a hex literal (8.4.11: `LEAST(X'61', t)` is t's text). A binary
     // result is as wide as its widest argument's bytes; a TEXT among them
     // makes it a BLOB of its bytes.
-    const texts = live.filter((t) => t.kind === 'string' || t.kind === 'bytes')
+    const texts = live.filter(isText)
     const derived = operation === undefined ? undefined : aggregateCollations(types, operation, compare)
     const least = Math.min(...texts.map(coercibilityOf))
     const binary = derived !== undefined ? derived.collationId === CHARSET_BINARY : texts.some((t) => t.kind === 'bytes' && coercibilityOf(t) === least)
@@ -2386,7 +2388,11 @@ function holderOf(types: readonly ResultType[], nullable: boolean, connectionCol
   if (live.some(isBits) && !live.every(isBits)) return decimalType(Math.max(...live.map(intDigits)), 0, nullable)
   // Integers of one field type keep it (8.4.11: `GREATEST(NULL, id)` of an INT is an INT).
   const field = live.every((t) => t.field === first.field) ? first.field : FIELD_TYPE.LONGLONG
-  return { ...intType(Math.max(...live.map((t) => t.length)), nullable, live.every((t) => t.unsigned)), field }
+  return { ...integerHolder(live, nullable), field }
+}
+
+function integerHolder(types: readonly ResultType[], nullable: boolean): ResultType {
+  return intType(Math.max(...types.map((t) => t.length)), nullable, types.every((t) => t.unsigned))
 }
 
 /** A real value with SQL string traits; canonical functions can override FLOAT text. */

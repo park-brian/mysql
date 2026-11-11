@@ -653,14 +653,12 @@ export function clockFunction(name: string, e: CallNode, ctx: CompileContext): C
     case 'CURRENT_TIMESTAMP':
     case 'LOCALTIME':
     case 'LOCALTIMESTAMP':
-    case 'UTC_TIMESTAMP': {
-      const fsp = fspArgument(e)
-      return { eval: (_r, env) => ({ kind: 'datetime', v: clock(env.now, fsp), type: 'DATETIME', fsp }), type: datetimeType(FIELD_TYPE.DATETIME, fsp, false) }
-    }
+    case 'UTC_TIMESTAMP':
     case 'SYSDATE': {
-      // The time of evaluation, not the statement's start (`Item_func_sysdate_local`).
       const fsp = fspArgument(e)
-      return { eval: () => ({ kind: 'datetime', v: clock(new Date(), fsp), type: 'DATETIME', fsp }), type: datetimeType(FIELD_TYPE.DATETIME, fsp, false) }
+      // SYSDATE reads the clock on each evaluation. The others use statement time.
+      const live = name === 'SYSDATE'
+      return { eval: (_r, env) => ({ kind: 'datetime', v: clock(live ? new Date() : env.now, fsp), type: 'DATETIME', fsp }), type: datetimeType(FIELD_TYPE.DATETIME, fsp, false) }
     }
     case 'DATE_ADD':
     case 'DATE_SUB':

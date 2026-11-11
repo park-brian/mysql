@@ -34,12 +34,18 @@ import { CHARSET_BINARY, FIELD_TYPE, equalBytes, expectTyped } from '@myjs/bytes
 import type { ColumnDef, IndexDef, KeyBound, KeyRange, TableDef } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
 import {
+  MAX_SIGNED,
+  bytesValue,
   compareValues,
+  doubleValue,
   encodeField,
   encodeKey,
+  intValue,
   integerRange,
   integerBytes,
+  parseDecimal,
   renderDecimal,
+  stringValue,
   textOf,
   keyPartOf,
   parseDateTime,
@@ -550,9 +556,9 @@ function constantValue(e: Expression, env: Env): Value | undefined {
     case NODE.UNARY: {
       const v = constantValue(e.operand, env)
       if (v === undefined || v === null) return v
-      if (v.kind === 'int') return v.unsigned && v.v > (1n << 63n) - 1n ? null : { kind: 'int', v: -v.v, unsigned: false }
+      if (v.kind === 'int') return v.unsigned && v.v > MAX_SIGNED ? null : intValue(-v.v)
       if (v.kind === 'decimal') return { ...v, v: -v.v }
-      if (v.kind === 'double') return { kind: 'double', v: -v.v }
+      if (v.kind === 'double') return doubleValue(-v.v)
       return undefined
     }
     case NODE.LITERAL:
@@ -567,21 +573,18 @@ function literalValue(e: Expression & { kind: typeof NODE.LITERAL }, env: Env): 
   switch (e.type) {
     case 'int': {
       const n = e.value as bigint
-      return { kind: 'int', v: n, unsigned: n > (1n << 63n) - 1n }
+      return intValue(n, n > MAX_SIGNED)
     }
-    case 'decimal': {
-      const text = e.value as string
-      const [i = '0', f = ''] = text.replace(/^[+]/, '').split('.')
-      return { kind: 'decimal', v: BigInt(`${i}${f}` || '0'), scale: f.length }
-    }
+    case 'decimal':
+      return parseDecimal(e.value as string)
     case 'double':
-      return { kind: 'double', v: e.value as number }
+      return doubleValue(e.value as number)
     case 'string':
       // An introducer or COLLATE changes what the literal compares as; leave those to the scan.
       if (e.charset !== undefined || e.collation !== undefined) return undefined
-      return { kind: 'string', v: e.value as string, collationId: env.session.characterSet, coercibility: 4 }
+      return stringValue(e.value as string, env.session.characterSet)
     case 'hex':
-      return { kind: 'bytes', v: e.value as Uint8Array }
+      return bytesValue(e.value as Uint8Array)
     case 'null':
       return null
     default:
