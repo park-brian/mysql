@@ -51,11 +51,11 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 
 ## Next
 
-**M5.10 warning demand.** Zero-limit WHERE binding and written false
-literals now suppress undemanded DOUBLE warnings while preserving fixed
-warnings in source order and later name errors. Next, handle computed
-false predicates and binding errors without a proved written false.
-Preserve condition order across nested query blocks before extending the
+**M5.10 warning demand.** Zero-limit WHERE binding, written false literals,
+and proved literal expressions suppress undemanded DOUBLE warnings while
+preserving fixed warnings in source order and later name errors. Next, move
+the demanded warning after successful binding for ordinary single-table
+reads. Prove warning order across nested query blocks before extending the
 rule to JOIN or write readers. M5.10 remains partial, with M5.47, M5.49 and
 M5.50 work before browser work. [Row-dependent DOUBLE conversion](#row-dependent-double-conversion)
 
@@ -4277,20 +4277,47 @@ The snapshot matches 687 test files and fixtures, 206 runtime sources and
 and all 38 passing MySQL test IDs retain their results. All seven pinned
 corpora pass in the preceding 0f57b89 Docker run.
 
+**Computed false literal expressions (2026-11-11).** A single-table SELECT
+WHERE with no enclosing scope can prove a false result for the existing
+literal arithmetic and comparison forms. The proof uses the optimizer's
+reader with an empty scope and a private environment without diagnostic or
+memo state. The decisive expression's reader publishes its own warning at
+the written position. With division warnings enabled, `1/0` warns before a
+later unknown WHERE name, while a later fixed DOUBLE conversion is quiet.
+Retained EXECUTE suppresses the fixed warning, even when a false marker
+appears earlier. A marker on its own still follows its original reader.
+
+The pinned audit improves 217 to 364 complete matches across 552 paired
+responses and preserves previously matching protocol details. The earlier
+written-false controls improve 220 to 260 of 311, and their binding-error and
+zero-limit controls retain every matching detail. The focused regression
+passes locally and on MySQL 8.4.11, and fails on a377458. HAVING alias
+substitution and optimizer proofs share the expression rewriter, and numeric
+classification uses the existing compiler categories. The nine size caps
+pass at 45,599 B parser, 334,334 B core and 334,241 B facade. The broader
+replay preserves 27,469 complete responses and 886,912 matching protocol
+facts across 32,803 observations. Fresh Docker passes 1,794 main tests, two
+isolated IN tests, four bulk tests, typecheck, lint, package and typed smoke,
+and the MySQL 8.4.11 client checks. The snapshot matches 687 test files and
+fixtures, 206 runtime sources and 71 tooling files. The 20,000-statement executor fuzz,
+2,127/2,248 plan score and all 38 passing MySQL test IDs retain their
+results. All seven pinned corpora pass in the preceding a377458 Docker run,
+and all eleven required jobs pass in its [GitHub run](https://github.com/park-brian/mysql/actions/runs/43084599551).
+
 **Remaining execution demand.** Native binds ordinary SELECT names and
 fixed conditions before it converts the written string beside a numeric
-column. A computed false conjunct can still skip the conversion. The
-427-response probe covers repeated EXECUTE and later name errors in GROUP
-BY, HAVING and ORDER BY without a proved written false. A nonnullable
-column's IS NULL suppresses conversion only when written first in the probe.
-A separate 552-response audit shows the binding order for computed false.
-With division warnings enabled, `1/0` can warn before a later unknown WHERE
-name, while a later fixed DOUBLE comparison stays quiet. Reuse the bound
-fixed reader for its outcome and warning, and preserve binding of every name.
+column. The 427-response probe covers repeated EXECUTE and later name
+errors in GROUP BY, HAVING and ORDER BY without a proved false expression.
+A nonnullable column's IS NULL suppresses conversion only when written
+first in the probe. Deterministic functions outside the proved literal
+forms still need their own binding and warning evidence.
 A scalar subquery can emit its conversion warning after the outer one even
-when the outer scan produces no rows. JOIN, nested query blocks, inferred
-conditions, IN and BETWEEN, strict INSERT SELECT and marker inference need
-their own demand evidence.
+when the outer scan produces no rows. A written false outer predicate or
+zero LIMIT with zero offset suppresses that inner warning in the follow-up
+probe. The 442-response follow-up also finds a WHERE warning before the
+INNER JOIN's ON warning. Start with the single-table post-bind step. JOIN,
+nested query blocks, inferred conditions, IN and BETWEEN, strict INSERT
+SELECT and marker inference need their own demand evidence.
 Introduced or collated text, BIT/HEX, temporal readers, CAST admission,
 session calls, OR TRUE, dynamic TRUE metadata and source effects,
 constant-group holders, uncacheable scalar lifetime and LIMIT absorption
@@ -10747,7 +10774,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,341 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-11. The facade is 334,225 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
+| Core bundle, gzipped | 334,334 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-11. The facade is 334,241 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

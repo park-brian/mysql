@@ -273,6 +273,9 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
     { sql: "SELECT id AS n FROM t WHERE NULL AND 'x'=id", rows: [], text: 'x', execution: true, demanded: false },
     { sql: "SELECT id AS n FROM t WHERE id='x' AND -0.0", rows: [], text: 'x', execution: true, demanded: false },
     { sql: "SELECT id AS n FROM t WHERE 0e0 AND id='x' LIMIT 0 OFFSET 1", rows: [], text: 'x', execution: true, demanded: false },
+    { sql: "SELECT id AS n FROM t WHERE id='x' AND 1=0 AND '1y'=1", rows: [], text: 'x', execution: true, demanded: false },
+    { sql: "SELECT id AS n FROM t WHERE '1y'=1 AND 1=0 AND id='x'", rows: [], text: '1y' },
+    { sql: "SELECT id AS n FROM t WHERE id='x' AND '0y'=1", rows: [], text: '0y' },
   ]
   try {
     if (!db) assert.match(String((await c.query<RowDataPacket[]>('SELECT VERSION()'))[0][0]![0]), /^8\.4\.11(?:-|$)/)
@@ -347,6 +350,32 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
           await check('x', !written, `${sql} EXECUTE ${value}`)
         }
       } finally { await marked.close(); c.unprepare(sql) }
+    }
+    const divisionWarning = ['Warning', 1365, 'Division by 0']
+    const division = "SELECT id AS n FROM t WHERE id='x' AND ? AND 1/0 AND '1y'=1"
+    await seed()
+    const divided = await c.prepare(division)
+    try {
+      assert.deepEqual(await conditionsOf(c), { warnings: [divisionWarning], warningCount: '1', errorCount: '0' }, division)
+      for (const marker of [0, 1, 0]) {
+        await seed()
+        assert.deepEqual((await c.query(division, [marker]))[0], [], division)
+        assert.deepEqual(await conditionsOf(c), {
+          warnings: marker ? [divisionWarning] : [], warningCount: String(marker), errorCount: '0',
+        }, `${division} QUERY ${marker}`)
+        await seed()
+        assert.deepEqual((await divided.execute([marker]))[0], [], division)
+        await check('x', false, `${division} EXECUTE ${marker}`)
+      }
+    } finally { await divided.close(); c.unprepare(division) }
+    const failedDivision = "SELECT id AS n FROM t WHERE id='x' AND 1/0 AND bad_name=0"
+    for (const api of ['query', 'prepare'] as const) {
+      await seed()
+      await assert.rejects(c[api](failedDivision), { errno: 1054 })
+      assert.deepEqual(await conditionsOf(c), {
+        warnings: [divisionWarning, ['Error', 1054, "Unknown column 'bad_name' in 'where clause'"]],
+        warningCount: '2', errorCount: '1',
+      }, `${failedDivision} ${api}`)
     }
     const marker = 'SELECT 1 AS n WHERE ?=0e0'
     const prepared = await c.prepare(marker)

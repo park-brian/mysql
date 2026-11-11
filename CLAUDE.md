@@ -144,7 +144,10 @@ its DOUBLE warning past wire PREPARE. The ordinary SELECT WHERE resolver
 also omits this warning at zero LIMIT and zero offset while binding names
 and fixed predicates. A written false literal omits the row-dependent warning
 and preserves fixed DOUBLE warnings before the false conjunct. Later names
-and DATE constructors still bind. Stored views keep their own metadata phase.
+and DATE constructors still bind. A single-table WHERE with no enclosing scope
+can use the same rule for proved literal arithmetic and comparisons. The
+decisive expression emits its own conditions at its written position. Stored
+views keep their own metadata phase.
 Range/key readers keep their syntax rules; CAST, session calls and binary
 markers retain reader order.
 Source naming uses the lexer’s bounded token sequence.

@@ -33,6 +33,22 @@ export function someNode(e: unknown, check: (node: object) => boolean | undefine
   }
   return false
 }
+
+/** Rewrite an expression tree. A replacement prunes its children. */
+export function rewriteExpression(e: Expression, replace: (node: Expression) => Expression | undefined): Expression {
+  const walk = (value: unknown): unknown => {
+    if (value === null || typeof value !== 'object') return value
+    if (Array.isArray(value)) return value.map(walk)
+    const node = value as Expression
+    if (node.kind === NODE.LITERAL) return node
+    const replacement = replace(node)
+    if (replacement !== undefined) return replacement
+    const out: Record<string, unknown> = {}
+    for (const [key, child] of Object.entries(value)) out[key] = walk(child)
+    return out
+  }
+  return walk(e) as Expression
+}
 /** Window calls owned here; subqueries retain their own window scope. */
 export function containsWindow(e: unknown): boolean {
   return someNode(e, (value) => {

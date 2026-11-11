@@ -397,7 +397,7 @@ function keyRanges(intervals: readonly Interval[], column: ColumnDef): { readonl
       }
       if (n > range.max) return lower ? 'empty' : 'open'
       if (n < range.min) return lower ? 'open' : 'empty'
-      v = { kind: 'int', v: n, unsigned: n > (1n << 63n) - 1n }
+      v = intValue(n, n > MAX_SIGNED)
     } else if (!exact(v, column)) return undefined
     return bound(v, column, inclusive)
   }

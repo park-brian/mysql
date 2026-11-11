@@ -156,7 +156,7 @@ export interface Env {
   /** The rows of the enclosing queries, innermost first: what a correlated reference reads (D-74). */
   readonly outer?: readonly Row[]
   /** One statement's memory: an uncorrelated subquery's answer, computed once. */
-  readonly memo?: Map<unknown, unknown>
+  readonly memo?: Map<unknown, unknown> | undefined
   /** The statement's conditions, as SHOW WARNINGS will list them. */
   readonly conditions?: Condition[] | undefined
 }
@@ -1265,9 +1265,9 @@ function plainTextLiteral(item: Expression | undefined): string | null | undefin
   return undefined
 }
 
-function numberLiteral(item: LiteralNode): boolean {
+export function numberLiteral(item: LiteralNode): boolean {
   // Nonfinite DOUBLE spellings are rejected before binding.
-  return item.type === LITERAL.INT || item.type === LITERAL.DECIMAL || item.type === LITERAL.DOUBLE
+  return numericKind(item.type)
 }
 
 function literalNumericOperand(e: Expression, arithmetic = false): boolean {
@@ -1396,7 +1396,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     // decimals stay exact; a number mixed with text or a temporal uses
     // doubles. With only dates and text, all are dates.
     const all = [a0, lo0, hi0]
-    const exact = all.every((x) => x.type.kind === 'int' || x.type.kind === 'decimal' || x.type.kind === 'null')
+    const exact = all.every(exactOrNull)
     const json = all.some((x) => x.type.kind === 'json')
     if (json) raise(ctx, 1235, "This version of MySQL doesn't yet support 'comparison of JSON in the BETWEEN operator'")
     const dateOf = all.find((x) => x.type.kind === 'datetime')
@@ -1986,7 +1986,9 @@ interface SortedItems {
   readonly byCollation: Map<number, Set<string> | readonly Exclude<Value, null>[]>
 }
 
-const numericKind = (kind: string): boolean => kind === 'int' || kind === 'decimal' || kind === 'double'
+const exactNumber = (kind: string): boolean => kind === 'int' || kind === 'decimal'
+const numericKind = (kind: string): boolean => exactNumber(kind) || kind === 'double'
+const exactOrNull = (c: Compiled): boolean => exactNumber(c.type.kind) || c.type.kind === 'null'
 
 function sortItems(values: readonly Value[]): SortedItems | undefined {
   const present = values.filter((v): v is Exclude<Value, null> => v !== null)
@@ -2518,7 +2520,7 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
   // double beside a number (`agg_cmp_type`); a searched CASE reads each WHEN's truth as one.
   const ordinal = given?.type.column !== undefined && (given.type.column.flags & (COLUMN_FLAG.ENUM | COLUMN_FLAG.SET)) !== 0
   const numeric = given !== undefined && (compared.some((x) => isNumber(x.type)) || (ordinal && rawWhens.some((w) => w.type.literalInt !== undefined)))
-  const exact = compared.every((c) => c.type.kind === 'int' || c.type.kind === 'decimal' || c.type.kind === 'null')
+  const exact = compared.every(exactOrNull)
   const number = (c: Compiled): Compiled => {
     if (exact) return c
     const read = asNumber(c, 'DOUBLE').eval
@@ -2883,7 +2885,6 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
   // otherwise a NULL on either side makes it NULL.
   const sub = (plan.columns[0] as { type: ResultType }).type
   const a0 = as[0] as Compiled
-  const exactNumber = (k: string): boolean => k === 'int' || k === 'decimal'
   const keyed =
     as.length === 1 &&
     (all ? op === '<>' : op === '=') &&

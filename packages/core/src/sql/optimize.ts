@@ -33,6 +33,7 @@ import { equalBounds, pointAccess, splitAnd } from './plan.ts'
 import { accessRows } from './operators.ts'
 import { intersect, rangeOf, type RangeSet } from './ranges.ts'
 import { safeResolve } from './scope.ts'
+import { rewriteExpression } from './ast.ts'
 
 /** A schema key that identifies a row even when comparisons can see NULL. */
 export function uniqueKey(def: TableDef, index: IndexDef): boolean {
@@ -517,32 +518,28 @@ function partialTruth(e: Expression, known: (column: Expression) => Expression |
   }
   let complete = true
   let touched = false
-  const substitute = (x: unknown): unknown => {
-    if (x === null || typeof x !== 'object') return x
-    if (Array.isArray(x)) return x.map(substitute)
-    const node = x as { kind?: string }
-    // Literal payloads include byte arrays, not expression nodes to rewrite.
-    if (node.kind === NODE.LITERAL) return x
+  const replaced = rewriteExpression(e, (node) => {
     if (node.kind === NODE.SUBQUERY || node.kind === NODE.CALL || node.kind === NODE.VARIABLE) {
       complete = false
-      return x
+      return node
     }
     if (node.kind === NODE.COLUMN) {
-      const v = known(x as Expression)
+      const v = known(node)
       if (v === undefined) complete = false
       else touched = true
-      return v ?? x
+      return v ?? node
     }
-    const out: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(x)) out[k] = typeof v === 'object' ? substitute(v) : v
-    return out
-  }
-  const replaced = substitute(e) as Expression
-  if (!complete || (!touched && !constants)) return undefined
+    return undefined
+  })
+  return complete && (touched || constants) ? plannedTruth(replaced, ctx, env) : undefined
+}
+
+/** A fixed predicate's bound value in a scope with no row inputs. */
+export function plannedTruth(e: Expression, ctx: CompileContext, env: Env): boolean | null | undefined {
   try {
-    return truth(compile(replaced, { ...ctx, scope: EMPTY_SCOPE }).eval([], env))
-  } catch (e) {
-    expectTyped(e)
+    return truth(compile(e, { ...ctx, scope: EMPTY_SCOPE }).eval([], env))
+  } catch (error) {
+    expectTyped(error)
     return undefined
   }
 }

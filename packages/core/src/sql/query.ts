@@ -13,14 +13,14 @@ import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, PreparedStatement, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { MAX_UNSIGNED, MIN_SIGNED, intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
-import { compile, constantNode, isComparison, literalPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
+import { compile, constantNode, isComparison, literalPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, copiedLength, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { equalBounds, isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
-import { and, columnRefs, integerLiteral, nativeCallName, queryBody, signedOperand, someNode } from './ast.ts'
+import { and, columnRefs, integerLiteral, nativeCallName, queryBody, rewriteExpression, signedOperand, someNode } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, wrongArgumentsError } from './errors.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
@@ -31,7 +31,7 @@ import { firstKey, rowKey, valueKey } from './keys.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
 import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts'
 import { convert as convertSetValue, checkSetWidth, nestedNullability, setOperation, setOperationType } from './setop.ts'
-import { constTablesHaveRows, neverEqual, optimizerFacts, uniqueKey, type OptimizerFacts } from './optimize.ts'
+import { constTablesHaveRows, neverEqual, optimizerFacts, plannedTruth, uniqueKey, type OptimizerFacts } from './optimize.ts'
 import { informationSchemaTable } from './information-schema.ts'
 import { performanceSchemaTable } from './performance-schema.ts'
 import { statisticsOf } from './stats.ts'
@@ -2519,12 +2519,9 @@ function selectedOnly(lookup: Scope, items: readonly { readonly expr: Expression
  * alias are 1052, and one holding a window function is 3594 (8.4.11).
  */
 function substituteAliases(e: Expression, items: readonly { readonly expr: Expression; readonly alias?: string }[]): Expression {
-  const walk = (x: unknown): unknown => {
-    if (x === null || typeof x !== 'object') return x
-    if (Array.isArray(x)) return x.map(walk)
-    const node = x as { kind?: string; parts?: readonly string[] }
-    if (node.kind === NODE.SUBQUERY || node.kind === NODE.LITERAL) return x
-    if (node.kind === NODE.COLUMN && node.parts?.length === 1) {
+  return rewriteExpression(e, (node) => {
+    if (node.kind === NODE.SUBQUERY) return node
+    if (node.kind === NODE.COLUMN && node.parts.length === 1) {
       const name = node.parts[0] as string
       const hits = items.filter((i) => i.alias?.toLowerCase() === name.toLowerCase())
       if (hits.length > 1) throw ambiguousColumnError(name, 'having clause')
@@ -2534,9 +2531,8 @@ function substituteAliases(e: Expression, items: readonly { readonly expr: Expre
         return hit.expr
       }
     }
-    return Object.fromEntries(Object.entries(x).map(([k, v]) => [k, walk(v)]))
-  }
-  return walk(e) as Expression
+    return undefined
+  })
 }
 
 /**
@@ -2660,7 +2656,17 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
   const { conditions: _conditions, ...fixedEnv } = run.env
   const conjuncts = splitAnd(condition)
   const selectWhere = whereOffset !== undefined && (run.preparedQuery !== undefined || ctx.skipRowNumberConditions)
-  const falseAt = selectWhere ? conjuncts.findIndex(writtenFalse) : -1
+  let probe = selectWhere && conjuncts.length > 1 && run.parent === undefined && ctx.scope instanceof TableScope && ctx.scope.tables.length === 1
+  let computedFalse = false
+  const falseAt = selectWhere ? conjuncts.findIndex((e) => {
+    if (writtenFalse(e)) return true
+    if (!probe || e.kind === NODE.LITERAL || !literalPredicate(e, true)) return false
+    // A fixed literal expression has no effects. Diagnose it only at its
+    // written position, after binding every earlier conjunct.
+    const value = plannedTruth(e, { ...ctx, conditions: undefined }, { ...fixedEnv, memo: undefined })
+    if (value === undefined) probe = false
+    return (computedFalse = value === false || value === null)
+  }) : -1
   if (falseAt >= 0 || (selectWhere && count === 0 && whereOffset === 0)) {
     ctx = { ...ctx, skipRowNumberConditions: true }
   }
@@ -2668,7 +2674,12 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
   // still belong to QUERY or PREPARE. Later fixed conversions are silent.
   const entries = new Map<Expression, Predicate>(conjuncts.map((e, i) => {
     const quiet = (run.preparedQuery || (falseAt >= 0 && i > falseAt)) && literalPredicate(e, true)
-    return [e, { eval: logicalOperand(compile(e, quiet ? { ...ctx, conditions: undefined } : ctx), e, resolving ? ctx : undefined) }]
+    let read = logicalOperand(compile(e, quiet ? { ...ctx, conditions: undefined } : ctx), e, resolving ? ctx : undefined)
+    if (computedFalse && i === falseAt) {
+      const value = read([], resolving ? run.env : fixedEnv)
+      read = () => value
+    }
+    return [e, { eval: read }]
   }))
   let impossible = false
   let folded: Predicate | undefined
@@ -2742,7 +2753,7 @@ function pinOf(cond: Expression, column: ColumnDef, columnOf: (e: Expression) =>
   return value.kind === NODE.PLACEHOLDER ? `?${value.at}` : deparse(value)
 }
 
-const numeric = (e: Expression): boolean => (e.kind === NODE.LITERAL && (e.type === 'int' || e.type === 'decimal' || e.type === 'double')) || (e.kind === NODE.UNARY && numeric(e.operand))
+const numeric = (e: Expression): boolean => e.kind === NODE.LITERAL ? numberLiteral(e) : e.kind === NODE.UNARY && numeric(e.operand)
 
 /**
  * `int_col = 9.5` and `tinyint_col = 300`: an integer column against a
