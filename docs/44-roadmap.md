@@ -4012,12 +4012,46 @@ same 38 passing IDs with the exact native baseline pass. All eleven required
 still running and no reported failure. Totals remain 144/190 and M5 42/53;
 M5.10 remains partial.
 
-**Next scalar prerequisite: written text arithmetic.** The pinned audit
-starts at 184 complete matches of 531 written/mode responses and 150 of
-336 retained-marker responses. Start with plain, unintroduced string
-literals in arithmetic, where MySQL converts them to numbers and may warn.
-Preserve warning order, collation, parser admission and retained binary
-marker reads before extending the proof. Introduced or
+**Plain string arithmetic rejection (2026-11-10):**
+The existing proof admits plain string operands under arithmetic operators
+and native `MOD()`, including those arithmetic trees inside a comparison.
+The compiled reader still performs conversion, emits diagnostics and supplies
+the rejected value. This does not admit direct string comparisons, introduced
+or explicitly collated literals, national strings, BINARY, BIT/HEX, temporals
+or CAST. Range/key syntax and retained binary marker phases are unchanged.
+
+Two pinned profiles improve 334 to 642 complete responses of 867:
+written/mode responses 184 to 405 of 531, retained markers 150 to 237 of
+336. The 45 INSERT SELECT responses improve 5 to 25, and the strict-mode
+subset remains 5 of 15. Two strict fixtures pin all 642 complete outcomes.
+Six native responses append to the earlier 437 numeric expectations without
+changing them. Some string conversion warnings, strict-write errors and
+scalar metadata remain unmatched.
+
+Across 202 profiles and 30,505 responses, complete agreement improves
+25,490 to 25,864 with every earlier complete response and all 808,572
+matching protocol facts retained. All three focused groups pass locally
+and directly on pinned MySQL; actual d994581 fails all three. All nine
+unchanged caps pass at parser/core/facade 45,599/334,334/334,240 B gzipped.
+
+Fresh default Docker passes 1,787 main, two isolated IN-list and four
+bulk-latency tests, typecheck, lint, and package and typed example smoke.
+Source proof matches 683 test files/fixtures and 206 runtime sources plus
+tooling. The seven unchanged native corpora retain earlier full reference
+verification after fourteen input hashes and the live pinned digest match.
+Full engine replay and blocking CI reference verification stay intact.
+Seeded executor fuzzing (20,000, 20261010), the unchanged plan floor
+(2,127/2,248 versus 2,118 required), and the official 1,459-file run's
+same 38 passing IDs with the exact native baseline pass. All eleven required
+69c5da1 jobs passed; nine d994581 jobs have passed with main and reference
+still running and no reported failure. Totals remain 144/190 and M5 42/53;
+M5.10 remains partial.
+
+**Next scalar prerequisite: direct plain string comparisons.** The pinned
+audit starts at 183 complete matches of 516 written, collation and mode
+responses, and 174 of 336 retained-marker responses. Prove unintroduced and
+uncollated literals against text, numbers and NULL. Preserve collation,
+conversion warnings, comparator NULL order and retained binary markers. Introduced or
 collated text, BIT/HEX, temporal readers, CAST admission, session calls,
 OR TRUE, dynamic TRUE metadata and source effects, constant-group holders,
 uncacheable scalar lifetime and LIMIT absorption remain separate before

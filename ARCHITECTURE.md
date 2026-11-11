@@ -1980,8 +1980,9 @@ and temporal cache metadata remain open before renewed COUNT value-demand work.
 Written false/NULL literals and eligible text markers discard earlier value
 demand after full binding. The same holds for proved arithmetic and direct
 comparisons over numeric or NULL literal trees, including integer, DECIMAL,
-finite DOUBLE, unary signs and native two-argument MOD(). The bound reader
-keeps its scale, signedness and diagnostics. Range/key readers keep their prior
+finite DOUBLE, unary signs and native two-argument MOD(). Numeric arithmetic
+also accepts plain string operands without introducers or explicit collations.
+The bound reader keeps its scale, signedness and diagnostics. Range/key readers keep their prior
 syntax rules; CAST, session calls and binary markers retain reader order.
 Source naming uses the lexer’s bounded token sequence.
 Set-expression limits and correlated sources retain their separate ownership. Plan-owned window readings, scalar caches

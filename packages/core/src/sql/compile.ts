@@ -1265,20 +1265,22 @@ function doubleArithmeticInput(op: string): boolean {
   return op === '+' || op === '-' || op === '*' || op === '/' || op === '%' || op === 'MOD'
 }
 
-function numericLiteralExpression(e: Expression): boolean {
+function literalNumericOperand(e: Expression, arithmetic = false): boolean {
   const item = signedOperand(e, '+')
-  if (item.kind === NODE.CALL) return item.args.length === 2 && nativeCallName(item) === 'MOD' && item.args.every(numericLiteralExpression)
+  if (item.kind === NODE.CALL) return item.args.length === 2 && nativeCallName(item) === 'MOD' &&
+    item.args.every((arg) => literalNumericOperand(arg, true))
   if (item.kind === NODE.BINARY) return (item.op === 'DIV' || doubleArithmeticInput(item.op)) &&
-    numericLiteralExpression(item.left) && numericLiteralExpression(item.right)
+    literalNumericOperand(item.left, true) && literalNumericOperand(item.right, true)
+  if (item.kind !== NODE.LITERAL) return false
+  if (item.type === LITERAL.STRING) return arithmetic && item.charset === undefined && item.collation === undefined
   // Nonfinite DOUBLE spellings are rejected before binding.
-  return item.kind === NODE.LITERAL &&
-    (item.type === LITERAL.INT || item.type === LITERAL.DECIMAL || item.type === LITERAL.DOUBLE || item.type === LITERAL.NULL)
+  return item.type === LITERAL.INT || item.type === LITERAL.DECIMAL || item.type === LITERAL.DOUBLE || item.type === LITERAL.NULL
 }
 
-/** Syntax proof for reusing an already-rejected reader over written numeric or NULL items. */
+/** Syntax proof for reusing an already-rejected numeric reader, including plain text in arithmetic. */
 export function numericLiteralPredicate(e: Expression): boolean {
-  if (e.kind === NODE.BINARY && (COMPARISONS[e.op] || e.op === '<=>')) return numericLiteralExpression(e.left) && numericLiteralExpression(e.right)
-  return numericLiteralExpression(e)
+  if (e.kind === NODE.BINARY && (COMPARISONS[e.op] || e.op === '<=>')) return literalNumericOperand(e.left) && literalNumericOperand(e.right)
+  return literalNumericOperand(e)
 }
 
 /**
