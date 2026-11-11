@@ -1265,18 +1265,20 @@ function doubleArithmeticInput(op: string): boolean {
   return op === '+' || op === '-' || op === '*' || op === '/' || op === '%' || op === 'MOD'
 }
 
-function exactNumericExpression(e: Expression): boolean {
+function numericLiteralExpression(e: Expression): boolean {
   const item = signedOperand(e, '+')
-  if (item.kind === NODE.CALL) return item.args.length === 2 && nativeCallName(item) === 'MOD' && item.args.every(exactNumericExpression)
+  if (item.kind === NODE.CALL) return item.args.length === 2 && nativeCallName(item) === 'MOD' && item.args.every(numericLiteralExpression)
   if (item.kind === NODE.BINARY) return (item.op === 'DIV' || doubleArithmeticInput(item.op)) &&
-    exactNumericExpression(item.left) && exactNumericExpression(item.right)
-  return item.kind === NODE.LITERAL && (item.type === LITERAL.INT || item.type === LITERAL.DECIMAL || item.type === LITERAL.NULL)
+    numericLiteralExpression(item.left) && numericLiteralExpression(item.right)
+  // Nonfinite DOUBLE spellings are rejected before binding.
+  return item.kind === NODE.LITERAL &&
+    (item.type === LITERAL.INT || item.type === LITERAL.DECIMAL || item.type === LITERAL.DOUBLE || item.type === LITERAL.NULL)
 }
 
-/** Syntax proof for reusing an already-rejected reader over written exact numeric or NULL items. */
-export function exactNumericPredicate(e: Expression): boolean {
-  if (e.kind === NODE.BINARY && (COMPARISONS[e.op] || e.op === '<=>')) return exactNumericExpression(e.left) && exactNumericExpression(e.right)
-  return exactNumericExpression(e)
+/** Syntax proof for reusing an already-rejected reader over written numeric or NULL items. */
+export function numericLiteralPredicate(e: Expression): boolean {
+  if (e.kind === NODE.BINARY && (COMPARISONS[e.op] || e.op === '<=>')) return numericLiteralExpression(e.left) && numericLiteralExpression(e.right)
+  return numericLiteralExpression(e)
 }
 
 /**
