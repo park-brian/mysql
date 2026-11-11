@@ -2796,8 +2796,14 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     const leftTable = tables[0]!.def
     const decimal = fractional && leftTable
     const safe = Number.isSafeInteger(decimal ? Math.trunc(value) : value)
-    // Rescaling the mantissa shifts its coefficient before half-away rounding.
-    const key = safe ? decimal && value ? rescale(parseDecimal(mantissa), Number(exponent ?? 0)).v : BigInt(value) : undefined
+    // Adjacent BIGINT keys can have the same DOUBLE representation.
+    const wideInteger = !safe && wide && !fractional && Math.abs(value) <= Number(MAX_UNSIGNED)
+    let key: bigint | undefined
+    if (wideInteger) key = BigInt(text)
+    else if (safe) {
+      // Rescaling the mantissa shifts its coefficient before half-away rounding.
+      key = decimal && value ? rescale(parseDecimal(mantissa), Number(exponent ?? 0)).v : BigInt(value)
+    }
     // A terminal exponent sign without digits leaves the physical lookup empty.
     const noKey = decimal && !exponent && /^[eE][+-]$/.test(source.trimStart().slice(text.length))
     const empty = { ranges: [] }
@@ -2812,7 +2818,7 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
       on.binding = condition
       on.recheck = point === access && value !== Number(key)
     }
-    if (decimal || !access) on.rounded = { condition, access: access ?? empty }
+    if (decimal || wideInteger || !access) on.rounded = { condition, access: access ?? empty }
     return true
   }
   if (!key) return true

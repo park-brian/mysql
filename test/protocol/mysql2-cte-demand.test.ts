@@ -287,8 +287,8 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
     await c.query('CREATE TABLE t(id INT PRIMARY KEY,d DOUBLE)')
     await c.query('CREATE TABLE empty_t LIKE t')
     await c.query('INSERT INTO t VALUES (1,2.5),(2,NULL)')
-    await c.query('CREATE TABLE big_t(id BIGINT PRIMARY KEY)')
-    await c.query('INSERT INTO big_t VALUES (1)')
+    await c.query('CREATE TABLE big_t(id BIGINT PRIMARY KEY,d INT)')
+    await c.query('INSERT INTO big_t VALUES (1,1),(9007199254740992,92),(9007199254740993,93),(9007199254740996,96)')
     for (const { sql, rows, text, execution, demanded = true } of cases) {
       await seed()
       const [queried, fields] = await c.query(sql)
@@ -458,6 +458,8 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='1.4y' WHERE a.id='2x'", rows: [[null]], fixed: ['1.4y'], demanded: ['2x', '1.4y'] },
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='1.0y' WHERE a.id='2x'", rows: [[1]], fixed: ['1.0y'], demanded: ['2x'] },
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN big_t b ON b.id='1.5y' WHERE a.id='2x'", rows: [[null]], fixed: ['1.5y'], demanded: ['2x'] },
+      { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='9007199254740993y' WHERE a.d='2.5x'", rows: [[93]], fixed: ['9007199254740993y'], demanded: ['2.5x'] },
+      { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='9007199254740997y' WHERE a.id='2x'", rows: [[null]], fixed: ['9007199254740997y'], demanded: ['2x'] },
     ]) {
       await seed()
       const [queried, fields] = await c.query(sql)
