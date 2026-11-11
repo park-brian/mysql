@@ -226,7 +226,7 @@ async function conditionsOf(c: mysql.Connection) {
   return { warnings, warningCount, errorCount }
 }
 
-test('M5.10: fixed DOUBLE comparison warnings belong to SELECT preparation', async () => {
+test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () => {
   const { c, db } = await connection()
   const schema = 'myjs_fixed_double_phase'
   let created = false
@@ -255,7 +255,14 @@ test('M5.10: fixed DOUBLE comparison warnings belong to SELECT preparation', asy
     { sql: "SELECT (SELECT 1 WHERE 'x'=1) AS n", rows: [[null]], text: 'x' },
     { sql: "SELECT id AS n FROM t WHERE LAST_INSERT_ID(LAST_INSERT_ID()+1) AND 'x'=1", rows: [], text: 'x' },
     { sql: "SELECT COUNT(*) AS n HAVING 'x'=1", rows: [], text: 'x' },
-    { sql: "SELECT 'x'=1 AS n", rows: [[0]], text: 'x', projection: true },
+    { sql: "SELECT 'x'=1 AS n", rows: [[0]], text: 'x', execution: true },
+    { sql: "SELECT id AS n FROM t WHERE id='1x'", rows: [[1]], text: '1x', execution: true },
+    { sql: "SELECT id AS n FROM t WHERE 'x'=id", rows: [], text: 'x', execution: true },
+    { sql: "SELECT id AS n FROM t WHERE d='x'", rows: [], text: 'x', execution: true },
+    { sql: "SELECT id AS n FROM t WHERE 'x'=d", rows: [], text: 'x', execution: true },
+    { sql: "SELECT id AS n FROM empty_t WHERE id='x'", rows: [], text: 'x', execution: true },
+    { sql: "SELECT t.id AS n FROM t JOIN empty_t u ON t.id='x'", rows: [], text: 'x', execution: true },
+    { sql: "SELECT t.id AS n FROM t JOIN empty_t u ON 'x'=t.id", rows: [], text: 'x', execution: true },
   ]
   try {
     if (!db) assert.match(String((await c.query<RowDataPacket[]>('SELECT VERSION()'))[0][0]![0]), /^8\.4\.11(?:-|$)/)
@@ -263,9 +270,10 @@ test('M5.10: fixed DOUBLE comparison warnings belong to SELECT preparation', asy
     await c.query(`CREATE DATABASE ${schema}`)
     created = true
     await c.query(`USE ${schema}`)
-    await c.query('CREATE TABLE t(id INT PRIMARY KEY)')
-    await c.query('INSERT INTO t VALUES (1),(2)')
-    for (const { sql, rows, text, projection } of cases) {
+    await c.query('CREATE TABLE t(id INT PRIMARY KEY,d DOUBLE)')
+    await c.query('CREATE TABLE empty_t LIKE t')
+    await c.query('INSERT INTO t VALUES (1,2.5),(2,NULL)')
+    for (const { sql, rows, text, execution } of cases) {
       await seed()
       const [queried, fields] = await c.query(sql)
       assert.deepEqual(queried, rows, sql)
@@ -273,18 +281,30 @@ test('M5.10: fixed DOUBLE comparison warnings belong to SELECT preparation', asy
       await seed()
       const prepared = await c.prepare(sql)
       try {
-        await check(text, !projection, `${sql} PREPARE`)
+        await check(text, !execution, `${sql} PREPARE`)
         for (let i = 0; i < 3; i++) {
           await seed()
           const [result, actualFields] = await prepared.execute([])
           assert.deepEqual(result, rows, sql)
           assert.deepEqual(fieldsOf(actualFields), fieldsOf(fields), sql)
-          await check(text, projection === true, `${sql} EXECUTE ${i + 1}`)
+          await check(text, execution === true, `${sql} EXECUTE ${i + 1}`)
         }
       } finally {
         await prepared.close()
         c.unprepare(sql)
       }
+    }
+    const failed = [
+      { condition: 'bad_name=0', errno: 1054, warnings: [['Error', 1054, "Unknown column 'bad_name' in 'where clause'"]] },
+      {
+        condition: "'2020x'=CAST('2020-01-01' AS DATE)", errno: 1525,
+        warnings: [['Warning', 1292, "Truncated incorrect date value: '2020x'"], ['Error', 1525, "Incorrect DATE value: '2020x'"]],
+      },
+    ]
+    for (const { condition, errno, warnings } of failed) {
+      await seed()
+      await assert.rejects(c.prepare(`SELECT id AS n FROM t WHERE id='x' AND ${condition}`), { errno })
+      assert.deepEqual(await conditionsOf(c), { warnings, warningCount: String(warnings.length), errorCount: '1' }, condition)
     }
     const marker = 'SELECT 1 AS n WHERE ?=0e0'
     const prepared = await c.prepare(marker)

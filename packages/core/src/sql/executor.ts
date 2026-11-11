@@ -375,8 +375,8 @@ export class SqlExecutor implements Executor {
       this.#alive(session)
       let columns: PreparedInfo['columns'] = []
       if (statement.kind === STATEMENT.QUERY) {
-        const run = {
-          ...this.#run(session, sql, [], undefined, 'binary', conditions), preparing: true,
+        const run: Run = {
+          ...this.#run(session, sql, [], undefined, 'binary', conditions), preparing: 'wire',
           admitQuery: (query: QueryExpression, sources?: boolean): void => {
             admission?.query(query, sources)
             if (admission?.diagnostic === true && construction === undefined) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')

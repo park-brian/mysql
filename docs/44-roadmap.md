@@ -4190,20 +4190,47 @@ and nine size caps (parser/core/facade: 45,599/334,349/334,263 B gzipped).
 The tested snapshot matches 687 test files/fixtures, 206 runtime sources and
 tooling. Fourteen input hashes and the live pin match the fresh seven-corpus
 reference run on 19c57a1. Seeded executor fuzz, the 2,127/2,248 plan score
-and all 38 official passing file IDs retain their exact baseline. Totals
-stay 144/190 and M5 42/53.
+and all 38 official passing file IDs retain their exact baseline. All eleven
+required jobs pass for [12c4162](https://github.com/park-brian/mysql/actions/runs/42948040438).
+Totals stay 144/190 and M5 42/53.
 
-**Next scalar prerequisite: row-dependent DOUBLE warning phases.** A row
-column compared to a written truncating string can warn at PREPARE locally,
-where native waits for EXECUTE (plain WHERE and inner JOIN ON, in both
-orders). Prove the binding, rows, diagnostics on errors and empty source
-behavior together. Keep the wire phase distinct from metadata-only planning
-of stored views. Outer JOIN warning demand, constant short-circuit order,
-IN/BETWEEN, strict INSERT SELECT and marker inference are separate. Introduced
-or collated text, BIT/HEX, temporal readers, CAST admission, session calls,
-OR TRUE, dynamic TRUE metadata and source effects, constant-group holders,
-uncacheable scalar lifetime and LIMIT absorption remain open before renewed
-COUNT work.
+**Row-dependent DOUBLE warnings at PREPARE (2026-11-11).** In a direct
+comparison of a numeric column and a plain string literal, the ordinary
+SELECT prepares the bound comparator and delays the conversion diagnostic
+until execution. Text queries and repeated EXECUTE still diagnose a
+demanded conversion over an empty source. Stored-view planning keeps its
+own metadata phase. A failed PREPARE reports the binding error and its own
+conditions, including the DATE truncation before error 1525 for a written
+string compared with a non-column temporal value.
+
+The focused MySQL 8.4.11 matrix gains 98 complete PREPARE matches, from
+703 to 801 of 1,137 paired observations. The stored-view probe retains all
+its prior responses. The regression passes locally and on the pinned
+server and fails on 12c4162. Shared compiler readers cover NULL and truth
+predicates, BIT bytes, binary cast metadata, conditional numeric branches
+and IN collation indexes. The pinned size run passes all nine caps at
+45,599 B parser, 334,336 B core and 334,261 B facade. All 27,469 complete
+matches and 886,912 matching protocol facts hold across the 32,803-response
+replay. Fresh Docker passes 1,794 main tests, two isolated IN-list tests,
+four bulk tests, typecheck and lint. The tested snapshot matches 687 test
+files and fixtures, 206 runtime sources and the verification tooling.
+Seeded executor fuzzing, the 2,127/2,248 plan score and all 38 passing
+MySQL test file IDs match their prior baselines.
+
+**Next scalar prerequisite: demand for row-dependent DOUBLE conversion.**
+Native binds ordinary SELECT names and fixed conditions before it converts
+the written string beside a numeric column. A decisive false conjunct or
+LIMIT 0 can skip that conversion. An empty input alone still warns. Prove
+both operand orders, condition order, repeated EXECUTE and the distinction
+between written and inferred false conditions. The next probes cover 427
+paired responses, including later name errors in GROUP BY, HAVING and ORDER
+BY. Inner joins and nested query blocks show their own order. Outer JOIN
+demand, IN and BETWEEN, strict INSERT SELECT and marker inference remain
+separate.
+Introduced or collated text, BIT/HEX, temporal readers, CAST admission,
+session calls, OR TRUE, dynamic TRUE metadata and source effects,
+constant-group holders, uncacheable scalar lifetime and LIMIT absorption
+remain open before renewed COUNT work.
 A WHERE containing a row/volatile input without an already-proved false conjunct
 still needs its actual reduction proof, including constant OR folding. Native
 `(SELECT 1 LIMIT 0)` reads 1, and COUNT over it counts every outer row; local
@@ -10656,7 +10683,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,360 B (326.5 KiB) for the browser entry chunk, measured on 2026-10-28; the facade is 334,260 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
+| Core bundle, gzipped | 334,336 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-11. The facade is 334,261 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

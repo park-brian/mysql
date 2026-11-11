@@ -56,8 +56,8 @@ export interface Run {
   readonly serverVersion: string
   /** Parameter values, when they are known (an execute rather than a prepare). */
   readonly params?: readonly Value[]
-  /** Planning for COM_STMT_PREPARE's metadata: what MySQL reports before it optimizes. */
-  readonly preparing?: boolean
+  /** Planning metadata for a wire PREPARE or a stored view. */
+  readonly preparing?: 'wire' | 'view' | undefined
   /** Executing a prepared SELECT, whose fixed WHERE diagnostics belonged to PREPARE. */
   readonly preparedQuery?: boolean
   /** The enclosing query's scope, where a subquery's correlated names resolve (M5.1). */
@@ -88,6 +88,7 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
     clause,
     connectionCollation: session.characterSet,
     preparedSqlMode: run.prepared instanceof PreparedStatement ? run.prepared.sqlMode : undefined,
+    preparingQuery: run.preparing === 'wire',
     session,
     state: run.state,
     serverVersion: run.serverVersion,
@@ -194,7 +195,7 @@ export function viewTable(run: Run, name: TableName, alias: string, given?: View
     throw e
   }
   const query = parseStatement(view.query) as QueryExpression
-  const inner: Run = { ...viewContext(run, view), ...(run.preparing === true ? { preparing: true } : {}), views: [...(run.views ?? []), path] }
+  const inner: Run = { ...viewContext(run, view), preparing: run.preparing && 'view', views: [...(run.views ?? []), path] }
   try {
     return { schema, source: derivedTable(inner, query, alias, view.columns, undefined, view) }
   } catch (e) {
@@ -213,7 +214,7 @@ export function viewTable(run: Run, name: TableName, alias: string, given?: View
  */
 export function planViewQuery(run: Run, view: ViewDef): { query: QueryExpression; plan: SelectPlan } {
   const query = parseStatement(view.query) as QueryExpression
-  const inner: Run = { ...viewContext(run, view), preparing: true, views: [`${view.schema}.${view.name}`] }
+  const inner: Run = { ...viewContext(run, view), preparing: 'view', views: [`${view.schema}.${view.name}`] }
   return { query, plan: planQuery(inner, query) }
 }
 
@@ -401,7 +402,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // Preserve item metadata until the selected input proves whether the window needs fields.
   const windowTypes = windowed ? items.map((i) => i.compiled.type) : undefined
   // Read through the windows' temporary table: every column a field of it (8.4.11: `id` loses PRI).
-  if (run.preparing !== true) windowColumns(items, windows)
+  if (!run.preparing) windowColumns(items, windows)
   const [limitCount, offset] = queryLimit(run, q)
   const checkedOutput = anti?.kind === 'correlated' && checkedCorrelatedOutput(node, q, source, items, anti.query)
   let checkedWhere = false
@@ -469,7 +470,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // the execute's does (8.4.11, found by review).
   // A bounded unordered DISTINCT copies fields even over an indexed prefix.
   // Only whole-key uniqueness can remove that boundary; PREPARE precedes it.
-  if (node.distinct === true && source !== undefined && facts !== undefined && run.preparing !== true && !distinctKey(source.def, items, lookup, limitCount !== undefined && q.orderBy === undefined)) {
+  if (node.distinct === true && source !== undefined && facts !== undefined && !run.preparing && !distinctKey(source.def, items, lookup, limitCount !== undefined && q.orderBy === undefined)) {
     const pinnedName = (item: { compiled: Compiled }): boolean => {
       const name = item.compiled.type.column?.orgName.toLowerCase()
       return name !== undefined && facts.pins.has(name)
@@ -499,7 +500,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
         patchType(item, { temporary: repeated || pinnedName(item) || (limitCount !== undefined && q.orderBy === undefined) ? 'pinned' : true })
       }
     }
-  } else if (from !== undefined && scope !== undefined && run.preparing !== true && (source === undefined || (semijoin && semijoinSubqueries(node.where).some((sq) => !emptySubquery(run, sq))) || (q.orderBy !== undefined && node.items.some((i) => correlatedIn(i.expr, scope)))) && (node.distinct === true || order.length > 0)) {
+  } else if (from !== undefined && scope !== undefined && !run.preparing && (source === undefined || (semijoin && semijoinSubqueries(node.where).some((sq) => !emptySubquery(run, sq))) || (q.orderBy !== undefined && node.items.some((i) => correlatedIn(i.expr, scope)))) && (node.distinct === true || order.length > 0)) {
     // Over a join, a DISTINCT is a temporary table and a sort reads the join's
     // rows streamed into one ("Stream results"): every item that reads the row
     // is copied, a column losing its key flags without gaining GROUP_FLAG, an
@@ -583,7 +584,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // Resolve every ORDER BY first: name errors precede DISTINCT admission.
   const copied = node.distinct === true && source !== undefined && scope !== undefined && !windowed && modeOf(run.env.session.sqlMode).onlyFullGroupBy ? checkDistinctOrder(run, order, items, orderCtx)?.filter((_, i) => !constantKey(order[i] as OrderItem)) : undefined
   // A window ORDER BY alone names reads the rows through its table as well.
-  if (run.preparing !== true) windowColumns(items, windows)
+  if (!run.preparing) windowColumns(items, windows)
   // A MATCH in the WHERE of one table is read through its full-text index,
   // which yields rows by relevance, highest first: with no ORDER BY of its
   // own that is the order they come in (8.4.11, M5.26).
@@ -958,7 +959,7 @@ function checkedCorrelatedOutput(node: SelectNode, q: QueryExpression, source: F
 
 /** A closed dependent cohort keeps its original binding and filters before the outer sort. */
 function dependentReader(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan | undefined, items: readonly { readonly expr: Expression; readonly alias?: string; readonly compiled: Compiled }[], bound: BoundSubquery): BoundSubquery {
-  if (from === undefined || !bound.correlated || run.preparing === true || q.locking !== undefined || node.distinct === true || node.having !== undefined) return bound
+  if (from === undefined || !bound.correlated || run.preparing || q.locking !== undefined || node.distinct === true || node.having !== undefined) return bound
   const outer = joinOuter(run, q, node, from)
   const where = node.where
   const query = where?.kind === NODE.UNARY && where.op === 'EXISTS' && where.operand.kind === NODE.SUBQUERY ? where.operand.query : negativeExistsSubquery(where)
@@ -1134,7 +1135,7 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
   if (extra !== undefined) {
     if (extra.kind !== NODE.BINARY || !['=', '<>', '!=', '<', '<=', '>', '>='].includes(extra.op)) return undefined
     if (!isQualifiedColumn(extra.left, innerAlias, true) || !integerLiteral(extra.right)) return undefined
-  } else if (run.preparing === true || run.env.memo === undefined || q.locking !== undefined || node.distinct === true || node.having !== undefined || someNode([node.items, q.orderBy], (n) => {
+  } else if (run.preparing || run.env.memo === undefined || q.locking !== undefined || node.distinct === true || node.having !== undefined || someNode([node.items, q.orderBy], (n) => {
     const kind = (n as Expression).kind
     return kind === NODE.SUBQUERY || kind === NODE.MATCH || kind === NODE.CALL || kind === NODE.VARIABLE || undefined
   })) return undefined
@@ -2233,7 +2234,7 @@ function planGrouped(
   const distinctAggregate = needsSortedGroups([node.items, node.having, order])
   // Keys over const tables alone are constants, one group at most: grouped as they come, and not sorted
   // (8.4.11: `FROM p CROSS JOIN q WHERE p.id = 5 GROUP BY p.g ORDER BY 1, 2` is a Group aggregate over q).
-  const constTable = source !== undefined && run.preparing !== true && groupFacts?.constTable
+  const constTable = source !== undefined && !run.preparing && groupFacts?.constTable
   const oneGroup = !rollup && keys.length > 0 && (constTable || (constants.size > 0 && keys.every((k) => !refersToRow(k.expr, lookup, constants))))
 
   // Retained grouping keys identify each output group; ROLLUP levels do not.
@@ -2243,7 +2244,7 @@ function planGrouped(
   ))
 
   // Retained DISTINCT copies completed AVG values through the native group writer.
-  const copiedAverage = run.preparing !== true && deduplicate && !windowed && source !== undefined && unhintedBase(q, node) !== undefined && wholeReaderReady(q, node) &&
+  const copiedAverage = !run.preparing && deduplicate && !windowed && source !== undefined && unhintedBase(q, node) !== undefined && wholeReaderReady(q, node) &&
     !rollup && q.limit === undefined && unordered &&
     keys.every((key) => constantNode(key.expr, true, true) && refersToRow(key.expr, lookup)) &&
     sink.specs.length > 0 && sink.specs.every((spec) => spec.name === 'AVG' && spec.type.kind === 'decimal') &&
@@ -2290,7 +2291,7 @@ function planGrouped(
   if (from !== undefined && !copiedAverage) from.sortedBy(sortTable(q.orderBy?.map((o) => o.expr), node.groupBy?.items, selectItems, from.scope), keep)
   const firstOrder = strategy === 'sort' && !rollup ? from?.orderGroupsFirst(keys) : undefined
   let dataColumns: ((trx: Trx | undefined) => readonly ResultType[]) | undefined
-  if (run.preparing !== true) {
+  if (!run.preparing) {
     const facts = selectFacts(run, from, node, limitCount)
     if (copiedAverage || !facts.empty) {
       const consts = new Set(facts.constTables.map((t) => t.alias))
@@ -2343,7 +2344,7 @@ function planGrouped(
     // Read through the windows' temporary table, which takes the groups'
     // place; one row of an aggregate without GROUP BY needs none (8.4.11:
     // `COUNT(*), ROW_NUMBER() OVER ()` keeps BINARY on both).
-    const temporary = node.groupBy === undefined || run.preparing === true ? undefined : ('stream' as const)
+    const temporary = node.groupBy === undefined || run.preparing ? undefined : ('stream' as const)
     for (const item of items) {
       const { temporary: _was, ...type } = item.compiled.type
       item.compiled = { ...item.compiled, type: temporary === undefined ? type : { ...type, temporary } }
@@ -2655,7 +2656,7 @@ function distinctKey(def: TableDef, items: readonly { readonly expr: Expression 
 /** A clause's readers and written constant outcomes, bound in its own context. */
 function resolveCondition(run: Run, ctx: CompileContext, condition: Expression | undefined, count: number | undefined) {
   type Predicate = { eval: Compiled['eval'] }
-  const resolving = run.preparing || run.protocol === 'text'
+  const resolving = run.preparing !== undefined || run.protocol === 'text'
   const { conditions: _conditions, ...fixedEnv } = run.env
   const conjuncts = splitAnd(condition)
   // PREPARE owns a fixed literal's binding diagnostics as well as its evaluation.

@@ -1994,6 +1994,9 @@ fully to finite DOUBLE can also compare directly with a numeric literal.
 The bound reader keeps its collation, scale, signedness and diagnostics.
 For proved fixed predicates in SELECT, PREPARE owns binding diagnostics;
 a repeated EXECUTE uses the same comparison without reporting them again.
+A direct numeric column comparison with a plain string literal can defer
+its DOUBLE warning past wire PREPARE. Stored views retain their own
+metadata phase.
 Range/key readers keep their syntax rules; CAST, session calls and binary
 markers retain reader order.
 Source naming uses the lexer’s bounded token sequence.
