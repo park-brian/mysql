@@ -13,7 +13,7 @@ import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, PreparedStatement, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { MAX_UNSIGNED, MIN_SIGNED, intValue, storageWidth, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
-import { compile, constantNode, isComparison, literalPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, textBesideColumn, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
+import { appendConditions, compile, constantNode, isComparison, literalPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, textBesideColumn, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, copiedLength, intType, type ResultType } from './meta.ts'
@@ -97,7 +97,7 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
       let correlated = false
       const plan = planQuery({ ...run, parent: enclosing(outer, () => (correlated = true)) }, q, scalarConditions)
       if (correlated && scalarConditions) {
-        for (const condition of scalarConditions) conditions?.push(condition)
+        appendConditions(conditions, scalarConditions)
         scalarConditions.length = 0
       }
       let bound: BoundSubquery = {
@@ -130,11 +130,22 @@ function executionEnv(run: Run, trx: Trx | undefined, given?: Env): Env {
 }
 
 /** What planning a FROM needs from the statement: its tables, and a compiler for ON clauses. */
-export function fromContext(run: Run): FromContext {
+export function fromContext(run: Run, on?: Condition[]): FromContext {
   const catalog = run.catalog
+  let joining = false
   return {
     open: (name, alias) => openTable(run, name, alias),
-    compileOn: (e, scope) => compile(e, compileContext(run, scope, 'on clause')),
+    compileOn(e, scope, written) {
+      let ctx = compileContext(run, scope, 'on clause')
+      if (on && (joining ||= written === true)) {
+        ctx = {
+          ...ctx,
+          conditions: written && !(run.preparedQuery && literalPredicate(e, true)) ? ctx.conditions : undefined,
+          rowNumberConditions: written ? on : undefined,
+        }
+      }
+      return compile(e, ctx)
+    },
     env: run.env,
     statistics: catalog && ((def, table) => statisticsOf(def, table, catalog.store)),
     derived: (ref, lateral) => derivedTable(run, ref.query, ref.alias as string, ref.columns, lateral),
@@ -365,12 +376,15 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
 
   // The parser normalizes unquoted DUAL; every retained reference names a table.
   const refs = node.from ?? []
-  let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'))
+  const on = pending && joinConditions(q, node)
+  let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run, on && pending), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'))
   run.admitQuery?.(q, true)
   const scope = from?.scope
   let source = from?.single
+  const joined = on && from?.tables.every((table) => table.table !== undefined) ? on : undefined
+  const onCount = pending?.length ?? 0
   const scalarConditions: Condition[] | undefined = pending && source && deferProjection(q, node) ? [] : undefined
-  if (pending && (!source || q.with !== undefined || (!scalarConditions && !deferWhere(q, node.where)))) pending = undefined
+  if (pending && !joined && (!source || q.with !== undefined || (!scalarConditions && !deferWhere(q, node.where)))) pending = undefined
   const lookup: Scope = scope ?? run.parent ?? EMPTY_SCOPE
   const reads = scope === undefined ? undefined : columnsRead(scope, node, q)
   if (from !== undefined && reads !== undefined) from.reads(reads)
@@ -446,6 +460,10 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
     } }
   }
   const resolved = resolveCondition(run, whereCtx, node.where, limitCount, offset, pending)
+  if (joined && pending) {
+    if ((limitCount === 0 && offset === 0) || resolved.conditional || joined.some(writtenFalse)) pending.length = 0
+    else appendConditions(pending, pending.splice(0, onCount))
+  }
   const constants = constRows(run, from, node)
 
   // An ORDER BY item that reads only a STRAIGHT_JOIN's const tables is a constant, which nothing sorts by (8.4.11).
@@ -667,7 +685,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
       if (scalarConditions?.length && keep !== 0 && !facts?.impossible) {
         const quiet = { ...run, env: { ...run.env, trx, conditions: undefined } }
         if (!provedEmpty(quiet, from, node, undefined)) {
-          for (const condition of scalarConditions) run.env.conditions?.push(condition)
+          appendConditions(run.env.conditions, scalarConditions)
         }
       }
       if (!initialize.length) return
@@ -2675,12 +2693,29 @@ function deferWhere(query: QueryExpression, where: Expression | undefined): bool
 /** A single scalar projection whose startup has no other query block or row effects. */
 function deferProjection(q: QueryExpression, node: SelectNode): boolean {
   const scalar = node.items[0]?.expr
-  if (node.items.length !== 1 || scalar?.kind !== NODE.SUBQUERY || !unhintedBase(q, node) || node.groupBy || node.having || node.distinct || q.locking) return false
+  if (node.items.length !== 1 || scalar?.kind !== NODE.SUBQUERY || !unhintedBase(q, node) || !plainProjection(q, node)) return false
   const inner = scalar.query.body
-  if (inner.kind !== QUERY.SELECT || !unhintedBase(scalar.query, inner) || inner.items.length !== 1 || inner.items[0]?.expr.kind !== NODE.COLUMN || inner.groupBy || inner.having || inner.distinct || scalar.query.locking || !deferWhere(scalar.query, inner.where)) return false
-  return constantNode([node.where, q.limit, q.orderBy], false, true) && splitAnd(node.where).every((e) =>
-    rowComparison(e) || literalPredicate(e, true) || writtenFalse(e) || (e.kind === NODE.BINARY && isComparison(e.op) &&
-      (isConstant(e.left, '+') && isConstant(e.right, '+') || e.left.kind === NODE.COLUMN && isConstant(e.right, '+'))))
+  if (inner.kind !== QUERY.SELECT || !unhintedBase(scalar.query, inner) || inner.items.length !== 1 || inner.items[0]?.expr.kind !== NODE.COLUMN || !plainProjection(scalar.query, inner) || !deferWhere(scalar.query, inner.where)) return false
+  return constantNode([node.where, q.limit, q.orderBy], false, true) && splitAnd(node.where).every(directCondition)
+}
+
+function plainProjection(q: QueryExpression, node: SelectNode): boolean {
+  return !node.groupBy && !node.having && !node.distinct && !q.locking
+}
+
+function directCondition(e: Expression): boolean {
+  return rowComparison(e) || literalPredicate(e, true) || writtenFalse(e) || (e.kind === NODE.BINARY && isComparison(e.op) &&
+    e.left.kind === NODE.COLUMN && isConstant(e.right, '+'))
+}
+
+function joinConditions(q: QueryExpression, node: SelectNode): Expression[] | undefined {
+  const join = node.from?.[0]
+  if (node.from?.length !== 1 || join?.kind !== REF.JOIN || join.type !== 'INNER' || join.left.kind !== REF.TABLE || join.right.kind !== REF.TABLE ||
+    join.left.indexHints || join.right.indexHints || q.with || node.windows || node.options?.length || !plainProjection(q, node)) return undefined
+  const parts = splitAnd(join.on)
+  if (!parts.some(rowComparison) || !parts.every(directCondition) || !splitAnd(node.where).every(directCondition) || !constantNode(q, false, true)) return undefined
+  if (containsAggregate(node.items)) return undefined
+  return parts
 }
 
 /** A clause's readers and written constant outcomes, bound in its own context. */
@@ -2690,7 +2725,7 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
   const { conditions: _conditions, ...fixedEnv } = run.env
   const conjuncts = splitAnd(condition)
   const selectWhere = whereOffset !== undefined && (run.preparedQuery !== undefined || ctx.rowNumberConditions === false)
-  let probe = selectWhere && conjuncts.length > 1 && run.parent === undefined && ctx.scope instanceof TableScope && ctx.scope.tables.length === 1
+  let probe = selectWhere && conjuncts.length > 1 && run.parent === undefined && ctx.scope instanceof TableScope && (ctx.scope.tables.length === 1 || pending !== undefined)
   let computedFalse = false
   const falseAt = selectWhere ? conjuncts.findIndex((e) => {
     if (writtenFalse(e)) return true

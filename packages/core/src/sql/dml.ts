@@ -1082,7 +1082,7 @@ export function* update(run: Run, node: UpdateNode, trx: Trx): Generator<void, O
   const ignore = node.ignore === true
   const strictMode = modeOf(run.env.session.sqlMode).strict
   const store: StoreContext = { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...sink(run) }
-  const keys = uniqueKeys(def)
+  const write = updateWriter(def, table, check, ignore, store, trx)
   run.state.insertIdSet = false
 
   const rows = yield* matching(run, def, table, alias, node, trx)
@@ -1092,31 +1092,43 @@ export function* update(run: Run, node: UpdateNode, trx: Trx): Generator<void, O
     const before = encodeRow(def, row, { strict: false, row: n + 1, warnings: 0 })
     // A NULL into a NOT NULL column is the type's zero and a warning outside a strict mode (8.4.11).
     const result = assignAll(run, def, before, row, [], assignments, onUpdate, defaults, store, store.strict ? 'error' : 'warn', generate)
-    if (!result.changed) return
-    const violated = check?.(result.after)
-    if (violated !== undefined) {
-      if (!ignore) throw checkViolated(violated)
-      warnError(store, checkViolated(violated))
-      return
-    }
-    const at = ignore ? trx.savepoint() : 0
-    try {
-      table.update(id, result.after, trx)
-    } catch (e) {
-      if (!ignore) throw duplicateError(e, def, table, keys, result.after, trx, id)
-      const skipped = isDuplicate(e) ? duplicateError(e, def, table, keys, result.after, trx, id) : e
-      if (!(skipped instanceof MyjsError) || !(isDuplicate(e) || skipped.errno === 1451 || skipped.errno === 1452)) throw e
-      trx.rollbackTo(at)
-      warnError(store, skipped)
-      return
-    }
-    changed++
+    if (result.changed && write(id, result.after)) changed++
   }
   // Without IGNORE, any error fails the statement whole: the rows go in batches.
   if (ignore) yield* paced(rows, each)
   else yield* inBatches(trx, rows, each)
 
-  const matched = rows.length
+  return updateResult(run, store, rows.length, changed)
+}
+
+/** CHECK admission and IGNORE rollback for a changed row, shared by both UPDATE readers. */
+function updateWriter(def: TableDef, table: Table, check: ReturnType<typeof checker>, ignore: boolean, store: StoreContext, trx: Trx) {
+  const keys = uniqueKeys(def)
+  return (id: RowId, after: readonly FieldBytes[]): boolean => {
+    const violated = check?.(after)
+    if (violated !== undefined) {
+      const error = checkViolated(violated)
+      if (!ignore) throw error
+      warnError(store, error)
+      return false
+    }
+    const at = ignore ? trx.savepoint() : 0
+    try {
+      table.update(id, after, trx)
+      return true
+    } catch (e) {
+      if (!ignore) throw duplicateError(e, def, table, keys, after, trx, id)
+      const duplicate = isDuplicate(e)
+      const skipped = duplicate ? duplicateError(e, def, table, keys, after, trx, id) : e
+      if (!(skipped instanceof MyjsError) || !(duplicate || skipped.errno === 1451 || skipped.errno === 1452)) throw e
+      trx.rollbackTo(at)
+      warnError(store, skipped)
+      return false
+    }
+  }
+}
+
+function updateResult(run: Run, store: StoreContext, matched: number, changed: number): OkResult {
   const foundRows = hasCap(run.env.session.capabilities, CLIENT.FOUND_ROWS)
   const warnings = statementWarnings(run, store.warnings)
   return {
@@ -1261,8 +1273,7 @@ function updateMulti(run: Run, node: UpdateNode, trx: Trx): OkResult {
     const generate = generatorOf(run, def)
     const onUpdate = onUpdateOf(run, def)
     const defaults = def.columns.map((c) => defaultOf(run, c, def))
-    const check = checker(run, def)
-    const keys = uniqueKeys(def)
+    const write = updateWriter(def, table, checker(run, def), ignore, store, trx)
     // Each target row once, at the first joined row that reaches it.
     const seen = new Set<string>()
     for (const r of rows) {
@@ -1275,35 +1286,10 @@ function updateMulti(run: Run, node: UpdateNode, trx: Trx): OkResult {
       if (current === undefined) continue
       const values = current.map((f, i) => (f === null ? null : decodeField(f, (def.columns[i] as ColumnDef).type)))
       const result = assignAll(run, def, current, values, [], assignments, onUpdate, defaults, store, store.strict ? 'error' : 'warn', generate)
-      if (!result.changed) continue
-      const violated = check?.(result.after)
-      if (violated !== undefined) {
-        if (!ignore) throw checkViolated(violated)
-        warnError(store, checkViolated(violated))
-        continue
-      }
-      const at = ignore ? trx.savepoint() : 0
-      try {
-        table.update(id, result.after, trx)
-      } catch (e) {
-        if (!ignore) throw duplicateError(e, def, table, keys, result.after, trx, id)
-        const skipped = isDuplicate(e) ? duplicateError(e, def, table, keys, result.after, trx, id) : e
-        if (!(skipped instanceof MyjsError) || !(isDuplicate(e) || skipped.errno === 1451 || skipped.errno === 1452)) throw e
-        trx.rollbackTo(at)
-        warnError(store, skipped)
-        continue
-      }
-      changed++
+      if (result.changed && write(id, result.after)) changed++
     }
   }
-  const foundRows = hasCap(run.env.session.capabilities, CLIENT.FOUND_ROWS)
-  const warnings = statementWarnings(run, store.warnings)
-  return {
-    affectedRows: foundRows ? matched : changed,
-    ...(run.state.insertIdSet ? { insertId: run.state.lastInsertId } : {}),
-    warnings,
-    info: `Rows matched: ${matched}  Changed: ${changed}  Warnings: ${warnings}`,
-  }
+  return updateResult(run, store, matched, changed)
 }
 
 /**

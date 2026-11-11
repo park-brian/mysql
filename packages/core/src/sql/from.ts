@@ -204,8 +204,8 @@ export interface JoinCondition {
 export interface FromContext {
   /** Open a base table: ER_NO_SUCH_TABLE, ER_NO_DB_ERROR. */
   open(ref: { readonly schema?: string; readonly name: string }, alias?: string): { readonly schema: string; readonly def: TableDef; readonly table: Table }
-  /** Compile an ON clause against the scope its join sees. */
-  compileOn(e: Expression, scope: Scope): Compiled
+  /** Compile against the join's scope; `written` identifies binding over physical inputs. */
+  compileOn(e: Expression, scope: Scope, written?: boolean): Compiled
   /** A base table's statistics, as the optimizer reads them (M5.45). */
   readonly statistics?: ((def: TableDef, table: Table) => TableStatistics) | undefined
   /** The statement's environment, which the cost model evaluates constant conditions in (M5.7). */
@@ -388,7 +388,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         const scope = preliminary.restrict(aliases, within)
         const onScope = slotScope(scope, preliminary)
         const predicates = splitAnd(onAst)
-        const on = predicates.map((e) => ({ e, aliases: aliasesOf(e, preliminary), compiled: ctx.compileOn(e, onScope) }))
+        const physical = l.node.kind === 'leaf' && r.node.kind === 'leaf' && l.node.table.table !== undefined && r.node.table.table !== undefined
+        const on = predicates.map((e) => ({ e, aliases: aliasesOf(e, preliminary), compiled: ctx.compileOn(e, onScope, physical) }))
         const outer = right ? r : l
         const inner = right ? l : r
         const innerSlots = [...inner.aliases].flatMap((a) => slotsOf(byAlias.get(a) as FromTable))

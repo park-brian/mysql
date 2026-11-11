@@ -559,6 +559,10 @@ export function raise(env: Pick<Env, 'conditions'>, code: number, message: strin
   env.conditions?.push({ level, code, message })
 }
 
+export function appendConditions(target: Condition[] | undefined, conditions: readonly Condition[]): void {
+  if (target) for (const condition of conditions) target.push(condition)
+}
+
 /** Session state an expression can read: user variables and the last statement's counters. */
 export interface SessionValues {
   readonly userVariables: Map<string, Value>

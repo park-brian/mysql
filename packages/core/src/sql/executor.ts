@@ -75,7 +75,7 @@ import { showCreateView, showQuery, shownColumns, tableStatusQuery, variablesCol
 import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Condition, type Value } from '@myjs/types'
 import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
-import { systemVariable, compile, EMPTY_SCOPE, raise, type Env } from './compile.ts'
+import { appendConditions, systemVariable, compile, EMPTY_SCOPE, raise, type Env } from './compile.ts'
 import { renderTree } from './explain.ts'
 import { analyze, keepShown } from './stats.ts'
 import { alterTable } from './alter.ts'
@@ -209,7 +209,7 @@ function recordDiagnostics(state: SqlSession, conditions: readonly Condition[], 
 }
 
 /** Translate parser conditions once, retaining order and their warning/error distinction. */
-function appendConditions(conditions: Condition[] | undefined, parsed: readonly ParseCondition[]): void {
+function appendParseConditions(conditions: Condition[] | undefined, parsed: readonly ParseCondition[]): void {
   for (const c of parsed) conditions?.push({ level: c.level ?? 'Error', code: c.errno, message: c.message })
 }
 
@@ -228,7 +228,7 @@ function recordFailure(state: SqlSession, conditions: Condition[] | undefined, f
     }
     // A full parser prefix may contain only warnings even when it returns ERR.
     const kept: readonly ParseCondition[] = parsing?.slice(0, limit) ?? [error]
-    appendConditions(conditions, kept)
+    appendParseConditions(conditions, kept)
   }
   // Native argument-count refusal belongs to construction's bounded diagnostics area.
   const history = error.errno === 1582 ? conditions?.slice(0, limit) : conditions
@@ -256,7 +256,7 @@ function binaryDeclarations(statement: Statement, conditions: Condition[], limit
     const kind = (n as { kind?: string }).kind
     return kind === REF.TABLE || kind === NODE.CONVERT || undefined
   })) return
-  appendConditions(conditions, grammar.slice(0, limit))
+  appendParseConditions(conditions, grammar.slice(0, limit))
 }
 
 /** How many parsed statements `SqlExecutor` keeps. */
@@ -365,7 +365,7 @@ export class SqlExecutor implements Executor {
       admitViewTarget(statement, session)
       const construction = statement === null ? undefined : Cursor.constructionConditions(statement)
       if (construction !== undefined) {
-        appendConditions(conditions, construction.slice(0, limit))
+        appendParseConditions(conditions, construction.slice(0, limit))
         state.previous = conditions.diagnostics
       }
       const admission = statement === null ? undefined : this.#admitStatement(statement, state, session)
@@ -677,7 +677,7 @@ export class SqlExecutor implements Executor {
         admitViewTarget(statement, session)
         const construction = Cursor.constructionConditions(statement)
         if (construction !== undefined) {
-          if (protocol === 'text') appendConditions(conditions, construction.slice(0, limit))
+          if (protocol === 'text') appendParseConditions(conditions, construction.slice(0, limit))
           state.previous = conditions.diagnostics
         }
         const admission = this.#admitStatement(statement, state, session)
@@ -895,7 +895,7 @@ export class SqlExecutor implements Executor {
       case STATEMENT.QUERY: {
         const pending: Condition[] = []
         const plan = planQuery({ ...run, preparedQuery: run.prepared !== undefined }, statement, pending)
-        for (const condition of pending) run.env.conditions?.push(condition)
+        appendConditions(run.env.conditions, pending)
         if (this.catalog === undefined) return resultSet(run, plan, undefined)
         return state.steps(this.catalog.store, plan.locking, (trx) => resultSteps(run, plan, trx, emit))
       }
