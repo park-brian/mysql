@@ -25,9 +25,9 @@
 import { expectTyped } from '@myjs/bytes'
 import type { ColumnDef, IndexDef, Table, TableDef, Trx } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
-import { compareValues, integerRange, truth, type Value } from '@myjs/types'
+import { compareValues, integerRange, numericPrefix, truth, type Value } from '@myjs/types'
 
-import { compile, EMPTY_SCOPE, isComparison, type CompileContext, type Env } from './compile.ts'
+import { compile, EMPTY_SCOPE, isComparison, numberLiteral, type CompileContext, type Env } from './compile.ts'
 import type { FromPlan } from './from.ts'
 import { equalBounds, pointAccess, splitAnd } from './plan.ts'
 import { accessRows } from './operators.ts'
@@ -471,13 +471,15 @@ function numericConstant(column: ColumnDef | undefined, other: Expression): { fl
   const literal = negative ? other.operand : other
   if (literal.kind !== NODE.LITERAL) return undefined
   const text = String(literal.value).trim()
-  const number = literal.type === 'int' || literal.type === 'decimal' || literal.type === 'double' || (literal.type === 'string' && /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(text))
-  if (!number) return undefined
+  if (!numberLiteral(literal) && !(literal.type === 'string' && numericPrefix(text).complete)) return undefined
   const integral = /^[+-]?\d+$/.test(text)
   const x = (negative ? -1 : 1) * Number(text)
-  const fraction = !integral && x % 1 !== 0
-  const floor = integral ? (negative ? -1n : 1n) * BigInt(text) : BigInt(Math.floor(x))
-  return { floor, fraction, range }
+  const finite = Number.isFinite(x)
+  let floor: bigint
+  if (integral) floor = (negative ? -1n : 1n) * BigInt(text)
+  else if (finite) floor = BigInt(Math.floor(x))
+  else floor = x < 0 ? range.min - 1n : range.max + 1n
+  return { floor, fraction: finite && !integral && x % 1 !== 0, range }
 }
 
 /**

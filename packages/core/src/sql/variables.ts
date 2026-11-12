@@ -34,12 +34,12 @@ function variables(): ReadonlyMap<string, SystemVariable> {
     const [header, ...lines] = group.split('\n') as [string, ...string[]]
     const [flags, prefix] = header.split('\t') as [string, string]
     const kind = KINDS[flags[2] as keyof typeof KINDS]
-    const nullable = flags.includes('n', 3)
+    const nullable = flags.includes('n')
     const traits = {
       scope: SCOPES[flags[0] as keyof typeof SCOPES],
       readOnly: flags[1] === 'r',
       globalOnly: flags[1] === 'g',
-      zeroDefault: flags.includes('z', 3),
+      zeroDefault: flags.includes('z'),
       kind,
     }
     for (const line of lines) {
