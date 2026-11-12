@@ -250,12 +250,11 @@ function indexHintEligibility(def: TableDef, alias: string, hints: readonly Inde
   type HintKey = (typeof keys)[number]['key']
   type Mask = { readonly scope: NonNullable<IndexHint['for']>; used?: Set<HintKey>; readonly ignored: Set<HintKey> }
   // Ordering and grouping have their own eligibility, separate from the scan.
-  const join = scope === 'JOIN'
-  const scopes = scope === undefined ? [] : join ? [scope] : ['JOIN', scope] as const
+  const scopes = scope === undefined ? [] : scope === 'JOIN' ? [scope] : ['JOIN', scope] as const
   const visible = !keys.some(({ key }) => key.invisible)
   const force = hints.some((hint) => hint.type === 'FORCE')
   // Any FORCE scope affects the range cost, even when its name mask is inactive.
-  const forceScope = visible && force && keys.length === def.indexes.length && scope !== undefined &&
+  const forceScope = visible && force && keys.length === def.indexes.length &&
     (scope !== 'ORDER BY' || hints.some((hint) => hint.type === 'FORCE' && hintApplies(hint, scope))) ? scope : undefined
   const masks = !visible || (force && forceScope === undefined) ? [] : scopes
     .filter((scope) => hints.some((hint) => hintApplies(hint, scope)))
@@ -1040,7 +1039,7 @@ function leafAccess(t: FromTable, settings: LeafSettings, env: Env): Access {
 /** The order asked of `t`'s reads, if any. */
 function orderFor(t: FromTable, settings: LeafSettings): LeafSettings['ordered'] {
   const order = settings.ordered
-  return order?.alias === undefined || order.alias === t.alias ? order : undefined
+  return (order?.alias ?? t.alias) === t.alias ? order : undefined
 }
 
 /** The access `chooseAccess` picks for a table under the WHERE, once per statement's environment: a range is weighed by counting its rows. */
@@ -1062,7 +1061,14 @@ function rangeCosting(t: FromTable, settings: LeafSettings, env: Env, quote = fa
   const clustered = clusteredIndex(def)
   const cover = settings.covering.get(t.alias)
   // The shortest a clustered record can be: its header, InnoDB's trx id and roll pointer, and its fixed-width columns.
-  const minRecordBytes = 5 + 13 + Math.ceil(def.columns.filter((c) => c.nullable).length / 8) + def.columns.reduce((n, c) => n + (c.type.collationId === undefined ? keyBytes(c) - (c.nullable ? 1 : 0) : 0), 0)
+  let minRecordBytes = 5 + 13
+  let nullable = 0
+  for (const column of def.columns) {
+    const nullByte = column.nullable ? 1 : 0
+    nullable += nullByte
+    if (column.type.collationId === undefined) minRecordBytes += keyBytes(column) - nullByte
+  }
+  minRecordBytes += Math.ceil(nullable / 8)
   const statistics = settings.statistics
   let stats: TableStatistics | undefined
   return {
@@ -2147,7 +2153,10 @@ function indexBytes(def: TableDef, index: IndexDef | undefined): number {
 export function holdsRead(def: TableDef, index: IndexDef, read: ReadonlySet<string> | 'all'): boolean {
   if (read === 'all' || index.invisible === true) return false
   const parts = indexParts(def, index)
-  return [...read].every((name) => parts.some((p) => p.prefix === undefined && p.column.toLowerCase() === name))
+  for (const name of read) {
+    if (!parts.some((p) => p.prefix === undefined && p.column.toLowerCase() === name)) return false
+  }
+  return true
 }
 
 /**

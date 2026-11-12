@@ -302,6 +302,12 @@ test('ORDER BY index hints leave JOIN covering reads eligible', async () => {
         [], wideFields, 'Limit/Offset\n    Index scan on t using by_a')
       await read('SELECT id,payload FROM t FORCE INDEX FOR ORDER BY (by_a) ORDER BY a,id DESC LIMIT 4',
         wide(byA.slice(0, 8).reverse().slice(0, 4)), wideFields, 'Limit\n    Sort\n        Table scan on t')
+      await read('SELECT id,payload FROM t FORCE INDEX FOR ORDER BY (by_a,by_b) ORDER BY a DESC,id DESC',
+        wide(byA.slice().reverse()), wideFields, 'Index scan on t using by_a')
+      await read('SELECT id,payload FROM t FORCE INDEX (by_a,by_ab) ORDER BY a,b,id LIMIT 4 OFFSET 7',
+        wide(byAb.slice(7, 11)), wideFields, 'Limit/Offset\n    Index scan on t using by_ab')
+      await read('SELECT id,a FROM t FORCE INDEX FOR ORDER BY (by_a,by_ab) ORDER BY a LIMIT 6',
+        first, [ID_FIELD, aField], `Limit\n    ${coverA}`)
     }
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)

@@ -412,10 +412,12 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   if (hints !== undefined && only?.kind === REF.TABLE && only.indexHints !== undefined && !node.distinct && !node.having &&
       q.locking === undefined && !containsWindow(node.items) &&
       !someNode([node.items, node.where, q.orderBy], (n) => (n as Expression).kind === NODE.MATCH || undefined)) {
-    if (q.orderBy === undefined && q.limit === undefined) {
+    if (q.orderBy !== undefined) {
+      if (!grouped && node.where === undefined) hintScope = 'ORDER BY'
+    } else if (q.limit === undefined) {
       if (!grouped) hintScope = 'JOIN'
       else if (node.groupBy && !node.groupBy.rollup && node.where === undefined && !needsSortedGroups(node.items)) hintScope = 'GROUP BY'
-    } else if (!grouped && q.orderBy !== undefined && node.where === undefined) hintScope = 'ORDER BY'
+    }
   }
   let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run, on), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'), hints, hintScope)
   if (from && on?.rounded) from.rounded = on.rounded
@@ -1394,6 +1396,8 @@ function emptySubquery(run: Run, query: QueryExpression): boolean {
   }
 }
 
+type OrderedIndex = { readonly index: string; readonly reverse: boolean }
+
 /**
  * The index a table read whole is read by — its covering index, else its
  * clustered one — when an ORDER BY agrees on one physical scan direction
@@ -1401,39 +1405,46 @@ function emptySubquery(run: Run, query: QueryExpression): boolean {
  * the clustered key it carries. 8.4.11 reads the index in that order and sorts nothing ("Index
  * scan on t using PRIMARY", "Covering index scan on t using name").
  */
-function orderingIndex(source: NonNullable<FromPlan['single']>, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary: boolean, from: FromPlan): { readonly index: string; readonly reverse: boolean } | undefined {
+function orderingIndex(source: NonNullable<FromPlan['single']>, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary: boolean, from: FromPlan): OrderedIndex | undefined {
   const { def, alias } = source
   const clustered = clusteredIndex(def)
   const eligible = from.orderingIndexes('ORDER BY')
-  const forced = from.eligibleIndexes?.force === 'ORDER BY' && eligible?.length === 1 ? eligible[0] : undefined
-  const index = forced ?? (readBy === undefined ? clustered : def.indexes.find((i) => i.name === readBy))
+  const forced = from.eligibleIndexes?.force === 'ORDER BY' ? eligible : undefined
+  const index = readBy === undefined ? clustered : def.indexes.find((i) => i.name === readBy)
   if (index === undefined || clustered === undefined) return undefined
   // The caller has nonempty ORDER keys; successful binding keeps this list nonempty.
   const keys: { name: string; desc: boolean }[] = []
   for (const o of order) {
     const e = sortExpression(o.expr, items)
-    if (e === undefined || e.kind !== NODE.COLUMN) return undefined
+    if (e?.kind !== NODE.COLUMN) return undefined
     const r = safeResolve(scope, e.parts, 'order clause')
     const column = r?.type.column
-    if (column === undefined || r?.depth !== undefined || column.table !== alias) return undefined
+    if (r?.depth !== undefined || column?.table !== alias) return undefined
     const name = column.orgName.toLowerCase()
     // A later occurrence cannot break a tie on the very same field.
     if (!keys.some((k) => k.name === name)) keys.push({ name, desc: o.desc === true })
   }
   // A clustered scan covers every row field. For a whole-table scan,
   // MySQL prefers it over a scan plus sort when prefer_ordering_index is on.
-  for (const candidate of primary ? [index, clustered] : [index]) {
-    if (eligible && !eligible.includes(candidate)) continue
+  const preferred = primary ? [index, clustered] : [index]
+  let alternate: OrderedIndex | undefined
+  for (const candidate of forced === undefined ? preferred : preferred.concat(forced)) {
+    if (eligible?.includes(candidate) === false) continue
     const parts = indexParts(def, candidate)
     const reverse = keys[0]!.desc !== (parts[0]?.descending === true)
     // Every requested key part must agree on the scan direction, including
     // the PRIMARY parts carried by a secondary index.
-    if (keys.every((key, i) => {
+    if (!keys.every((key, i) => {
       const part = parts[i]
-      return part !== undefined && part.prefix === undefined && part.column.toLowerCase() === key.name && ((part.descending === true) !== key.desc) === reverse
-    })) return { index: candidate.name, reverse }
+      return part?.column.toLowerCase() === key.name && part.prefix === undefined && ((part.descending === true) !== key.desc) === reverse
+    })) continue
+    const read = { index: candidate.name, reverse }
+    if (preferred.includes(candidate)) return read
+    // Multiple alternatives need a cost decision.
+    if (alternate !== undefined) return undefined
+    alternate = read
   }
-  return undefined
+  return alternate
 }
 
 /** One positive IN or EXISTS predicate; NOT and conjunctions stay with their callers. */
