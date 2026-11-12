@@ -1930,8 +1930,14 @@ matching fact.
 single-table SELECTs apply JOIN eligibility when the statement also has
 unused ORDER BY or GROUP BY hints. All hint names still resolve in native
 diagnostic order. Two MySQL 8.4.11 audits improve from 359 to 520 complete
-matches of 672, preserving every matching fact. Choice-expression
-collation in grouping and deduplication keys is next.
+matches of 672, preserving every matching fact.
+
+**M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
+carry the resolved collation and derivation on selected string values.
+Grouping, DISTINCT and byte readers now see the same result collation.
+The three pinned audits improve from 188 to 416 complete matches of 474.
+The repair also closes all 38 remaining targeted typed GROUP BY cases.
+Derived string argument admission remains open.
 
 **M5.10 written utf8 failure histories, verified:** the shared
 expression helper now retains warning 3719 for the written alias at introducers,
@@ -8299,9 +8305,10 @@ collation-equivalent groups and copied field metadata together.
 
 Both protocols cover scoped empty USE, IGNORE, alternate secondary keys,
 PRIMARY, nullable text and exact decimal SUM. All 304 targeted integer
-responses agree and 228 of 266 targeted typed responses agree. The 38
-remaining typed cases involve merging a computed COALESCE group with the
-literal fallback. All 3,054 earlier index-hint controls reproduce exactly.
+responses agree and 228 of 266 targeted typed responses agreed in this
+slice. The choice-result collation repair closes the other 38 by merging
+the computed COALESCE group with the literal fallback. All 3,054 earlier
+index-hint controls reproduce exactly.
 Grouped ranges, LIMIT, ORDER BY, ROLLUP, windows, invisible indexes and
 FORCE remain open. Parser, core and facade are 45,611, 334,294 and
 334,208 B gzipped within the existing caps. M5.49 remains partial.
@@ -8321,6 +8328,25 @@ The two targeted subsets improve from 188 to 349 complete matches of
 range costing, warning differences, LIMIT/OFFSET, invisible indexes and
 FORCE remain open. Parser, core and facade are 45,611, 334,274 and
 334,188 B gzipped within the existing caps. M5.49 remains partial.
+
+### Verified collation of selected text values (M5.10)
+
+IF, CASE, IFNULL and COALESCE carry the selected string's text and ordinal
+with the resolved collation and derivation after short-circuit evaluation.
+Numeric readers apply their own conversion rules to the chosen branch.
+Temporary and sorted GROUP BY, ROLLUP, DISTINCT and COUNT
+DISTINCT now use the declared result collation. HEX and CAST AS BINARY
+use the bytes of the resolved charset, including a latin1 result chosen
+from a representable utf8mb4 literal.
+
+Both protocols cover copied field metadata, case, accent and padding
+rules, and exact bytes. All 180 valid cross-charset responses agree.
+The remaining cases in the new audits involve unsupported
+`utf8mb4_0900_as_cs` weights, a derived unrepresentable argument and a
+CAST fallback's byte and field metadata. Two prior typed grouping audits
+improve from 342 to 400 complete matches of 406. Parser, core and facade
+are 45,611, 334,349 and 334,248 B gzipped within the existing caps.
+M5.10 and M5.49 remain partial.
 
 ### Verified ordered-read projection boundary (M5.49)
 
@@ -11594,7 +11620,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,274 B (326.4 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 334,188 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
+| Core bundle, gzipped | 334,349 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 334,248 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

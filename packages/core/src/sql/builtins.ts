@@ -42,6 +42,7 @@ import {
   asNumber,
   stringReal,
   realInteger,
+  choiceCollation,
   choiceOf,
   byteWidth,
   coercibilityOf,
@@ -396,7 +397,7 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
         }
         return null
       }
-      const result: Compiled = { decimalPrefix: true, eval: read, type }
+      const result: Compiled = { decimalPrefix: true, eval: choiceCollation(read, type), type }
       return isText(type) || type.kind === 'json' ? stringReal(result) : realInteger(result, () => printedArgument(e, ctx))
     }
     case 'ANY_VALUE': {
@@ -731,13 +732,6 @@ function nextRand(s: RandSeeds): number {
   return s.seed1 / RAND_MAX
 }
 
-/** The largest single-precision float, `FLT_MAX` (<cfloat>). */
-
-/**
- * An argument of COALESCE or IFNULL, as its result holds it: a BIT beside
- * text is its bytes, and BITs alone are the number, whose text is its
- * digits even under the BIT type (8.4.11: `COALESCE(b)` of b'101' sends '5').
- */
 /**
  * A string or hex constant compared with a BIGINT column, as an integer
  * constant: MySQL converts it once, so the comparison is exact rather than
@@ -793,6 +787,7 @@ function nullifTemporalConstant(x: Compiled, y: Compiled, written: Expression, c
   return { comparison: lit(converted, comparisonType), result: stringValue(packed.toString(), ctx.connectionCollation), type }
 }
 
+/** COALESCE and IFNULL render a BIT among text as bytes and BIT-only choices as digits. */
 function chosenOf(x: Compiled, result: ResultType): (v: Exclude<Value, null>, env: Env) => Value {
   if (result.kind === 'datetime' && (x.type.kind === 'datetime' || x.type.kind === 'time') && x.type.field !== result.field) return (v, env) => asMerged(v, result, env)
   if (ownText(x.type) && result.kind === 'string') return (v) => stringValue(textOf(v, x.type), result.collationId)

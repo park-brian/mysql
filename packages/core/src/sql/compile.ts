@@ -2520,6 +2520,16 @@ export function branchOf(x: Compiled, result: ResultType): Compiled['eval'] {
   }
 }
 
+/** The selected string carries the choice's resolved collation to its consumers. */
+export function choiceCollation(read: Compiled['eval'], type: ResultType): Compiled['eval'] {
+  if (type.kind !== 'string') return read
+  const { collationId } = type
+  const coercibility = coercibilityOf(type)
+  return readNonNull(read, (value) => value.kind === 'string' && (value.collationId !== collationId || value.coercibility !== coercibility)
+    ? { ...value, collationId, coercibility }
+    : value)
+}
+
 /** IF and CASE select once; each numeric reader retains the original branch's policy. */
 export function choiceOf(xs: readonly Compiled[], select: (row: Row, env: Env) => number, type: ResultType): Compiled {
   const reader = (reads: readonly Compiled['eval'][]): Compiled['eval'] => (r, env) => (reads[select(r, env)] as Compiled['eval'])(r, env)
@@ -2527,7 +2537,7 @@ export function choiceOf(xs: readonly Compiled[], select: (row: Row, env: Env) =
     reader(xs.map((x) => asNumber(x, kind, once).eval))
   return {
     type,
-    eval: reader(xs.map((x) => branchOf(x, type))),
+    eval: choiceCollation(reader(xs.map((x) => branchOf(x, type))), type),
     decimalOf: numeric('DECIMAL'),
     realOf: numeric('DOUBLE'),
     integerOf: numeric('INTEGER'),
@@ -2624,6 +2634,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
   throw sqlError(collision ? 'ER_FUNC_INEXISTENT_NAME_COLLISION' : 'ER_SP_DOES_NOT_EXIST', message + (collision ? ". Check the 'Function Name Parsing and Resolution' section in the Reference Manual" : ''))
 }
 
+/** The largest single-precision float. */
 const FLT_MAX = 3.4028234663852886e38
 
 /** TIME() and CAST AS TIME share conversion and result normalization, not precision inference. */

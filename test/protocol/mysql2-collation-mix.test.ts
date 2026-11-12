@@ -195,3 +195,57 @@ test('M5.10: collations are checked and aggregated as 8.4.11 does', async () => 
     await db.end()
   }
 })
+
+test('M5.10: text choices use their resolved collation for grouping and bytes', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection(db === undefined
+    ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+    : { stream: db.createStream(), user: 'root' })
+  const schema = 'choice_collation'
+  const read = async (sql: string, rows: unknown[][], fields: unknown[][]) => {
+    for (const method of ['query', 'execute'] as const) {
+      const options = { sql, rowsAsArray: true }
+      const [actual, metadata] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+      assert.deepEqual(actual, rows, `${method}: ${sql}`)
+      assert.deepEqual(metadata.map((field) => [field.name, field.columnType, field.columnLength, field.flags, field.decimals, field.characterSet]), fields, `${method}: ${sql}`)
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], `${method}: ${sql}`)
+    }
+  }
+  const choices = [
+    { sql: (column: string, fallback: string) => `COALESCE(${column},${fallback})`, required: true },
+    { sql: (column: string, fallback: string) => `IFNULL(${column},${fallback})`, required: true },
+    { sql: (column: string, fallback: string) => `IF(${column} IS NULL,${fallback},${column})`, required: false },
+    { sql: (column: string, fallback: string) => `CASE WHEN ${column} IS NULL THEN ${fallback} ELSE ${column} END`, required: false },
+  ]
+  const groups = [['x', 6], ['x ', 1], ['y', 1]]
+  const count = ['COUNT(*)', 8, 21, 129, 0, 63]
+  const bucket = (flags: number, decimals: number) => ['bucket', 253, 48, flags, decimals, 45]
+  const hex = ['E9', 'C9', 'E9', 'E920', '65', 'E9', 'E9', '79']
+  const hexFields = [['id', 3, 11, 20483, 0, 63], ['bytes', 253, 96, 0, 31, 45], ['cast_bytes', 253, 96, 0, 31, 45]]
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_general_ci')
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,g VARCHAR(12) COLLATE utf8mb4_0900_ai_ci,l VARCHAR(12) CHARACTER SET latin1)')
+    await conn.query("INSERT INTO t VALUES (1,NULL,NULL),(2,'X','É'),(3,'x','é'),(4,'x ','é '),(5,'ẋ','e'),(6,'x','é'),(7,NULL,NULL),(8,'y','y')")
+    for (const choice of choices) {
+      const expr = choice.sql('g', "'x'")
+      const copied = bucket(choice.required ? 1 : 32768, 0)
+      await read(`SELECT ${expr} AS bucket,COUNT(*) FROM t GROUP BY 1`, groups, [copied, ['COUNT(*)', 8, 21, 1, 0, 63]])
+      await read(`SELECT ${expr} AS bucket,COUNT(DISTINCT id) FROM t GROUP BY 1`, groups,
+        [bucket(Number(choice.required), 31), ['COUNT(DISTINCT id)', 8, 21, 129, 0, 63]])
+      await read(`SELECT ${expr} AS bucket,COUNT(*) FROM t GROUP BY 1 WITH ROLLUP`, [...groups, [null, 8]], [bucket(0, 31), count])
+      await read(`SELECT DISTINCT ${expr} AS bucket FROM t`, [['x'], ['x '], ['y']], [copied])
+      await read(`SELECT COUNT(DISTINCT ${expr}) AS n FROM t`, [[3]], [['n', 8, 21, 129, 0, 63]])
+
+      const latin = choice.sql('l', "'é'")
+      await read(`SELECT id,HEX(${latin}) AS bytes,HEX(CAST(${latin} AS BINARY)) AS cast_bytes FROM t ORDER BY id`,
+        hex.map((bytes, i) => [i + 1, bytes, bytes]), hexFields)
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
