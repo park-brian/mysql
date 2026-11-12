@@ -23,7 +23,7 @@ import { equalBounds, isConstant, optimizerEnabled, pointAccess, splitAnd, table
 import { and, columnRefs, integerLiteral, nativeCallName, queryBody, rewriteExpression, someNode } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, wrongArgumentsError } from './errors.ts'
-import { clusteredIndex, indexParts } from './indexes.ts'
+import { clusteredIndex, indexPartMatchesColumn, indexParts } from './indexes.ts'
 import { collationInfoByName, encodeCollation } from '@myjs/charsets'
 import { ambiguousColumnError, unknownColumnError, requireSchema, safeResolve, TableScope, columnIndex as indexOfColumn } from './scope.ts'
 import { holdsRead, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type HintAdmission, type JoinCondition } from './from.ts'
@@ -678,13 +678,13 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   const outerLoop = (semi?.innerFirst === false || anti?.kind === 'materialized' || anti?.kind === 'correlated') && source !== undefined && sortBy === source.alias
   // Reconsider PRIMARY for ordinary scans and the modeled outer-first loop.
   // A proved UNIQUE projection can reconsider PRIMARY as an ordinary scan does.
-  const ordered = source !== undefined && !deduplicated && !windowed && (anti === undefined || anti.kind !== 'hash') && match === undefined && keys.length > 0 && read!.ranges === undefined ? orderingIndex(source, order, items, lookup, read!.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index'), from!) : undefined
-  if (ordered !== undefined) from!.readInOrder(ordered.index, false, ordered.reverse, source!.alias)
+  const ordered = source !== undefined && !deduplicated && !windowed && anti?.kind !== 'hash' && match === undefined && keys.length > 0 && read!.ranges === undefined ? orderingIndex(source, order, items, lookup, read!.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index'), from!) : undefined
+  if (ordered) from!.readInOrder(ordered.index.name, false, ordered.reverse, source!.alias)
   // Only whole scans can be replaced above, so this selected range is final.
   // A pinned complete PRIMARY point binds ORDER but needs none of its readers.
   const point = read?.ranges?.length === 1 ? read.ranges[0] : undefined
   if (base && point?.from?.values.length === 1 && point.from === point.to && base.def.indexes.some((i) => i.name === read!.index && i.kind === 'primary' && i.parts.length === 1 && facts?.pins.has(i.parts[0]!.column.toLowerCase()))) keys.length = 0
-  const sortedFirst = outerLoop && ordered === undefined && keys.length > 0
+  const sortedFirst = outerLoop && !ordered && keys.length > 0
   if (sortedFirst) from!.sortFirst(source!.alias, keys)
   // Whole single-table integer sorts have a known fixed record layout and
   // source estimate. Do not infer queue eligibility from the rows emitted.
@@ -701,20 +701,20 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
 
   // Ordinary readers apply LIMIT after sorting and before SELECT evaluation.
   // Multi-table copies, written HAVING and windows retain their materialization boundary.
-  const limitFirst = !windowed && !node.distinct && !loopSemijoin && (ordered === undefined ? !node.having && (source !== undefined || !streamed) : having === undefined)
+  const limitFirst = !windowed && !node.distinct && !loopSemijoin && (ordered ? having === undefined : !node.having && (source !== undefined || !streamed))
   const readerReady = !windowed && (wholeReaderReady(q, node) || checkedWhere) && (from === undefined
     ? !order.length
     : !node.distinct && ((base && (!order.length || rowOrder || (checkedWhere && sortedFirst))) || (!order.length && !q.with && !node.options && from.tables.length === 1 && from.tables[0]?.derived)))
   const take = q.limit && limitStage(offset, limitCount)
   const stages: Stage[] = [
     ...(from === undefined && node.where !== undefined ? [filterStage(resolved.predicates)] : []),
-    ...(anti?.kind === 'materialized' ? [filterStage(anti.read, undefined, anti.plan)] : []),
     // Retain the clause's bound correlated reader above its physical outer sort.
-    ...(anti?.kind === 'correlated' ? [filterStage(resolved.predicates, undefined, semijoinNode(run, node.where!, anti.explicitLimit)?.children[0])] : []),
+    ...(anti?.kind === 'materialized' ? [filterStage(anti.read, undefined, anti.plan)]
+      : anti?.kind === 'correlated' ? [filterStage(resolved.predicates, undefined, semijoinNode(run, node.where!, anti.explicitLimit)?.children[0])] : []),
     // HAVING without grouping filters the rows WHERE kept, before any window sees them.
-    ...(having === undefined ? [] : [filterStage(having, run)]),
-    ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows)]),
-    deliverStage(items.map((i) => i.compiled), ordered === undefined && !sortedFirst ? keys : [], deduplicate, { deduplicated, streamed, copied, keep: q.limit && keep, buffer, constant: constantDistinct, limit: limitFirst ? take : undefined }),
+    ...(having ? [filterStage(having, run)] : []),
+    ...(windows?.windows.length ? [windowStage(windows)] : []),
+    deliverStage(items.map((i) => i.compiled), !ordered && !sortedFirst ? keys : [], deduplicate, { deduplicated, streamed, copied, keep: q.limit && keep, buffer, constant: constantDistinct, limit: limitFirst ? take : undefined }),
     ...(!limitFirst && take ? [take] : []),
   ]
   return {
@@ -1172,10 +1172,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   try {
     const def = nonTemporaryDefinition(run, inner.table)
     if (def === undefined) return undefined
-    let candidates = def.indexes.filter((i) => {
-      const part = i.parts[0]
-      return i.kind === 'index' && i.invisible !== true && part?.column.toLowerCase() === innerColumn && part.prefix === undefined
-    })
+    let candidates = def.indexes.filter((i) => i.kind === 'index' && i.invisible !== true && indexPartMatchesColumn(i.parts[0], innerColumn))
     // Either direction keeps equal leading keys adjacent in a forward scan.
     // Multiple candidates and limited plans keep the established selection.
     if (candidates.length > 1 || q.limit !== undefined) candidates = candidates.filter((i) => !i.parts[0]!.descending)
@@ -1396,11 +1393,11 @@ function emptySubquery(run: Run, query: QueryExpression): boolean {
   }
 }
 
-type OrderedIndex = { readonly index: string; readonly reverse: boolean }
+type OrderedIndex = { readonly index: IndexDef; readonly reverse: boolean }
 
 /**
  * Use the selected read or the preferred clustered key when it supplies the
- * order. Otherwise use a uniquely compatible forced key. A secondary index
+ * order. Otherwise consider compatible forced keys. A secondary index
  * carries any named clustered parts, and all requested parts agree on one
  * physical scan direction.
  */
@@ -1408,7 +1405,7 @@ function orderingIndex(source: NonNullable<FromPlan['single']>, order: readonly 
   const { def, alias } = source
   const clustered = clusteredIndex(def)
   const eligible = from.orderingIndexes('ORDER BY')
-  const forced = from.eligibleIndexes?.force === 'ORDER BY' ? eligible : undefined
+  const forced = from.eligibleIndexes?.force === 'ORDER BY' && eligible
   const index = readBy === undefined ? clustered : def.indexes.find((i) => i.name === readBy)
   if (!index && !forced) return undefined
   // The caller has nonempty ORDER keys; successful binding keeps this list nonempty.
@@ -1435,13 +1432,18 @@ function orderingIndex(source: NonNullable<FromPlan['single']>, order: readonly 
     // the PRIMARY parts carried by a secondary index.
     if (!keys.every((key, i) => {
       const part = parts[i]
-      return part?.column.toLowerCase() === key.name && part.prefix === undefined && ((part.descending === true) !== key.desc) === reverse
+      return indexPartMatchesColumn(part, key.name) && ((part.descending === true) !== key.desc) === reverse
     })) continue
-    const read = { index: candidate.name, reverse }
+    const read = { index: candidate, reverse }
     if (preferred.includes(candidate)) return read
     // Keep a selected covering key on a hidden-row-ID table.
-    // Multiple alternatives need a cost decision.
-    if (alternate || (index && !clustered)) return undefined
+    if (!clustered && (index || alternate)) return undefined
+    if (alternate) {
+      if (readBy !== undefined) return undefined
+      // MySQL considers the keys in declaration order, replacing its choice
+      // for fewer declared parts or a forward scan over a backward one.
+      if (candidate.parts.length >= alternate.index.parts.length && (reverse || !alternate.reverse)) continue
+    }
     alternate = read
   }
   return alternate

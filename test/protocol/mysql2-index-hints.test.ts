@@ -316,6 +316,42 @@ test('ORDER BY index hints leave JOIN covering reads eligible', async () => {
   }
 })
 
+test('FORCE INDEX ranks noncovering ordering keys in declaration order', async () => {
+  const { db, conn } = await indexHintConnection()
+  const schema = 'index_hint_order_competitors'
+  const read = checkIndexRead.bind(undefined, conn)
+  const forward = DATA.slice().sort((left, right) => left.a - right.a || left.id - right.id)
+  const backward = DATA.slice().sort((left, right) => left.a - right.a || right.id - left.id)
+  const descending = DATA.slice().sort((left, right) => right.a - left.a || left.id - right.id)
+  const composite = DATA.slice().sort((left, right) => left.a - right.a || left.b - right.b || left.id - right.id)
+  const wide = (rows: typeof DATA) => rows.map(({ id, payload }) => [id, payload])
+  const fields = [ID_FIELD, ['payload', 253, 80, 0, 0, 224]]
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    for (const [first, rows, index] of [
+      ['KEY long_ab(a,b),KEY short_a(a),KEY desc_a(a DESC)', backward, 'desc_a'],
+      ['KEY desc_a(a DESC),KEY long_ab(a,b),KEY short_a(a)', composite, 'long_ab'],
+    ] as const) {
+      await conn.query('CREATE TABLE t(id INT PRIMARY KEY,a INT NOT NULL,b INT NOT NULL,payload VARCHAR(20),' + first + ') STATS_AUTO_RECALC=0')
+      await conn.query('INSERT INTO t VALUES ' + DATA.map(({ id, a, b, payload }) => `(${id},${a},${b},'${payload}')`).join(','))
+      await conn.query('ANALYZE TABLE t')
+      await conn.query("SET optimizer_switch='prefer_ordering_index=off'")
+      await read('SELECT id,payload FROM t FORCE INDEX FOR ORDER BY (long_ab,desc_a) ORDER BY a',
+        wide(rows), fields, `Index scan on t using ${index}`)
+      await read('SELECT id,payload FROM t FORCE INDEX (long_ab,short_a) ORDER BY a LIMIT 4 OFFSET 7',
+        wide(forward.slice(7, 11)), fields, 'Limit/Offset\n    Index scan on t using short_a')
+      await read('SELECT id,payload FROM t FORCE INDEX FOR ORDER BY (short_a,desc_a) ORDER BY a DESC LIMIT 4 OFFSET 7',
+        wide(descending.slice(7, 11)), fields, 'Limit/Offset\n    Index scan on t using desc_a')
+      await conn.query('DROP TABLE t')
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
 test('ORDER BY hints can read secondary keys on tables with hidden clustered row IDs', async () => {
   const { db, conn } = await indexHintConnection()
   const schema = 'index_hint_hidden_order'

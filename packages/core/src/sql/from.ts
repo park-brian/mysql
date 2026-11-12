@@ -49,7 +49,7 @@ import { rowKey } from './keys.ts'
 import { columnResultType } from './meta.ts'
 import { fulltextOf } from './fulltext.ts'
 import { chooseStrategy } from './group.ts'
-import { clusteredIndex, forwardKeyColumn, indexParts } from './indexes.ts'
+import { clusteredIndex, forwardKeyColumn, indexPartMatchesColumn, indexParts } from './indexes.ts'
 import { accessRows, distinct, sort as sortRows, type SortKey } from './operators.ts'
 import { neverEqual, rejectsNullExtension } from './optimize.ts'
 import type { TableStatistics } from './stats.ts'
@@ -2154,7 +2154,7 @@ export function holdsRead(def: TableDef, index: IndexDef, read: ReadonlySet<stri
   if (read === 'all' || index.invisible === true) return false
   const parts = indexParts(index, clusteredIndex(def))
   for (const name of read) {
-    if (!parts.some((p) => p.prefix === undefined && p.column.toLowerCase() === name)) return false
+    if (!parts.some((p) => indexPartMatchesColumn(p, name))) return false
   }
   return true
 }

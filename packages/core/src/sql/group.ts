@@ -35,7 +35,7 @@ import type { IndexDef, TableDef } from '@myjs/engine'
 import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
 import { nativeCallName, someNode } from './ast.ts'
 import { unknownColumnError } from './scope.ts'
-import { clusteredIndex, indexParts } from './indexes.ts'
+import { clusteredIndex, indexPartMatchesColumn, indexParts } from './indexes.ts'
 import { messages, sqlError, utf8 } from '@myjs/protocol'
 import {
   avgAccumulator,
@@ -549,7 +549,7 @@ export function chooseStrategy(def: TableDef | undefined, keyColumns: readonly (
       const parts = indexParts(index, pk)
       if (columns.every((column, i) => {
         const part = parts[i]
-        return part?.column.toLowerCase() === column && part.prefix === undefined && part.descending !== true
+        return indexPartMatchesColumn(part, column) && part.descending !== true
       })) {
         return { strategy: 'index', index: index.name }
       }

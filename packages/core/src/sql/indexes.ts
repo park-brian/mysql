@@ -12,6 +12,11 @@ export function indexParts(index: IndexDef, clustered: IndexDef | undefined): In
   return [...parts, ...clustered.parts.filter((p) => parts.every((q) => q.column.toLowerCase() !== p.column.toLowerCase()))]
 }
 
+/** Whether this part stores a complete column with the given folded name. */
+export function indexPartMatchesColumn(part: IndexDef['parts'][number] | undefined, name: string): part is IndexDef['parts'][number] {
+  return part?.column.toLowerCase() === name && part.prefix === undefined
+}
+
 /** The canonical column a visible, complete ascending first key part can read. */
 export function forwardKeyColumn(def: TableDef, index: IndexDef): ColumnDef | undefined {
   const part = index.parts[0]
