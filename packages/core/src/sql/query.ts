@@ -12,7 +12,7 @@
 import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, PreparedStatement, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
-import { MAX_UNSIGNED, MIN_SIGNED, intValue, integerRange, numericPrefix, parseDecimal, rescale, storageWidth, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
+import { MAX_UNSIGNED, MIN_SIGNED, intValue, integerRange, numericPrefix, parseDecimal, rescale, storageWidth, terminalIntegerValue, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
 import { appendConditions, compile, constantNode, isComparison, literalPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, textBesideColumn, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
@@ -2774,22 +2774,6 @@ function joinConditions(q: QueryExpression, node: SelectNode, pending: Condition
   return { parts, pending, key, leftFilters: left ? where : undefined }
 }
 
-/** The integer reader retains its coefficient when the exponent sign ends the text. */
-function terminalIntegerKey(mantissa: string): bigint {
-  const [whole, fraction] = mantissa.split('.') as [string, string]
-  const digits = (whole + fraction).replace(/^[+-]?0*/, '')
-  let magnitude = BigInt(digits.slice(0, 20))
-  let retained = 20
-  if (magnitude > MAX_UNSIGNED) {
-    magnitude /= 10n
-    if (magnitude === MAX_UNSIGNED / 10n) magnitude = MAX_UNSIGNED
-    else retained--
-  }
-  // Discarded whole digits require a left shift past the unsigned range.
-  if (digits.length > retained + fraction.length) magnitude = MAX_UNSIGNED + 1n
-  return whole[0] === '-' ? -magnitude : magnitude
-}
-
 function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
   const { key, leftFilters } = on
   const { tables } = scope as TableScope
@@ -2811,10 +2795,8 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     const value = Number(text)
     const [mantissa, exponent] = text.split(/[eE]/) as [string, string?]
     const safe = Number.isSafeInteger(Math.trunc(value))
-    const terminal = fractional && !exponent && /^[eE][+-]$/.test(source.trimStart().slice(text.length))
-    let key: bigint | undefined
-    if (terminal) key = terminalIntegerKey(mantissa)
-    else if (safe || (wide && Math.abs(value) <= Number(MAX_UNSIGNED))) {
+    let key = fractional && !exponent ? terminalIntegerValue(source.trimStart()) : undefined
+    if (key === undefined && (safe || (wide && Math.abs(value) <= Number(MAX_UNSIGNED)))) {
       // Adjacent BIGINT keys can have the same DOUBLE representation.
       if (!fractional) key = BigInt(text)
       // Rescaling the mantissa shifts its coefficient before half-away rounding.

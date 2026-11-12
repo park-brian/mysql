@@ -200,15 +200,19 @@ function nameOfType(t: ColumnType): string {
  * integer type says 1366 when there is no number at all and 1265 when one is
  * followed by more (`'1.5x'`).
  */
-function numericSource(v: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext): Exclude<Value, null> {
+function numericSource(v: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext, integerField = false): Exclude<Value, null> {
   if (v.kind !== 'string' && v.kind !== 'bytes') return v
-  if (v.kind === 'string' && v.ordinal !== undefined) return { kind: 'int', v: v.ordinal, unsigned: true }
-  if (v.kind === 'bytes' && v.hex === true) return { kind: 'int', v: hexNumber(v.v), unsigned: true }
+  if (v.kind === 'string' && v.ordinal !== undefined) return int(v.ordinal, true)
+  if (v.kind === 'bytes' && v.hex === true) return int(hexNumber(v.v), true)
   const text = toText(v)
   const p = numericPrefix(text)
   if (p.complete) return v
+  if (integerField) {
+    const terminal = terminalIntegerValue(text)
+    if (terminal !== undefined) return int(terminal)
+  }
   const kind = nameOfType(column.type)
-  const truncation = kind === 'double' || (kind === 'integer' && /^[ \t\n\r]*[+-]?(?:\d|\.\d)/.test(text))
+  const truncation = kind === 'double' || (kind === 'integer' && p.valid)
   return adjust(ctx, () => (truncation ? truncated(column.name, ctx.row) : wrongValueForColumn(kind, text, column.name, ctx.row)), v)
 }
 
@@ -220,7 +224,7 @@ export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext
     return null
   }
   const width = integerBytes(t.type)
-  if (width !== undefined) return encodeIntField(numericSource(value, column, ctx), width, column, ctx)
+  if (width !== undefined) return encodeIntField(numericSource(value, column, ctx, true), width, column, ctx)
 
   switch (t.type) {
     case FIELD_TYPE.DECIMAL:
@@ -382,12 +386,30 @@ function bytesToBigint(b: Uint8Array): bigint {
   return n
 }
 
+/** MySQL retains the coefficient when an exponent sign ends integer input. */
+export function terminalIntegerValue(text: string): bigint | undefined {
+  const match = /^[ \t]*([+-]?)(\d*)(?:\.(\d*))?[eE][+-]$/.exec(text)
+  if (match === null) return undefined
+  const fraction = match[3] ?? ''
+  const coefficient = match[2]! + fraction
+  if (coefficient === '') return undefined
+  const digits = coefficient.replace(/^0+/, '')
+  let magnitude = BigInt(digits.slice(0, 20))
+  let retained = 20
+  if (magnitude > MAX_UNSIGNED) {
+    magnitude /= 10n
+    if (magnitude === MAX_UNSIGNED / 10n) magnitude = MAX_UNSIGNED
+    else retained--
+  }
+  // Discarded whole digits require a left shift past the unsigned range.
+  if (digits.length > retained + fraction.length) magnitude = MAX_UNSIGNED + 1n
+  return match[1] === '-' ? -magnitude : magnitude
+}
+
 function encodeIntField(v: Exclude<Value, null>, width: number, column: FieldColumn, ctx: StoreContext): Uint8Array {
   const unsigned = column.type.unsigned === true
   const range = unsigned ? unsignedRange(width) : signedRange(width)
-  let n: bigint
-  if (v.kind === 'double' && !Number.isFinite(v.v)) n = v.v > 0 ? MAX_UNSIGNED + 1n : -(MAX_UNSIGNED + 1n)
-  else n = toInteger(v)
+  let n = toInteger(v)
   if (n < range.min || n > range.max) n = adjust(ctx, () => columnOutOfRange(column.name, ctx.row), n < range.min ? range.min : range.max)
   return encodeInt(n, width, unsigned)
 }
