@@ -1399,11 +1399,10 @@ function emptySubquery(run: Run, query: QueryExpression): boolean {
 type OrderedIndex = { readonly index: string; readonly reverse: boolean }
 
 /**
- * The index a table read whole is read by — its covering index, else its
- * clustered one — when an ORDER BY agrees on one physical scan direction
- * over a prefix of that index's key, which for a secondary index ends with
- * the clustered key it carries. 8.4.11 reads the index in that order and sorts nothing ("Index
- * scan on t using PRIMARY", "Covering index scan on t using name").
+ * Use the selected read or the preferred clustered key when it supplies the
+ * order. Otherwise use a uniquely compatible forced key. A secondary index
+ * carries any named clustered parts, and all requested parts agree on one
+ * physical scan direction.
  */
 function orderingIndex(source: NonNullable<FromPlan['single']>, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary: boolean, from: FromPlan): OrderedIndex | undefined {
   const { def, alias } = source
@@ -1411,7 +1410,7 @@ function orderingIndex(source: NonNullable<FromPlan['single']>, order: readonly 
   const eligible = from.orderingIndexes('ORDER BY')
   const forced = from.eligibleIndexes?.force === 'ORDER BY' ? eligible : undefined
   const index = readBy === undefined ? clustered : def.indexes.find((i) => i.name === readBy)
-  if (index === undefined || clustered === undefined) return undefined
+  if (!index && !forced) return undefined
   // The caller has nonempty ORDER keys; successful binding keeps this list nonempty.
   const keys: { name: string; desc: boolean }[] = []
   for (const o of order) {
@@ -1428,9 +1427,9 @@ function orderingIndex(source: NonNullable<FromPlan['single']>, order: readonly 
   // MySQL prefers it over a scan plus sort when prefer_ordering_index is on.
   const preferred = primary ? [index, clustered] : [index]
   let alternate: OrderedIndex | undefined
-  for (const candidate of forced === undefined ? preferred : preferred.concat(forced)) {
-    if (eligible?.includes(candidate) === false) continue
-    const parts = indexParts(def, candidate)
+  for (const candidate of forced ? preferred.concat(forced) : preferred) {
+    if (!candidate || eligible?.includes(candidate) === false) continue
+    const parts = indexParts(candidate, clustered)
     const reverse = keys[0]!.desc !== (parts[0]?.descending === true)
     // Every requested key part must agree on the scan direction, including
     // the PRIMARY parts carried by a secondary index.
@@ -1440,8 +1439,9 @@ function orderingIndex(source: NonNullable<FromPlan['single']>, order: readonly 
     })) continue
     const read = { index: candidate.name, reverse }
     if (preferred.includes(candidate)) return read
+    // Keep a selected covering key on a hidden-row-ID table.
     // Multiple alternatives need a cost decision.
-    if (alternate !== undefined) return undefined
+    if (alternate || (index && !clustered)) return undefined
     alternate = read
   }
   return alternate

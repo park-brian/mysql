@@ -546,7 +546,7 @@ export function chooseStrategy(def: TableDef | undefined, keyColumns: readonly (
     const ordered = (eligible ?? def.indexes).filter((i) => i.invisible !== true).sort((a, b) => (a === pk ? -1 : b === pk ? 1 : 0))
     for (const index of ordered) {
       // A secondary index carries the clustered key after its own parts.
-      const parts = indexParts(def, index)
+      const parts = indexParts(index, pk)
       if (columns.every((column, i) => {
         const part = parts[i]
         return part?.column.toLowerCase() === column && part.prefix === undefined && part.descending !== true

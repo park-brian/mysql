@@ -2112,7 +2112,7 @@ function pushedToIndex(t: FromTable, c: Placed, settings: LeafSettings, env: Env
   const index = def.indexes.find((i) => i.name === access.index)
   const clustered = clusteredIndex(def)
   if (access.ranges === undefined || index === undefined || index === clustered || settings.covering.get(t.alias) === index.name) return false
-  const held = new Set(indexParts(def, index).map((p) => p.column.toLowerCase()))
+  const held = new Set(indexParts(index, clustered).map((p) => p.column.toLowerCase()))
   return !someNode(c.e, (node) => {
     const n = node as Expression
     if (n.kind === NODE.SUBQUERY || n.kind === NODE.VARIABLE) return true
@@ -2152,7 +2152,7 @@ function indexBytes(def: TableDef, index: IndexDef | undefined): number {
 /** Whether an index holds every complete column read, including a secondary key's clustered parts. */
 export function holdsRead(def: TableDef, index: IndexDef, read: ReadonlySet<string> | 'all'): boolean {
   if (read === 'all' || index.invisible === true) return false
-  const parts = indexParts(def, index)
+  const parts = indexParts(index, clusteredIndex(def))
   for (const name of read) {
     if (!parts.some((p) => p.prefix === undefined && p.column.toLowerCase() === name)) return false
   }

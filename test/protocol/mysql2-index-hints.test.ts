@@ -316,6 +316,43 @@ test('ORDER BY index hints leave JOIN covering reads eligible', async () => {
   }
 })
 
+test('ORDER BY hints can read secondary keys on tables with hidden clustered row IDs', async () => {
+  const { db, conn } = await indexHintConnection()
+  const schema = 'index_hint_hidden_order'
+  const read = checkIndexRead.bind(undefined, conn)
+  const data = Array.from({ length: 32 }, (_, i) => ({ id: (i * 13) % 32 + 1, a: i % 8, b: (i * 11) % 13, payload: 'p' + i }))
+  const byA = data.slice().sort((left, right) => left.a - right.a)
+  const byAId = byA.slice().sort((left, right) => left.a - right.a || left.id - right.id)
+  const payloads = (rows: typeof data) => rows.map(({ payload }) => [payload])
+  const payloadField = [['payload', 253, 80, 0, 0, 224]]
+  const aField = [['a', 3, 11, 20489, 0, 63]]
+  const cover = 'Covering index scan on t using by_a'
+  const scan = 'Index scan on t using by_a'
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE t(id INT,a INT NOT NULL,b INT NOT NULL,payload VARCHAR(20),KEY by_a(a),KEY by_ab(a,b)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO t VALUES ' + data.map(({ id, a, b, payload }) => `(${id},${a},${b},'${payload}')`).join(','))
+    for (const alter of [undefined, 'ALTER TABLE t ADD UNIQUE KEY id_key(id)']) {
+      if (alter !== undefined) await conn.query(alter)
+      await conn.query('ANALYZE TABLE t')
+      await read('SELECT payload FROM t FORCE INDEX FOR ORDER BY (by_a) ORDER BY a',
+        payloads(byA), payloadField, scan)
+      await read('SELECT payload FROM t FORCE INDEX FOR ORDER BY (by_a) ORDER BY a DESC LIMIT 4 OFFSET 2',
+        payloads(byA.slice().reverse().slice(2, 6)), payloadField, `Limit/Offset\n    ${scan}`)
+      await read('SELECT a FROM t ORDER BY a', byA.map(({ a }) => [a]), aField, cover)
+      await read('SELECT a FROM t FORCE INDEX FOR ORDER BY (by_ab) ORDER BY a',
+        byA.map(({ a }) => [a]), aField, `Sort\n    ${cover}`)
+      await read('SELECT payload FROM t FORCE INDEX FOR ORDER BY (by_a) ORDER BY a,id LIMIT 4 OFFSET 2',
+        payloads(byAId.slice(2, 6)), payloadField, 'Limit/Offset\n    Sort\n        Table scan on t')
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
 test('GROUP BY index hints select ordered grouping or temporary aggregation', async () => {
   const { db, conn } = await indexHintConnection()
   const schema = 'index_hint_group'

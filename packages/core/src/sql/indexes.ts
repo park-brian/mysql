@@ -5,12 +5,11 @@ export function clusteredIndex(def: TableDef): IndexDef | undefined {
   return def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
 }
 
-/** The schema key parts, with PRIMARY parts appended only for columns absent from a secondary key. */
-export function indexParts(def: TableDef, index: IndexDef): IndexDef['parts'] {
-  const clustered = clusteredIndex(def)
+/** The schema key parts, plus any named clustered columns absent from a secondary key. */
+export function indexParts(index: IndexDef, clustered: IndexDef | undefined): IndexDef['parts'] {
   const parts = index.parts
-  if (clustered === undefined || index === clustered) return parts
-  return [...parts, ...clustered.parts.filter((p) => !parts.some((q) => q.column.toLowerCase() === p.column.toLowerCase()))]
+  if (!clustered || index === clustered) return parts
+  return [...parts, ...clustered.parts.filter((p) => parts.every((q) => q.column.toLowerCase() !== p.column.toLowerCase()))]
 }
 
 /** The canonical column a visible, complete ascending first key part can read. */
