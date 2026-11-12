@@ -387,6 +387,7 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       }, `${failedDivision} ${api}`)
     }
     const scalar = "(SELECT id FROM t WHERE id='1x' LIMIT 1)"
+    const longOn = `127.${'0'.repeat(140)}1e+`
     for (const [sql, name, warning] of [
       ["SELECT id AS n FROM t WHERE id='x' GROUP BY bad_name", 'group statement'],
       ["SELECT id AS n FROM t WHERE id='x' HAVING bad_name", 'having clause'],
@@ -482,6 +483,7 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='-922337203685477580.9e+' WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x'] },
       { sql: "SELECT b.d AS n FROM t a LEFT JOIN unsigned_t b ON b.id='-0.1e+' WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x', '-0.1e+'] },
       { sql: "SELECT b.id AS n FROM t a LEFT JOIN tiny_t b ON b.id='127.00000000000000000000000000000001e+' WHERE a.id='2x'", rows: [[127]], fixed: [], demanded: ['2x', '127.00000000000000000000000000000001e+'] },
+      { sql: `SELECT b.id AS n FROM t a LEFT JOIN tiny_t b ON b.id='${longOn}' WHERE a.id='2x'`, rows: [[127]], fixed: [], demanded: ['2x', longOn.slice(0, 128)] },
       { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='9223372036854775807.4e+' WHERE a.id='2x'", rows: [[110]], fixed: ['9223372036854775807.4e+'], demanded: ['2x'] },
       { sql: "SELECT b.d AS n FROM t a LEFT JOIN unsigned_t b ON b.id='1844674407370955161.6e+' WHERE a.d='2.5x'", rows: [[120]], fixed: ['1844674407370955161.6e+'], demanded: ['2.5x'] },
       { sql: "SELECT b.d AS n FROM t a LEFT JOIN unsigned_t b ON b.id='184467440737095516160.1e+' WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x', '184467440737095516160.1e+'] },

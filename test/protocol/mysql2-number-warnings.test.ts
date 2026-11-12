@@ -16,6 +16,9 @@ import { MySQL } from '@myjs/core'
 
 type Outcome = readonly (readonly (string | null)[])[] | readonly [number, number, string, number] | readonly [number, string]
 
+const atDoubleWarningLimit = '1' + 'x'.repeat(127)
+const doubleWarning = `Truncated incorrect DOUBLE value: '${atDoubleWarningLimit}'`
+
 const SCRIPT: readonly (readonly [string, Outcome])[] = [
   ["CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(10), w VARCHAR(400), c CHAR(10), b VARBINARY(10), s VARCHAR(10), l VARCHAR(10) CHARACTER SET latin1)", [0,0,"",0]],
   ["INSERT INTO t VALUES (1, '1x', '1x', '1x', X'00FF', 'é', 'é'), (2, '1xy', '1xy', '1xy', X'C3A9', 'ж', 'x'), (3, 'xy', '1abc', 'xy', '', 'E', 'e'), (4, '1.2.3', '1.2.3.4', '1.2.3', X'0A000509', 'ab', 'ab')", [4,0,"Records: 4  Duplicates: 0  Warnings: 0",0]],
@@ -38,6 +41,8 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
   ["INSERT INTO u VALUES (1, ' xyz', X'0A000509'), (2, CONCAT('a', CHAR(0), 'bcd'), 'ab'), (3, '  xy', X'2020')", [3,0,"Records: 3  Duplicates: 0  Warnings: 0",0]],
   ["SELECT id, x + 0, y + 0 FROM u ORDER BY id", [["1","0","0"],["2","0","0"],["3","0","0"]]],
   ["SHOW WARNINGS", [["Warning","1292","Truncated incorrect DOUBLE value: 'a'"],["Warning","1292","Truncated incorrect DOUBLE value: 'ab'"]]],
+  [`SELECT '${atDoubleWarningLimit}' + 0e0, CAST('${atDoubleWarningLimit}z' AS DOUBLE)`, [["1","1"]]],
+  ["SHOW WARNINGS", [["Warning","1292",doubleWarning],["Warning","1292",doubleWarning]]],
 ]
 
 test('text read as a number warns, and FIELD and the address functions quote, as 8.4.11 did', async () => {

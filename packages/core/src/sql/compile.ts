@@ -228,7 +228,8 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
         if (env.memo?.has(key)) return v
         env.memo?.set(key, true)
       }
-      if (quietTail !== undefined && unconvertedBytes(v, kind) === quietTail) return v
+      const integer = integerPrefix(v)
+      if (integer === undefined || (quietTail !== undefined && unconvertedBytes(v, kind === 'INTEGER' ? integer : undefined) === quietTail)) return v
       checkNumber(v, kind, env, c, diagnosticKind)
       return v
     },
@@ -251,14 +252,12 @@ function resolveConstant(c: Compiled, ctx: CompileContext): Compiled {
 }
 
 /** The bytes a number's reading leaves over: after the integer for an INTEGER (-1 when there is no digit), after the number for a DOUBLE (all of them, leading spaces too, when there is none). */
-function unconvertedBytes(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL'): number {
-  if (!isTextValue(v)) return 0
+function unconvertedBytes(v: Exclude<Value, null>, integer?: string): number {
   const text = toText(v)
   let end: number
-  if (kind === 'INTEGER') {
-    const m = /^[ \t\n\r]*[+-]?\d+/.exec(text)
-    if (m === null) return -1
-    end = m[0].length
+  if (integer !== undefined) {
+    if (!text.startsWith(integer)) return -1
+    end = integer.length
   } else {
     const prefix = numericPrefix(text)
     end = prefix.valid ? text.indexOf(prefix.text) + prefix.text.length : 0
@@ -349,7 +348,6 @@ function completeDouble(prefix: ReturnType<typeof numericPrefix>): boolean {
 
 /** `asNumber`'s check, for one value. */
 function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env, c: Compiled, diagnosticKind?: ResultType['kind']): void {
-  if (integerPrefix(v) === undefined) return
   const text = toText(v)
   const p = numericPrefix(text)
   const column = c.type.column
@@ -364,7 +362,7 @@ function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECI
   if (kind === 'DOUBLE' ? completeDouble(p) : p.complete &&
     (kind !== 'INTEGER' || (!p.fractional && BigInt(p.text) <= MAX_UNSIGNED && BigInt(p.text) >= MIN_SIGNED))) return
   // INTEGER casts warn even for empty or whitespace-only strings and bytes.
-  if (!p.complete && kind !== 'DECIMAL' && diagnosticKind === undefined && /^[ \t\n\r]*$/.test(text)) return
+  if (kind !== 'DECIMAL' && diagnosticKind === undefined && /^[ \t\n\r]*$/.test(text)) return
   let diagnostic: string
   if (diagnosticKind === 'bytes' && v.kind === 'bytes') diagnostic = escapedBytes(v.v.subarray(0, 128)).slice(0, 128)
   else if (diagnosticKind === 'string') diagnostic = fixedNumericText(v)
@@ -374,6 +372,7 @@ function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECI
 
 /** A truncated conversion's message; each reader retains its text policy. */
 function truncated(env: Pick<Env, 'conditions'>, kind: string, text: string): void {
+  if (kind === 'DOUBLE' && /^[\x00-\x7F]{129,}$/.test(text)) text = text.slice(0, 128)
   raise(env, 1292, `Truncated incorrect ${kind} value: '${text}'`)
 }
 
@@ -387,9 +386,7 @@ export function warnedText(v: Exclude<Value, null>): string {
     const nul = v.v.indexOf(0)
     return new TextDecoder().decode(nul === -1 ? v.v : v.v.subarray(0, nul))
   }
-  const text = toText(v)
-  const nul = text.indexOf('\0')
-  return nul === -1 ? text : text.slice(0, nul)
+  return toText(v).split('\0', 1)[0]!
 }
 
 /** utf8mb3 carries no character past the BMP. */
