@@ -51,3 +51,53 @@ test('quantified subquery coverage distinguishes complete and prefix index parts
     await db?.end()
   }
 })
+
+test('forced nullable integer NOT IN describes its retained membership build', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection(db === undefined
+    ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+    : { stream: db.createStream(), user: 'root' })
+  const schema = 'quantified_not_in354'
+  const sql = 'SELECT id,label FROM p WHERE k NOT IN (SELECT k FROM c)'
+  const outer = 'Filter\n    Table scan on p\n    Select #2'
+  const materialized = `${outer}\n        Filter\n            Limit\n                Index lookup on <materialized_subquery> using <auto_distinct_key>\n                    Materialize with deduplication\n                        Covering index scan on c using by_k`
+  const dependent = `${outer}\n        Limit\n            Filter\n                Alternative plans for IN subquery\n                    Covering index lookup on c using by_k\n                    Table scan on c`
+  const all = [[1, 'p0'], [2, 'p1'], [3, 'p2'], [4, 'p3'], [5, 'p4']]
+  async function read(expected: unknown[][], plan: string) {
+    for (const method of ['query', 'execute'] as const) {
+      const options = { sql, rowsAsArray: true }
+      const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+      assert.deepEqual(rows, expected)
+      assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
+        ['id', 3, 11, 20483, 0, 63, schema, 'p', 'p', 'id'], ['label', 253, 64, 4097, 0, 224, schema, 'p', 'p', 'label'],
+      ])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
+      assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan)
+    }
+  }
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,k INT,label VARCHAR(16) NOT NULL) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE c(id INT PRIMARY KEY,k INT NOT NULL,KEY by_k(k)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO p VALUES (1,0,'p0'),(2,NULL,'p1'),(3,2,'p2'),(4,3,'p3'),(5,4,'p4')")
+    await conn.query('INSERT INTO c VALUES (1,0)')
+    await conn.query('ANALYZE TABLE p,c')
+    await read(all.slice(2), dependent)
+    await conn.query("SET optimizer_switch='subquery_materialization_cost_based=off'")
+    await read(all.slice(2), materialized)
+    await conn.query("SET optimizer_switch='materialization=off'")
+    await read(all.slice(2), dependent)
+    await conn.query("SET optimizer_switch='materialization=on,semijoin=off'")
+    await conn.query('INSERT INTO c VALUES (2,2)')
+    await read(all.slice(3), materialized)
+    await conn.query('DELETE FROM c')
+    await read(all, materialized)
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})

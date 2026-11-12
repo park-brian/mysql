@@ -58,12 +58,12 @@ import { intersect, normalize, rangeOf, type Constant, type Interval, type Range
 import type { TableStatistics } from './stats.ts'
 import { forwardKeyColumn } from './indexes.ts'
 import { columnIndex } from './scope.ts'
-import { REVERSE_COMPARISON, signedOperand } from './ast.ts'
+import { REVERSE_COMPARISON, logicalShortCircuit, signedOperand } from './ast.ts'
 
-/** Whether a named optimizer transformation is enabled in this statement's session. */
+/** Whether a named transformation is enabled in the normalized session settings. */
 export function optimizerEnabled(env: Env | undefined, name: string): boolean {
   const setting = env?.state.systemVariable('optimizer_switch', undefined, env.session)
-  return setting?.kind !== 'string' || !new RegExp(`(?:^|,)\\s*${name}=off(?:,|$)`, 'i').test(setting.v)
+  return setting?.kind !== 'string' || !`,${setting.v},`.includes(`,${name}=off,`)
 }
 
 /** An inferred access condition, with source identity only for one proved integer bound. */
@@ -131,7 +131,7 @@ export function equalBounds(e: Expression, env: Env, column: ColumnDef | undefin
 /** A condition's top-level `AND`ed conjuncts, appended to `out`. */
 export function splitAnd(e: Expression | undefined, out: Expression[] = []): Expression[] {
   if (e === undefined) return out
-  if (e.kind === NODE.BINARY && (e.op === 'AND' || e.op === '&&')) {
+  if (e.kind === NODE.BINARY && logicalShortCircuit(e.op) === false) {
     splitAnd(e.left, out)
     splitAnd(e.right, out)
   } else out.push(e)

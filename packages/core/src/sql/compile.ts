@@ -12,7 +12,7 @@
 // unknown function in a selected schema is ER_SP_DOES_NOT_EXIST; a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes, type MysqlTime } from '@myjs/bytes'
-import { nativeCallName, queryBody, signedOperand, someNode } from './ast.ts'
+import { logicalShortCircuit, nativeCallName, queryBody, signedOperand, someNode } from './ast.ts'
 import { notSupported } from './errors.ts'
 import { resolveCollation } from './collation.ts'
 import { decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
@@ -121,7 +121,7 @@ import {
 import { castAsJson } from './json.ts'
 import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
 import { regexpLike } from './regexp.ts'
-import { valueKey } from './keys.ts'
+import { NULL_VALUE_KEY, valueKey } from './keys.ts'
 import { requireSchema, safeResolve, TableScope, unknownColumnError, columnIndex as indexOfColumn } from './scope.ts'
 import { bitBytes } from './wire.ts'
 import { badAgainst, booleanRank, Corpus, foldFor, fulltextOf, naturalRank, noExpansion, noIndex, parseBoolean, queryText, wordsOf, type Term } from './fulltext.ts'
@@ -137,6 +137,11 @@ import { systemVariableInfo } from './variables.ts'
 
 /** One row as operators pass it: a value per column of the scope. */
 export type Row = readonly Value[]
+
+/** Give an enclosing row to a correlated or lateral reader. */
+export function withOuterRow(env: Env, row: Row): Env {
+  return { ...env, outer: [row, ...(env.outer ?? [])] }
+}
 
 /** The row a statement is producing, 1-based, as a warning's "at row N" names it (`current_row_for_condition`). */
 const ROW_NUMBERS = new WeakMap<object, number>()
@@ -1535,10 +1540,10 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
 
   const b = compile(right, ctx)
   const nullable = a.type.nullable || b.type.nullable
-  if (op === 'AND' || op === '&&' || op === 'OR' || op === '||' || op === 'XOR') {
+  const decisive = logicalShortCircuit(op)
+  if (decisive !== undefined || op === 'XOR') {
     const at = logicalOperand(a, left, ctx), bt = logicalOperand(b, right, ctx)
     // AND decides on false, OR on true, and XOR always reads both sides.
-    const decisive = op === 'XOR' ? undefined : op === 'OR' || op === '||'
     return {
       eval: (r, env) => {
         const x = truth(at(r, env))
@@ -2119,6 +2124,18 @@ function searchItems(list: SortedItems, v: Exclude<Value, null>): boolean | null
   return missing
 }
 
+/** A NULL item supplies no comparison class. */
+function sameComparisonKind(items: readonly Compiled[], classify: (type: ResultType) => string): boolean {
+  let kind: string | undefined
+  for (const { type } of items) {
+    if (type.kind === 'null') continue
+    const next = classify(type)
+    if (kind !== undefined && kind !== next) return false
+    kind = next
+  }
+  return true
+}
+
 function inList(negated: boolean, left: Expression, right: Expression, ctx: CompileContext): Compiled {
   if (right.kind === NODE.SUBQUERY) return quantified(negated ? '<>' : '=', negated ? 'ALL' : 'ANY', left, right, ctx)
   const list = right.kind === NODE.ROW ? right.items : [right]
@@ -2148,11 +2165,12 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
   const literalConstants = list.every(constantItem)
   const allConstant = literalConstants || list.every((e) => constantNode(e))
   const timeColumn = timed && left.kind === NODE.COLUMN
+  const single = list.length === 1 ? list[0] : undefined
   // One item is `=`, whose text constant beside a date must be one (1525); a list's need not (8.4.11).
   const entries = list.map((i) => compile(i, ctx))
-  const timeConstants = timeColumn && (list.length === 1 || (allConstant && new Set(entries.filter((c) => c.type.kind !== 'null').map((c) => isNumber(c.type) ? 'number' : 'string')).size <= 1))
+  const timeConstants = timeColumn && (single !== undefined || (allConstant && sameComparisonKind(entries, (t) => isNumber(t) ? 'number' : 'string')))
   let raw = timeConstants ? entries.map((c, i) => timeConstant(compiled, left, list[i] as Expression, c, true, ctx)) : entries
-  if (list.length === 1) raw = raw.map((c, k) => yearConstant(dateConstant(c, list[k] as Expression, compiled, ctx), list[k] as Expression, compiled, ctx))
+  if (single !== undefined) raw = [yearConstant(dateConstant(raw[0]!, single, compiled, ctx), single, compiled, ctx)]
   if (allConstant && dated) raw = raw.map((c, i) => numberBesideDate(c, list[i] as Expression, compiled, left, ctx))
   // MySQL selects a datetime comparator for an all-STRING list containing
   // a date. JSON selects its comparator only through the first nonconstant
@@ -2178,10 +2196,9 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
   if (dateOf !== undefined || dated || timed) raw = raw.map((c, i) => dateOf === undefined && !json && list.length > 1 && timed && !isNumber(c.type) ? comparisonTime(c) : dateItem(c, list[i] as Expression))
   // Text against numbers is read as doubles: the left side once a row, and
   // a text item each time it is compared (8.4.11: `id IN ('1x', 2)` warns a row).
-  const a = dateOf !== undefined ? dateItem(compiled, left) : !json && raw.some((i) => textVersusNumber(type, i.type)) ? list.length === 1 ? numberConstant(compiled, left, ctx) : asNumber(compiled, 'DOUBLE') : compiled
+  const a = dateOf !== undefined ? dateItem(compiled, left) : !json && raw.some((i) => textVersusNumber(type, i.type)) ? single !== undefined ? numberConstant(compiled, left, ctx) : asNumber(compiled, 'DOUBLE') : compiled
   const items = raw.map((i) => (!json && (textVersusNumber(i.type, type) || (numeric && i.type.kind === 'json')) ? asNumber(i, 'DOUBLE') : i))
   // Strings throughout are compared in one collation; one item is `=`'s.
-  const single = list.length === 1 ? list[0] : undefined
   const inner = single?.kind === NODE.SUBQUERY ? queryBody(single.query) : undefined
   // An injected HAVING compares a result reference instead of the selected expression.
   const runtimeText = single !== undefined && (inner === undefined || (inner.kind === QUERY.SELECT && inner.having !== undefined))
@@ -2195,7 +2212,7 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
   const searchable = !json && items.length >= 10 && literalConstants && !timeColumn
   // One element is `=`, which compares fixed decimals within a tolerance;
   // a list compares exactly (8.4.11: a FLOAT(3,1) is IN (1.2) and not IN (1.2, 1.3)).
-  const compare = items.length === 1 ? comparer(a.type, (items[0] as Compiled).type) : compareValues
+  const compare = single === undefined ? compareValues : comparer(a.type, items[0]!.type)
   const jsonOperand = (v: Value, t: ResultType): Value => v === null ? null : jsonValue(isBits(t) && v.kind === 'int' ? { t: 'opaque', field: FIELD_TYPE.BIT, v: bitBytes(v.v, t.length) } : toJsonDoc(v))
   const compareItem = (v: Value, w: Value, i: number): number | null => json ? compareValues(jsonOperand(v, type), jsonOperand(w, (items[i] as Compiled).type)) : compare(v, w)
   // Constant items: sorted once a statement, which a correlated subquery's per-row environments share the memo of.
@@ -2209,14 +2226,14 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
     }
     return 'string'
   }
-  const cachedConstants = !searchable && !json && allConstant && new Set(items.filter((i) => i.type.kind !== 'null').map((i) => comparisonKind(i.type))).size <= 1
+  const cachedConstants = !searchable && !json && allConstant && sameComparisonKind(items, comparisonKind)
   const constantsKey = {}
   return {
     eval: (r, env) => {
       let values = cachedConstants ? memoValue(env.memo, constantsKey, () => items.map((i) => i.eval(r, env))) : undefined
       const v = a.eval(r, env)
       if (type.kind === 'null') return null
-      if (v === null && items.length === 1 && !cachedConstants) return null
+      if (v === null && single !== undefined && !cachedConstants) return null
       checkLeft?.(v)
       if (searchable) {
         if (sortedFor !== (env.memo ?? env)) {
@@ -2877,13 +2894,12 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
 
 // --- subqueries (M5.1) --------------------------------------------------------------
 
-/** A `[NOT] IN`, `= ALL` or `<> ANY` subquery as compiled: its comparison, and what EXPLAIN's choice of strategy turns on. */
+/** An uncorrelated scalar `[NOT] IN`, `= ALL` or `<> ANY` subquery as compiled. */
 export interface QuantifiedSubquery {
-  readonly op: string
-  readonly quantifier: 'ANY' | 'ALL'
+  /** A plain integer NOT IN whose execution has a keyed membership reader. */
+  readonly kind: 'in' | 'not-in' | 'keyed-int-not-in' | 'scan'
   /** Whether the expression it is compared with can be NULL. */
-  readonly outerNullable: boolean
-  readonly correlated: boolean
+  readonly nullable: boolean
 }
 
 /** A subquery's plan, with the enclosing scope its correlated names resolve in. */
@@ -2906,7 +2922,7 @@ function rowsOf(plan: SubqueryPlan, key: object, row: Row, env: Env): readonly (
   if (!plan.correlated) {
     return memoValue(env.memo, key, () => [...plan.rows(env)])
   }
-  return [...plan.rows({ ...env, outer: [row, ...(env.outer ?? [])] })]
+  return [...plan.rows(withOuterRow(env, row))]
 }
 
 /**
@@ -2955,10 +2971,11 @@ function scalarFilterTruth(expr: Expression | undefined): boolean | undefined {
   if (expr.kind === NODE.LITERAL && expr.collation === undefined && (numberLiteral(expr) || expr.type === LITERAL.BOOL)) return true
   if (expr.kind !== NODE.BINARY) return undefined
   const { left, right } = expr
-  if (expr.op === 'AND' || expr.op === '&&' || expr.op === 'OR' || expr.op === '||') {
+  const disjunction = logicalShortCircuit(expr.op)
+  if (disjunction !== undefined) {
     const a = scalarFilterTruth(left), b = scalarFilterTruth(right)
     if (a === undefined || b === undefined) return undefined
-    return expr.op === 'AND' || expr.op === '&&' ? a && b : a || b
+    return disjunction ? a || b : a && b
   }
   const compare = COMPARISONS[expr.op]
   if (compare === undefined) return undefined
@@ -2993,7 +3010,6 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
   const as = lefts.map((l) => compile(l, ctx))
   const plan = planned(right, ctx)
   if (plan.columns.length !== as.length) throw operandColumnsError(as.length)
-  if (as.length === 1) ctx.quantified?.(right.query, { op, quantifier, outerNullable: (as[0] as Compiled).type.nullable, correlated: plan.correlated })
   const test = COMPARISONS[op] as (c: number) => boolean
   const all = quantifier === 'ALL'
   const compareRow = (vs: readonly Value[], r: readonly Value[]): number | null => {
@@ -3013,32 +3029,29 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
   // otherwise a NULL on either side makes it NULL.
   const sub = (plan.columns[0] as { type: ResultType }).type
   const a0 = as[0] as Compiled
-  const keyed =
-    as.length === 1 &&
-    (all ? op === '<>' : op === '=') &&
-    compatibleEqualityKeys(a0.type, sub)
+  const single = as.length === 1 && !plan.correlated
+  const membership = all ? op === '<>' : op === '='
+  const keyed = single && membership && compatibleEqualityKeys(a0.type, sub)
+  if (single && (op === '=' || op === '<>')) {
+    const plainNotIn = keyed && all && right.quantifier === undefined && left.kind === NODE.COLUMN && ctx.clause === 'where clause' &&
+      a0.type.field === FIELD_TYPE.LONG && sub.field === FIELD_TYPE.LONG && a0.type.unsigned === sub.unsigned
+    const kind = !membership ? 'scan' : !all ? 'in' : plainNotIn ? 'keyed-int-not-in' : 'not-in'
+    ctx.quantified?.(right.query, { kind, nullable: a0.type.nullable })
+  }
   const type = boolType(true)
-  if (!keyed || plan.correlated) return { eval: compareAll, type }
-  const setKey = {}
+  if (!keyed) return { eval: compareAll, type }
   return {
     eval: (row, env) => {
       if (env.memo === undefined) return compareAll(row, env)
-      const m = memoValue(env.memo, setKey, () => {
+      const keys = memoValue(env.memo, key, () => {
         const keys = new Set<string>()
-        let empty = true
-        let sawNull = false
-        for (const r of plan.rows(env)) {
-          empty = false
-          const x = r[0] ?? null
-          if (x === null) sawNull = true
-          else keys.add(valueKey(x))
-        }
-        return { keys, empty, sawNull }
+        for (const r of plan.rows(env)) keys.add(valueKey(r[0] ?? null))
+        return keys
       })
-      if (m.empty) return bool(all)
+      if (keys.size === 0) return bool(all)
       const v = a0.eval(row, env)
-      if (v !== null && m.keys.has(valueKey(v))) return bool(!all)
-      return v === null || m.sawNull ? null : bool(all)
+      if (v !== null && keys.has(valueKey(v))) return bool(!all)
+      return v === null || keys.has(NULL_VALUE_KEY) ? null : bool(all)
     },
     type,
   }

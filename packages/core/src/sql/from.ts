@@ -35,7 +35,7 @@
 // physical range and exact point equality already enforce it.
 import { notSupported, wrongUsage } from './errors.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
-import { and, isOrderedComparison, someNode } from './ast.ts'
+import { and, isOrderedComparison, logicalShortCircuit, someNode } from './ast.ts'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, type Expression, type IndexHint, type QueryExpression, type TableReference } from '@myjs/parser'
@@ -723,7 +723,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const alwaysTrue = (e: Expression): boolean => {
         if (e.kind === NODE.UNARY) return e.op === 'IS NOT NULL' && notNull(e.operand) !== undefined
         if (e.kind !== NODE.BINARY) return false
-        if (e.op === 'OR' || e.op === '||') return alwaysTrue(e.left) || alwaysTrue(e.right)
+        if (logicalShortCircuit(e.op) === true) return alwaysTrue(e.left) || alwaysTrue(e.right)
         if (e.op !== '<>' && e.op !== '!=') return false
         const l = notNull(e.left)
         return l !== undefined ? neverEqual(l, e.right) : neverEqual(notNull(e.right), e.left)
@@ -1509,7 +1509,7 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: rea
   }
   const isNullOfNotNull = (e: Expression): boolean => e.kind === NODE.UNARY && e.op === 'IS NULL' && resolve(e.operand)?.c.nullable === false
   const possible = (e: Expression): Expression => {
-    if (e.kind !== NODE.BINARY || (e.op !== 'OR' && e.op !== '||')) return e
+    if (e.kind !== NODE.BINARY || logicalShortCircuit(e.op) !== true) return e
     const left = possible(e.left)
     const right = possible(e.right)
     if (isNullOfNotNull(left)) return isNullOfNotNull(right) ? e : right
@@ -1542,7 +1542,7 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: rea
       if (x.kind === NODE.UNARY) return (x.op === 'IS NULL' || x.op === 'IS NOT NULL') && x.operand.kind === NODE.COLUMN ? { ...x, operand: column } : undefined
       if (x.kind !== NODE.BINARY) return undefined
       const op = x.op.toUpperCase()
-      if (op === 'AND' || op === '&&' || op === 'OR' || op === '||') {
+      if (logicalShortCircuit(op) !== undefined) {
         const a = sargable(x.left)
         const b = sargable(x.right)
         return a === undefined || b === undefined ? undefined : { ...x, left: a, right: b }

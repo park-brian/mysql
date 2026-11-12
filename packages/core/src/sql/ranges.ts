@@ -8,7 +8,7 @@ import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import type { ColumnDef } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
 import { compareValues, integerBytes, type Value } from '@myjs/types'
-import { REVERSE_COMPARISON } from './ast.ts'
+import { REVERSE_COMPARISON, logicalShortCircuit } from './ast.ts'
 
 /** A constant's value while planning — a literal, or a bound `?` — or `undefined` for anything else. */
 export type Constant = (e: Expression) => Value | undefined
@@ -32,10 +32,14 @@ function constantFor(e: Expression, column: ColumnDef, value: Constant): Value |
 }
 
 export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, column: ColumnDef, value: Constant): RangeSet {
-  if (e.kind === NODE.BINARY && (e.op === 'AND' || e.op === '&&')) return intersect(rangeOf(e.left, isColumn, column, value), rangeOf(e.right, isColumn, column, value))
-  if (e.kind === NODE.BINARY && (e.op === 'OR' || e.op === '||')) return union(rangeOf(e.left, isColumn, column, value), rangeOf(e.right, isColumn, column, value))
   if (e.kind === NODE.UNARY && (e.op === 'IS NULL' || e.op === 'IS NOT NULL') && isColumn(e.operand)) return e.op === 'IS NULL' ? (column.nullable ? ['null'] : []) : [ALL_VALUES]
   if (e.kind !== NODE.BINARY) return 'all'
+  const disjunction = logicalShortCircuit(e.op)
+  if (disjunction !== undefined) {
+    const left = rangeOf(e.left, isColumn, column, value)
+    const right = rangeOf(e.right, isColumn, column, value)
+    return disjunction ? union(left, right) : intersect(left, right)
+  }
   const point = (v: Exclude<Value, null>): Interval => ({ lo: { v, inclusive: true }, hi: { v, inclusive: true } })
   if (e.op === 'BETWEEN' && isColumn(e.left)) {
     const a = constantFor(e.right, column, value)

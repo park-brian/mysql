@@ -17,6 +17,7 @@ import { MyjsError } from '@myjs/bytes'
 import { encodeCharset } from '@myjs/charsets'
 import { NODE, quoteName, type Expression } from '@myjs/parser'
 import { bytesValue, textOf } from '@myjs/types'
+import { logicalShortCircuit } from './ast.ts'
 import { decimalCastShape } from './meta.ts'
 
 /** Not an error a client sees: the signal that an expression is past what this printer writes. */
@@ -58,9 +59,6 @@ export function printTableExpression(expression: Expression, charset: string | u
 
 const NUMBER = /^[0-9.]+(?:[eE][-+]?[0-9]+)?/
 
-/** The connective whose same-word children print as one group. */
-const logicalWord = (op: string): 'and' | 'or' | undefined => op === 'AND' || op === '&&' ? 'and' : op === 'OR' || op === '||' ? 'or' : undefined
-
 export function printExpression(e: Expression, o: PrintOptions): string {
   const p = (x: Expression): string => printExpression(x, o)
   switch (e.kind) {
@@ -90,18 +88,18 @@ export function printExpression(e: Expression, o: PrintOptions): string {
       break
     case NODE.BINARY: {
       const op = e.op.toUpperCase()
-      const word = logicalWord(op)
-      if (word !== undefined) {
+      const disjunction = logicalShortCircuit(op)
+      if (disjunction !== undefined) {
         // An AND (or OR) of ANDs is one condition with all their arguments.
         const flat: Expression[] = []
         const gather = (x: Expression) => {
-          if (x.kind === NODE.BINARY && logicalWord(x.op) === word) {
+          if (x.kind === NODE.BINARY && logicalShortCircuit(x.op) === disjunction) {
             gather(x.left)
             gather(x.right)
           } else flat.push(x)
         }
         gather(e)
-        return `(${flat.map(p).join(` ${word} `)})`
+        return `(${flat.map(p).join(disjunction ? ' or ' : ' and ')})`
       }
       if (op === 'IN' || op === 'NOT IN') {
         if (e.right.kind !== NODE.ROW) break

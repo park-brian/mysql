@@ -18,9 +18,11 @@ function trimFraction(text: string): string {
   return text.includes('.') ? text.replace(/\.?0+$/, '') : text
 }
 
+export const NULL_VALUE_KEY = 'N'
+
 /** The key of one value. */
 export function valueKey(v: Value): string {
-  if (v === null) return 'N'
+  if (v === null) return NULL_VALUE_KEY
   switch (v.kind) {
     case 'string': {
       if (v.collationId === CHARSET_BINARY) return `b${hex(encodeCollation(v.v, v.collationId))}`

@@ -1,5 +1,8 @@
 import { LITERAL, NODE, QUERY, nativeFunctionWord, type CallNode, type Expression, type LiteralNode, type QueryBody, type QueryExpression } from '@myjs/parser'
 
+/** AND can stop on false, OR on true. Other operators have no such value. */
+export const logicalShortCircuit = (op: string): boolean | undefined => op === 'AND' || op === '&&' ? false : op === 'OR' || op === '||' ? true : undefined
+
 /** A comparison written with its two operands swapped. */
 export const REVERSE_COMPARISON: Readonly<Record<string, string>> = { '<': '>', '<=': '>=', '>': '<', '>=': '<=', '=': '=', '<=>': '<=>', '<>': '<>', '!=': '!=' }
 

@@ -13,14 +13,14 @@ import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type IndexHint, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, PreparedStatement, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { MAX_UNSIGNED, MIN_SIGNED, intValue, integerRange, numericPrefix, roundedIntegerText, storageWidth, terminalIntegerValue, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
-import { appendConditions, compile, constantNode, isComparison, literalPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, textBesideColumn, writtenFalse, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
+import { appendConditions, compile, constantNode, isComparison, literalPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, textBesideColumn, withOuterRow, writtenFalse, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, copiedLength, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { accessRows, distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { equalBounds, isConstant, optimizerEnabled, pointAccess, splitAnd, tableColumn, type Access } from './plan.ts'
-import { and, columnRefs, integerLiteral, nativeCallName, queryBody, rewriteExpression, someNode } from './ast.ts'
+import { and, columnRefs, integerLiteral, logicalShortCircuit, nativeCallName, queryBody, rewriteExpression, someNode } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, wrongArgumentsError } from './errors.ts'
 import { clusteredIndex, indexPartMatchesColumn, indexParts } from './indexes.ts'
@@ -926,7 +926,7 @@ function subqueryNodes(run: Run, clause: string): PlanNode[] {
     if (s.clause !== clause || !firstKey(seen, s.query)) continue
     const roots = s.plan.explain?.()
     const how = run.quantified?.get(s.query)
-    const rewritten = how === undefined || how.correlated ? undefined : quantifiedPlan(run, s.query, how, topLevel(run.clauses?.[clause], s.query), roots)
+    const rewritten = how === undefined ? undefined : quantifiedPlan(run, s.query, how, topLevel(run.clauses?.[clause], s.query), roots)
     out.push(planNode(`Select #${selectNumber(run, s.query)}`, rewritten !== undefined ? [rewritten] : roots))
   }
   return out
@@ -939,7 +939,7 @@ function subqueryNodes(run: Run, clause: string): PlanNode[] {
  */
 function topLevel(root: Expression | undefined, query: QueryExpression): boolean {
   if (root === undefined) return false
-  if (root.kind === NODE.BINARY && ['AND', 'OR', '&&', '||'].includes(root.op.toUpperCase())) return topLevel(root.left, query) || topLevel(root.right, query)
+  if (root.kind === NODE.BINARY && logicalShortCircuit(root.op.toUpperCase()) !== undefined) return topLevel(root.left, query) || topLevel(root.right, query)
   return root.kind === NODE.BINARY && root.right.kind === NODE.SUBQUERY && root.right.query === query
 }
 
@@ -969,24 +969,24 @@ function quantifiedPlan(run: Run, query: QueryExpression, how: QuantifiedSubquer
   const alias = ref.alias ?? ref.table.name
   const column = tableColumn(item, def, alias)
   if (column === undefined) return undefined
-  if (how.op !== '=' && how.op !== '<>') return undefined
-  const equality = how.op === '=' ? how.quantifier === 'ANY' : how.quantifier === 'ALL'
-  const nulls = !top || !equality || how.op === '<>'
   const read = keyReads(column.name, body.where)
   const index = def.indexes.find((i) => i.invisible !== true && i.parts[0]?.column === column.name && i.parts[0].prefix === undefined)
   const where = body.where !== undefined ? 1 : 0
   let access: PlanNode
   let filters: number
-  if (equality) {
-    if (index === undefined) {
+  if (how.kind !== 'scan') {
+    const nulls = !top || how.kind !== 'in'
+    const forced = how.kind === 'keyed-int-not-in' && top && where === 0 && (column.nullable || how.nullable) && run.env.memo !== undefined &&
+      optimizerEnabled(run.env, 'materialization') && !optimizerEnabled(run.env, 'subquery_materialization_cost_based')
+    if (index === undefined || forced) {
       const materialized = planNode('Materialize with deduplication', roots)
       return planNode('Filter', [planNode('Limit', [planNode('Index lookup on <materialized_subquery> using <auto_distinct_key>', [materialized])])])
     }
     const unique = index.parts.length === 1 && (index.kind === 'primary' || index.kind === 'unique')
     const covering = holdsRead(def, index, read)
     access = indexLookup(alias, index.name, unique, covering)
-    if (nulls && how.outerNullable) access = planNode('Alternative plans for IN subquery', [access, planNode(`Table scan on ${alias}`)])
-    filters = Math.max(nulls ? (column.nullable ? 2 : how.outerNullable ? 1 : 0) : 0, where)
+    if (nulls && how.nullable) access = planNode('Alternative plans for IN subquery', [access, planNode(`Table scan on ${alias}`)])
+    filters = Math.max(nulls ? (column.nullable ? 2 : how.nullable ? 1 : 0) : 0, where)
   } else {
     const cover = def.indexes.find((i) => holdsRead(def, i, read) && i.kind !== 'primary')
     access = planNode(cover === undefined ? `Table scan on ${alias}` : `Covering index scan on ${alias} using ${cover.name}`)
@@ -1693,7 +1693,7 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
   })
   // Memoization can cache a merged query too; only an unmerged table copies fields.
   function* fieldRows(trx: Trx | undefined, env: Env, row?: readonly Value[]): Generator<Value[]> {
-    const given = lateral === undefined || row === undefined ? env : { ...env, outer: [row, ...(env.outer ?? [])] }
+    const given = lateral === undefined || row === undefined ? env : withOuterRow(env, row)
     for (const r of plan.rows(trx, given)) yield r.map((v, i) => {
       const type = columns[i]!.type
       return withoutHex(!merged && (type.kind === 'decimal' || type.kind === 'time' || type.kind === 'double') ? fieldValue(v, type) : v)
@@ -2954,8 +2954,9 @@ function pinOf(cond: Expression, column: ColumnDef, columnOf: (e: Expression) =>
     return pinOf({ ...cond.operand, op: '=' }, column, columnOf, env)
   }
   if (cond.kind !== NODE.BINARY) return undefined
-  if (cond.op === 'AND' || cond.op === '&&') return pinOf(cond.left, column, columnOf, env) ?? pinOf(cond.right, column, columnOf, env)
-  if (cond.op === 'OR' || cond.op === '||') {
+  const disjunction = logicalShortCircuit(cond.op)
+  if (disjunction === false) return pinOf(cond.left, column, columnOf, env) ?? pinOf(cond.right, column, columnOf, env)
+  if (disjunction === true) {
     const a = pinOf(cond.left, column, columnOf, env)
     return a !== undefined && a === pinOf(cond.right, column, columnOf, env) ? a : undefined
   }

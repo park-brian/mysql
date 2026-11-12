@@ -33,7 +33,7 @@ import { equalBounds, pointAccess, splitAnd } from './plan.ts'
 import { accessRows } from './operators.ts'
 import { intersect, rangeOf, type RangeSet } from './ranges.ts'
 import { safeResolve } from './scope.ts'
-import { REVERSE_COMPARISON, isOrderedComparison, rewriteExpression } from './ast.ts'
+import { REVERSE_COMPARISON, isOrderedComparison, logicalShortCircuit, rewriteExpression } from './ast.ts'
 
 /** A schema key that identifies a row even when comparisons can see NULL. */
 export function uniqueKey(def: TableDef, index: IndexDef): boolean {
@@ -192,8 +192,11 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
   const impossible = (c: Expression, inOn = false, inner?: ReadonlySet<string>): boolean => {
     // An OR whose every side is impossible: `id IS NULL OR name IS NULL` over
     // NOT NULL columns is "Impossible WHERE" (8.4.11).
-    if (c.kind === NODE.BINARY && (c.op === 'OR' || c.op === '||')) return impossible(c.left, inOn, inner) && impossible(c.right, inOn, inner)
-    if (c.kind === NODE.BINARY && (c.op === 'AND' || c.op === '&&')) return impossible(c.left, inOn, inner) || impossible(c.right, inOn, inner)
+    if (c.kind === NODE.BINARY) {
+      const disjunction = logicalShortCircuit(c.op)
+      if (disjunction === true) return impossible(c.left, inOn, inner) && impossible(c.right, inOn, inner)
+      if (disjunction === false) return impossible(c.left, inOn, inner) || impossible(c.right, inOn, inner)
+    }
     // In an ON, only over the inner tables' columns: `p2.grp <> NULL` on the preserved side proves nothing (8.4.11).
     if (inner !== undefined && !columnSlots(c, slot).every((i) => inner.has(aliasOf(i) ?? ''))) return false
     if (!inOn && c.kind === NODE.UNARY && c.op === 'IS NULL') {
@@ -422,7 +425,7 @@ export function rejectsNullExtension(pool: readonly Expression[], slot: (e: Expr
 /** The table slots a condition rejects NULL on. */
 function nullRejected(c: Expression, slot: (e: Expression) => number | undefined, tableOf?: (i: number) => string | undefined): number[] {
   // An OR rejects NULL on a table both its sides reject it on (`not_null_tables`): `ch.id BETWEEN … OR ch.id BETWEEN …`.
-  if (tableOf !== undefined && c.kind === NODE.BINARY && (c.op === 'OR' || c.op === '||')) {
+  if (tableOf !== undefined && c.kind === NODE.BINARY && logicalShortCircuit(c.op) === true) {
     const right = new Set(nullRejected(c.right, slot, tableOf).map(tableOf))
     return nullRejected(c.left, slot, tableOf).filter((i) => right.has(tableOf(i)))
   }
@@ -511,18 +514,15 @@ function pastRange(column: ColumnDef | undefined, op: string, other: Expression)
  * only when every column in it is known.
  */
 function partialTruth(e: Expression, known: (column: Expression) => Expression | undefined, ctx: CompileContext, env: Env, constants = false): boolean | null | undefined {
-  if (e.kind === NODE.BINARY && (e.op === 'AND' || e.op === '&&' || e.op === 'OR' || e.op === '||')) {
-    const a = partialTruth(e.left, known, ctx, env, constants)
-    const b = partialTruth(e.right, known, ctx, env, constants)
-    const and = e.op === 'AND' || e.op === '&&'
-    if (and) {
-      if (a === false || b === false) return false
+  if (e.kind === NODE.BINARY) {
+    const decisive = logicalShortCircuit(e.op)
+    if (decisive !== undefined) {
+      const a = partialTruth(e.left, known, ctx, env, constants)
+      const b = partialTruth(e.right, known, ctx, env, constants)
+      if (a === decisive || b === decisive) return decisive
       if (a === undefined || b === undefined) return undefined
-      return a === null || b === null ? null : true
+      return a === null || b === null ? null : !decisive
     }
-    if (a === true || b === true) return true
-    if (a === undefined || b === undefined) return undefined
-    return a === null || b === null ? null : false
   }
   let complete = true
   let touched = false

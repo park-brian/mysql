@@ -22,7 +22,7 @@
 import { expectTyped } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { sqlError } from '@myjs/protocol'
-import { columnRefs, nativeCallName, someNode, visitPostorder } from './ast.ts'
+import { REVERSE_COMPARISON, columnRefs, logicalShortCircuit, nativeCallName, someNode, visitPostorder } from './ast.ts'
 import type { ColumnDef, FieldBytes, TableDef, TableSpec } from '@myjs/engine'
 import { NODE, TOKEN, lex, parseExpression, type CheckConstraint, type CreateTableNode, type Expression, type Token, type SqlMode } from '@myjs/parser'
 import { decodeField, truth } from '@myjs/types'
@@ -77,12 +77,14 @@ function conditionText(sql: string, tokens: readonly Token[], check: CheckConstr
   return sql.slice(open.end).trim()
 }
 
-const CONDITIONS = new Set(['MEMBER OF', '=', '<>', '!=', '<', '<=', '>', '>=', '<=>', 'AND', '&&', 'OR', '||', 'XOR', 'IN', 'NOT IN', 'BETWEEN', 'NOT BETWEEN', 'LIKE', 'NOT LIKE', 'REGEXP', 'NOT REGEXP', 'RLIKE', 'NOT RLIKE', 'IS', 'IS NOT'])
+const CONDITIONS = new Set(['MEMBER OF', 'XOR', 'IN', 'NOT IN', 'BETWEEN', 'NOT BETWEEN', 'LIKE', 'NOT LIKE', 'REGEXP', 'NOT REGEXP', 'RLIKE', 'NOT RLIKE', 'IS', 'IS NOT'])
 
 function isCondition(e: Expression): boolean {
   switch (e.kind) {
-    case NODE.BINARY:
-      return CONDITIONS.has(e.op.toUpperCase())
+    case NODE.BINARY: {
+      const op = e.op.toUpperCase()
+      return CONDITIONS.has(op) || Object.hasOwn(REVERSE_COMPARISON, op) || logicalShortCircuit(op) !== undefined
+    }
     case NODE.UNARY:
       return e.op === 'NOT' || e.op === '!' || e.op.startsWith('IS ')
     case NODE.LITERAL:
