@@ -36,9 +36,11 @@ function load(): { bySymbol: Map<string, Entry>; byErrno: Map<number, Entry> } {
     const n = new Map<number, Entry>()
     const words = ERROR_NAME_WORDS.split(' ')
     const unpack = (token: string): string => {
-      // One letter addresses block zero. A two-letter code starts with its block.
-      const block = token.length === 1 ? 0 : token.charCodeAt(0) - 96
-      return words[26 * block + token.charCodeAt(token.length - 1) - 97]!
+      if (token === '~') return ''
+      const first = token.charCodeAt(0) - 97
+      if (first < 0) return token
+      // The first 12 words use a through l, followed by 26 words for each two-letter prefix.
+      return words[token.length === 1 ? first : 12 + 26 * (first - 12) + token.charCodeAt(1) - 97]!
     }
     let errno = 0
     for (const line of PACKED_ERROR_TABLE.split('\n')) {
@@ -49,7 +51,8 @@ function load(): { bySymbol: Map<string, Entry>; byErrno: Map<number, Entry> } {
       }
       const space = line.indexOf(' ')
       const packedSymbol = space === -1 ? line : line.slice(0, space)
-      const symbol = packedSymbol.replace(/[a-z]+/g, unpack)
+      const prefix = packedSymbol[0] === '!' ? '' : 'ER_'
+      const symbol = prefix + packedSymbol.match(/[a-l]|[m-z][a-z]|[A-Z0-9]+|~/g)!.map(unpack).join('_')
       const sqlState = space === -1 ? DEFAULT_SQLSTATE : line.slice(space + 1)
       const entry: Entry = { errno, symbol, sqlState }
       s.set(symbol, entry)

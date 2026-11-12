@@ -107,10 +107,24 @@ for (const { symbol } of entries) {
   }
 }
 const letters = 'abcdefghijklmnopqrstuvwxyz'
-// Nine two-letter blocks reduce the compressed size of the pinned dictionary.
-const tokens = [...letters, ...[...letters.slice(0, 9)].flatMap((prefix) => [...letters].map((letter) => prefix + letter))]
+// The letters a through l are single-letter tokens. The rest start two-letter tokens.
+const tokens = [...letters.slice(0, 12), ...[...letters.slice(12)].flatMap((prefix) => [...letters].map((letter) => prefix + letter))]
 const words = [...wordSavings.keys()].sort().sort((a, b) => wordSavings.get(b) - wordSavings.get(a)).slice(0, tokens.length)
 const codes = new Map(words.map((word, i) => [word, tokens[i]]))
+
+function packSymbol(symbol) {
+  const ordinary = symbol.startsWith('ER_')
+  let packed = ordinary ? '' : '!'
+  let previousRaw = false
+  for (const word of (ordinary ? symbol.slice(3) : symbol).split('_')) {
+    const token = codes.get(word)
+    const raw = token === undefined && word !== ''
+    if (previousRaw && raw) packed += '_'
+    packed += token ?? (word || '~')
+    previousRaw = raw
+  }
+  return packed
+}
 
 // Error numbers advance sequentially within each upstream range. Store a
 // range start rather than repeating a number on every row; a reset also
@@ -119,8 +133,8 @@ const lines = []
 let expected = null
 for (const entry of entries) {
   if (entry.errno !== expected) lines.push(`@${entry.errno}`)
-  const symbol = entry.symbol.split('_').map((word) => codes.get(word) ?? word).join('_')
-  lines.push(entry.sqlState === null ? symbol : `${symbol} ${entry.sqlState}`)
+  const symbol = packSymbol(entry.symbol)
+  lines.push(entry.sqlState === null || entry.sqlState === 'HY000' ? symbol : `${symbol} ${entry.sqlState}`)
   expected = entry.errno + 1
 }
 const packed = lines.join('\n')
@@ -153,13 +167,15 @@ export const STRICT_ERROR_SOURCE_SHA256 = '${strictSha256}'
 /** Native codes promoted by Strict_error_handler; no eager symbol-table lookup. */
 export const STRICT_ERROR_CODES: ReadonlySet<number> = new Set([${strictCodes.join(', ')}])
 
-/** Each lowercase token in a packed symbol stands for one underscore-delimited word. */
+/** Lowercase tokens encode underscore-delimited words in packed symbols. */
 export const ERROR_NAME_WORDS = '${words.join(' ')}'
 
 /**
  * \`@errno\` starts a sequential range; each following line consumes one code.
- * Entry lines contain a packed symbol and an optional SQLSTATE. Expanded lazily by
- * \`errors/index.ts\`; order preserves symbol and number alias precedence.
+ * Entry lines contain a packed symbol and an optional SQLSTATE. Symbols begin
+ * with an implicit ER_ unless prefixed by !. Lowercase tokens encode words, _
+ * separates adjacent raw words and ~ encodes an empty word. The decoder
+ * preserves entry order and alias precedence.
  */
 export const PACKED_ERROR_TABLE = \`${packed}\`
 `

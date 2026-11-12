@@ -12,11 +12,11 @@
 // unknown function in a selected schema is ER_SP_DOES_NOT_EXIST; a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes, type MysqlTime } from '@myjs/bytes'
-import { nativeCallName, signedOperand, someNode } from './ast.ts'
+import { nativeCallName, queryBody, signedOperand, someNode } from './ast.ts'
 import { notSupported } from './errors.ts'
 import { resolveCollation } from './collation.ts'
 import { decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, type VariableNode, quoteName } from '@myjs/parser'
+import { LITERAL, NODE, QUERY, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, type VariableNode, quoteName } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
 import { fromUtf8, sqlError, messages, utf8, type Parameter, type Session, type SqlError } from '@myjs/protocol'
 import { promotedError } from './strict.ts'
@@ -131,6 +131,7 @@ import { printString, printExpression, Unprintable } from './print.ts'
 import { modeOf } from './mode.ts'
 import { NOT_YET, VARIES_PER_EVALUATION, functionCompiler, invalidGroupFunction } from './registry.ts'
 import { clock, escapedBytes, hexOf } from './builtins.ts'
+import { convertTextCharset } from './string-functions.ts'
 import { settle, timeValue } from './temporal-functions.ts'
 import { systemVariableInfo } from './variables.ts'
 
@@ -782,13 +783,23 @@ const NUMERIC_COLLATION = 8
 
 export const isText = (t: ResultType): boolean => t.kind === 'string' || t.kind === 'bytes'
 
+/** Text established by the written expression without evaluating a nullable wrapper. */
+export function literalTextOf(expr: Expression, type: ResultType, allowNullIf = false): string | undefined {
+  if (expr.kind === NODE.LITERAL || expr.kind === NODE.COLLATE) return type.literalText
+  if (expr.kind === NODE.CALL) {
+    const name = nativeCallName(expr)
+    if (name === 'CONCAT' || (allowNullIf && name === 'NULLIF' && type.literalTextState === undefined)) return type.literalText
+  }
+  return undefined
+}
+
 /**
  * The collation and derivation the arguments aggregate to for `operation`,
  * or its error; `compare` for an operation that compares, which NONE cannot
- * serve. Undefined when no argument is a string, or when one does not say
- * its derivation and so cannot be held to one.
+ * serve. A `runtime` comparison checks conditional text when it is read.
+ * Undefined when no argument is a string, or when one does not say its derivation.
  */
-export function aggregateCollations(types: readonly ResultType[], operation: string, compare: boolean, numbers = true): Derived | undefined {
+export function aggregateCollations(types: readonly ResultType[], operation: string, compare: boolean | 'runtime', numbers = true): Derived | undefined {
   const items: Derived[] = []
   let known = true
   for (const t of types) {
@@ -815,12 +826,19 @@ export function aggregateCollations(types: readonly ResultType[], operation: str
   if (acc.collationId !== CHARSET_BINARY) {
     const target = charsetOfCollation(acc.collationId)
     for (const t of types) {
-      if (t.kind !== 'string' || t.literalText === undefined || charsetOfCollation(t.collationId) === target || UNICODE.has(target)) continue
+      if (t.kind !== 'string' || t.literalText === undefined || (compare === 'runtime' && t.literalTextState === 'conditional') || charsetOfCollation(t.collationId) === target || UNICODE.has(target)) continue
       const back = decodeCollation(encodeCollation(t.literalText, acc.collationId), acc.collationId)
       if (back !== t.literalText) throw collationMix(items, operation)
     }
   }
   return acc
+}
+
+/** Check a conditional operand's charset when it supplies text to a comparison. */
+function conditionalTextCheck(t: ResultType, derived: Derived | undefined): ((v: Value) => void) | undefined {
+  if (t.kind !== 'string' || t.literalTextState !== 'conditional' || derived === undefined || derived.collationId === CHARSET_BINARY) return undefined
+  const target = derived.collationId
+  return (v) => { if (v?.kind === 'string') convertTextCharset(v.v, v.collationId, target) }
 }
 
 function collationMix(items: readonly Derived[], operation: string): unknown {
@@ -903,7 +921,11 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
       return {
         eval: readNonNull(inner.eval, (v) => id === CHARSET_BINARY ? bytesValue(valueBytes(v)) : stringValue(toText(v), id, COERCIBILITY.EXPLICIT)),
         decimalPrefix: true,
-        type: { ...stringResultType(charWidth(t), id === CHARSET_BINARY, id, COERCIBILITY.EXPLICIT), coercibility: COERCIBILITY.EXPLICIT },
+        type: {
+          ...stringResultType(charWidth(t), id === CHARSET_BINARY, id, COERCIBILITY.EXPLICIT),
+          coercibility: COERCIBILITY.EXPLICIT,
+          literalText: id === CHARSET_BINARY ? undefined : literalTextOf(e.expr, t),
+        },
       }
     }
 
@@ -1318,6 +1340,15 @@ export function literalPredicate(e: Expression, truncatedDouble = false): boolea
   return literalNumericOperand(e)
 }
 
+/** Signed zero and NULL need no coercion to prove a written false conjunct. */
+export function writtenFalse(e: Expression): boolean {
+  const item = signedOperand(e, '+')
+  if (item.kind !== NODE.LITERAL || item.collation !== undefined) return false
+  const { type, value } = item
+  return value === null || value === false || value === 0 ||
+    (type === LITERAL.INT && value === 0n) || (type === LITERAL.DECIMAL && !/[1-9]/.test(value as string))
+}
+
 /**
  * The width an integer `+` or `-` reports: its operands' wider digit count,
  * one more for a carry, and one more for a sign unless the result is unsigned
@@ -1524,8 +1555,6 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   // Printed only for an error's message: the printing compiles the columns it names.
   let printed: string | undefined
   const label = (): string => (printed ??= printedArgument({ kind: NODE.BINARY, op, left, right, at: left.at }, ctx))
-  if (compared && isText(ca.type) && isText(cb.type)) aggregateCollations([ca.type, cb.type], op === '!=' ? '<>' : op, true)
-
   switch (op) {
     case '+':
     case '-':
@@ -1624,6 +1653,8 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     }
     default: {
       if (!compared) throw notSupported(`The operator ${op}`)
+      const derived = isText(ca.type) && isText(cb.type) ? aggregateCollations([ca.type, cb.type], op === '!=' ? '<>' : op, 'runtime') : undefined
+      const checkLeft = conditionalTextCheck(ca.type, derived), checkRight = conditionalTextCheck(cb.type, derived)
       const nullSafe = !test
       const cmp = nullSafe && fixedTolerance(a.type, b.type) === undefined ? undefined : comparer(a.type, b.type)
       return {
@@ -1631,7 +1662,9 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
         eval: (r, env) => {
           const x = at(r, env)
           if (x === null && !nullSafe) return null
+          checkLeft?.(x)
           const y = bt(r, env)
+          if (x !== null) checkRight?.(y)
           if (!cmp) {
             if (comparison && x !== null && y === null) at(r, env)
             return bool(nullSafeEqual(x, y))
@@ -2124,7 +2157,15 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
   const a = dateOf !== undefined ? dateItem(compiled, left) : !json && raw.some((i) => textVersusNumber(type, i.type)) ? list.length === 1 ? numberConstant(compiled, left, ctx) : asNumber(compiled, 'DOUBLE') : compiled
   const items = raw.map((i) => (!json && (textVersusNumber(i.type, type) || (numeric && i.type.kind === 'json')) ? asNumber(i, 'DOUBLE') : i))
   // Strings throughout are compared in one collation; one item is `=`'s.
-  if (isText(type) && raw.some((i) => isText(i.type))) aggregateCollations([type, ...raw.map((i) => i.type)], raw.length === 1 ? '=' : ' IN ', true)
+  const single = list.length === 1 ? list[0] : undefined
+  const inner = single?.kind === NODE.SUBQUERY ? queryBody(single.query) : undefined
+  // An injected HAVING compares a result reference instead of the selected expression.
+  const runtimeText = single !== undefined && (inner === undefined || (inner.kind === QUERY.SELECT && inner.having !== undefined))
+  const derived = isText(type) && raw.some((i) => isText(i.type))
+    ? aggregateCollations([type, ...raw.map((i) => i.type)], single === undefined ? ' IN ' : '=', runtimeText ? 'runtime' : true)
+    : undefined
+  const checkLeft = runtimeText ? conditionalTextCheck(type, derived) : undefined
+  const checkRight = runtimeText ? conditionalTextCheck(raw[0]!.type, derived) : undefined
   // A long list of constants is sorted once per execution and searched, as
   // MySQL's `in_vector` is: Prisma sends 65,535 of them.
   const searchable = !json && items.length >= 10 && literalConstants && !timeColumn
@@ -2152,6 +2193,7 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
       const v = a.eval(r, env)
       if (type.kind === 'null') return null
       if (v === null && items.length === 1 && !cachedConstants) return null
+      checkLeft?.(v)
       if (searchable) {
         if (sortedFor !== (env.memo ?? env)) {
           sorted = sortItems(items.map((i) => i.eval(r, env)))
@@ -2171,7 +2213,9 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
       }
       let sawNull = false
       for (let i = 0; i < items.length; i++) {
-        const c = compareItem(v, values === undefined ? (items[i] as Compiled).eval(r, env) : values[i] as Value, i)
+        const w = values === undefined ? (items[i] as Compiled).eval(r, env) : values[i] as Value
+        if (v !== null) checkRight?.(w)
+        const c = compareItem(v, w, i)
         if (c === 0) return bool(!negated)
         if (c === null) sawNull = true
       }
@@ -2187,12 +2231,15 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
  * character, and the escape (default `\`) makes either literal.
  */
 function like(negated: boolean, a: Compiled, pattern: Compiled, escape: Compiled | undefined): Compiled {
-  if (isText(a.type) && isText(pattern.type)) aggregateCollations([a.type, pattern.type], 'like', true)
+  const derived = isText(a.type) && isText(pattern.type) ? aggregateCollations([a.type, pattern.type], 'like', 'runtime') : undefined
+  const checkLeft = conditionalTextCheck(a.type, derived), checkRight = conditionalTextCheck(pattern.type, derived)
   return {
     eval: (r, env) => {
       const v = a.eval(r, env)
+      checkLeft?.(v)
       const p = pattern.eval(r, env)
       if (v === null || p === null) return null
+      checkRight?.(p)
       const esc = escape === undefined ? '\\' : toText(escape.eval(r, env) ?? stringValue('\\', 255))
       const id = v.kind === 'string' && p.kind === 'string' ? aggregateCollation(v, p) : v.kind === 'string' ? v.collationId : p.kind === 'string' ? (p as StringValue).collationId : CHARSET_BINARY
       const m = matchLike([...toText(v)], [...toText(p)], esc, id)
@@ -2852,6 +2899,17 @@ function scalarSubquery(e: SubqueryNode, ctx: CompileContext): Compiled {
   const key = {}
   const cached = plan.cached !== false
   const { column: _column, blobBytes: _blobBytes, fieldFlags: _fieldFlags, ownInTemporary: _ownInTemporary, ...type } = t
+  let literalText = t.literalText
+  let literalTextState = t.literalTextState
+  if (literalText !== undefined) {
+    const select = queryBody(e.query)
+    if (select.kind === QUERY.SELECT && select.from === undefined && select.groupBy === undefined && constantNode(select.items, false)) {
+      const having = scalarFilterTruth(select.having)
+      const where = scalarFilterTruth(select.where)
+      if (having === false || ((select.having === undefined || having === true) && where === false)) literalText = undefined
+      else if ((select.having !== undefined && having === undefined) || (select.where !== undefined && where === undefined)) literalTextState = 'conditional'
+    } else literalTextState = 'conditional'
+  }
   return {
     eval: (row, env) => {
       const rows = rowsOf(plan, key, row, env)
@@ -2863,8 +2921,28 @@ function scalarSubquery(e: SubqueryNode, ctx: CompileContext): Compiled {
       return v?.kind === 'string' && v.ordinal !== undefined ? plainValue(v) : v
     },
     // Its own item, not its inner one: a MIN of a column inside keeps none of that column's flags here.
-    type: { ...type, nullable: t.nullable || cached },
+    type: { ...type, literalText, literalTextState, nullable: t.nullable || cached },
   }
+}
+
+/** Only warning-free literal filters can settle the scalar's text at admission. */
+function scalarFilterTruth(expr: Expression | undefined): boolean | undefined {
+  if (expr === undefined) return undefined
+  if (writtenFalse(expr)) return false
+  if (expr.kind === NODE.LITERAL && expr.collation === undefined && (numberLiteral(expr) || expr.type === LITERAL.BOOL)) return true
+  if (expr.kind !== NODE.BINARY) return undefined
+  const { left, right } = expr
+  if (expr.op === 'AND' || expr.op === '&&' || expr.op === 'OR' || expr.op === '||') {
+    const a = scalarFilterTruth(left), b = scalarFilterTruth(right)
+    if (a === undefined || b === undefined) return undefined
+    return expr.op === 'AND' || expr.op === '&&' ? a && b : a || b
+  }
+  const compare = COMPARISONS[expr.op]
+  if (compare === undefined) return undefined
+  if (left.kind !== NODE.LITERAL || left.type !== LITERAL.INT || left.collation !== undefined ||
+      right.kind !== NODE.LITERAL || right.type !== LITERAL.INT || right.collation !== undefined) return undefined
+  const a = left.value as bigint, b = right.value as bigint
+  return compare(a === b ? 0 : a < b ? -1 : 1)
 }
 
 /** `EXISTS (SELECT …)`: whether it has a row. Never NULL. */

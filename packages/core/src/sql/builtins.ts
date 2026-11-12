@@ -5,8 +5,8 @@
 // `registry.ts` routes a call here by name, so nothing here returns
 // "not mine".
 import { CHARSET_BINARY, FIELD_TYPE, concatBytes, hex, type MysqlDateTime } from '@myjs/bytes'
-import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import { NODE, deparse, type CallNode, type Expression, type LiteralNode } from '@myjs/parser'
+import { encodeCollation, hasCollation, requireCollationInfo } from '@myjs/charsets'
+import { LITERAL, NODE, deparse, type CallNode, type Expression, type LiteralNode } from '@myjs/parser'
 import { dateToMysql, messages, sqlError, utf8, webCryptoRandom } from '@myjs/protocol'
 import {
   COERCIBILITY,
@@ -61,6 +61,7 @@ import {
   isBits,
   isText,
   lit,
+  literalTextOf,
   readsColumn,
   readSlot,
   type CompileContext,
@@ -76,7 +77,6 @@ import {
   type Row,
 } from './compile.ts'
 import { dateAdd, isInterval } from './interval.ts'
-import { nativeCallName } from './ast.ts'
 import {
   CHARSET_UTF8MB3_GENERAL_CI,
   CHARSET_UTF8MB4_BIN,
@@ -211,9 +211,9 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
       // in bytes too (8.4.11).
       const width = types.reduce((n, t) => n + charWidth(t) * (binary && t.kind === 'string' ? requireCollationInfo(t.collationId).mbmaxlen : 1), 0)
       const tooWide = width * (binary ? 1 : requireCollationInfo(id).mbmaxlen) > maxPacket(ctx)
-      // A result descriptor can retain a literal's text even when a wrapper returns NULL.
-      const known = !binary && !tooWide && e.args.every((arg, i) => types[i]?.literalText !== undefined &&
-        (arg.kind === NODE.LITERAL || (arg.kind === NODE.CALL && nativeCallName(arg) === 'CONCAT')))
+      const literalText = !binary && !tooWide && e.args.every((arg, i) => literalTextOf(arg, types[i]!) !== undefined)
+        ? types.map((t) => t.literalText).join('')
+        : undefined
       return {
         eval: (r, env) => {
           const parts: Exclude<Value, null>[] = []
@@ -231,7 +231,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
         type: {
           ...stringResultType(width, binary, id, coercibility, true), coercibility,
           nullable: modeOf(ctx.preparedSqlMode ?? ctx.session.sqlMode).strict || types.some((t) => t.nullable) || tooWide,
-          ...(known ? { literalText: types.map((t) => t.literalText).join('') } : {}),
+          literalText,
         },
         decimalPrefix: true,
       }
@@ -421,11 +421,27 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
       // A comparison: text beside a date is read as one for it (or is 1525), though the value returned is the first argument as given.
       const left = dateConverter(a, e.args[0] as Expression, b, ctx)
       const right = dateConverter(b, e.args[1] as Expression, a, ctx)
-      if (isText(x.type) && isText(y.type)) aggregateCollations([x.type, y.type], 'nullif', true)
+      const comparison = isText(x.type) && isText(y.type) ? aggregateCollations([x.type, y.type], 'nullif', true) : undefined
       const cmp = comparer(a.type, b.type)
+      let literalText = x.type.literalText
+      let literalTextState = x.type.literalTextState
+      if (literalText !== undefined) {
+        const leftText = literalTextOf(e.args[0]!, x.type, true)
+        const rightArg = e.args[1]!
+        const rightText = literalTextOf(rightArg, y.type, true)
+        const value = rightText !== undefined ? stringValue(rightText, y.type.collationId, coercibilityOf(y.type))
+          : rightArg.kind === NODE.LITERAL && rightArg.type === LITERAL.HEX && y.type.kind === 'bytes' ? bytesValue(rightArg.value as Uint8Array)
+          : null
+        if (leftText !== undefined && value !== null && comparison !== undefined && hasCollation(comparison.collationId)) {
+          if (cmp(stringValue(leftText, x.type.collationId, coercibilityOf(x.type)), value) === 0) {
+            literalText = undefined
+            literalTextState = 'null'
+          }
+        } else if (y.type.literalTextState !== 'null' && (rightArg.kind !== NODE.LITERAL || rightArg.type !== LITERAL.NULL)) literalTextState = 'conditional'
+      }
       // A temporal or a YEAR comes back as its text, in the connection's charset (8.4.11).
       const text = x.type.kind === 'datetime' || x.type.kind === 'time' || x.type.field === FIELD_TYPE.YEAR
-      const type: ResultType = converted?.type ?? (text ? { ...stringType(charWidth(x.type), conn, true), unsigned: x.type.field === FIELD_TYPE.YEAR } : { ...expressionOf(x.type), nullable: true })
+      const type: ResultType = converted?.type ?? (text ? { ...stringType(charWidth(x.type), conn, true), unsigned: x.type.field === FIELD_TYPE.YEAR } : { ...expressionOf(x.type), literalText, literalTextState, nullable: true })
       const read = (result: Compiled['eval']): Compiled['eval'] => (r, env) => {
         const v = readA.eval(r, env)
         if (v !== null) {

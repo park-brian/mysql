@@ -122,12 +122,12 @@ function strOf(v: V, binary: boolean, collation: number): Str {
     const b = valueBytes(v)
     return { binary, units: Array.from(b, (x) => String.fromCharCode(x)) }
   }
-  const text = v.kind === 'bytes' ? asText(v.v, collation) : v.kind === 'string' ? converted(v.v, v.collationId, collation) : toText(v)
+  const text = v.kind === 'bytes' ? asText(v.v, collation) : v.kind === 'string' ? convertTextCharset(v.v, v.collationId, collation) : toText(v)
   return { binary, units: [...text] }
 }
 
 /** Text moved into another character set: 3854 when a character has no place there (8.4.11). */
-function converted(text: string, from: number, to: number): string {
+export function convertTextCharset(text: string, from: number, to: number): string {
   const a = requireCollationInfo(from).charset
   const b = requireCollationInfo(to).charset
   if (a === b || b.startsWith('utf8mb4')) return text

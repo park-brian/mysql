@@ -87,7 +87,9 @@ export interface ResultType {
   /** How strongly a string holds its collation (`COERCIBILITY`): a column's is 2, a literal's 4, the default. */
   readonly coercibility?: number
   /** Written text available for collation conversion checks (1267, 1270). */
-  readonly literalText?: string
+  readonly literalText?: string | undefined
+  /** A wrapper can conditionally supply its known text, or be proved to supply NULL. */
+  readonly literalTextState?: 'conditional' | 'null' | undefined
   /** The column it is, when the expression is a bare column reference. */
   readonly column?: SourceColumn
   /** A table column's text width, in its own charset's bytes, when it is a BLOB/TEXT. */

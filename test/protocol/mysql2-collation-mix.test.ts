@@ -215,6 +215,14 @@ async function readCollationRows(conn: mysql.Connection, sql: string, rows: unkn
   }
 }
 
+async function rejectCollation(conn: mysql.Connection, sql: string, message: string, errno = 1267) {
+  for (const method of ['query', 'execute'] as const) {
+    await assert.rejects(() => method === 'query' ? conn.query(sql) : conn.execute(sql),
+      { errno, sqlState: 'HY000', sqlMessage: message }, `${method}: ${sql}`)
+    assert.deepEqual((await conn.query({ sql: 'SHOW WARNINGS', rowsAsArray: true }))[0], [['Error', errno, message]])
+  }
+}
+
 test('M5.10: text choices use their resolved collation for grouping and bytes', async () => {
   const { db, conn } = await collationConnection()
   const schema = 'choice_collation'
@@ -276,16 +284,84 @@ test('M5.10: literal CONCAT text is checked during collation resolution', async 
     ] as const) {
       const sql = `SELECT id,${expr} AS result FROM t ORDER BY id`
       const message = `Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (${collation},COERCIBLE) for operation '${operation}'`
-      for (const method of ['query', 'execute'] as const) {
-        await assert.rejects(() => method === 'query' ? conn.query(sql) : conn.execute(sql),
-          { errno: 1267, sqlState: 'HY000', sqlMessage: message }, `${method}: ${sql}`)
-        assert.deepEqual((await conn.query({ sql: 'SHOW WARNINGS', rowsAsArray: true }))[0], [['Error', 1267, message]])
-      }
+      await rejectCollation(conn, sql, message)
     }
     await read("SELECT id,COALESCE(g,CONCAT('é','x')) AS result FROM t ORDER BY id",
       [[1, 'éx'], [2, 'éx'], [3, 'éx'], [4, 'ab']], fields)
     await read("SELECT id,IFNULL(g,CONCAT(NULLIF('😀','😀'),'x')) AS result FROM t ORDER BY id",
       [[1, null], [2, 'éx'], [3, null], [4, 'ab']], fields)
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
+test('M5.10: NULL-producing expressions do not supply text to collation resolution', async () => {
+  const { db, conn } = await collationConnection()
+  const schema = 'nullable_collation'
+  const result = (expr: string) => `SELECT COALESCE(_latin1'q' COLLATE latin1_swedish_ci,${expr}) AS result`
+  const text = "CONCAT('😀','x')"
+  try {
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_general_ci')
+    for (const expr of [
+      `NULLIF(${text},${text})`,
+      `NULLIF(${text},CONCAT('😀','X'))`,
+      `NULLIF(${text},CONCAT('😀','x '))`,
+      `NULLIF(${text},CONCAT('😀','X') COLLATE utf8mb4_general_ci)`,
+      `NULLIF(${text},X'F09F988078')`,
+      `NULLIF(NULLIF(${text},'y'),'😀X')`,
+      `NULLIF(${text},NULLIF(${text},'y'))`,
+      `ANY_VALUE(NULLIF(${text},${text}))`,
+      `(SELECT ${text} WHERE 0)`,
+      `(SELECT ${text} WHERE 1=0)`,
+      `(SELECT ${text} WHERE 0 OR 0)`,
+      `(SELECT ${text} HAVING FALSE)`,
+      `(SELECT ${text} WHERE 0 LIMIT 0)`,
+    ]) {
+      await readCollationRows(conn, result(expr), [['q']], [['result', 253, 8, 0, 31, 45]])
+    }
+    const error = "Illegal mix of collations (latin1_swedish_ci,EXPLICIT) and (utf8mb4_general_ci,COERCIBLE) for operation 'coalesce'"
+    for (const expr of [
+      `NULLIF(${text},'y')`,
+      `NULLIF(${text},NULL)`,
+      `NULLIF(NULLIF(${text},'y'),'z')`,
+      `NULLIF(${text},NULLIF(${text},'😀X'))`,
+      `(SELECT ${text})`,
+      `(SELECT ${text} LIMIT 0)`,
+      `(SELECT ${text} WHERE 0 HAVING COUNT(*)=0)`,
+    ]) {
+      await rejectCollation(conn, result(expr), error)
+    }
+
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,g VARCHAR(12) CHARACTER SET latin1,u VARCHAR(12) COLLATE utf8mb4_general_ci)')
+    await conn.query("INSERT INTO t VALUES (1,NULL,'😀x'),(2,'éx','y'),(3,NULL,'😀X')")
+    await conn.query("SET @u='😀x'")
+    const fields = [['id', 3, 11, 20483, 0, 63], ['result', 8, 1, 128, 0, 63]]
+    const select = (expr: string, where = '') => `SELECT id,${expr} AS result FROM t${where} ORDER BY id`
+    const comparisonError = "Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (utf8mb4_general_ci,COERCIBLE) for operation '='"
+    for (const expr of [
+      `NULLIF(${text},@u)`,
+      `(SELECT ${text} FROM t t2 WHERE 0)`,
+      `(SELECT ${text} WHERE @u='0')`,
+      `(SELECT ${text} WHERE 0 HAVING COUNT(*)>0)`,
+    ]) {
+      await readCollationRows(conn, select(`g=${expr}`), [[1, null], [2, null], [3, null]], fields)
+    }
+    const live = `(SELECT ${text} FROM t t2 WHERE t2.id=1)`
+    const conversion = "Cannot convert string '\\xF0\\x9F\\x98\\x80x' from utf8mb4 to latin1"
+    for (const expr of [`g=${live}`, `g LIKE ${live}`, `g IN (NULLIF(${text},u))`]) {
+      await readCollationRows(conn, select(expr, ' WHERE id=1'), [[1, null]], fields)
+      await rejectCollation(conn, select(expr), conversion, 3854)
+    }
+    await readCollationRows(conn, select(`g<=>${live}`, ' WHERE id=1'), [[1, 0]],
+      [fields[0]!, ['result', 8, 1, 129, 0, 63]])
+    await rejectCollation(conn, select(`${live}=g`, ' WHERE id=1'), conversion, 3854)
+    await rejectCollation(conn, select(`g IN ((SELECT ${text} FROM t t2 WHERE 0))`), comparisonError)
+    await rejectCollation(conn, select(`g=NULLIF(NULLIF(${text},'y'),'z')`), comparisonError)
+    await rejectCollation(conn, select(`g=NULLIF(${text},NULLIF(${text},'😀X'))`), comparisonError)
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()

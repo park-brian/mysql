@@ -13,14 +13,14 @@ import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type IndexHint, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, PreparedStatement, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { MAX_UNSIGNED, MIN_SIGNED, intValue, integerRange, numericPrefix, roundedIntegerText, storageWidth, terminalIntegerValue, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
-import { appendConditions, compile, constantNode, isComparison, literalPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, textBesideColumn, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
+import { appendConditions, compile, constantNode, isComparison, literalPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, textBesideColumn, writtenFalse, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, copiedLength, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { accessRows, distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { equalBounds, isConstant, optimizerEnabled, pointAccess, splitAnd, tableColumn, type Access } from './plan.ts'
-import { and, columnRefs, integerLiteral, nativeCallName, queryBody, rewriteExpression, signedOperand, someNode } from './ast.ts'
+import { and, columnRefs, integerLiteral, nativeCallName, queryBody, rewriteExpression, someNode } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, wrongArgumentsError } from './errors.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
@@ -2923,15 +2923,6 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
       return facts
     },
   }
-}
-
-/** Signed zero and NULL need no coercion to prove a written false conjunct. */
-function writtenFalse(e: Expression): boolean {
-  const item = signedOperand(e, '+')
-  if (item.kind !== NODE.LITERAL || item.collation !== undefined) return false
-  const { type, value } = item
-  return value === null || value === false || value === 0 ||
-    (type === LITERAL.INT && value === 0n) || (type === LITERAL.DECIMAL && !/[1-9]/.test(value as string))
 }
 
 /**

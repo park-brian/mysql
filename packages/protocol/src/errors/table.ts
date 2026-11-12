@@ -26,2149 +26,2151 @@ export const STRICT_ERROR_SOURCE_SHA256 = '709fff0c6c4f005e9bb95e16c605014a11a1f
 /** Native codes promoted by Strict_error_handler; no eager symbol-table lookup. */
 export const STRICT_ERROR_CODES: ReadonlySet<number> = new Set([1292, 1411, 1264, 3752, 1365, 1366, 1265, 3751, 1406, 1048, 1364, 1071, 1423, 1263, 1260, 1441, 6527, 1261, 1262, 3020, 3155, 3156, 1301])
 
-/** Each lowercase token in a packed symbol stands for one underscore-delimited word. */
-export const ERROR_NAME_WORDS = 'ER OBSOLETE INVALID ERROR SUPPORTED TABLE NOT PARTITION BINLOG WARN CANNOT CANT DEPRECATED WRONG COLUMN DEFINITION FAILED COMPONENT REPLICA UNSUPPORTED GTID VALUE TABLESPACE UNKNOWN AUDIT LOG ENCRYPTION INNODB ALLOWED MISSING PASSWORD OPERATION INDEX CHANGE CREATE JSON REPLICATION ENGINE TRANSACTION FUNCTION GENERATED NAME UNSAFE KEY WITH EXISTS SOURCE RANGE TOO MISMATCH USER WINDOW CONSTRAINT DEFAULT UNSTRUCTURED GROUP FILE FUNCTIONAL JDV MODE FORMAT PLUGIN BULK TYPE FOR OPTION SCHEMA SELECT ALTER NO EVENT COMPONENTS FIELD ACCESS CLIENT REGEXP UPDATE FAILURE LH ANONYMOUS VARIABLE INCOMPATIBLE DATA GEOMETRY LANGUAGE SYSTEM CHARACTER FOUND CHANNEL SET UNEXPECTED MULTIPLE FOREIGN KEYRING READ STATEMENT ARGUMENT EXCEEDED IN DENIED DROP ONLY DUPLICATE EXCEPTION SIZE CHECK DISABLED EMPTY MASKING PREVENTS REQUIRES VIEW WITHOUT LONG PRIVILEGE ARCHIVE ILLEGAL SERVICE INCONSISTENT LIMIT FILTER MASTER POLICY REASON ATTRIBUTE AUTO CONVERSION REFERENCED SRS VERSION TO COMPRESSION CONSISTENCY IMPLEMENTED MAX PARSER ROW TABLES THREAD CLONE APPLIER CHARSET LOCK NULL OPEN RUNNING TIMEOUT LENGTH AGGREGATE GRANT RECURSIVE TIMESTAMP UDF RESOURCE ROTATION RPL ALREADY COMMENT EXCEEDS EXIST IGNORED OUT PARQUET READER SERVER STRING SWITCH UNUSED MUST USED ALGORITHM MANDATORY ORDER QUERY RECOVERY REGISTRATION AVRO COMMAND CONNECTION CORRUPT DISABLE EXPLAIN MANY COUNT INFER NON SP WRITE DOES LOAD CLAUSE ERR HEADER OBJECT ON SYNTAX OF POSITION AFTER BAD COLLATION COLUMNS CONDITION DIFFERENT FUNC HANDLER INCREMENT LOGGING PARAMETER PRIMARY REFERENCE SLAVE TRUNCATED WHEN AND USE FIELDS LIST REDO STMT SUBPARTITION AUTOINC CONFLICT CREATION EXECUTED FEATURE METADATA NEXT OVERFLOW PARTIAL ROLLBACK SPATIAL TEMP IS CORRUPTED CURSOR DELETE DEPENDENT DOESNT DUP DURING INCORRECT INSERT MALFORMED RECURSION SECONDARY TEMPORARY TRANSFORM UNABLE VALUES VARIABLES BIG TRG COL COMMUNICATION CONFIGURATION CONVERT DISALLOWED FILTERS MATCH'
+/** Lowercase tokens encode underscore-delimited words in packed symbols. */
+export const ERROR_NAME_WORDS = 'ER OBSOLETE INVALID ERROR SUPPORTED TABLE NOT PARTITION BINLOG WARN CANNOT CANT DEPRECATED WRONG COLUMN DEFINITION FAILED COMPONENT REPLICA UNSUPPORTED GTID VALUE TABLESPACE UNKNOWN AUDIT LOG ENCRYPTION INNODB ALLOWED MISSING PASSWORD OPERATION INDEX CHANGE CREATE JSON REPLICATION ENGINE TRANSACTION FUNCTION GENERATED NAME UNSAFE KEY WITH EXISTS SOURCE RANGE TOO MISMATCH USER WINDOW CONSTRAINT DEFAULT UNSTRUCTURED GROUP FILE FUNCTIONAL JDV MODE FORMAT PLUGIN BULK TYPE FOR OPTION SCHEMA SELECT ALTER NO EVENT COMPONENTS FIELD ACCESS CLIENT REGEXP UPDATE FAILURE LH ANONYMOUS VARIABLE INCOMPATIBLE DATA GEOMETRY LANGUAGE SYSTEM CHARACTER FOUND CHANNEL SET UNEXPECTED MULTIPLE FOREIGN KEYRING READ STATEMENT ARGUMENT EXCEEDED IN DENIED DROP ONLY DUPLICATE EXCEPTION SIZE CHECK DISABLED EMPTY MASKING PREVENTS REQUIRES VIEW WITHOUT LONG PRIVILEGE ARCHIVE ILLEGAL SERVICE INCONSISTENT LIMIT FILTER MASTER POLICY REASON ATTRIBUTE AUTO CONVERSION REFERENCED SRS VERSION TO COMPRESSION CONSISTENCY IMPLEMENTED MAX PARSER ROW TABLES THREAD CLONE APPLIER CHARSET LOCK NULL OPEN RUNNING TIMEOUT LENGTH AGGREGATE GRANT RECURSIVE TIMESTAMP UDF RESOURCE ROTATION RPL ALREADY COMMENT EXCEEDS EXIST IGNORED OUT PARQUET READER SERVER STRING SWITCH UNUSED MUST USED ALGORITHM MANDATORY ORDER QUERY RECOVERY REGISTRATION AVRO COMMAND CONNECTION CORRUPT DISABLE EXPLAIN MANY COUNT INFER NON SP WRITE DOES LOAD CLAUSE ERR HEADER OBJECT ON SYNTAX OF POSITION AFTER BAD COLLATION COLUMNS CONDITION DIFFERENT FUNC HANDLER INCREMENT LOGGING PARAMETER PRIMARY REFERENCE SLAVE TRUNCATED WHEN AND USE FIELDS LIST REDO STMT SUBPARTITION AUTOINC CONFLICT CREATION EXECUTED FEATURE METADATA NEXT OVERFLOW PARTIAL ROLLBACK SPATIAL TEMP IS CORRUPTED CURSOR DELETE DEPENDENT DOESNT DUP DURING INCORRECT INSERT MALFORMED RECURSION SECONDARY TEMPORARY TRANSFORM UNABLE VALUES VARIABLES BIG TRG COL COMMUNICATION CONFIGURATION CONVERT DISALLOWED FILTERS MATCH PARAMETERS PATH PURGE REPOSITORY SESSION STATISTICS VALIDATION EXTERNAL NATIVE NUMBER PURGED REQUIRED VECTOR VAR FAIL HAVE INFO INSUFFICIENT PART SAME STOP SUCH AVAILABLE COLLISION FILEGROUP FILES FRAME HEARTBEAT PARSE PERSISTED PROCEDURE RECONNECT REPLICATE SPECIFIED SQL START FK ANNOTATIONS CHECKS COMMIT DECIMAL FPARSER GRP IMPORT INSTALL INSTANT INTERRUPTED NONEXISTING PARENT ROLE SIGNAL TRIGGER UNLOAD VIRTUAL BOOST COMPLETE DA DATETIME EXCHANGE FULLTEXT GROUPING GTIDS INTERVAL LATITUDE OFF PARAM READONLY SETTABLE STORE SUBQUERY AUTOEXTEND CONCURRENT HYPERGRAPH PARTITIONS TERMINATOR IMPLEMENTATION NONPARTITIONED ACTIVE BE BEFORE BUFFER GLOBAL HANDLE IGNORE LOADER LOCKED NESTED PACKET RECORD ROTATE SECURE STORED TARGET UNIQUE AUTH CACHE CARTESIAN CHANGED CHILD CRST CURRENT DEFINED DEFINER ENTRY EXECUTION FORBIDDEN GEOJSON HOST INIT INJECTION INSTALLED LARGE LIBCURL LONGITUDE NET PARSING'
 
 /**
  * `@errno` starts a sequential range; each following line consumes one code.
- * Entry lines contain a packed symbol and an optional SQLSTATE. Expanded lazily by
- * `errors/index.ts`; order preserves symbol and number alias precedence.
+ * Entry lines contain a packed symbol and an optional SQLSTATE. Symbols begin
+ * with an implicit ER_ unless prefixed by !. Lowercase tokens encode words, _
+ * separates adjacent raw words and ~ encodes an empty word. The decoder
+ * preserves entry order and alias precedence.
  */
 export const PACKED_ERROR_TABLE = `@1000
-b_a_HASHCHK
-b_a_NISAMCHK
-a_br
-a_YES
-a_l_ai_be
-a_l_ai_f
-a_l_ai_DB
-a_DB_ai_at
-a_DB_cw_at
-b_a_DB_cw_ic
-a_DB_cw_RMDIR
-b_a_l_ic_be
-a_l_FIND_ch_REC
-a_l_GET_STAT
-b_a_l_GET_WD
-a_l_em
-a_l_eo_be
-a_be_g_cj
-a_l_cq_DIR
-b_a_l_cl_WD
-a_CHECKREAD
-b_a_DISK_FULL
-a_if_ar 23000
-b_a_d_gm_CLOSE
-a_d_gm_cq
-a_d_gm_RENAME
-a_d_gm_gf
-a_be_fn
-b_a_FILSORT_ABORT
-b_a_FORM_g_cj
-a_GET_ERRNO
-a_dm_HA
-a_ar_g_cj
-a_g_FORM_be
-a_g_KEYFILE
-a_OLD_KEYFILE
-a_eo_AS_READONLY
-a_OUTOFMEMORY HY001
-a_ff_go_SORTMEMORY HY001
-b_a_cm_EOF
-a_CON_gb_d 08004
-a_ff_go_RESOURCES
-a_gr_HOST_d 08S01
-a_HANDSHAKE_d 08S01
-a_DBACCESS_cv_d 42000
-a_bv_cv_d 28000
-a_br_DB_d 3D000
-a_x_COM_d 08S01
-a_gr_en_d 23000
-a_gr_DB_d 42000
-a_f_at_d 42S01
-a_gr_f_d 42S02
-a_gd_UNIQ_d 23000
-a_fi_SHUTDOWN 08S01
-a_gr_bu_d 42S22
-a_n_bu_as_bd 42000
-a_n_bd_bu 42000
-a_n_SUM_bp 42000
-a_n_v_gb 21S01
-a_aw_dj_IDENT 42000
-a_if_FIELDNAME 42S21
-a_if_KEYNAME 42000
-a_if_ENTRY 23000
-a_n_bu_SPEC 42000
-a_PARSE_d 42000
-a_dd_fr 42000
-a_NONUNIQ_f 42000
-a_c_bb 42000
-a_cn_PRI_ar 42000
-a_aw_ga_KEYS 42000
-a_aw_ga_ar_PARTS 42000
-a_aw_dj_ar 42000
-a_ar_o_gg_g_EXITS 42000
-a_BLOB_fn_AS_ar 42000
-a_aw_ir_FIELDLENGTH 42000
-a_n_dv_ar 42000
-a_READY
-b_a_NORMAL_SHUTDOWN
-b_a_GOT_SIGNAL
-a_SHUTDOWN_COMPLETE
-a_FORCING_CLOSE 08S01
-a_IPSOCK_d 08S01
-a_br_SUCH_ag 42S12
-a_n_bu_TERMINATORS 42000
-a_BLOBS_hg_br_TERMINATED 42000
-a_TEXTFILE_g_READABLE
-a_be_at_d
-a_gh_INFO
-a_bq_INFO
-a_n_SUB_ar
-a_l_REMOVE_ALL_hi 42000
-a_l_cw_bu_OR_ar 42000
-a_ii_INFO
-a_by_f_fn
-a_br_SUCH_ei
-a_KILL_cv_d
-a_br_eh_fn
-a_aw_ir_cl
-a_br_UNIQUE_LOGFILE
-a_f_g_LOCKED_bm_gf
-a_f_g_LOCKED
-a_BLOB_l_HAVE_bb 42000
-a_n_DB_ap 42000
-a_n_f_ap 42000
-a_aw_ir_bp 42000
-a_x_d
-a_x_PROCEDURE 42000
-a_n_PARAMCOUNT_ea_PROCEDURE 42000
-a_n_PARAMETERS_ea_PROCEDURE
-a_x_f 42S02
-a_bu_SPECIFIED_TWICE 42000
-a_c_bd_gw_hh
-a_t_EXTENSION 42000
-a_f_fm_HAVE_gt 42000
-a_RECORD_be_FULL
-a_x_ci_cl 42000
-a_aw_ga_eh
-a_aw_ga_hi
-a_aw_ir_ROWSIZE 42000
-a_STACK_OVERRUN
-a_n_OUTER_JOIN_fl 42000
-a_en_o_cu_ag 42000
-a_l_FIND_ew
-a_l_INITIALIZE_ew
-a_ew_br_PATHS
-a_ew_at
-a_l_eo_LIBRARY
-a_l_FIND_DL_ENTRY
-a_an_g_DEFINED
-a_HOST_hz_BLOCKED
-a_HOST_g_PRIVILEGED
-a_ae_cb_ay 42000
-a_ae_g_ac 42000
-a_ae_br_iz 42000
-a_by_INFO
-a_l_ai_ei
-a_n_v_gb_gm_eg 21S01
-a_l_REOPEN_f
-a_c_hh_go_en 22004
-a_bx_d 42000
-a_MIX_go_bd_gw_hg_hi 42000
-a_NONEXISTING_et 42000
-a_TABLEACCESS_cv_d 42000
-a_COLUMNACCESS_cv_d 42000
-a_dm_et_bm_f 42000
-a_et_n_HOST_OR_ay 42000
-a_br_SUCH_f 42S02
-a_NONEXISTING_f_et 42000
-a_g_ac_fv 42000
-a_gn_d 42000
-b_a_UNUSED1
-b_a_UNUSED2
-a_ABORTING_fw 08S01
-a_NET_PACKET_aw_LARGE 08S01
-a_NET_cq_d_FROM_PIPE 08S01
-a_NET_FCNTL_d 08S01
-a_NET_PACKETS_ff_go_fq 08S01
-a_NET_UNCOMPRESS_d 08S01
-a_NET_cq_d 08S01
-a_NET_cq_INTERRUPTED 08S01
-a_NET_d_gm_gf 08S01
-a_NET_gf_INTERRUPTED 08S01
-a_aw_dj_fj 42000
-a_f_l_HANDLE_BLOB 42000
-a_f_l_HANDLE_dv_gy 42000
-b_a_UNUSED3
-a_n_o_ap 42000
-a_n_ar_o 42000
-a_n_MRG_f
-a_if_UNIQUE 23000
-a_BLOB_ar_di_er 42000
-a_hb_l_HAVE_en 42000
-a_aw_ga_ROWS 42000
-a_dg_hb_ar 42000
-b_a_br_RAID_COMPILED
-a_by_di_ar_cu_SAFE_bh
-a_ar_gg_g_EXITS 42000
-a_db_br_SUCH_f 42000
-a_db_g_ed 42000
-a_l_DO_THIS_ig_AN_am 25000
-a_d_ig_COMMIT
-a_d_ig_hw
-a_d_ig_FLUSH_LOGS
-b_a_d_ig_CHECKPOINT
-a_NEW_ABORTING_fw 08S01
-b_a_DUMP_g_ed
-b_a_FLUSH_dr_i_CLOSED
-b_a_ag_REBUILD
-a_au
-a_au_NET_cq 08S01
-a_au_NET_gf 08S01
-a_FT_MATCHING_ar_g_cj
-a_em_OR_ACTIVE_am
-a_x_ch_cc
-a_CRASHED_gm_USAGE
-a_CRASHED_gm_REPAIR
-a_WARNING_g_COMPLETE_hw
-a_TRANS_CACHE_FULL
-b_a_hd_fm_STOP
-a_s_g_ep
-a_gr_s
-a_fw_hs
-a_s_ei
-a_aw_ga_ay_CONNECTIONS 42000
-a_cl_CONSTANTS_cx
-a_em_WAIT_eq
-a_em_f_FULL
-a_cq_cx_am 25000
-b_a_cw_DB_as_cq_em
-b_a_ai_DB_as_cq_em
-a_n_ARGUMENTS
-a_br_PERMISSION_ea_ai_ay 42000
-b_a_UNION_eh_cu_gv_DIR
-a_em_DEADLOCK 40001
-a_f_l_HANDLE_FT
-a_k_ADD_co
-a_br_dx_eg 23000
-a_eg_hz_dx 23000
-a_CONNECT_ea_au 08S01
-b_a_fr_gm_dr
-a_d_hf_EXECUTING_fv
-a_n_USAGE
-a_n_NUMBER_go_gt_cu_bp 21000
-a_l_by_as_READLOCK
-a_MIXING_g_ac
-a_if_cs
-a_ay_dp_REACHED 42000
-a_SPECIFIC_bv_cv_d 42000
-a_LOCAL_cc
-a_GLOBAL_cc
-a_br_bb 42000
-a_n_v_bm_VAR 42000
-a_n_bl_bm_VAR 42000
-a_VAR_l_BE_cq
-a_l_hh_bn_HERE 42000
-a_g_e_YET 42000
-a_au_FATAL_d_READING_i
-a_s_fe_f
-a_ih_GLOBAL_LOCAL_VAR
-a_n_FK_DEF 42000
-a_ar_REF_DO_g_iz_f_REF
-a_OPERAND_gt 21000
-a_SUBQUERY_br_1_eg 21000
-a_x_hl_gx
-a_fx_HELP_DB
-b_a_CYCLIC_hc
-a_dv_iw
-a_dm_hc 42S22
-a_DERIVED_fm_HAVE_ALIAS 42000
-a_bp_REDUCED 01000
-a_TABLENAME_g_ac_HERE 42000
-a_g_e_AUTH_bh 08004
-a_hx_l_HAVE_en 42000
-a_gs_el_ax 42000
-b_a_hd_WAS_ep
-b_a_hd_WAS_g_ep
-a_aw_ir_bm_UNCOMPRESS
-a_ZLIB_Z_MEM_d
-a_ZLIB_Z_BUF_d
-a_ZLIB_Z_ce_d
-a_CUT_v_bd_CONCAT
-a_j_aw_FEW_RECORDS 01000
-a_j_aw_ga_RECORDS 01000
-a_j_en_ea_NOTNULL 22004
-a_j_ce_ff_go_av 22003
-j_ce_he 01000
-a_j_USING_OTHER_gx
-a_l_es_2COLLATIONS
-b_a_cw_ay
-a_REVOKE_GRANTS
-a_l_es_3COLLATIONS
-a_l_es_NCOLLATIONS
-a_cc_hz_g_STRUCT
-a_x_gs
-a_s_fe_SSL_PARAMS
-b_a_fi_hz_cu_SECURE_AUTH_bh
-a_j_bu_RESOLVED
-a_gr_s_UNTIL_COND
-a_ad_SKIP_s
-a_UNTIL_COND_fe
-a_n_ap_bm_ag 42000
-a_n_ap_bm_CATALOG 42000
-b_a_j_QC_RESIZE
-a_gr_FT_o
-a_x_ar_CACHE
-a_j_HOSTNAME_WONT_WORK
-a_x_STORAGE_al 42000
-a_j_m_gn
-a_gd_UPDATABLE_f
-a_hr_dc
-a_bn_df_cr
-a_DUPLICATED_v_cu_bl
-a_he_n_v 22007
-b_a_aw_MUCH_dv_ev_COLS
-a_c_gm_by
-a_t_PS
-a_GET_ERRMSG
-a_GET_im_ERRMSG
-a_x_TIME_ZONE
-a_j_c_ev
-a_c_ci_fj
-a_j_ac_PACKET_OVERFLOWED
-a_CONFLICTING_DECLARATIONS
-a_ge_br_eu_ai 2F003
-a_ge_fa_at 42000
-a_ge_gg_g_fd 42000
-a_ge_cw_q
-a_ge_STORE_q
-a_ge_LILABEL_ax 42000
-a_ge_LABEL_REDEFINE 42000
-a_ge_LABEL_ax 42000
-a_ge_UNINIT_VAR 01000
-a_ge_BADSELECT 0A000
-a_ge_BADRETURN 42000
-a_ge_BADSTATEMENT 0A000
-a_by_z_m_fe 42000
-a_by_z_m_TRANSLATED 42000
-a_fr_INTERRUPTED 70100
-a_ge_n_br_go_ARGS 42000
-a_ge_COND_ax 42000
-a_ge_NORETURN 42000
-a_ge_NORETURNEND 2F005
-a_ge_gr_ib_fr 42000
-a_ge_gr_ib_bp 42000
-a_ge_ib_ax 42000
-a_ge_ib_fa_eo 24000
-a_ge_ib_g_eo 24000
-a_ge_UNDECLARED_VAR 42000
-a_ge_n_br_go_FETCH_ARGS
-a_ge_FETCH_br_ce 02000
-a_ge_if_PARAM 42000
-a_ge_if_VAR 42000
-a_ge_if_COND 42000
-a_ge_if_CURS 42000
-a_ge_l_bq
-a_ge_SUBSELECT_NYI 0A000
-a_hl_g_ac_cu_SF_OR_is 0A000
-a_ge_VARCOND_gq_CURSHNDLR 42000
-a_ge_ib_gq_gx 42000
-a_ge_CASE_g_cj 20000
-a_FPARSER_aw_ir_be
-a_FPARSER_gr_gk
-a_FPARSER_EOF_cu_fb
-a_FPARSER_d_cu_ha
-a_FPARSER_EOF_cu_x_ha
-a_dh_br_fz
-b_a_FRM_x_bl
-a_n_gl
-a_NONUPDATEABLE_o
-b_a_dh_bp_DERIVED_fl
-a_dh_bp_gi
-a_dh_bp_cc
-a_dh_bp_TMPTABLE
-a_dh_n_hj
-a_j_dh_MERGE
-a_j_dh_di_ar
-a_dh_c
-a_ge_br_cw_ge
-b_a_ge_GOTO_cu_HNDLR
-a_is_fa_at
-a_is_gg_g_fd
-a_is_gm_dh_OR_hy_f
-a_is_l_ah_eg
-a_is_br_SUCH_eg_cu_is
-a_br_bb_bm_bu
-a_DIVISION_BY_ZERO 22012
-a_he_n_v_bm_bu
-a_dm_v_bm_bl 22007
-a_dh_NONUPD_db
-a_dh_db_q
-a_PROCACCESS_cv_d 42000
-a_RELAY_z_FAIL
-b_a_PASSWD_er
-a_x_TARGET_i
-a_IO_gj_z_ag_cq
-a_i_PURGE_PROHIBITED
-a_FSEEK_FAIL
-a_i_PURGE_FATAL_gj
-a_z_cu_hh
-a_z_PURGE_x_gj
-a_RELAY_z_INIT
-a_br_BINARY_gz
-a_RESERVED_gn
-b_a_WSAS_q
-b_a_DIFF_GROUPS_PROC
-b_a_br_bd_bm_PROC
-b_a_fq_as_PROC
-b_a_gz_PROHIBIT_CHANGING_go
-b_a_br_be_MAPPING
-b_a_n_MAGIC
-a_PS_ga_PARAM
-a_ar_PART_0
-a_dh_CHECKSUM
-a_dh_MULTIUPDATE
-a_dh_br_ii_bu_hj
-a_dh_ic_MERGE_dh
-a_k_ay
-a_XAER_NOTA XAE04
-a_XAER_INVAL XAE05
-a_XAER_RMFAIL XAE07
-a_XAER_OUTSIDE XAE09
-a_XAER_RMERR XAE03
-a_XA_RBROLLBACK XA100
-a_NONEXISTING_PROC_et 42000
-a_PROC_dv_et_FAIL
-a_PROC_dv_REVOKE_FAIL
-a_ce_aw_dj 22001
-a_ge_gr_SQLSTATE 42000
-a_STARTUP
-a_gh_FROM_FIXED_da_ROWS_ea_VAR
-a_l_ai_ay_as_et 42000
-a_n_v_bm_bl
-a_f_DEF_CHANGED
-a_ge_if_gx 42000
-a_ge_g_VAR_ARG 42000
-a_ge_br_RETSET 0A000
-a_l_ai_cf_gl 22003
-b_a_q_ROUTINE_BREAK_i
-a_i_aq_ROUTINE
-a_i_ai_ROUTINE_NEED_SUPER
-b_a_EXEC_hl_as_eo_ib
-a_hl_HAS_br_eo_ib
-a_COMMIT_g_ac_cu_SF_OR_is
-a_br_bb_bm_dh_bu
-a_ge_br_ik
-a_aw_ir_SCALE 42000
-a_aw_ir_PRECISION 42000
-a_M_BIGGER_THAN_D 42000
-a_n_em_go_ch_f
-a_CONNECT_ea_co_ce_au
-a_fr_gm_co_ce_au
-a_co_ce_au_ie_fd
-a_co_ce_fj_c_l_ai
-a_co_ce_fj_c
-b_a_l_ai_FEDERATED_f
-a_is_cu_n_bo
-a_STACK_OVERRUN_NEED_MORE
-a_aw_dj_BODY 42000
-a_j_l_cw_bb_KEYCACHE
-a_aw_ir_DISPLAYWIDTH 42000
-a_XAER_DUPID XAE08
-a_DATETIME_an_hu 22008
-a_l_by_fn_f_cu_SF_OR_is
-a_dh_PREVENT_by
-a_PS_br_ik
-a_ge_l_cl_AUTOCOMMIT
-b_a_ij_DEFINER
-a_dh_FRM_br_ay
-a_dh_OTHER_ay
-a_br_SUCH_ay
-a_FORBID_bo_ah
-a_eg_hz_dx_2 23000
-a_br_dx_eg_2 23000
-a_ge_gr_VAR_SHADOW 42000
-a_is_br_DEFINER
-a_OLD_be_bi
-a_ge_ik_dp
-b_a_ge_PROC_f_fx
-a_ge_n_ap 42000
-a_f_NEEDS_UPGRADE
-a_ge_br_es 42000
-a_ee_PREPARED_hl_gb_REACHED 42000
-a_dh_eu
-a_gd_GROUPING_bu_fn 42000
-a_f_l_HANDLE_SPKEYS
-a_br_TRIGGERS_gm_ch_bo
-a_REMOVED_SPACES
-a_hn_cq_q
-a_USERNAME
-a_HOSTNAME
-a_n_fj_er
-a_gd_INSERTABLE_f
-a_ADMIN_n_MRG_f
-a_aw_HIGH_LEVEL_go_NESTING_bm_bp
-a_ap_BECOMES_dd
-a_AMBIGUOUS_bu_TERM
-a_co_fi_at
-a_co_fi_ie_fd
-a_dm_HA_ai_bn
-a_h_dg_ip_d
-a_h_n_ip_d
-a_h_MAXVALUE_d
-b_a_h_hm_d
-b_a_h_SUBPART_MIX_d
-a_h_n_br_PART_d
-a_h_n_br_SUBPART_d
-a_n_EXPR_cu_h_gw_d
-b_a_br_CONST_EXPR_cu_av_OR_hj_d
-a_bu_g_cj_PART_d
-b_a_hj_go_hi_cx_cu_HASH_d
-a_do_h_INFO_d
-a_h_gw_g_ac_d
-a_PARTITIONS_fm_BE_DEFINED_d
-a_av_g_INCREASING_d
-a_do_bl_go_FUNCTIONS_d
-a_cn_DEF_CONST_cu_hj_PART_d
-a_h_ENTRY_d
-a_MIX_gx_d
-a_h_g_DEFINED_d
-a_aw_ga_PARTITIONS_d
-a_hm_d
-a_l_ai_gx_be
-a_BLOB_bu_cu_PART_gw_d
-a_UNIQUE_ar_NEED_ALL_hi_cu_PF
-a_br_PARTS_d
-a_h_MGMT_gm_NONPARTITIONED
-a_co_ar_gm_PARTITIONED
-a_cw_h_gd_EXISTENT
-a_cw_LAST_h
-a_COALESCE_cx_gm_HASH_h
-a_REORG_HASH_cx_gm_SAME_br
-a_REORG_br_PARAM_d
-a_cx_gm_av_hj_h
-a_ADD_h_SUBPART_d
-a_ADD_h_br_NEW_h
-a_COALESCE_h_br_h
-a_REORG_h_g_fd
-a_SAME_ap_h
-a_br_i_d
-a_CONSECUTIVE_REORG_PARTITIONS
-a_REORG_OUTSIDE_av
-a_h_an_bz
-b_a_PART_STATE_d
-a_LIMITED_PART_av
-a_bj_hz_g_LOADED
-a_n_v
-a_br_h_bm_GIVEN_v
-a_FILEGROUP_bn_cx_ONCE
-a_ai_FILEGROUP_q
-a_cw_FILEGROUP_q
-a_w_dv_EXTEND_d
-a_n_da_NUMBER
-a_da_hu_d
-a_bq_FILEGROUP_q
-a_i_eg_gz_q
-b_a_i_eg_n_f_DEF
-b_a_i_eg_RBR_ea_SBR
-a_bs_fa_at
-b_a_bs_STORE_q
-a_bs_gg_g_fd
-b_a_bs_l_bq
-b_a_bs_cw_q
-a_bs_INTERVAL_g_POSITIVE_OR_aw_ir
-a_bs_ENDS_BEFORE_STARTS
-a_bs_EXEC_TIME_cu_THE_PAST
-b_a_bs_eo_f_q
-b_a_bs_NEITHER_M_EXPR_NOR_M_AT
-b_a_it_gb_ie_iz_ia
-b_a_k_gh_FROM_f
-b_a_bs_k_ic
-b_a_bs_COMPILE_d
-a_bs_SAME_ap
-b_a_bs_ce_aw_dj
-a_cw_ag_FK
-a_j_m_gn_as_VER
-b_a_l_gf_em_z_f
-a_l_em_z_f
-a_co_cy_ar_OLD_fl 23000
-a_it_gb_ie_iz_PLEASE_by
-b_a_hy_f_df_fk_ff_go_RBR
-a_STORED_an_df_fk_i_bi
-b_a_NDB_l_fk_i_bi
-a_h_br_im
-a_h_CONST_DOMAIN_d
-a_h_an_hz_g_ac
-b_a_DDL_z_d_fl
-a_en_cu_ip_LESS_THAN
-a_n_h_ap
-a_l_ah_TX_CHARACTERISTICS 25001
-a_if_ENTRY_AUTOINCREMENT_CASE
-b_a_bs_MODIFY_QUEUE_d
-a_bs_cl_VAR_d
-a_h_MERGE_d
-b_a_l_ACTIVATE_z
-b_a_RBR_g_AVAILABLE
-a_BASE64_DECODE_d
-a_bs_ik_FORBIDDEN
-b_a_EVENTS_DB_d
-a_cx_INTEGERS_ac
-a_UNSUPORTED_z_al
-a_gr_z_cr
-a_l_RENAME_z_f
-a_n_PARAMCOUNT_ea_NATIVE_FCT 42000
-a_n_PARAMETERS_ea_NATIVE_FCT 42000
-a_n_PARAMETERS_ea_STORED_FCT 42000
-a_NATIVE_FCT_ap_COLLISION
-a_if_ENTRY_as_ar_ap 23000
-a_i_PURGE_EMFILE
-a_bs_k_ai_cu_THE_PAST
-a_bs_k_bq_cu_THE_PAST
-b_a_hd_INCIDENT
-a_br_h_bm_GIVEN_v_SILENT
-a_i_aq_cr
-a_i_FATAL_d
-b_a_hd_RELAY_z_cq_bz
-b_a_hd_RELAY_z_gf_bz
-b_a_hd_ai_bs_bz
-b_a_hd_dr_COM_bz
-a_i_gz_IMPOSSIBLE
-a_dh_br_hp_CTX
-a_dh_c_hp_CTX
-b_a_SR_c_hp_CTX
-a_is_ia_be
-a_is_br_hp_CTX
-a_is_c_hp_CTX
-a_bs_c_hp_CTX
-a_is_l_eo_f
-b_a_l_ai_SROUTINE
-b_a_NEVER_fn
-a_br_bi_DESCRIPTION_bs_BEFORE_i_cr
-a_s_fx_bs
-b_a_gh_ce_c_o_fl
-a_z_PURGE_br_be
-a_XA_RBTIMEOUT XA106
-a_XA_RBDEADLOCK XA102
-a_NEED_REPREPARE
-b_a_DELAYED_g_e
-j_br_fw_hs
-j_bn_fe
-a_bj_ic_BUILTIN
-j_bj_BUSY
-a_cc_hz_READONLY
-a_j_al_am_hw
-b_a_hd_HEARTBEAT_bz
-a_s_HEARTBEAT_v_ff_go_av
-a_NDB_ak_bo_d
-a_ho_FN_PARSE_d
-a_EXCEPTIONS_gf_d
-a_aw_dj_f_fb
-a_aw_dj_bu_fb
-a_gw_INEXISTENT_ap_COLLISION 42000
-a_DATABASE_ap
-a_f_ap
-a_h_ap
-a_hm_ap
-a_im_ap
-a_RENAMED_ap
-a_aw_ga_CONCURRENT_TRXS
-j_gd_ASCII_SEPARATOR_g_ed
-a_DEBUG_SYNC_eq
-a_DEBUG_SYNC_HIT_dp
-a_if_SIGNAL_cl 42000
-a_SIGNAL_j 01000
-a_SIGNAL_g_cj 02000
-a_SIGNAL_cz HY000
-a_RESIGNAL_di_ACTIVE_gx 0K000
-a_SIGNAL_gr_gu_bl
-j_COND_ITEM_he
-a_COND_ITEM_aw_dj
-a_x_LOCALE
-a_s_IGNORE_fi_IDS
-b_a_fr_CACHE_dc
-a_SAME_ap_h_bu
-a_h_o_hj_d
-a_n_bl_o_v_d
-a_aw_ga_h_gw_hi_d
-a_MAXVALUE_cu_ip_cu
-a_aw_ga_ip_d
-a_eg_SINGLE_h_bu_d
-a_bu_bl_g_ac_AS_h_bu
-a_h_hi_aw_dj
-a_i_eg_al_hg_hl_al
-a_i_eg_bh_hg_hl_al
-a_i_aq_hg_hl_al
-a_i_eg_INJECTION_hg_hl_al
-a_i_hl_bh_hg_eg_al
-a_i_eg_INJECTION_hg_hl_bh
-a_i_cn_ENGINES_hg_SELF_gz_al
-a_i_aq_dp
-b_a_UNUSED4
-a_i_aq_ch_f
-a_i_aq_hn_gt
-a_i_aq_ew
-a_i_aq_ch_cc
-a_i_aq_ch_an
-a_i_aq_NONTRANS_gq_TRANS
-a_MESSAGE_hg_cr
-b_a_hd_dw_q
-a_s_l_ai_dw
-a_INSIDE_am_df_fk_i_bi
-a_PATH_er
-a_j_m_gn_br_REPLACEMENT
-a_n_NATIVE_f_STRUCTURE
-a_n_PERFSCHEMA_USAGE
-a_j_I_S_SKIPPED_f
-a_INSIDE_am_df_fk_i_DIRECT
-a_STORED_an_df_fk_i_DIRECT
-a_hx_fm_HAVE_GEOM_it 42000
-a_aw_dj_ag_fb
-a_em_ABORTED
-a_ce_ff_go_av 22003
-b_a_n_SPVAR_bl_cu_dp
-a_i_aq_cn_ENGINES_hg_SELF_gz_al
-a_i_aq_MIXED_cr
-a_INSIDE_am_df_fk_SQL_z_BIN
-a_STORED_an_df_fk_SQL_z_BIN
-a_q_cq_FROM_PAR_be
-a_ip_hz_g_INT_bl_d
-a_bv_cv_br_ae_d 28000
-b_a_cl_ae_AUTH_bj
-b_a_et_bj_ay_at
-a_TRUNCATE_dm_FK 42000
-a_bj_hz_PERMANENT
-a_s_HEARTBEAT_v_ff_go_av_MIN
-a_s_HEARTBEAT_v_ff_go_av_ee
-a_hl_CACHE_FULL
-a_MULTI_by_ar_ho
-a_f_NEEDS_REBUILD
-j_bn_BELOW_dp
-a_ag_o_aw_dj
-a_d_cu_TRIGGER_BODY
-a_d_cu_x_TRIGGER_BODY
-a_ag_fx
-a_UNDO_RECORD_aw_ir
-a_i_aq_ii_IGNORE_bp
-a_i_aq_ii_bp_by
-a_i_aq_REPLACE_bp
-a_i_aq_ai_IGNORE_bp
-a_i_aq_ai_REPLACE_bp
-a_i_aq_by_IGNORE
-a_bj_br_UNINSTALL
-a_bj_br_INSTALL
-a_i_aq_gf_hn_bp
-a_i_aq_ai_bp_hn
-a_i_aq_ii_TWO_KEYS
-a_f_cu_FK_db
-a_t_al
-a_i_aq_hn_g_FIRST
-a_k_gh_FROM_f_V2
-a_au_DELAY_v_ff_go_av
-a_cx_FD_hg_RBR_EVENTS_ac_cu_i_cr
-a_h_EXCHANGE_gv_bn
-a_h_EXCHANGE_PART_f
-a_h_EXCHANGE_hy_f
-a_h_INSTEAD_go_hm
-a_x_h
-a_eh_gv_hs
-a_eg_gg_g_iz_h
-a_i_CACHE_da_GREATER_THAN_ee
-a_j_ag_g_APPLICABLE
-a_h_EXCHANGE_co_ar
-b_a_br_SUCH_ar_v
-a_ez_INFO_ce_aw_dj
-b_a_NETWORK_cq_bs_CHECKSUM_bz
-b_a_i_cq_bs_CHECKSUM_bz
-a_i_hl_CACHE_da_GREATER_THAN_ee
-a_l_by_f_cu_ai_f_bp
-a_h_gi_gm_NONPARTITIONED
-a_eg_gg_g_iz_GIVEN_h_cl
-b_a_br_SUCH_h__fl
-a_ah_ez_INFO_REPOSITORY_bz
-a_WARNING_g_COMPLETE_hw_as_CREATED_hy_f
-a_WARNING_g_COMPLETE_hw_as_DROPPED_hy_f
-a_MTA_hr_hz_g_e
-a_MTA_UPDATED_DBS_GREATER_ee
-a_MTA_l_PARALLEL
-a_MTA_do_ce
-a_FULLTEXT_g_e_as_PARTITIONING
-a_DA_c_gu_NUMBER 35000
-a_INSECURE_PLAIN_TEXT
-a_INSECURE_ah_au
-a_co_cy_ar_as_CHILD_INFO 23000
-a_co_cy_ar_di_CHILD_INFO 23000
-a_SQLTHREAD_as_SECURE_s
-a_f_HAS_br_FT
-a_cc_g_SETTABLE_cu_SF_OR_TRIGGER
-a_cc_g_SETTABLE_cu_am
-b_a_u_ht_hz_g_cu_u_ht_hj
-b_a_l_ah_u_ht_cu_am
-a_cl_cr_k_INVOKE_an
-a_u_ht_l_BE_AUTOMATIC_IF_u_ht_hj_hz_gd_en
-b_a_SKIPPING_LOGGED_am
-a_ij_u_cl_SPECIFICATION
-a_ij_u_cl_ENCODING
-a_ij_u_SPECIFICATION
-a_GNO_EXHAUSTED
-a_gr_s_dv_gp
-a_dv_gp_dg_u_bh_g_OFF
-a_l_DO_IMPLICIT_COMMIT_cu_TRX_hf_u_ht_hz_cl
-a_u_bh_gm_dg_ENFORCE_u_ec_gm
-b_a_u_bh_dg_i
-a_l_cl_u_ht_ea_u_hf_u_bh_hz_OFF
-a_l_cl_u_ht_ea_cb_hf_u_bh_hz_gm
-a_l_cl_u_ht_hj_ea_gd_en_hf_u_bh_hz_OFF
-b_a_cj_u_bs_hf_u_bh_hz_OFF__fl
-a_u_aq_gd_TRANSACTIONAL_f
-a_u_aq_ai_bp
-b_a_u_aq_ai_cw_hy_f_cu_am
-a_u_bh_CAN_cx_ah_ONE_STEP_AT_A_TIME
-a_au_HAS_PURGED_REQUIRED_GTIDS
-a_l_cl_u_ht_hf_OWNING_u
-a_x_fz_bi
-a_l_EXECUTE_cu_cq_cx_am 25006
-a_aw_dj_f_h_fb
-a_s_iv
-a_ab_FT_dp
-a_ab_br_FT_hy_f
-a_ab_FT_n_DOCID_o
-a_ab_FT_n_DOCID_ag
-a_ab_ONLINE_z_aw_ir
-a_x_bq_fo
-a_x_bq_em
-a_MTA_ah_au_l_RUN_as_GAPS
-a_MTA_fs_bz
-a_MTA_RESET_WORKERS
-a_it_gb_ie_iz_ia_V2
-a_s_SILENT_RETRY_am
-a_DISCARD_FK_CHECKS_ep
-a_f_bo_ax
-a_f_cu_ch_w
-a_IO_cq_d
-a_IO_gf_d
-a_w_ad
-a_w_at
-a_w_DISCARDED
-a_INTERNAL_d
-a_ab_IMPORT_d
-a_ab_ag_fx
-a_c_YEAR_o_er
-a_g_VALID_ae
-a_fm_ah_ae
-a_FK_br_ag_CHILD
-a_FK_br_ag_PARENT
-a_FK_FAIL_ADD_ch
-a_FK_k_eo_PARENT
-a_FK_ih_bn
-a_FK_if_ap
-a_ae_bi
-a_FK_o_k_cw
-a_FK_o_k_cw_CHILD
-a_FK_o_g_en
-a_if_ag
-a_FK_o_k_ah
-a_FK_o_k_ah_CHILD
-b_a_UNUSED5
-a_ij_PACKET
-a_cq_cx_bh
-a_u_ht_bl_UNDEFINED_u
-a_cc_g_SETTABLE_cu_ge
-b_a_l_cl_u_PURGED_hf_u_bh_hz_OFF
-a_l_cl_u_PURGED_hf_u_hq_hz_g_dd
-a_l_cl_u_PURGED_hf_OWNED_GTIDS_hz_g_dd
-a_u_PURGED_WAS_CHANGED
-a_u_hq_WAS_CHANGED
-a_i_hl_bh_hg_br_REPL_eh
-a_bq_af_g_e 0A000
-a_bq_af_g_e_dt 0A000
-a_bq_af_g_e_dt_COPY
-a_bq_af_g_e_dt_h
-a_bq_af_g_e_dt_FK_RENAME
-a_bq_af_g_e_dt_o_bl
-a_bq_af_g_e_dt_FK_db
-b_a_UNUSED6
-a_bq_af_g_e_dt_NOPK
-a_bq_af_g_e_dt_hn
-a_bq_af_g_e_dt_HIDDEN_FTS
-a_bq_af_g_e_dt_ah_FTS
-a_bq_af_g_e_dt_FTS
-b_a_SQL_s_SKIP_COUNTER_g_SETTABLE_cu_u_bh
-a_if_x_cu_ag 23000
-a_IDENT_CAUSES_aw_dj_PATH
-a_bq_af_g_e_dt_g_en
-a_fm_ah_ae_LOGIN
-a_eg_cu_n_h
-a_MTA_bs_BIGGER_PENDING_JOBS_da_ee
-b_a_ab_br_FT_USES_ef
-a_i_LOGICAL_CORRUPTION
-a_j_PURGE_z_cu_hh
-a_j_PURGE_z_hz_ACTIVE
-a_dv_gy_ho
-j_gm_BLOCKHOLE_cu_RBR
-a_s_CM_INIT_REPOSITORY
-a_s_AM_INIT_REPOSITORY
-a_bv_cv_ah_ay_d 28000
-a_ab_cq_cx
-a_STOP_s_SQL_ei_eq
-a_STOP_s_IO_ei_eq
-a_f_fx
-a_hy_be_gf_bz
-a_ab_FT_AUX_g_HEX_ID
-a_OLD_TEMPORALS_UPGRADED
-a_ab_FORCED_fs
-a_AES_c_IV
-a_bj_k_BE_UNINSTALLED
-a_u_aq_i_SPLITTABLE_cr_hg_ASSIGNED_u
-a_s_HAS_MORE_GTIDS_THAN_au
-a_ad_ar
-j_NAMED_PIPE_bv_EVERYONE
+!baHASHCHK
+!baNISAMCHK
+of
+YES
+lmwns
+lmwf
+lmwDB
+DBmwnh
+DBpknh
+!baDBpkuq
+DBpkRMDIR
+!baluqns
+lFINDovREC
+lGET_STAT
+!balGET_WD
+lra
+lrcns
+nsgox
+lpeDIR
+!balozWD
+CHECKREAD
+!baDISK_FULL
+utnf 23000
+!badtaCLOSE
+dtape
+dtaRENAME
+dtast
+nssb
+!baFILSORT_ABORT
+!baFORMgox
+GET_ERRNO
+qaHA
+nfgox
+gFORMns
+gKEYFILE
+OLD_KEYFILE
+rcASyc
+OUTOFMEMORY HY001
+rttcSORTMEMORY HY001
+!bapaEOF
+CONspd 08004
+rttcRESOURCES
+tfzrd 08S01
+HANDSHAKEd 08S01
+DBACCESSpjd 42000
+ojpjd 28000
+ofDBd 3D000
+mlCOMd 08S01
+tfrbd 23000
+tfDBd 42000
+fnhd 42S01
+tffd 42S02
+srUNIQd 23000
+rwSHUTDOWN 08S01
+tfoid 42S22
+mboingnr 42000
+mbnroi 42000
+mbSUMod 42000
+mbmjsp 21S01
+nkpxIDENT 42000
+utFIELDNAME 42S21
+utKEYNAME 42000
+utzn 23000
+mboiSPEC 42000
+wqd 42000
+prsf 42000
+NONUNIQf 42000
+cnp 42000
+pbPRInf 42000
+nksoKEYS 42000
+nksonfPARTS 42000
+nkpxnf 42000
+nfmcsugEXITS 42000
+BLOBsbASnf 42000
+nkvfFIELDLENGTH 42000
+mbqjnf 42000
+READY
+!baNORMAL_SHUTDOWN
+!baGOTxm
+SHUTDOWNxr
+FORCING_CLOSE 08S01
+IPSOCKd 08S01
+ofwjmu 42S12
+mboiTERMINATORS 42000
+BLOBStuofTERMINATED 42000
+TEXTFILEgREADABLE
+nsnhd
+svwe
+oewe
+mbSUBnf
+lREMOVE_ALLtw 42000
+lpkoiORnf 42000
+uwwe
+omfsb
+ofwjqw
+KILLpjd
+ofqvsb
+nkvfoz
+ofzdLOGFILE
+fgyvoast
+fgyv
+BLOBlwdnp 42000
+mbDBnd 42000
+mbfnd 42000
+nkvfod 42000
+mld
+mlws 42000
+mbPARAMCOUNTqows 42000
+mbvoqows
+mlf 42S02
+oiwvTWICE 42000
+cnrtktv
+mhEXTENSION 42000
+fsawdth 42000
+yynsFULL
+mlowoz 42000
+nksoqv
+nksotw
+nkvfROWSIZE 42000
+STACK_OVERRUN
+mbOUTER_JOINrz 42000
+rbmcpimu 42000
+lFINDrk
+lINITIALIZErk
+rkofPATHS
+rknh
+lrcLIBRARY
+lFIND_DLzn
+nbgzl
+zrunBLOCKED
+zrgPRIVILEGED
+msopnm 42000
+msgmq 42000
+msofvn 42000
+omwe
+lmwqw
+mbmjsptaqu 21S01
+lREOPENf
+ctvtcrb 22004
+old 42000
+MIXtcnrtktutw 42000
+xjrh 42000
+TABLEACCESSpjd 42000
+COLUMNACCESSpjd 42000
+qarhoaf 42000
+rhmbzrORnm 42000
+ofwjf 42S02
+xjfrh 42000
+gmqsj 42000
+tbd 42000
+!baUNUSED1
+!baUNUSED2
+ABORTINGsk 08S01
+zyyxnkzv 08S01
+zypedFROM_PIPE 08S01
+zyFCNTLd 08S01
+zyPACKETSrttcse 08S01
+zyUNCOMPRESSd 08S01
+zyped 08S01
+zypexi 08S01
+zydtast 08S01
+zystxi 08S01
+nkpxrx 42000
+flysBLOB 42000
+flysqjtm 42000
+!baUNUSED3
+mbmcnd 42000
+mbnfmc 42000
+mbMRGf
+utzd 23000
+BLOBnfpwrf 42000
+tplwdrb 42000
+nksoROWS 42000
+putpnf 42000
+!baofRAID_COMPILED
+ompwnfpiSAFEnv
+nfsugEXITS 42000
+ppofwjf 42000
+ppgqr 42000
+lDO_THISuuANna 25000
+duuxb
+duuuk
+duuFLUSH_LOGS
+!baduuCHECKPOINT
+NEW_ABORTINGsk 08S01
+!baDUMPgqr
+!baFLUSHqfiCLOSED
+!bamuREBUILD
+ni
+nizype 08S01
+nizyst 08S01
+FT_MATCHINGnfgox
+raORynna
+mlovoq
+CRASHEDtaUSAGE
+CRASHEDtaREPAIR
+WARNINGgxruk
+TRANSzfFULL
+!batrsawi
+mggrd
+tfmg
+skug
+mgqw
+nksonmCONNECTIONS 42000
+ozCONSTANTSpl
+raWAITre
+rafFULL
+peplna 25000
+!bapkDBngpera
+!bamwDBngpera
+mbARGUMENTS
+ofPERMISSIONqomwnm 42000
+!baUNIONqvpitjDIR
+raDEADLOCK 40001
+flysFT
+kADDpc
+ofqlqu 23000
+quunql 23000
+CONNECTqoni 08S01
+!basftaqf
+dttEXECUTINGsj
+mbUSAGE
+mbvxtcthpiod 21000
+lomngREADLOCK
+MIXINGgmq
+utpg
+nmqdREACHED 42000
+SPECIFICojpjd 42000
+LOCALoq
+yroq
+ofnp 42000
+mbmjoawb 42000
+mbnzoawb 42000
+wblyope
+ltvobHERE 42000
+geYET 42000
+niFATALdREADINGi
+mgrsf
+uvyrLOCALwb
+mbwyDEF 42000
+nfREF_DOgvnfREF
+OPERANDth 21000
+yfof1qu 21000
+mltztl
+slHELP_DB
+!baCYCLICtq
+qjvk
+qatq 42S22
+DERIVEDsawdALIAS 42000
+odREDUCED 01000
+TABLENAMEgmqHERE 42000
+gezenv 08004
+ullwdrb 42000
+tgqznl 42000
+!batrWASrd
+!batrWASgrd
+nkvfoaUNCOMPRESS
+ZLIB_Z_MEMd
+ZLIB_Z_BUFd
+ZLIB_Zosd
+CUTmjnrCONCAT
+jnkFEW_RECORDS 01000
+jnksoRECORDS 01000
+jrbqoNOTNULL 22004
+josrttcnj 22003
+!josts 01000
+jUSING_OTHERtl
+lrg2COLLATIONS
+!bapknm
+REVOKE_GRANTS
+lrg3COLLATIONS
+lrgNCOLLATIONS
+oqungSTRUCT
+mltg
+mgrsSSL_PARAMS
+!barwunpizazenv
+joiRESOLVED
+tfmgUNTIL_COND
+mrSKIPmg
+UNTIL_CONDrs
+mbndoamu 42000
+mbndoaCATALOG 42000
+!bajQC_RESIZE
+tfFTmc
+mlnfzf
+jHOSTNAME_WONT_WORK
+mlSTORAGEmz 42000
+jmatb
+srUPDATABLEf
+ufpq
+obptpf
+DUPLICATEDmjpinz
+tsmbmj 22007
+!bankMUCHqjrjCOLS
+ctaom
+mhPS
+GET_ERRMSG
+GETvaERRMSG
+mlTIME_ZONE
+jcrj
+cowrx
+jmqyxOVERFLOWED
+CONFLICTING_DECLARATIONS
+ssofrimw 2F003
+ssronh 42000
+sssugrr 42000
+sspkme
+ssyeme
+ssLILABELnl 42000
+ssLABEL_REDEFINE 42000
+ssLABELnl 42000
+ssUNINITwb 01000
+ssBADSELECT 0A000
+ssBADRETURN 42000
+ssBADSTATEMENT 0A000
+ommnmars 42000
+ommnmaTRANSLATED 42000
+sfxi 70100
+ssmboftcARGS 42000
+ssCONDnl 42000
+ssNORETURN 42000
+ssNORETURNEND 2F005
+sstfupsf 42000
+sstfupod 42000
+ssupnl 42000
+ssuprorc 24000
+ssupgrc 24000
+ssUNDECLAREDwb 42000
+ssmboftcFETCH_ARGS
+ssFETCHofos 02000
+ssutyb 42000
+ssutwb 42000
+ssutCOND 42000
+ssutCURS 42000
+ssloe
+ssSUBSELECT_NYI 0A000
+tzgmqpiSF_ORvg 0A000
+ssVARCONDteCURSHNDLR 42000
+ssuptetl 42000
+ssCASEgox 20000
+xdnkvfns
+xdtfsy
+xdEOFpirp
+xddpito
+xdEOFpimlto
+pvofsn
+!baFRMmlnz
+mbsz
+NONUPDATEABLEmc
+!bapvodDERIVEDrz
+pvodsw
+pvodoq
+pvodTMPTABLE
+pvmbtx
+jpvMERGE
+jpvpwnf
+pvc
+ssofpkss
+!bassGOTOpiHNDLR
+vgronh
+vgsugrr
+vgtapvORumf
+vglmvqu
+vgofwjqupivg
+ofnpoaoi
+DIVISION_BY_ZERO 22012
+tsmbmjoaoi
+qamjoanz 22007
+pvNONUPDpp
+pvppme
+PROCACCESSpjd 42000
+RELAYmnwc
+!baPASSWDrf
+mlzci
+IOsxmnmupe
+ivqPROHIBITED
+FSEEKwc
+ivqFATALsx
+mnpitv
+mnvqmlsx
+RELAYmnzs
+ofBINARYtn
+RESERVEDtb
+!baWSASme
+!baDIFF_GROUPS_PROC
+!baofnroaPROC
+!basengPROC
+!batnPROHIBIT_CHANGINGtc
+!baofnsMAPPING
+!bambMAGIC
+PSsoyb
+nfwg0
+pvCHECKSUM
+pvMULTIUPDATE
+pvofuwoitx
+pvuqMERGEpv
+knm
+XAER_NOTA XAE04
+XAER_INVAL XAE05
+XAER_RMFAIL XAE07
+XAER_OUTSIDE XAE09
+XAER_RMERR XAE03
+XA_RBROLLBACK XA100
+xjPROCrh 42000
+PROCqjrhwc
+PROCqjREVOKEwc
+osnkpx 22001
+sstfSQLSTATE 42000
+STARTUP
+svFROM_FIXEDpoROWSqowb
+lmwnmngrh 42000
+mbmjoanz
+fDEFzh
+ssuttl 42000
+ssgwbARG 42000
+ssofRETSET 0A000
+lmwotsz 22003
+!bameROUTINE_BREAKi
+ineROUTINE
+imwROUTINE_NEED_SUPER
+!baEXECtzngrcup
+tzHASofrcup
+xbgmqpiSF_ORvg
+ofnpoapvoi
+ssofuy
+nkvfSCALE 42000
+nkvfPRECISION 42000
+M_BIGGER_THAN_D 42000
+mbratcovf
+CONNECTqopcosni
+sftapcosni
+pcosniusrr
+pcosrxclmw
+pcosrxc
+!balmwFEDERATEDf
+vgpimboc
+STACK_OVERRUN_NEED_MORE
+nkpxBODY 42000
+jlpknpKEYCACHE
+nkvfDISPLAYWIDTH 42000
+XAER_DUPID XAE08
+xtnbui 22008
+lomsbfpiSF_ORvg
+pvPREVENTom
+PSofuy
+sslozAUTOCOMMIT
+!bauxzm
+pvFRMofnm
+pvOTHERnm
+ofwjnm
+FORBIDocmv
+quunql2 23000
+ofqlqu2 23000
+sstfwbSHADOW 42000
+vgofzm
+OLDnsnw
+ssuyqd
+!bassPROCfsl
+ssmbnd 42000
+fNEEDS_UPGRADE
+ssofrg 42000
+qsPREPAREDtzspREACHED 42000
+pvri
+srxwoisb 42000
+flysSPKEYS
+ofTRIGGERStaovoc
+REMOVED_SPACES
+ubpeme
+USERNAME
+HOSTNAME
+mbrxrf
+srINSERTABLEf
+ADMINmbMRGf
+nkHIGH_LEVELtcNESTINGoaod
+ndBECOMESpr
+AMBIGUOUSoiTERM
+pcrwnh
+pcrwusrr
+qaHAmwob
+hpuvdd
+hmbvdd
+hMAXVALUEd
+!bahuad
+!bahSUBPART_MIXd
+hmbofwgd
+hmbofSUBPARTd
+mbEXPRpihtkd
+!baofCONST_EXPRpinjORtxd
+oigoxwgd
+!batxtctwplpiHASHd
+qchwed
+htkgmqd
+yjsayozld
+njgINCREASINGd
+qcnztcFUNCTIONSd
+pbDEF_CONSTpitxwgd
+hznd
+MIXtld
+hgzld
+nksoyjd
+uad
+lmwtlns
+BLOBoipiwgtkd
+zdnfNEED_ALLtwpiPF
+ofPARTSd
+hMGMTtaym
+pcnftaPARTITIONED
+pkhsrEXISTENT
+pkLASTh
+COALESCEpltaHASHh
+REORG_HASHpltawhof
+REORGofybd
+pltanjtxh
+ADDhSUBPARTd
+ADDhofNEWh
+COALESCEhofh
+REORGhgrr
+whndh
+ofid
+CONSECUTIVE_REORGyj
+REORG_OUTSIDEnj
+hnbon
+!bawgSTATEd
+LIMITEDwgnj
+nxungLOADED
+mbmj
+ofhoaGIVENmj
+wmobplONCE
+mwwmme
+pkwmme
+mkqjEXTENDd
+mbpovx
+pouid
+oewmme
+iqutnme
+!baiqumbfDEF
+!baiquRBRqoSBR
+ogronh
+!baogyeme
+ogsugrr
+!baogloe
+!baogpkme
+ogxygPOSITIVE_ORnkvf
+ogENDSypSTARTS
+ogEXEC_TIMEpiTHE_PAST
+!baogrcfme
+!baogNEITHER_M_EXPR_NOR_M_AT
+!bavhspusvnuo
+!baksvFROMf
+!baogkuq
+!baogCOMPILEd
+ogwhnd
+!baogosnkpx
+pkmuwy
+jmatbngVER
+!balstramnf
+lramnf
+pcpmnfOLDrz 23000
+vhspusvnPLEASEom
+!baumfptryrttcRBR
+zbnbptryinw
+!baNDBlryinw
+hofva
+hCONST_DOMAINd
+hnbungmq
+!baDDLmndrz
+rbpivdLESS_THAN
+mbhnd
+lmvTX_CHARACTERISTICS 25001
+utznAUTOINCREMENT_CASE
+!baogMODIFY_QUEUEd
+ogozwbd
+hMERGEd
+!balACTIVATEmn
+!baRBRgwk
+BASE64_DECODEd
+oguyzp
+!baEVENTS_DBd
+plINTEGERSmq
+UNSUPORTEDmnmz
+tfmnpf
+lRENAMEmnf
+mbPARAMCOUNTqovwFCT 42000
+mbvoqovwFCT 42000
+mbvoqozbFCT 42000
+vwFCTndwl
+utznngnfnd 23000
+ivqEMFILE
+ogkmwpiTHE_PAST
+ogkoepiTHE_PAST
+!batrINCIDENT
+ofhoaGIVENmjSILENT
+inepf
+iFATALd
+!batrRELAYmnpeon
+!batrRELAYmnston
+!batrmwogon
+!batrqfCOMon
+itnIMPOSSIBLE
+pvofudCTX
+pvcudCTX
+!baSRcudCTX
+vguons
+vgofudCTX
+vgcudCTX
+ogcudCTX
+vglrcf
+!balmwSROUTINE
+!baNEVERsb
+ofnwDESCRIPTIONogypipf
+mgslog
+!basvoscmcrz
+mnvqofns
+XA_RBTIMEOUT XA106
+XA_RBDEADLOCK XA102
+NEED_REPREPARE
+!baDELAYEDge
+!jofskug
+!jobrs
+nxuqBUILTIN
+!jnxBUSY
+oqunyc
+jmznauk
+!batrwpon
+mgwpmjrttcnj
+NDBmyocd
+ucFNwqd
+EXCEPTIONSstd
+nkpxfrp
+nkpxoirp
+tkINEXISTENTndwl 42000
+DATABASEnd
+fnd
+hnd
+uand
+vand
+RENAMEDnd
+nksoyhTRXS
+!jsrASCII_SEPARATORgqr
+DEBUG_SYNCre
+DEBUG_SYNC_HITqd
+utxmoz 42000
+xmj 01000
+xmgox 02000
+xmpn
+RESIGNALpwyntl 0K000
+xmtftinz
+!jCOND_ITEMts
+COND_ITEMnkpx
+mlLOCALE
+mgytrwIDS
+!basfzfpq
+whndhoi
+hmctxd
+mbnzmcmjd
+nksohtktwd
+MAXVALUEpivdpi
+nksovdd
+quSINGLEhoid
+oinzgmqAShoi
+htwnkpx
+iqumztutzmz
+iqunvtutzmz
+inetutzmz
+iquzttutzmz
+itznvtuqumz
+iquzttutznv
+ipbENGINEStuSELFtnmz
+ineqd
+!baUNUSED4
+ineovf
+ineubth
+inerk
+ineovoq
+ineovnb
+ineNONTRANSteTRANS
+MESSAGEtupf
+!batrqkme
+mglmwqk
+INSIDEnaptryinw
+vprf
+jmatbofREPLACEMENT
+mbvwfSTRUCTURE
+mbPERFSCHEMA_USAGE
+jI_S_SKIPPEDf
+INSIDEnaptryiDIRECT
+zbnbptryiDIRECT
+ulsawdGEOMvh 42000
+nkpxmurp
+raABORTED
+osrttcnj 22003
+!bambSPVARnzpiqd
+inepbENGINEStuSELFtnmz
+ineMIXEDpf
+INSIDEnaptrywwmnBIN
+zbnbptrywwmnBIN
+mepeFROM_PARns
+vdungINTnzd
+ojpjofmsd 28000
+!baozmszenx
+!barhnxnmnh
+TRUNCATEqawy 42000
+nxunPERMANENT
+mgwpmjrttcnjMIN
+mgwpmjrttcnjqs
+tzzfFULL
+MULTIomnfuc
+fNEEDS_REBUILD
+!jobBELOWqd
+mumcnkpx
+dpixnBODY
+dpimlxnBODY
+musl
+UNDOyynkvf
+ineuwytod
+ineuwodom
+ineREPLACEod
+inemwytod
+inemwREPLACEod
+ineomyt
+nxofUNINSTALL
+nxofxg
+inestubod
+inemwodub
+ineuwTWO_KEYS
+fpiwypp
+mhmz
+ineubgFIRST
+ksvFROMfV2
+niDELAYmjrttcnj
+plFDtuRBR_EVENTSmqpiipf
+hxutjob
+hxuwgf
+hxuumf
+hINSTEADtcua
+mlh
+qvtjug
+qusugvnh
+izfpoGREATER_THANqs
+jmugAPPLICABLE
+hxupcnf
+!baofwjnfmj
+rnweosnkpx
+!baNETWORKpeogCHECKSUMon
+!baipeogCHECKSUMon
+itzzfpoGREATER_THANqs
+lomfpimwfod
+hswtaym
+qusugvnGIVENhoz
+!baofwjh~rz
+mvrnwevron
+WARNINGgxrukngCREATEDumf
+WARNINGgxrukngDROPPEDumf
+MTAufunge
+MTA_UPDATED_DBS_GREATERqs
+MTAlPARALLEL
+MTAqcos
+xvgengPARTITIONING
+xsctivx 35000
+INSECURE_PLAIN_TEXT
+INSECUREmvni
+pcpmnfngziwe 23000
+pcpmnfpwziwe 23000
+SQLTHREADngzamg
+fHASofFT
+oqgydpiSF_ORxn
+oqgydpina
+!bamiuhungpimiuhtx
+!balmvmiuhpina
+ozpfkINVOKEnb
+miuhlyoAUTOMATIC_IFmiuhtxunsrrb
+!baSKIPPING_LOGGEDna
+uxmiozSPECIFICATION
+uxmiozENCODING
+uxmiSPECIFICATION
+GNO_EXHAUSTED
+tfmgqjtd
+qjtdpuminvgya
+lDO_IMPLICITxbpiTRXttmiuhunoz
+minvtapuENFORCEmiqqta
+!baminvpui
+lozmiuhqomittminvunya
+lozmiuhqoopttminvunta
+lozmiuhtxqosrrbttminvunya
+!baoxmiogttminvunya~rz
+minesrTRANSACTIONALf
+minemwod
+!baminemwpkumfpina
+minvCANplmvONE_STEP_AT_A_TIME
+niHASvyvzxx
+lozmiuhttOWNINGmi
+mlsnnw
+lEXECUTEpipeplna 25006
+nkpxfhrp
+mgvj
+mpFTqd
+mpofFTumf
+mpFTmbDOCIDmc
+mpFTmbDOCIDmu
+mpONLINEmnnkvf
+mloesc
+mloera
+MTAmvnilRUNngGAPS
+MTAsgon
+MTA_RESET_WORKERS
+vhspusvnuoV2
+mgSILENT_RETRYna
+DISCARDwyxard
+focnl
+fpiovmk
+IOped
+IOstd
+mkmr
+mknh
+mkDISCARDED
+INTERNALd
+mpxfd
+mpmusl
+cYEARmcrf
+gVALIDms
+samvms
+wyofmuzi
+wyofmuxk
+wywcADDov
+wykrcxk
+wyuvob
+wyutnd
+msnw
+wymckpk
+wymckpkzi
+wymcgrb
+utmu
+wymckmv
+wymckmvzi
+!baUNUSED5
+uxyx
+peplnv
+miuhnzUNDEFINEDmi
+oqgydpiss
+!balozmivyttminvunya
+lozmivyttmiueungpr
+lozmivyttOWNEDxxungpr
+mivyWASzh
+miueWASzh
+itznvtuofREPLqv
+oemtge 0A000
+oemtgeqh 0A000
+oemtgeqhCOPY
+oemtgeqhh
+oemtgeqhwyRENAME
+oemtgeqhmcnz
+oemtgeqhwypp
+!baUNUSED6
+oemtgeqhNOPK
+oemtgeqhub
+oemtgeqhHIDDEN_FTS
+oemtgeqhmvFTS
+oemtgeqhFTS
+!bawwmgSKIP_COUNTERgydpiminv
+utmlpimu 23000
+IDENT_CAUSESnkpxvp
+oemtgeqhgrb
+samvmsLOGIN
+qupimbh
+MTAogBIGGER_PENDING_JOBSpoqs
+!bampofFT_USESqt
+iLOGICAL_CORRUPTION
+jvqmnpitv
+jvqmnunyn
+qjtmuc
+!jtaBLOCKHOLEpiRBR
+mgCMzsvr
+mgAMzsvr
+ojpjmvnmd 28000
+mppepl
+wimgwwqwre
+wimgIOqwre
+fsl
+umnsston
+mpFT_AUXgHEX_ID
+OLD_TEMPORALS_UPGRADED
+mpFORCEDsg
+AEScIV
+nxkyoUNINSTALLED
+mineiSPLITTABLEpftuASSIGNEDmi
+mgHAS_MORExxTHANni
+mrnf
+!jNAMED_PIPEojEVERYONE
 @3000
-a_be_fx
-a_d_gm_au
-b_a_do_d
-a_STORAGE_al_g_LOADED
-a_GET_STACKED_DA_di_ACTIVE_gx 0Z002
-a_j_LEGACY_gn_CONVERTED
-a_i_aq_FULLTEXT_bj
-a_k_DISCARD_im_f
-a_FK_DEPTH_ct
-a_it_gb_ie_iz_PLEASE_by_V2
-a_j_TRIGGER_ie_HAVE_CREATED
-a_dx_is_gg_g_fd
-a_fz_g_e
-a_c_bu_da
-a_ad_HA_ai_bn
-a_al_ff_go_MEMORY
-a_ae_EXPIRE_cb_ay
-a_s_SQL_ei_fm_STOP
-a_br_FT_MATERIALIZED_SUBQUERY
-a_ab_UNDO_z_FULL
-a_c_cs_bm_LOGARITHM 2201E
-a_s_ck_IO_ei_fm_STOP
-a_j_eo_hy_eh_fm_BE_ZERO
-a_j_cx_au_z_be_br_POS
-a_fr_eq
-a_gd_RO_bp_fy_TIMER
-a_if_hj_ENTRY
-b_a_SQL_bh_br_EFFECT
-a_es_fq_bm_UNION
-a_es_fq_gd_AGG_fr
-a_s_WORKER_STOPPED_PREVIOUS_THD_d
-b_a_DONT_SUPPORT_s_PRESERVE_COMMIT_fq
-a_fi_OFFLINE_bh
-a_GIS_gv_SRIDS
-a_GIS_t_cs
-a_GIS_x_d
-a_GIS_x_cz
-a_GIS_c_ce 22023
-a_BOOST_cf_dd_INPUT_cz
-a_BOOST_cf_CENTROID_cz
-a_BOOST_cf_OVERLAY_c_INPUT_cz
-a_BOOST_cf_TURN_INFO_cz
-a_BOOST_cf_SELF_INTERSECTION_POINT_cz
-a_BOOST_cf_x_cz
-a_STD_gr_ALLOC_d
-a_STD_DOMAIN_d
-a_STD_er_d
-a_STD_c_cs
-a_STD_ff_go_av_d
-a_STD_hu_d
-a_STD_av_d
-a_STD_UNDERFLOW_d
-a_STD_LOGIC_d
-a_STD_RUNTIME_d
-a_STD_x_cz
-a_GIS_ce_n_ENDIANESS
-a_ah_au_ae_er
-a_ay_em_n_ap 42000
-a_ay_em_DEADLOCK
-a_REPLACE_INACCESSIBLE_ROWS
-a_bq_af_g_e_dt_GIS
-a_dm_ay_VAR 42000
-a_u_bh_OFF
-b_a_t_BY_ak_ei
-a_ih_bl
-a_bu_cu_fq_g_bp
-a_es_cu_fq_g_bp
-a_c_ez_WILD_f_dq_PATTERN
-a_NET_OK_PACKET_aw_LARGE 08S01
-a_c_aj_ce
-a_c_GEOJSON_ad_MEMBER
-a_c_GEOJSON_n_bl
-a_c_GEOJSON_UNSPECIFIED
-a_DIMENSION_t
-a_s_ck_gg_g_fd
-b_a_hd_cn_CHANNELS_HOST_PORT
-a_s_ck_ap_c_OR_aw_dj
-a_s_NEW_ck_n_REPOSITORY
-b_a_hd_ck_ic
-a_s_cn_CHANNELS_CMD
-a_s_ee_CHANNELS_ct
-a_s_ck_fm_STOP
-a_s_ck_g_ep
-a_s_ck_WAS_ep
-a_s_ck_WAS_g_ep
-a_s_ck_SQL_ei_fm_STOP
-a_s_ck_SQL_SKIP_COUNTER
-a_n_bu_as_bd_V2
-a_MIX_go_bd_gw_hg_hi_V2
-a_j_m_SYSVAR_by
-a_j_m_SQLMODE
-a_k_z_hv_cw_DATABASE_as_u
-a_bd_ak_iv
-a_bd_ak_ep
-a_bd_ak_ek_INIT_d
-a_bd_ak_STOP_ek_ei_eq
-a_bd_ak_iu_LAYER_SESSION_d
-a_bd_ak_iu_LAYER_JOIN_d
-a_BEFORE_DML_VALIDATION_d
-a_df_cc_di_RBR
-a_RUN_HOOK_d
-a_am_hw_ig_COMMIT 40000
-a_ao_o_an_hz_g_ac
-a_t_bq_INPLACE_gm_VIRTUAL_o
-a_n_FK_bn_bm_ao_o
-a_gd_bb_v_bm_ao_o
-a_t_ACTION_gm_ao_o
-a_ao_o_gd_PRIOR
-a_id_BY_ao_o
-a_ao_o_REF_dv_INC
-a_hr_g_AVAILABLE
-a_l_cl_u_bh
-a_l_hh_dv_gp_as_u_bh_OFF
-b_a_l_REPLICATE_cb_as_dv_gp
-b_a_l_REPLICATE_cb_as_u_bh_gm
-b_a_l_REPLICATE_u_as_u_bh_OFF
-a_l_ENFORCE_u_ec_as_ONGOING_u_VIOLATING_TX
-a_ENFORCE_u_ec_j_as_ONGOING_u_VIOLATING_TX
-a_ACCOUNT_HAS_BEEN_LOCKED
-a_n_w_ap 42000
-a_w_hz_g_dd
-a_n_be_ap
-a_BOOST_cf_do_TURNS_cz
-a_j_OPTIMIZER_HINT_gn_d
-a_j_gr_ee_EXECUTION_TIME
-a_j_t_ee_EXECUTION_TIME
-a_j_CONFLICTING_HINT
-a_j_x_QB_ap
-a_UNRESOLVED_HINT_ap
-a_j_gm_MODIFYING_u_hq_f
-a_PLUGGABLE_PROTOCOL_fv_g_e
-a_LOCKING_dn_n_ap 42000
-a_LOCKING_dn_DEADLOCK
-a_LOCKING_dn_eq
-a_GIS_ee_POINTS_cu_cf_OVERFLOWED
-a_SQL_bh_MERGED
-b_a_VTOKEN_bj_TOKEN_ax
-b_a_VTOKEN_bj_TOKEN_g_cj
-a_l_cl_cc_hf_OWNING_u
-a_s_ck_af_g_ac
-a_c_aj_TEXT 22032
-a_c_aj_TEXT_cu_PARAM 22032
-a_c_aj_BINARY_ce
-a_c_aj_PATH 42000
-a_c_aj_el 22032
-a_c_aj_el_cu_an 22032
-a_c_bl_bm_aj 22032
-a_c_CAST_ea_aj 22032
-a_c_aj_PATH_el 42000
-a_c_aj_PATH_WILDCARD 42000
-a_aj_v_aw_ir 22032
-a_aj_ar_aw_ir 22032
-a_aj_fn_AS_ar 42000
-a_aj_VACUOUS_PATH 42000
-a_aj_gr_ONE_OR_ALL_ARG 42000
-a_NUMERIC_aj_v_ff_go_av 22003
-a_c_aj_v_bm_CAST 22018
-a_aj_DOCUMENT_aw_DEEP 22032
-a_aj_DOCUMENT_en_ar 22032
-a_SECURE_TRANSPORT_REQUIRED
-a_br_SECURE_TRANSPORTS_CONFIGURED
-a_dc_STORAGE_al
-a_ay_gg_g_fd
-a_ay_fa_at
-a_y_API_ABORT
-a_c_aj_PATH_ARRAY_CELL 42000
-a_BUFPOOL_RESIZE_INPROGRESS
-a_hr_dc_SEE_DOC
-a_fi_ISNT_AVAILABLE
-a_SESSION_WAS_KILLED
-a_CAPACITY_ct
-a_CAPACITY_ct_cu_av_OPTIMIZER
-b_a_f_NEEDS_UPG_PART
-a_l_WAIT_bm_hq_u_cl_WHILE_OWNING_A_u
-a_k_ADD_co_BASE_it_VIRTUAL
-a_k_ai_VIRTUAL_ag_ba
-a_d_gm_MODIFYING_u_hq_f
-a_em_REFUSED_BY_al
-a_t_bq_ONLINE_gm_VIRTUAL_o
-a_dr_ar_ey_g_e_BY_SE
-b_a_dr_ar_ey_d_BY_SE
-a_dr_ar_ey_i_q
-a_dr_ar_ey_SE_UNAVAILABLE
-a_w_k_ENCRYPT
-a_c_aa_bn
-a_k_FIND_ar_cu_cp
-a_CAPACITY_ct_cu_ef
-a_t_bq_aa_INPLACE
-a_cp_ew_cp_dn_d
-a_ay_o_OLD_er
-a_l_RESET_au
-a_bd_ak_ee_bd_da
-a_k_ADD_co_BASE_it_STORED
-a_f_dx
-b_a_h_al_m_bm_f
-b_a_j_USING_GEOMFROMWKB_ea_cl_SRID_ZERO 01000
-b_a_j_USING_GEOMFROMWKB_ea_cl_SRID 01000
-a_XA_RETRY
-a_cp_AWS_ew_AWS_KMS_d
-a_i_aq_XA
-a_ew_d
-a_cp_MIGRATION_bz
-a_cp_bv_cv_d 42000
-a_cp_MIGRATION_STATUS
-b_a_bj_q_ea_eo_eh
-b_a_bj_q_ea_eo_f
-b_a_y_z_br_cp_bj_INSTALLED
-b_a_y_z_aa_ae_HAS_g_BEEN_cl
-b_a_y_z_COULD_g_ai_AES_ar
-b_a_y_z_aa_ae_k_BE_FETCHED
-b_a_y_z_aj_FILTERING_g_ENABLED
-b_a_y_z_ew_INSUFFICIENT_dk
-b_a_y_z_SUPER_dk_REQUIRED
-b_a_COULD_g_REINITIALIZE_y_z_iy
-b_a_y_z_ew_c_cs_bl
-b_a_y_z_ew_c_cs_gb
-b_a_y_z_HAS_g_BEEN_INSTALLED
-b_a_y_z_ew_cq_c_ee_ARRAY_er_ARG_bl
-a_y_z_ew_cq_c_ee_ARRAY_er_ARG_v
-b_a_y_z_aj_dq_PARSING_d
-b_a_y_z_aj_dq_ap_k_BE_dd
-b_a_y_z_aj_ay_ap_k_BE_dd
-b_a_y_z_aj_dq_gg_g_at
-b_a_y_z_ay_FIRST_ci_fm_BE_ALPHANUMERIC
-b_a_y_z_ay_ap_c_ci
-b_a_y_z_HOST_ap_c_ci
-b_j_m_MAXDB_SQL_bh_bm_ev
-b_a_XA_ak_iy
-b_a_l_eo_d_z
-b_a_GROUPING_gm_ev_cu_DST
-b_a_l_START_fi_NAMED_PIPE
-a_gf_cl_fc_dp
-b_a_m_TLS_dz_SESSION_57
-b_a_j_m_TLS_dz_57
-b_a_j_n_NATIVE_f_STRUCTURE
-a_AES_c_KDF_ap
-a_AES_c_KDF_ITERATIONS
-j_AES_ar_da
-a_AES_c_KDF_bn_da
+nssl
+dtani
+!baqcd
+STORAGEmzgLOADED
+GET_STACKEDxspwyntl 0Z002
+jLEGACYtbCONVERTED
+inexvnx
+kDISCARDvaf
+wyDEPTHph
+vhspusvnPLEASEomV2
+jxnuswdCREATED
+qlvgsugrr
+snge
+coipo
+mrHAmwob
+mzrttcMEMORY
+msEXPIREopnm
+mgwwqwsawi
+ofFT_MATERIALIZEDyf
+mpUNDOmnFULL
+cpgoaLOGARITHM 2201E
+mgoyIOqwsawi
+jrcumqvsayoZERO
+jplnimnnsofPOS
+sfre
+srROodsmTIMER
+uttxzn
+!bawwnvofEFFECT
+rgseoaUNION
+rgsesrAGGsf
+mgWORKER_STOPPED_PREVIOUS_THDd
+!baDONT_SUPPORTmgPRESERVExbse
+rwOFFLINEnv
+GIStjSRIDS
+GISmhpg
+GISmld
+GISmlpn
+GIScos 22023
+xqotprINPUTpn
+xqotCENTROIDpn
+xqotOVERLAYcINPUTpn
+xqotTURNwepn
+xqotSELF_INTERSECTION_POINTpn
+xqotmlpn
+STDtfALLOCd
+STD_DOMAINd
+STDrfd
+STDcpg
+STDrttcnjd
+STDuid
+STDnjd
+STD_UNDERFLOWd
+STD_LOGICd
+STD_RUNTIMEd
+STDmlpn
+GISosmbENDIANESS
+mvnimsrf
+nmrambnd 42000
+nmraDEADLOCK
+REPLACE_INACCESSIBLE_ROWS
+oemtgeqhGIS
+qanmwb 42000
+minvya
+!bamhBYmyqw
+uvnz
+oipisegod
+rgpisegod
+crnWILDfqePATTERN
+zyOKyxnkzv 08S01
+cmxos
+czqmrMEMBER
+czqmbnz
+czqUNSPECIFIED
+DIMENSIONmh
+mgoysugrr
+!batrpbCHANNELSzrPORT
+mgoyndcORnkpx
+mgNEWoymbvr
+!batroyuq
+mgpbCHANNELS_CMD
+mgqsCHANNELSph
+mgoysawi
+mgoygrd
+mgoyWASrd
+mgoyWASgrd
+mgoywwqwsawi
+mgoywwSKIP_COUNTER
+mboingnrV2
+MIXtcnrtktutwV2
+jmaSYSVARom
+jmaSQLMODE
+kmnujpkDATABASEngmi
+nrmyvj
+nrmyrd
+nrmyqyzsd
+nrmywiqyqwre
+nrmyviLAYERvsd
+nrmyviLAYER_JOINd
+ypDMLvud
+ptoqpwRBR
+RUN_HOOKd
+naukuuxb 40000
+ncmcnbungmq
+mhoeINPLACEtaxpmc
+mbwyoboancmc
+srnpmjoancmc
+mhACTIONtancmc
+ncmcsrPRIOR
+urBYncmc
+ncmcREFqjINC
+ufgwk
+lozminv
+ltvqjtdngminvya
+!balwuopngqjtd
+!balwuopngminvta
+!balwumingminvya
+lENFORCEmiqqngONGOINGmiVIOLATING_TX
+ENFORCEmiqqjngONGOINGmiVIOLATING_TX
+ACCOUNT_HAS_BEENyv
+mbmknd 42000
+mkungpr
+mbnsnd
+xqotqcTURNSpn
+jOPTIMIZER_HINTtbd
+jtfqszoTIME
+jmhqszoTIME
+jCONFLICTING_HINT
+jmlQBnd
+UNRESOLVED_HINTnd
+jtaMODIFYINGmiuef
+PLUGGABLE_PROTOCOLsjge
+LOCKINGqbmbnd 42000
+LOCKINGqbDEADLOCK
+LOCKINGqbre
+GISqsPOINTSpiotOVERFLOWED
+wwnvMERGED
+!baVTOKENnxTOKENnl
+!baVTOKENnxTOKENgox
+lozoqttOWNINGmi
+mgoymtgmq
+cmxTEXT 22032
+cmxTEXTpiyb 22032
+cmxBINARYos
+cmxvp 42000
+cmxqz 22032
+cmxqzpinb 22032
+cnzoamx 22032
+cCASTqomx 22032
+cmxvpqz 42000
+cmxvpWILDCARD 42000
+mxmjnkvf 22032
+mxnfnkvf 22032
+mxsbASnf 42000
+mxVACUOUSvp 42000
+mxtfONE_OR_ALL_ARG 42000
+NUMERICmxmjrttcnj 22003
+cmxmjoaCAST 22018
+mxDOCUMENTnkDEEP 22032
+mxDOCUMENTrbnf 22032
+zaTRANSPORTvz
+ofzaTRANSPORTS_CONFIGURED
+pqSTORAGEmz
+nmsugrr
+nmronh
+mmAPI_ABORT
+cmxvpARRAY_CELL 42000
+BUFPOOL_RESIZE_INPROGRESS
+ufpqSEE_DOC
+rwISNTwk
+vsWAS_KILLED
+CAPACITYph
+CAPACITYphpinjOPTIMIZER
+!bafNEEDS_UPGwg
+lWAIToauemiozWHILE_OWNING_Ami
+kADDpcBASEvhxp
+kmwxpmuno
+dtaMODIFYINGmiuef
+raREFUSED_BYmz
+mhoeONLINEtaxpmc
+qfnfrmgeBY_SE
+!baqfnfrmdBY_SE
+qfnfrmime
+qfnfrmSE_UNAVAILABLE
+mkkENCRYPT
+cmoob
+kFINDnfpipd
+CAPACITYphpiqt
+mhoemoINPLACE
+pdrkpdqbd
+nmmcOLDrf
+lRESETni
+nrmyqsnrpo
+kADDpcBASEvhzb
+fql
+!bahmzmaoaf
+!bajUSING_GEOMFROMWKBqoozSRID_ZERO 01000
+!bajUSING_GEOMFROMWKBqoozSRID 01000
+XA_RETRY
+pdAWSrkAWS_KMSd
+ineXA
+rkd
+pdMIGRATIONon
+pdojpjd 42000
+pdMIGRATION_STATUS
+!banxmeqorcqv
+!banxmeqorcf
+!bammmnofpdnxzu
+!bammmnmomsHASgBEENoz
+!bammmnCOULDgmwAESnf
+!bammmnmomskyoFETCHED
+!bammmnmxFILTERINGgENABLED
+!bammmnrkwfpy
+!bammmnSUPERpyvz
+!baCOULDgREINITIALIZEmmmnvm
+!bammmnrkcpgnz
+!bammmnrkcpgsp
+!bammmnHASgBEENzu
+!bammmnrkpecqsARRAYrfARGnz
+mmmnrkpecqsARRAYrfARGmj
+!bammmnmxqezzd
+!bammmnmxqendkyopr
+!bammmnmxnmndkyopr
+!bammmnmxqesugnh
+!bammmnnmFIRSTowsayoALPHANUMERIC
+!bammmnnmndcow
+!bammmnzrndcow
+!bjmaMAXDBwwnvoarj
+!baXAmyvm
+!balrcdmn
+!baxwtarjpiDST
+!balwxrwNAMED_PIPE
+stozrqqd
+!bamaTLSqnvs57
+!bajmaTLSqn57
+!bajmbvwfSTRUCTURE
+AEScKDFnd
+AEScKDF_ITERATIONS
+!jAESnfpo
+AEScKDFobpo
 @3500
-a_UNSUPPORT_COMPRESSED_im_f
-a_ACL_af_q
-a_t_ag_fo
-a_br_SUCH_DB 42Y07
-a_aw_ir_ENUM
-a_aw_dj_cl_ENUM_v
-a_c_DD_gl
-a_UPDATING_DD_f
-a_c_DD_gl_ID
-a_c_DD_gl_ap
-a_w_ad_as_ap
-a_aw_dj_ROUTINE_fb
-a_ge_gh_q
-a_c_BITWISE_OPERANDS_da
-a_c_BITWISE_es_OPERANDS_da
-a_j_t_HINT
-a_cm_cf_bl 22S01
-a_dy_PARSE_d SR002
-a_dy_PROJ_ha_ad SR003
-a_j_dy_g_cj 01000
-a_dy_g_CARTESIAN 22S00
-a_dy_g_CARTESIAN_UNDEFINED SR001
-a_PK_ag_l_BE_INVISIBLE
-a_x_AUTHID
-a_q_ROLE_et
-a_eo_ROLE_eh
-a_q_bb_ROLES
-a_bt_br_SCHEME
-a_bt_br_SCHEME_dn
-a_bt_l_gh
-a_ROLE_g_GRANTED
-a_q_REVOKE_ROLE
-a_RENAME_ROLE
-a_bt_l_ACQUIRE_dn_IMPLEMENTATION
-a_bt_l_SATISFY_DEPENDENCY
-a_bt_gh_l_REGISTER_dn_IMPLEMENTATION
-a_bt_gh_l_INITIALIZE
-a_bt_UNLOAD_g_LOADED
-a_bt_UNLOAD_l_DEINITIALIZE
-a_bt_l_RELEASE_dn
-a_bt_UNLOAD_l_UNREGISTER_dn
-a_bt_l_UNLOAD
-a_j_UNLOAD_THE_g_PERSISTED
-a_r_f_ih
-a_r_MANIPULATE_eg_q
-a_bt_UNLOAD_cy_cu_bd
-a_l_cl_u_PURGED_DUE_SETS_CONSTRAINTS
-a_k_em_ay_MANAGEMENT_CACHES
-a_dy_g_cj SR001
-a_cc_g_PERSISTED
-a_hz_fr_c_gi
-a_io_ea_STORE_STATISTICS
-a_br_ch_bo_bv
-a_br_ch_w_bv
-a_br_ch_f_bv
-a_br_ch_f_bv_bm_DICTIONARY_f
-a_br_ch_f_bv_bm_ch_f
-a_br_ch_f_bv_bm_f
-a_c_bn_ar 22023
-a_c_bn_v 22023
-a_c_bn_ar_v_PAIR 22023
-a_c_bn_START_ci 22023
-a_c_bn_END_ci 22023
-a_c_bn_CHARACTERS 22023
-a_cy_bn_ar 22023
-a_j_dy_g_cj_AXIS_fq 01000
-a_br_bv_ea_NATIVE_FCT
-a_RESET_au_ea_v_ff_go_av
-a_UNRESOLVED_f_em
-a_cy_f_em
-a_i_aq_SKIP_LOCKED
-a_i_aq_NOWAIT
-a_em_NOWAIT
-a_CTE_eu_dg_UNION
-a_CTE_eu_dg_NONRECURSIVE_FIRST
-a_CTE_eu_FORBIDS_AGGREGATION
-a_CTE_eu_FORBIDDEN_JOIN_fq
-a_CTE_eu_dg_SINGLE_hc
-a_fk_TMP_al
-a_az_br_SUCH_az
-a_az_CIRCULARITY_cu_az_GRAPH
-a_az_br_CHILD_PARTITIONING
-a_az_br_INHERIT_FRAME
-a_az_br_REDEFINE_fq_BY
-a_az_FRAME_START_dm
-a_az_FRAME_END_dm
-a_az_FRAME_dm
-a_az_av_FRAME_fq_bl
-a_az_av_FRAME_TEMPORAL_bl
-a_az_av_FRAME_NUMERIC_bl
-a_az_av_BOUND_g_CONSTANT
-a_az_cy_ap
-a_az_dm_fq_BY
-a_az_c_az_gw_hh
-a_az_c_az_gw_ALIAS_hh
-a_az_NESTED_az_gw_hh_cu_az_SPEC
-a_az_ROWS_INTERVAL_hh
-a_az_br_bd_fq_fl
-a_az_fz_aj
-a_az_an_IGNORES_FRAME
-a_WL9236_NOW_fl
-a_c_br_go_ARGS
-a_bu_cu_GROUPING_g_bd_BY
-a_aw_dj_w_fb
-a_al_l_cw_f
-a_al_l_cw_ad_f
-a_w_if_FILENAME
-a_DB_cw_RMDIR2
-a_IMP_br_FILES_MATCHED
-a_IMP_bo_gg_g_fd
-a_IMP_f_fa_at
-a_IMP_cd_MYSQLD_dz
-a_IMP_cd_DD_dz
-a_IMP_cd_SDI_dz
-a_j_c_HINT
-a_VAR_gg_g_fd
-a_LONGITUDE_ff_go_av 22S02
-a_LATITUDE_ff_go_av 22S03
-a_g_ed_bm_GEOGRAPHIC_dy 22S00
-a_dm_dk_LEVEL
-a_br_ch_dh_bv
-a_r_dq_FLABBERGASTED
-a_PART_EXPR_aw_dj
-a_ew_cw_DYNAMICALLY_REGISTERED
-a_io_ea_STORE_o_STATISTICS
-a_io_ea_by_o_STATISTICS
-a_io_ea_cw_o_STATISTICS
-a_io_ea_BUILD_HISTOGRAM
-a_fp_ROLE
-a_ad_w_be
-a_PERSIST_cx_bv_cv_d 42000
-b_a_CMD_NEED_SUPER
-a_PATH_cu_DATADIR
-a_ej_DDL_cu_PROGRESS
-a_ej_aw_ga_CONCURRENT_CLONES
-a_ek_z_bs_VALIDATION_d
-a_CTE_ee_ik_DEPTH
-a_g_HINT_UPDATABLE_cc
-a_CREDENTIALS_CONTRADICT_ea_HISTORY
-a_WARNING_ae_HISTORY_CLAUSES_VOID
-a_bw_gg_g_SUPPORT
-a_I_S_SKIPPED_w
-a_w_al_ax
-a_n_SRID_bm_o
-a_k_bq_SRID_DUE_ea_ag
-a_j_i_hv_UPDATES_dc
-b_a_j_i_V1_eg_EVENTS_dc
-a_j_i_hv_UPDATES_SUGGESTS_hv_IMAGES
-a_COULD_g_APPLY_aj_DIFF
-a_ia_aj_DIFF
-a_ex_bd_at
-a_ex_bd_g_at
-a_c_VCPU_ID
-a_c_VCPU_av
-a_c_ei_PRIORITY
-a_ix_af
-a_ex_bd_BUSY
-a_ex_bd_dc
-a_hr_t
-a_du_fe
-a_c_ei_ID
-a_ex_bd_BIND_q
-a_c_hh_go_FORCE_bn
-a_bd_ak_fv_bz
-a_SDI_af_q
-a_ad_aj_f_v 22035
-a_n_aj_f_v 2203F
-a_TF_fm_HAVE_ALIAS 42000
-a_TF_FORBIDDEN_JOIN_bl
-a_JT_v_ff_go_av 22003
-a_JT_ee_NESTED_PATH 42000
-a_ae_EXPIRATION_g_e_BY_AUTH_METHOD
-a_c_GEOJSON_CRS_g_TOP_LEVEL
-a_gr_en_d_g_fe 23000
-j_USELESS_hx_ag
-a_DISK_FULL_NOWAIT
-a_PARSE_d_cu_DIGEST_FN
-a_UNDISCLOSED_PARSE_d_cu_DIGEST_FN
-a_bo_DIR_at
-a_bo_DIR_ad
-a_bo_DIR_ai_q
-a_bo_DIR_x
-a_cx_ed_bm_SRID_0_hg_4326 22S00
-b_a_i_EXPIRE_z_DAYS_hg_SECS_fn_TOGETHER
-a_bx_BUFFER_hu
-a_bx_dm_cs
-a_bx_ag_OUTOFBOUNDS_d
-a_bx_INTERNAL_d
-a_bx_RULE_gn
-a_bx_gr_ESCAPE_SEQUENCE
-a_bx_UNIMPLEMENTED
-a_bx_MISMATCHED_PAREN
-a_bx_gr_INTERVAL
-a_bx_ee_LT_MIN
-a_bx_c_BACK_REF
-a_bx_LOOK_BEHIND_dp
-a_bx_ad_CLOSE_BRACKET
-a_bx_c_av
-a_bx_STACK_hu
-a_bx_TIME_ff
-a_bx_PATTERN_aw_ir
-a_l_cl_d_z_dn
-a_dd_PIPELINE_bm_d_z_dn
-a_r_dq_DIAGNOSTICS
-a_g_ed_bm_CARTESIAN_dy 22S00
-a_g_ed_bm_PROJECTED_dy 22S00
-a_NONPOSITIVE_RADIUS 22003
-a_RESTART_fi_q
-a_dy_ad_fp_du SR006
-a_dy_cn_du_DEFINITIONS SR006
-a_dy_ap_l_BE_dd_OR_WHITESPACE SR006
-a_dy_ORGANIZATION_l_BE_dd_OR_WHITESPACE SR006
-a_dy_ID_fa_at SR004
-a_j_dy_ID_fa_at 01S00
-a_l_MODIFY_SRID_0 SR000
-a_j_RESERVED_SRID_av 01S01
-a_l_MODIFY_dy_fn_BY_o SR005
-a_dy_c_ci_cu_du SR006
-a_dy_du_fj_aw_dj SR006
-a_m_UTF8_ALIAS
-a_m_NATIONAL
-a_c_bb_UTF8MB4_gs
-a_io_ea_COLLECT_z_STATUS
-a_RESERVED_w_ap
-a_io_ea_cl_bn
-a_s_POSSIBLY_DIVERGED_gq_DDL
-a_dy_g_GEOGRAPHIC 22S00
-a_POLYGON_aw_LARGE 22023
-a_hx_UNIQUE_ag
-a_ag_bl_g_e_bm_hx_ag
-a_FK_k_cw_PARENT
-a_cf_PARAM_LONGITUDE_ff_go_av 22S02
-a_cf_PARAM_LATITUDE_ff_go_av 22S03
-a_FK_k_hh_VIRTUAL_o
-a_FK_br_o_PARENT
-a_l_cl_d_SUPPRESSION_hj
-a_dy_GEOGCS_c_AXES SR002
-a_dy_c_SEMI_MAJOR_AXIS SR002
-a_dy_c_INVERSE_FLATTENING SR002
-a_dy_c_ANGULAR_UNIT SR002
-a_dy_c_PRIME_MERIDIAN SR002
-a_in_au_dy_g_e 22S00
-a_in_TARGET_dy_g_e 22S00
-a_in_au_dy_ad_TOWGS84 22S00
-a_in_TARGET_dy_ad_TOWGS84 22S00
-a_hy_f_df_fk_SESSION_i_bi
-a_hy_f_df_fk_GLOBAL_i_bi
-a_ep_ek_df_fk_GLOBAL_i_bi
-a_bw_u_aq_ai_cw_hy_f_cu_TRX_cu_SBR
-b_a_XA_l_ai_MDL_BACKUP
-a_f_di_PK
-a_j_ce_he_bf_ag 01000
-a_j_ce_ff_go_av_bf_ag 22003
-a_bf_ag_gm_aj_OR_cf_an 42000
-a_bf_ag_REF_dv_gy
-a_k_cw_o_bf_ag
-a_bf_ag_hb_ar
-a_bf_ag_gm_LOB
-a_bf_ag_an_hz_g_ac
-a_FULLTEXT_bf_ag
-a_hx_bf_ag
-a_n_ar_o_bf_ag
-a_bf_ag_gm_bu
-a_ao_o_NAMED_an_hz_g_ac
-a_ao_o_eg_v
-a_ao_o_iq
-a_id_BY_bb_ao_v
-a_bb_VAL_ao_gd_PRIOR
-a_bb_VAL_ao_REF_dv_INC
-a_bb_VAL_ao_an_hz_g_ac
-a_bb_VAL_ao_NAMED_an_hz_g_ac
-a_bb_VAL_ao_eg_v
-a_bb_VAL_ao_iq
-a_bb_AS_VAL_ao
-a_t_ACTION_gm_bb_VAL_ao
-a_u_aq_bq_ADD_it_as_bb_EXPRESSION
-a_FK_k_ah_al
-a_j_m_ay_cl_EXPR
-a_j_m_UTF8MB3_gs
-a_j_m_NESTED_fb_gn
-a_FK_cd_gt
-a_GR_HOLD_WAIT_eq
-a_GR_HOLD_KILLED
-a_GR_HOLD_MEMBER_STATUS_d
-a_ez_aa_q_ea_FETCH_ar
-a_ez_aa_ar_g_cj
-a_ez_aa_cp_c_ar
-a_ez_aa_gk_d
-a_ez_aa_q_ea_ROTATE_LOGS
-a_ez_aa_ar_at_cm
-a_ez_aa_q_ea_GENERATE_ar
-a_ez_aa_q_ea_STORE_ar
-a_ez_aa_q_ea_REMOVE_ar
-a_ez_aa_io_ea_ah_bn
-a_ez_aa_dr_ar_fs_q
-a_SLOW_z_bh_fe_hf_g_gz_ea_be
-a_GRP_TRX_ec_g_ac
-a_GRP_TRX_ec_BEFORE
-a_GRP_TRX_ec_gq_gm_TRX_BEGIN
-a_GRP_TRX_ec_BEGIN_g_ac
-a_bf_ag_eg_v_hz_g_ac
-a_ez_aa_q_ea_ENCRYPT
-a_PAGE_TRACKING_g_STARTED
-a_PAGE_TRACKING_av_g_TRACKED
-a_PAGE_TRACKING_k_PURGE
-a_ez_aa_k_ROTATE_i_dr_ar
-a_i_dr_ar_fs_ff_go_COMBINATION
-a_i_dr_ar_ey_FAIL_ea_OPERATE_ar
-a_i_dr_ar_ey_FAIL_ea_ROTATE_LOGS
-a_i_dr_ar_ey_FAIL_ea_REENCRYPT_z
-a_i_dr_ar_ey_FAIL_ea_CLEANUP_fl_KEYS
-a_i_dr_ar_ey_FAIL_ea_CLEANUP_AUX_ar
-a_gd_BOOLEAN_EXPR_bm_db_ba
-a_o_db_ba_REFERENCES_OTHER_o
-a_db_ba_NAMED_an_hz_g_ac
-a_db_ba_an_hz_g_ac
-a_db_ba_iq
-a_db_ba_eg_v
-a_db_ba_REFERS_dv_gy_o
-a_db_ba_VIOLATED
-a_db_ba_REFERS_x_o
-a_db_ba_g_cj
-a_db_ba_if_ap
-a_db_ba_gi_USING_FK_REFER_ACTION_o
-j_UNENCRYPTED_f_cu_ENCRYPTED_DB
-a_c_aa_REQUEST
-a_k_cl_f_aa
-a_k_cl_DATABASE_aa
-a_k_cl_w_aa
-a_w_k_BE_ENCRYPTED
-a_w_k_BE_DECRYPTED
-a_w_bl_x
-a_TARGET_w_UNENCRYPTED
-a_k_hh_aa_gi
-a_c_cn_CLAUSES
-a_t_hh_go_et_AS
-a_UKNOWN_AUTH_ID_OR_bv_cv_bm_et_AS
-a_id_BY_bf_ag
-a_bj_g_EARLY
-a_ab_hk_z_dl_START_SUBDIR_PATH
-a_ab_hk_z_dl_START_eq
-a_ab_hk_z_dl_DIRS_c
-a_ab_hk_z_dl_LABEL_g_cj
-a_ab_hk_z_dl_DIR_dd
-a_ab_hk_z_dl_br_SUCH_DIR
-a_ab_hk_z_dl_DIR_CLASH
-a_ab_hk_z_dl_DIR_PERMISSIONS
-a_ab_hk_z_dl_be_ai
-a_ab_hk_z_dl_ACTIVE
-a_ab_hk_z_dl_INACTIVE
-a_ab_hk_z_dl_q
-a_ab_hk_z_dl_SESSION
-a_STD_REGEX_d
-a_c_aj_bl 22032
-a_k_iw_fj
-a_id_BY_h_gw
-a_j_m_FLOAT_dv_gy
-a_ez_l_STOP_s_WHILE_LOCKED_BACKUP
-a_j_m_FLOAT_DIGITS
-a_j_m_FLOAT_UNSIGNED
-a_j_m_INTEGER_DISPLAY_WIDTH
-a_j_m_ZEROFILL
-a_ej_DONOR
-a_ej_PROTOCOL
-a_ej_DONOR_dz
-a_ej_OS
-a_ej_PLATFORM
-a_ej_el
-a_ej_CONFIG
-a_ej_SYS_CONFIG
-a_ej_bj_iz
-a_ej_LOOPBACK
-a_ej_aa
-a_ej_DISK_SPACE
-a_ej_cu_PROGRESS
-a_ej_ix
-a_k_et_ROLES_ea_cb_ay
-a_il_al_bj
-a_SECOND_ae_k_BE_dd
-a_DB_bv_cv
-a_DA_AUTH_ID_as_ch_ay_PRIV_cu_fp_ROLES
-a_DA_ez_u_f_k_eo
-a_cf_cu_x_er_UNIT SU001
-a_DA_bj_INSTALL_d
-a_br_SESSION_hy
-a_DA_x_d_NUMBER
-a_o_ah_da
-a_bx_c_CAPTURE_bd_ap
-a_DA_SSL_LIBRARY_d
-a_il_al
-a_il_al_DDL
-a_ih_CURRENT_ae
-a_ad_CURRENT_ae
-a_CURRENT_ae_g_REQUIRED
-a_ae_k_BE_RETAINED_gm_bj_ah
-a_CURRENT_ae_k_BE_RETAINED
-a_hv_REVOKES_fd
-a_k_et_ch_PRIV_ea_fp_ROLE
-a_XA_ak_iy
-a_t_SQL_bh
-a_bx_c_FLAG
-a_hv_REVOKE_hg_DB_et_BOTH_at
-a_UNIT_g_cj SU001
-a_c_aj_v_bm_gw_ag 22018
-a_aj_v_ff_go_av_bm_gw_ag 22003
-a_ct_MV_KEYS_NUM
-a_ct_MV_KEYS_SPACE
-a_bf_ag_ce_hz_aw_dj 22001
-a_n_MVI_v
-a_j_gw_ag_g_APPLICABLE
-a_GRP_ez_ew_d
-a_by_u_PURGED_as_GR
-a_GROUPING_gm_ev_cu_DST
-a_f_ap_CAUSES_aw_dj_PATH
-a_y_z_INSUFFICIENT_dk
-b_a_y_z_ae_HAS_BEEN_COPIED
-a_DA_GRP_ez_STARTED_dv_REJOIN
-a_SYSVAR_ah_ig_fr
-a_GLOBSTAT_ah_ig_fr
-a_GRP_ez_MESSAGE_dn_INIT_bz
-a_ah_au_n_eb_fo_bw
-a_ah_au_n_eb_LEVEL_bw
-a_n_eb_fo_bw
-a_n_eb_LEVEL_bw
-a_ah_au_n_eb_fo_hj_bw
-a_bw_dk_CHECKS_ay_k_BE_cb
-a_bw_dk_CHECKS_ay_gg_g_fd
-a_bw_dk_CHECKS_ay_fx
-a_bw_dk_CHECKS_ay_NEEDS_ez_ek_PRIV
-a_j_DA_dk_g_REGISTERED
-a_bw_cp_ew_ar_c
-a_bw_cp_ew_ar_bl_c
-a_bw_cp_ew_ar_aw_dj
-a_bw_cp_ew_ar_bl_aw_dj
-a_aj_bo_VALIDATION_d_as_DETAILED_REPORT
-a_DA_ew_c_el_SPECIFIED
-a_DA_ew_c_el
-a_DA_ew_c_gs
-a_DA_ew_c_EXTENSION_cs_bl
-a_cn_CONSTRAINTS_as_SAME_ap
-a_ba_g_cj
-a_bq_ba_ENFORCEMENT_g_e
-a_f_v_CONSTRUCTOR_fm_HAVE_gt
-a_f_v_CONSTRUCTOR_k_HAVE_bb
-a_bw_fr_bz_c_gd_eg_bi
-a_REQUIRE_eg_bi_c_v
-a_q_ea_DETERMINE_IF_ROLE_hz_fp
-a_q_ea_FETCH_fp_ROLE_hj
-a_bw_LOCAL_FILES_dc 42000
-a_IMP_cd_CFG_dz
-a_DA_OOM
-a_DA_ew_c_cs_ea_cl_el
-a_DA_ew_c_RETURN_bl_ea_cl_el
-a_cn_INTO_CLAUSES
-a_MISPLACED_INTO
-a_ay_bv_cv_bm_ay_ACCOUNT_BLOCKED_BY_ae_em
-a_j_m_YEAR_UNSIGNED
-a_ej_NETWORK_PACKET
-a_SDI_af_q_ad_RECORD
-a_id_BY_db_ba
-a_GRP_af_g_ac_GR_fm_STOP
-a_j_m_aj_f_gm_d_gm_dd
-a_j_m_INNER_INTO
-a_j_m_ip_an_ALWAYS_en
-a_j_m_SQL_CALC_cj_ROWS
-a_j_m_cj_ROWS
-a_ad_aj_v 22035
-a_cn_aj_ip 22034
-a_HOSTNAME_aw_dj
-b_a_j_bw_m_h_PREFIX_ar
-a_bd_ak_ay_dd_MSG
-a_bd_ak_ay_fp_MSG
-a_bd_ak_ae_er
-a_SUBQUERY_in_REJECTED
-a_DA_GRP_ez_fs_ENDPOINT_bi
-a_DA_GRP_ez_fs_ENDPOINT_c
-a_n_v_bm_VAR_PLUS_ACTIONABLE_PART
-a_cr_g_ac_gq_START_am
-a_co_ar_as_ATOMIC_ai_bp
-a_g_ac_as_START_am
-a_c_aj_du
-a_al_du_g_e
-a_c_ay_du_aj
-a_ab_hk_dc
-a_ab_hk_ARCHIVING_ENABLED
-a_MDL_ff_go_RESOURCES
-a_IMPLICIT_COMPARISON_bm_aj
-a_an_gg_g_SUPPORT_ci_cl
-a_IMPOSSIBLE_fj_dw
-a_bo_cq_cx
-a_ez_ASYNC_RECONNECT_u_bh_OFF
-a_ez_ASYNC_RECONNECT_dv_gp_OFF
-a_fy_u_bh_dg_ASYNC_RECONNECT_OFF
-a_fy_dv_gp_dg_ASYNC_RECONNECT_OFF
-a_c_ha_hh
-a_ci_cl_ax
-a_j_VAR_v_ah_g_e
-a_c_TIME_ZONE_INTERVAL
-a_c_CAST
-a_HYPERGRAPH_g_e_YET 42000
-b_a_j_HYPERGRAPH_EXPERIMENTAL
-a_DA_br_d_z_ef_CONFIGURED
-a_DA_d_z_f_dc
-a_DA_d_z_cn_iy
-a_DA_l_eo_d_z
-a_ay_dx_AS_DEFINER
-a_k_ay_dx_AS_DEFINER
-a_REGEX_NUMBER_aw_ir
-a_SPVAR_NONINTEGER_bl
-j_t_ACL_eh_cq
-a_i_aq_ACL_f_cq_cu_DML_DDL
-a_STOP_s_MONITOR_IO_ei_eq
-a_STARTING_s_MONITOR_IO_ei
-a_l_hh_cb_ea_u_as_u_bh_g_gm
-a_l_COMBINE_cb_ea_u_hg_AUTOPOSITION
-a_ASSIGN_GTIDS_ea_cb_TRANSACTIONS_dg_u_bh_gm
-a_SQL_s_SKIP_COUNTER_fn_as_u_bh_gm
-a_USING_ASSIGN_GTIDS_ea_cb_TRANSACTIONS_AS_LOCAL_OR_UUID
-b_a_cl_u_ea_ANON_hg_WAIT_UNTIL_SQL_THD_gq_GTIDS
-a_l_cl_SQL_gq_OR_BEFORE_GTIDS_as_cb_ea_u
-a_cb_ea_u_UUID_SAME_AS_bd_ap
-a_l_hh_SAME_UUID_AS_bd_ap
-a_GRP_ez_fs_ck_STILL_ep
-a_ab_c_AUTOEXTEND_da_v
-a_ab_cd_as_w
-a_ab_AUTOEXTEND_da_ff_go_av
-a_k_hh_AUTOEXTEND_da_gi
-a_ROLE_GRANTED_ea_ITSELF
-a_f_fm_HAVE_A_VISIBLE_o
-a_ab_eb_bz
-a_j_ASYNC_CONN_FAILOVER_NETWORK_NAMESPACE
-a_bw_INTERACTION_eq
-a_c_CAST_ea_cf 22S01
-a_c_CAST_POLYGON_RING_DIRECTION 22S04
-a_GIS_gv_SRIDS_AGGREGATION 22S05
-a_RELOAD_cp_bz
-a_SDI_GET_KEYS_c_w
-a_ah_ez_SRC_n_eb_fo_da
-b_a_j_m_TLS_dz_bm_ck_CLI
-a_l_hh_SAME_UUID_AS_dh_ah_UUID
-a_cb_ea_u_UUID_SAME_AS_dh_ah_UUID
-a_GRP_ez_dh_ah_UUID_FAIL_GET_cc
-a_j_ADUIT_z_ee_da_hg_PRUNE_SECONDS
-a_j_ADUIT_z_ee_da_CLOSE_ea_ROTATE_gm_da
-a_KERBEROS_ai_ay
-a_INSTALL_bj_ho_bw
-a_DA_d_z_r_FLUSH_q
-a_j_SQL_gq_MTS_GAPS_GAP_g_CALCULATED
-a_c_ASSIGNMENT_TARGET 42000
-a_af_g_ac_gm_GR_il
-a_GRP_ez_FAILOVER_ck_STATUS_PROPAGATION
-a_j_y_z_bi_UNIX_ev_cx_hf_aj
-a_c_MFA_bj_SPECIFIED
-a_IDENTIFIED_BY_t
-a_c_bj_bm_ft
-a_bj_dg_ft
-a_MFA_METHOD_at
-a_MFA_METHOD_g_at
-a_AUTHENTICATION_ds_ax
-a_bj_ft_DONE
-a_c_ay_bm_ft
-a_ay_ft_q
-a_MFA_METHODS_c_fq
-a_MFA_METHODS_IDENTICAL
-a_c_MFA_OPERATIONS_bm_PASSWORDLESS_ay
-a_ah_ak_au_br_OPTIONS_bm_u_cx
-a_ah_REP_au_l_fy_REQ_eg_bi_as_u_cx
-a_ah_REP_au_l_fy_dv_gp_as_u_cx
-a_ah_REP_au_l_fy_u_cx_di_POSITIONS
-a_ah_REP_au_l_fy_dv_POS_di_POSITIONS
-a_ah_REP_au_GR_ck_as_u_bh_g_gm
-a_l_hh_u_cx_as_u_bh_g_gm
-a_j_C_fy_u_cx_as_au_dv_POS_c_POS
-a_DA_SSL_FIPS_bh_d
-a_v_ff_go_av
-a_FULLTEXT_as_ROLLUP
-a_bx_ad_ex
-a_j_bx_USING_bb
-a_bx_ad_be
-a_j_m_gs
-a_CONCURRENT_PROCEDURE_USAGE
-a_DA_GLOBAL_CONN_dp
-a_DA_CONN_dp
-a_bq_af_g_e_dt_o_bl_INSTANT
-a_j_SF_ew_ap_COLLISION
-a_k_PURGE_i_as_BACKUP_em
-a_aw_ga_WINDOWS
-a_MYSQLBACKUP_bw_MSG
-a_fb_CONTAINS_c_fj
-a_p_CONTAINS_c_fj
-a_l_EXECUTE_fv_as_ASSIGNED_u_ht
-a_XA_hy_f
-a_ab_ee_eg_dz
-b_a_ab_INSTANT_ADD_g_e_ee_da
-a_af_g_ac_WHILE_hb_ah_hz_ep
-a_j_m_DATETIME_DELIMITER
-a_j_m_SUPERFLUOUS_DELIMITER
-a_k_PERSIST_SENSITIVE_iq
-a_j_k_SECURELY_PERSIST_SENSITIVE_iq
-a_j_is_fa_at
-a_IF_g_at_t_is_at_gm_gv_f
-a_IF_g_at_t_ew_NATIVE_FCT_ap_COLLISION
-a_cl_ae_AUTH_bj_d
-b_a_REDUCED_DBLWR_be_ia
-b_a_REDUCED_DBLWR_PAGE_cj
-a_dy_c_LATITUDE_go_ORIGIN SR002
-a_dy_c_LONGITUDE_go_ORIGIN SR002
-a_dy_fl_PROJ_ha_PRESENT SR002
-a_GIPK_o_at
-a_GIPK_q_hn_o_at
-a_GIPK_o_bq_g_ac
-a_cw_PK_o_ea_cw_GIPK
-a_ai_bp_as_GIPK_ix_cu_SBR
-b_a_DA_EXPIRE_LOGS_DAYS_fe
-a_CTE_eu_g_UNION
-a_fv_BACKEND_q_ea_FETCH_SECURITY_CTX
-a_fv_dn_BACKEND_q
-a_bw_be_dk_bm_ak_CHECKS
-a_bd_ak_FORCE_MEMBERS_fv_bz
-a_j_m_IDENT
-a_INTERSECT_ALL_ee_DUPLICATES_ct
-a_TP_fr_THRS_PER_GRP_fc_TXN_THR_dp
-a_gr_ev_bi
-a_SHAPE_PRIDICTION_ew
-a_dy_c_HEIGHT SR002
-a_dy_c_SCALING SR002
-a_dy_c_ZONE_WIDTH SR002
-a_dy_c_LATITUDE_POLAR_STERE_VAR_A SR002
-a_j_m_bw_br_bo_bn
-a_f_g_dd
-a_f_br_hb_ar
-a_f_cu_SHARED_w
-a_ag_OTHER_THAN_PK
-a_gh_bk_ce_UNSORTED
-a_bk_EXECUTOR_d
-a_bk_fh_LIBCURL_INIT_q
-a_bk_fh_LIBCURL_d
-a_bk_fh_fi_d
-a_bk_fh_iu_d
-a_bk_gh_ce_q
-a_bk_LOADER_o_aw_ir_bm_LEFTOVER_BUFFER
-a_bk_LOADER_r_d
-a_bk_LOADER_be_CONTAINS_LESS_LINES_THAN_IGNORE_gi
-a_bk_ef_ad_ENCLOSED_BY
-a_bk_ef_eg_BUFFER_ee_TOTAL_COLS_ct
-a_bk_ef_COPY_BUFFER_da_ct
-a_bk_ef_cm_END_go_INPUT
-a_bk_ef_cm_eg_TERMINATOR
-a_bk_ef_cm_CHAR_gq_ENDING_ENCLOSED_BY
-a_bk_ef_cm_CHAR_gq_en_ESCAPE
-a_bk_ef_cm_CHAR_gq_o_TERMINATOR
-a_bk_ef_INCOMPLETE_ESCAPE_SEQUENCE
-a_gh_bk_ce_q
-a_gh_bk_ce_n_v_bm_bu
-a_gh_bk_ce_j_en_ea_NOTNULL
-a_REQUIRE_f_hb_ar_db_GENERATE_as_GR
-a_l_ah_SYS_VAR_cu_cq_cx_bh
-a_ab_INSTANT_ADD_cw_g_e_ee_da
-a_ab_INSTANT_ADD_g_e_ee_hi
-a_l_cl_PERSISTED
-a_INSTALL_r_cl_en_v
-a_INSTALL_r_cl_fl_v
-a_j_m_ay_DEFINED_COLLATIONS
-a_ay_em_OVERLONG_ap 42000
-a_j_br_SPACE_dz_fb
-a_VALIDATE_ae_INSUFFICIENT_CHANGED_CHARACTERS
-a_j_m_as_NOTE
-a_l_RUN_fv_SERVICES_RECURSIVELY
-a_j_y_z_dq_fs_gz_dc
+UNSUPPORT_COMPRESSEDvaf
+ACLmtme
+mhmusc
+ofwjDB 42Y07
+nkvfENUM
+nkpxozENUMmj
+cDDsz
+UPDATING_DDf
+cDDszID
+cDDsznd
+mkmrngnd
+nkpxROUTINErp
+sssvme
+cBITWISE_OPERANDSpo
+cBITWISErgOPERANDSpo
+jmhHINT
+paotnz 22S01
+qmwqd SR002
+qmPROJtomr SR003
+jqmgox 01000
+qmgzg 22S00
+qmgzgUNDEFINED SR001
+PKmulyoINVISIBLE
+mlAUTHID
+mexlrh
+rcxlqv
+menpROLES
+ohofSCHEME
+ohofSCHEMEqb
+ohlsv
+xlgGRANTED
+meREVOKExl
+RENAMExl
+ohlACQUIREqbyl
+ohlSATISFY_DEPENDENCY
+ohsvlREGISTERqbyl
+ohsvlINITIALIZE
+ohxogLOADED
+ohxolDEINITIALIZE
+ohlRELEASEqb
+ohxolUNREGISTERqb
+ohlxo
+jxoTHEgwr
+mffuv
+mfMANIPULATEqume
+ohxopmpinr
+lozmivyDUE_SETS_CONSTRAINTS
+kranmMANAGEMENT_CACHES
+qmgox SR001
+oqgwr
+unsfcsw
+vcqoyevt
+ofovocoj
+ofovmkoj
+ofovfoj
+ofovfojoaDICTIONARYf
+ofovfojoaovf
+ofovfojoaf
+cobnf 22023
+cobmj 22023
+cobnfmjPAIR 22023
+cobwxow 22023
+cobENDow 22023
+cobCHARACTERS 22023
+pmobnf 22023
+jqmgoxAXISse 01000
+ofojqovwFCT
+RESETniqomjrttcnj
+UNRESOLVEDfra
+pmfra
+ineSKIPyv
+ineNOWAIT
+raNOWAIT
+CTEripuUNION
+CTEripuNONRECURSIVE_FIRST
+CTEriFORBIDS_AGGREGATION
+CTErizpJOINse
+CTEripuSINGLEtq
+ryTMPmz
+nnofwjnn
+nnCIRCULARITYpinnGRAPH
+nnofziPARTITIONING
+nnofINHERITwo
+nnofREDEFINEseBY
+nnwowxqa
+nnwoENDqa
+nnwoqa
+nnnjwosenz
+nnnjwoTEMPORALnz
+nnnjwoNUMERICnz
+nnnjBOUNDgCONSTANT
+nnpmnd
+nnqaseBY
+nncnntktv
+nncnntkALIAStv
+nnywnntktvpinnSPEC
+nnROWSxytv
+nnofnrserz
+nnsnmx
+nnnbIGNORESwo
+WL9236_NOWrz
+coftcARGS
+oipixwgnrBY
+nkpxmkrp
+mzlpkf
+mzlpkmrf
+mkutFILENAME
+DBpkRMDIR2
+IMPofwnMATCHED
+IMPocsugrr
+IMPfronh
+IMPorMYSQLDqn
+IMPorDDqn
+IMPorSDIqn
+jcHINT
+wbsugrr
+zxrttcnj 22S02
+xzrttcnj 22S03
+gqroaGEOGRAPHICqm 22S00
+qapyLEVEL
+ofovpvoj
+mfqeFLABBERGASTED
+wgEXPRnkpx
+rkpkDYNAMICALLY_REGISTERED
+vcqoyemcvt
+vcqoommcvt
+vcqopkmcvt
+vcqoBUILD_HISTOGRAM
+sdxl
+mrmkns
+PERSISTplojpjd 42000
+!baCMD_NEED_SUPER
+vppiDATADIR
+qxDDLpiPROGRESS
+qxnksoyhCLONES
+qymnogvud
+CTEqsuyDEPTH
+gHINT_UPDATABLEoq
+CREDENTIALS_CONTRADICTqoHISTORY
+WARNINGmsHISTORY_CLAUSES_VOID
+oksugSUPPORT
+I_S_SKIPPEDmk
+mkmznl
+mbSRIDoamc
+koeSRID_DUEqomu
+jiujUPDATESpq
+!bajiV1quEVENTSpq
+jiujUPDATES_SUGGESTSujIMAGES
+COULDgAPPLYmxDIFF
+uomxDIFF
+rlnrnh
+rlnrgnh
+cVCPU_ID
+cVCPUnj
+cqwPRIORITY
+vlmt
+rlnrBUSY
+rlnrpq
+ufmh
+qirs
+cqwID
+rlnrBINDme
+ctvtcFORCEob
+nrmysjon
+SDImtme
+mrmxfmj 22035
+mbmxfmj 2203F
+TFsawdALIAS 42000
+TFzpJOINnz
+JTmjrttcnj 22003
+JTqsywvp 42000
+msEXPIRATIONgeBYzeMETHOD
+czqCRSgTOP_LEVEL
+tfrbdgrs 23000
+!jUSELESSulmu
+DISK_FULL_NOWAIT
+wqdpiDIGEST_FN
+UNDISCLOSEDwqdpiDIGEST_FN
+ocDIRnh
+ocDIRmr
+ocDIRmwme
+ocDIRml
+plqroaSRID_0tu4326 22S00
+!baiEXPIREmnDAYStuSECSsbTOGETHER
+olyqui
+olqapg
+olmuOUTOFBOUNDSd
+olINTERNALd
+olRULEtb
+oltfESCAPE_SEQUENCE
+olUNIMPLEMENTED
+olMISMATCHED_PAREN
+oltfxy
+olqsLT_MIN
+olcBACK_REF
+olLOOK_BEHINDqd
+olmrCLOSE_BRACKET
+olcnj
+olSTACKui
+olTIMErt
+olPATTERNnkvf
+lozdmnqb
+prPIPELINEoadmnqb
+mfqeDIAGNOSTICS
+gqroazgqm 22S00
+gqroaPROJECTEDqm 22S00
+NONPOSITIVE_RADIUS 22003
+RESTARTrwme
+qmmrsdqi SR006
+qmpbqiDEFINITIONS SR006
+qmndlyoprOR_WHITESPACE SR006
+qmORGANIZATIONlyoprOR_WHITESPACE SR006
+qmIDronh SR004
+jqmIDronh 01S00
+lMODIFY_SRID_0 SR000
+jRESERVED_SRIDnj 01S01
+lMODIFYqmsbBYmc SR005
+qmcowpiqi SR006
+qmqirxnkpx SR006
+maUTF8_ALIAS
+maNATIONAL
+cnpUTF8MB4tg
+vcqoCOLLECTmnSTATUS
+RESERVEDmknd
+vcqoozob
+mgPOSSIBLY_DIVERGEDteDDL
+qmgGEOGRAPHIC 22S00
+POLYGONnkzv 22023
+ulzdmu
+munzgeoaulmu
+wykpkxk
+otybzxrttcnj 22S02
+otybxzrttcnj 22S03
+wyktvxpmc
+wyofmcxk
+lozdSUPPRESSIONtx
+qmGEOGCScAXES SR002
+qmcSEMI_MAJOR_AXIS SR002
+qmcINVERSE_FLATTENING SR002
+qmcANGULAR_UNIT SR002
+qmcPRIME_MERIDIAN SR002
+vbniqmge 22S00
+vbzcqmge 22S00
+vbniqmmrTOWGS84 22S00
+vbzcqmmrTOWGS84 22S00
+umfptryvsinw
+umfptryyrinw
+rdqyptryyrinw
+okminemwpkumfpiTRXpiSBR
+!baXAlmwMDL_BACKUP
+fpwPK
+jostsntmu 01000
+josrttcnjntmu 22003
+ntmutamxORotnb 42000
+ntmuREFqjtm
+kpkmcntmu
+ntmutpnf
+ntmutaLOB
+ntmunbungmq
+xvntmu
+ulntmu
+mbnfmcntmu
+ntmutaoi
+ncmcNAMEDnbungmq
+ncmcqumj
+ncmcve
+urBYnpncmj
+npVALncsrPRIOR
+npVALncREFqjINC
+npVALncnbungmq
+npVALncNAMEDnbungmq
+npVALncqumj
+npVALncve
+npAS_VALnc
+mhACTIONtanpVALnc
+mineoeADDvhngnpEXPRESSION
+wykmvmz
+jmanmozEXPR
+jmaUTF8MB3tg
+jmaywrptb
+wyorth
+GR_HOLD_WAITre
+GR_HOLD_KILLED
+GR_HOLD_MEMBER_STATUSd
+rnmomeqoFETCHnf
+rnmonfgox
+rnmopdcnf
+rnmosyd
+rnmomeqoyzLOGS
+rnmonfnhpa
+rnmomeqoGENERATEnf
+rnmomeqoyenf
+rnmomeqoREMOVEnf
+rnmovcqomvob
+rnmoqfnfsgme
+SLOWmnnvrsttgtnqons
+xeTRXqqgmq
+xeTRXqqyp
+xeTRXqqtetaTRX_BEGIN
+xeTRXqqBEGINgmq
+ntmuqumjungmq
+rnmomeqoENCRYPT
+PAGE_TRACKINGgSTARTED
+PAGE_TRACKINGnjgTRACKED
+PAGE_TRACKINGkvq
+rnmokyziqfnf
+iqfnfsgrttcCOMBINATION
+iqfnfrmwcqoOPERATEnf
+iqfnfrmwcqoyzLOGS
+iqfnfrmwcqoREENCRYPTmn
+iqfnfrmwcqoCLEANUPrzKEYS
+iqfnfrmwcqoCLEANUP_AUXnf
+srBOOLEAN_EXPRoappno
+mcppnoREFERENCES_OTHERmc
+ppnoNAMEDnbungmq
+ppnonbungmq
+ppnove
+ppnoqumj
+ppnoREFERSqjtmmc
+ppnoVIOLATED
+ppnoREFERSmlmc
+ppnogox
+ppnoutnd
+ppnoswUSINGwyREFER_ACTIONmc
+!jUNENCRYPTEDfpiENCRYPTED_DB
+cmoREQUEST
+kozfmo
+kozDATABASEmo
+kozmkmo
+mkkyoENCRYPTED
+mkkyoDECRYPTED
+mknzml
+zcmkUNENCRYPTED
+ktvmosw
+cpbCLAUSES
+mhtvtcrhAS
+UKNOWNzeID_ORojpjoarhAS
+urBYntmu
+nxgEARLY
+mptymnpzwxSUBDIRvp
+mptymnpzwxre
+mptymnpzDIRSc
+mptymnpzLABELgox
+mptymnpzDIRpr
+mptymnpzofwjDIR
+mptymnpzDIR_CLASH
+mptymnpzDIR_PERMISSIONS
+mptymnpznsmw
+mptymnpzyn
+mptymnpzINACTIVE
+mptymnpzme
+mptymnpzvs
+STD_REGEXd
+cmxnz 22032
+kvkrx
+urBYhtk
+jmaFLOATqjtm
+rnlwimgWHILEyvBACKUP
+jmaFLOAT_DIGITS
+jmaFLOAT_UNSIGNED
+jmaINTEGER_DISPLAY_WIDTH
+jmaZEROFILL
+qxDONOR
+qxPROTOCOL
+qxDONORqn
+qxOS
+qxPLATFORM
+qxqz
+qxCONFIG
+qxSYS_CONFIG
+qxnxvn
+qxLOOPBACK
+qxmo
+qxDISK_SPACE
+qxpiPROGRESS
+qxvl
+krhROLESqoopnm
+uzmznx
+SECONDmskyopr
+DBojpj
+xszeIDngovnmPRIVpisdROLES
+xsrnmifkrc
+otpimlrfUNIT SU001
+xsnxxgd
+ofvsum
+xsmldvx
+mcmvpo
+olcCAPTUREnrnd
+xsSSL_LIBRARYd
+uzmz
+uzmzDDL
+uvzkms
+mrzkms
+zkmsgvz
+mskyoRETAINEDtanxmv
+zkmskyoRETAINED
+ujREVOKESrr
+krhovPRIVqosdxl
+XAmyvm
+mhwwnv
+olcFLAG
+ujREVOKEtuDBrhBOTHnh
+UNITgox SU001
+cmxmjoatkmu 22018
+mxmjrttcnjoatkmu 22003
+phMV_KEYS_NUM
+phMV_KEYS_SPACE
+ntmuosunnkpx 22001
+mbMVImj
+jtkmugAPPLICABLE
+xernrkd
+ommivyngGR
+xwtarjpiDST
+fndCAUSESnkpxvp
+mmmnwfpy
+!bammmnmsHAS_BEEN_COPIED
+xsxernSTARTEDqjREJOIN
+SYSVARmvuusf
+GLOBSTATmvuusf
+xernMESSAGEqbzson
+mvnimbqpscok
+mvnimbqpLEVELok
+mbqpscok
+mbqpLEVELok
+mvnimbqpsctxok
+okpyxanmkyoop
+okpyxanmsugrr
+okpyxanmsl
+okpyxanmNEEDSrnqyPRIV
+jxspygREGISTERED
+okpdrknfc
+okpdrknfnzc
+okpdrknfnkpx
+okpdrknfnznkpx
+mxocvudngDETAILED_REPORT
+xsrkcqzwv
+xsrkcqz
+xsrkctg
+xsrkcEXTENSIONpgnz
+pbCONSTRAINTSngwhnd
+nogox
+oenoENFORCEMENTge
+fmjCONSTRUCTORsawdth
+fmjCONSTRUCTORkwdnp
+oksfoncsrqunw
+REQUIREqunwcmj
+meqoDETERMINE_IFxlunsd
+meqoFETCHsdxltx
+okLOCALwnpq 42000
+IMPorCFGqn
+xsOOM
+xsrkcpgqoozqz
+xsrkcRETURNnzqoozqz
+pbINTO_CLAUSES
+MISPLACED_INTO
+nmojpjoanmACCOUNT_BLOCKED_BYmsra
+jmaYEAR_UNSIGNED
+qxNETWORKyx
+SDImtmemryy
+urBYppno
+xemtgmqGRsawi
+jmamxftadtapr
+jmaINNER_INTO
+jmavdnbALWAYSrb
+jmawwCALCoxROWS
+jmaoxROWS
+mrmxmj 22035
+pbmxvd 22034
+HOSTNAMEnkpx
+!bajokmahPREFIXnf
+nrmynmprMSG
+nrmynmsdMSG
+nrmymsrf
+yfvbREJECTED
+xsxernsgENDPOINTnw
+xsxernsgENDPOINTc
+mbmjoawbPLUS_ACTIONABLEwg
+pfgmqtewxna
+pcnfngATOMICmwod
+gmqngwxna
+cmxqi
+mzqige
+cnmqimx
+mptypq
+mptyARCHIVING_ENABLED
+MDLrttcRESOURCES
+IMPLICIT_COMPARISONoamx
+nbsugSUPPORTowoz
+IMPOSSIBLErxqk
+ocpepl
+rnASYNCwtminvya
+rnASYNCwtqjtdya
+smminvpuASYNCwtya
+smqjtdpuASYNCwtya
+ctotv
+owoznl
+jwbmjmvge
+cTIME_ZONExy
+cCAST
+yigeYET 42000
+!bajyiEXPERIMENTAL
+xsofdmnqtCONFIGURED
+xsdmnfpq
+xsdmnpbvm
+xslrcdmn
+nmqlASzm
+knmqlASzm
+REGEXvxnkvf
+SPVAR_NONINTEGERnz
+!jmhACLqvpe
+ineACLfpepiDML_DDL
+wimgMONITOR_IOqwre
+STARTINGmgMONITOR_IOqw
+ltvopqomingminvgta
+lCOMBINEopqomituAUTOPOSITION
+ASSIGNxxqoopTRANSACTIONSpuminvta
+wwmgSKIP_COUNTERsbngminvta
+USING_ASSIGNxxqoopTRANSACTIONS_AS_LOCAL_OR_UUID
+!baozmiqoANONtuWAIT_UNTILwwTHDtexx
+lozwwteORypxxngopqomi
+opqomiUUIDwhASnrnd
+ltvwhUUID_ASnrnd
+xernsgoySTILLrd
+mpcygpomj
+mporngmk
+mpygporttcnj
+ktvygposw
+xlGRANTEDqoITSELF
+fsawdA_VISIBLEmc
+mpqpon
+jASYNC_CONN_FAILOVER_NETWORK_NAMESPACE
+okINTERACTIONre
+cCASTqoot 22S01
+cCAST_POLYGON_RING_DIRECTION 22S04
+GIStjSRIDS_AGGREGATION 22S05
+RELOADpdon
+SDI_GET_KEYScmk
+mvrnSRCmbqpscpo
+!bajmaTLSqnoaoyCLI
+ltvwhUUID_ASpvmvUUID
+opqomiUUIDwhASpvmvUUID
+xernpvmvUUIDwcGEToq
+jADUITmnqspotuPRUNE_SECONDS
+jADUITmnqspoCLOSEqoyztapo
+KERBEROSmwnm
+xgnxucok
+xsdmnmfFLUSHme
+jwwteMTS_GAPS_GAPgCALCULATED
+cASSIGNMENTzc 42000
+mtgmqtaGRuz
+xernFAILOVERoySTATUS_PROPAGATION
+jmmmnnwUNIXrjplttmx
+cMFAnxwv
+IDENTIFIED_BYmh
+cnxoash
+nxpush
+MFA_METHODnh
+MFA_METHODgnh
+AUTHENTICATIONqgnl
+nxshDONE
+cnmoash
+nmshme
+MFA_METHODScse
+MFA_METHODS_IDENTICAL
+cMFA_OPERATIONSoaPASSWORDLESSnm
+mvmyniofOPTIONSoamipl
+mvREPnilsmREQqunwngmipl
+mvREPnilsmqjtdngmipl
+mvREPnilsmmiplpwPOSITIONS
+mvREPnilsmqjPOSpwPOSITIONS
+mvREPniGRoyngminvgta
+ltvmiplngminvgta
+jCsmmiplngniqjPOScPOS
+xsSSL_FIPSnvd
+mjrttcnj
+xvngROLLUP
+olmrrl
+jolUSINGnp
+olmrns
+jmatg
+yhwsUSAGE
+xsyrCONNqd
+xsCONNqd
+oemtgeqhmcnzxh
+jSFrkndwl
+kvqingBACKUPra
+nksoWINDOWS
+MYSQLBACKUPokMSG
+rpCONTAINScrx
+mdCONTAINScrx
+lEXECUTEsjngASSIGNEDmiuh
+XAumf
+mpqsquqn
+!bampxhADDgeqspo
+mtgmqWHILEtpmvunrd
+jmaxtDELIMITER
+jmaSUPERFLUOUS_DELIMITER
+kPERSIST_SENSITIVEve
+jkSECURELY_PERSIST_SENSITIVEve
+jvgronh
+IFgnhmhvgnhtatjf
+IFgnhmhrkvwFCTndwl
+ozmszenxd
+!baREDUCED_DBLWRnsuo
+!baREDUCED_DBLWR_PAGEox
+qmcxztcORIGIN SR002
+qmczxtcORIGIN SR002
+qmrzPROJtoPRESENT SR002
+GIPKmcnh
+GIPKmeubmcnh
+GIPKmcoegmq
+pkPKmcqopkGIPK
+mwodngGIPKvlpiSBR
+!baxsEXPIRE_LOGS_DAYSrs
+CTErigUNION
+sjBACKENDmeqoFETCH_SECURITY_CTX
+sjqbBACKENDme
+oknspyoamyxa
+nrmyFORCE_MEMBERSsjon
+jmaIDENT
+INTERSECT_ALLqsDUPLICATESph
+TPsfTHRS_PERxerqTXN_THRqd
+tfrjnw
+SHAPE_PRIDICTIONrk
+qmcHEIGHT SR002
+qmcSCALING SR002
+qmcZONE_WIDTH SR002
+qmcxzPOLAR_STEREwbA SR002
+jmaokofocob
+fgpr
+foftpnf
+fpiSHAREDmk
+muOTHER_THAN_PK
+svnyosUNSORTED
+nyEXECUTORd
+nyrvzwzsme
+nyrvzwd
+nyrvrwd
+nyrvvid
+nysvosme
+nyyumcnkvfoaLEFTOVERyq
+nyyumfd
+nyyunsCONTAINS_LESS_LINES_THANytsw
+nyqtmrENCLOSED_BY
+nyqtquyqqsTOTAL_COLSph
+nyqtCOPYyqpoph
+nyqtpaENDtcINPUT
+nyqtpaquyk
+nyqtpaCHARteENDING_ENCLOSED_BY
+nyqtpaCHARterbESCAPE
+nyqtpaCHARtemcyk
+nyqtINCOMPLETE_ESCAPE_SEQUENCE
+svnyosme
+svnyosmbmjoaoi
+svnyosjrbqoNOTNULL
+REQUIREftpnfppGENERATEngGR
+lmvSYSwbpipeplnv
+mpxhADDpkgeqspo
+mpxhADDgeqstw
+lozwr
+xgmfozrbmj
+xgmfozrzmj
+jmanmzlCOLLATIONS
+nmraOVERLONGnd 42000
+jofSPACEqnrp
+VALIDATEmswfzhCHARACTERS
+jmangNOTE
+lRUNsjSERVICES_RECURSIVELY
+jmmmnqesgtnpq
 @6000
-a_cg_r
-a_cg_r_g_AVAILABLE
-a_cg_r_t_cg
-a_cg_r_k_UNINSTALL
-a_ge_br_bq_cg
-b_a_fz_INTO_ANALYZE_g_e 0A000
-a_fz_INTO_IMPLICIT_bi_g_e 0A000
-a_fz_INTO_bi_g_e 0A000
-a_en_l_BE_PERSISTED_bm_READONLY
-a_fz_INTO_bm_fw_g_e 0A000
-a_ab_IMPORT_n_DROPPED_ENUM_er
-a_ab_IMPORT_n_NUMBER_go_INDEXES_ZERO
-a_ab_IMPORT_n_NUMBER_go_INDEXES_aw_HIGH
-a_ab_IMPORT_cw_it_hs_ax
-a_ab_IMPORT_ENUM_en_TERMINATOR_ad
-a_SIMULATED_INJECTION_d
-a_j_m_DYNAMIC_PRIV_cu_et
-a_bk_MULTI_fh_eo_be_q
-a_bk_MULTI_fh_cq_be_q
-a_bk_MERGE_c_CHUNK
-a_bk_MERGE_g_ALL_CHUNKS_CONSUMED
-a_bk_WRITER_LIBCURL_INIT_q
-a_bk_WRITER_LIBCURL_d
-a_bk_SORTING_LOADER_gf
-a_bk_SORTING_LOADER_WAIT
-a_bk_fh_eo_be_q
-a_bk_gh_f_HAS_INSTANT_COLS
-a_bk_gh_ex
-a_bk_gh_il_al
-a_bk_fh_d
-a_bk_fh_be_ie_fd
-a_bk_fh_COULDNT_RESOLVE_HOST
-a_START_s_ck_c_iv
-a_k_EXECUTE_cu_hb
-a_aw_ga_bd_BY_MODIFIER_BRANCHES
-a_j_m_al_gn_br_REPLACEMENT
-a_QUALIFY_di_az_an
-a_e_cx_as_HYPERGRAPH
-a_SPECIFIC_bv_cv
-a_l_cl_u_ht_ea_AUTOMATIC_TAGGED_hf_u_bh_hz_OFF
-a_u_ht_TAG_u_bh_OFF
-a_ca_it_g_NULLABLE
-a_ca_j_it_ad_g_NULLABLE
-a_ca_it_hz_dd
-a_ca_it_hz_dd_j
-a_ca_gr_v
-a_ca_DECIMAL_x_gj
-a_ca_DECIMAL_OOM_gj
-a_ca_j_DECIMAL_ROUNDING
-a_ca_DECIMAL_PRECISION_fc_bo
-a_ca_fc_MIN
-a_ca_fc_ee
-a_ca_j_fc_MIN_TRUNCATING
-a_ca_j_fc_ee_TRUNCATING
-a_ca_REAL_hz_NAN
-a_ca_ff_go_av
-a_ca_DATETIME_bi
-a_ca_j_he
-a_ca_k_iw_fj
-a_ca_ex_PRINCIPAL_gj
-a_ca_AWS_AUTH_gj
-a_ca_CSV_PARSING_gj
-a_ca_o_ax_gj
-a_ca_o_ee_gj
-a_ca_el_t
-a_ca_fg_DECIMAL_dw_gj
-a_ca_fj_aw_dj
-a_ca_ex_PRINCIPAL_BUCKET_gj
-a_ca_br_FILES_cj
-a_ca_dd_be
-a_ca_cy_be
-a_ca_fu_bo_DEPTH_fc_ee
-a_ca_fu_gk_ax
-a_ca_fu_ENUM_k_iw_el
-a_ca_fu_ENUM_ax
-a_ca_fu_bl_k_iw
-a_ca_fu_be_ENDS_UNEXPECTEDLY
-a_ca_fu_be_ce_fx
-a_ca_fu_c_UNION
-a_ca_fu_c_BLOCK_da
-a_ca_fu_c_BLOCK_RECORD_gb
-a_ca_bi_gk_br_MAGIC_BYTES
-a_ca_fu_gk_hs_gj
-a_ca_fu_gk_br_bo
-a_ca_fu_br_CODEC_cu_gk
-a_ca_fu_c_ap_cu_bo
-a_ca_fu_DECODING_gj
-a_ca_fg_gd_UTF8_be_ENC
-a_ca_fg_bo_ax
-a_ca_fg_eg_bd_da_fc_ee
-a_ca_fg_k_LOCATE_OFFSET
-a_ca_fg_bl_k_iw
-a_ca_fg_k_LOCATE_bo
-a_ca_gc_NUM_it_ax
-a_ca_OOM
-a_ca_j_gc_SKIPPED_LINES
-a_ca_j_gc_SKIPPED_FILES
-a_ca_gc_be_HAS_br_ce
-a_ca_gc_br_ce
-a_ca_gc_br_FILES
-a_ca_j_gc_hh_bb_it_NAMES
-a_ca_fg_k_cq_gk
-a_ca_gc_j_GOT_cz
-a_ca_fu_k_PARSE_gk
-a_ca_fg_l_eo_be
-a_ca_aw_LARGE_v_gj
-a_ca_aw_LARGE_eg_gj
-a_TABLESAMPLE_PERCENTAGE 2202H
-a_TABLESAMPLE_cx_gm_BASE_eh
-b_a_ha_ag_ff_go_av
-a_RESULT_da_dp_ct
-a_cg_r_INTERNAL
-a_cg_r_CONCURRENCY_dp
-a_cg_r_RUNTIME
-a_cg_r_TIMEZONE
-a_cg_r_KEYWORD
-a_cg_r_cl_ch_cc
-a_cg_r_t_bl
-a_cg_r_dw
-a_j_ge_cr_PARTIALLY_hq
-a_hl_EXECUTION_g_ac_WITHIN_ge_OR_is_OR_ew
-a_ca_aj_PARSING
-a_al_k_BE_bb
-a_h_PREFIX_ar_g_e
-a_j_m_gd_STANDARD_ar
-a_FK_br_UNIQUE_ag_PARENT
-a_bv_cv_br_PROXY_et
-a_bv_cv_br_PROXY
-a_ca_ay_ce_bv_q
-a_bk_fh_ZSTD_d
-a_bk_ef_d
-a_ca_c_aj_be_bi_bo
-a_ca_gc_aj_c_bo
-a_ca_aj_be_bi_j_gc_bo
-a_gd_SCALAR_fn_AS_ar
-a_cd_bl_AGG
-a_ce_cd_as_VECTOR
-a_fc_VECTOR_ee_DIMENSIONS
-a_ea_VECTOR_dw
-b_a_EXTERNAL_t_ag_fo
-a_TP_k_fy_MTL_as_DL
-a_GRP_ez_fw_HANDOFF_BUSY
+oumf
+oumfgwk
+oumfmhou
+oumfkUNINSTALL
+ssofoeou
+!basnINTO_ANALYZEge 0A000
+snINTO_IMPLICITnwge 0A000
+snINTOnwge 0A000
+rblyowroayc
+snINTOoaskge 0A000
+mpxfmbDROPPED_ENUMrf
+mpxfmbvxtcINDEXES_ZERO
+mpxfmbvxtcINDEXESnkHIGH
+mpxfpkvhugnl
+mpxfENUMrbykmr
+SIMULATEDztd
+jmaDYNAMIC_PRIVpirh
+nyMULTIrvrcnsme
+nyMULTIrvpensme
+nyMERGEcCHUNK
+nyMERGEgALL_CHUNKS_CONSUMED
+nyWRITERzwzsme
+nyWRITERzwd
+nySORTINGyust
+nySORTINGyuWAIT
+nyrvrcnsme
+nysvfHASxhCOLS
+nysvrl
+nysvuzmz
+nyrvd
+nyrvnsusrr
+nyrvCOULDNT_RESOLVEzr
+wxmgoycvj
+kEXECUTEpitp
+nksonrBY_MODIFIER_BRANCHES
+jmamztbofREPLACEMENT
+QUALIFYpwnnnb
+eplngyi
+SPECIFICojpj
+lozmiuhqoAUTOMATIC_TAGGEDttminvunya
+miuhTAGminvya
+oovhgNULLABLE
+oojvhmrgNULLABLE
+oovhunpr
+oovhunprj
+ootfmj
+ooxcmlsx
+ooxcOOMsx
+oojxcROUNDING
+ooxcPRECISIONrqoc
+oorqMIN
+oorqqs
+oojrqMIN_TRUNCATING
+oojrqqsTRUNCATING
+ooREALunNAN
+oorttcnj
+ooxtnw
+oojts
+ookvkrx
+oorlPRINCIPALsx
+ooAWSzesx
+ooCSVzzsx
+oomcnlsx
+oomcqssx
+ooqzmh
+ooruxcqksx
+oorxnkpx
+oorlPRINCIPAL_BUCKETsx
+ooofwnox
+ooprns
+oopmns
+oosiocDEPTHrqqs
+oosisynl
+oosiENUMkvkqz
+oosiENUMnl
+oosinzkvk
+oosinsENDS_UNEXPECTEDLY
+oosinsossl
+oosicUNION
+oosicBLOCKpo
+oosicBLOCKyysp
+oonwsyofMAGIC_BYTES
+oosisyugsx
+oosisyofoc
+oosiofCODECpisy
+oosicndpioc
+oosiDECODINGsx
+oorusrUTF8nsENC
+ooruocnl
+ooruqunrporqqs
+oorukLOCATE_OFFSET
+oorunzkvk
+oorukLOCATEoc
+oosqNUMvhnl
+ooOOM
+oojsqSKIPPED_LINES
+oojsqSKIPPEDwn
+oosqnsHASofos
+oosqofos
+oosqofwn
+oojsqtvnpvhNAMES
+oorukpesy
+oosqjGOTpn
+oosikwqsy
+oorulrcns
+oonkzvmjsx
+oonkzvqusx
+TABLESAMPLE_PERCENTAGE 2202H
+TABLESAMPLEpltaBASEqv
+!batomurttcnj
+RESULTpoqdph
+oumfINTERNAL
+oumfCONCURRENCYqd
+oumfRUNTIME
+oumfTIMEZONE
+oumfKEYWORD
+oumfozovoq
+oumfmhnz
+oumfqk
+jsspfPARTIALLYue
+tzzogmqWITHINssORvgORrk
+oomxzz
+mzkyonp
+hPREFIXnfge
+jmasrSTANDARDnf
+wyofzdmuxk
+ojpjofPROXYrh
+ojpjofPROXY
+oonmosojme
+nyrvZSTDd
+nyqtd
+oocmxnsnwoc
+oosqmxcoc
+oomxnsnwjsqoc
+srSCALARsbASnf
+ornzAGG
+osorngwa
+rqwaqsDIMENSIONS
+qowaqk
+!bavvmhmusc
+TPksmMTLngDL
+xernskHANDOFF_BUSY
 @6400
-a_fi_OFFLINE_bh_dt
-b_a_fi_OFFLINE_bh_ay
-a_ca_bc_br_ce_cj
-a_ca_bc_be_PARSE_gj
-a_ca_bc_ENCODING_gj
-a_ca_bc_be_bl_ax_gj
-a_ca_bc_bo_gj
-a_ca_o_al_ATTR_gj
-a_ca_bc_OBJ_cq_gj
-a_ca_br_SEGMENTS_ao
-a_ca_bc_be_aw_LARGE
-a_ct_ee_REGULAR_cr_HANDLE_dp
-a_fz_ANALYZE_aj_bi_dz_g_e 0A000
-a_gd_DML_DYNAMIC_PARAMETERS
-a_DEPRECATE_gd_COMPOSABLE_cn_al
-a_bk_aj_c
-a_bk_BLOB_aw_ir
-a_br_fr_PLAN_cj
-a_ca_CP_aw_ga_CHANGES
-a_ca_CP_g_ENABLED
-a_ca_CP_br_VECTOR_STORE
-a_ca_CP_br_VALIDATION_bh
-b_a_ca_CP_ad_FILES_bh
-a_ca_CP_COMMIT_q
-a_ca_bc_c_cg
-a_ca_VECTOR_aw_ga_ENTRIES
-a_bk_ef_cm_ENCLOSED_BY_ci
-a_CMD_NEED_SUPER_OR_ai_hx_hc_ch
-a_gi_fe
-a_c_gi_cu_CONTEXT
-a_c_gi_COMBINATION
-a_j_REDACTED_PRIVILEGES
-a_c_OUTER_hc
-a_LIBRARIES_g_e
-a_ca_j_SUMMARY
-a_ca_j_gc_hh_bb_DELIMITERS
-a_LIBRARY_c
-a_k_PERSIST_am_ISOLATION
-a_ca_fu_c_RECORD
-a_ca_c_v_cu_VECTOR
-a_ca_j_VECTOR_LOSSY_dw
-a_ca_bc_TRUNCATION_d
-a_ca_bc_PAGE_CHUNK_j
-a_ca_bc_aw_ga_CHUNKS
-a_bv_cv_FIREWALL 28000
-a_ca_DECOMPRESSION_gj
-a_bg_c_p_n_ANNOTATIONS
-a_bg_ALGO_TEMPTABLE_g_e
-a_bg_as_db_bn_g_e
-a_bg_c_p_gd_SIMPLE_bp_g_e
-a_bg_c_p_CTE_g_e
-a_bg_c_p_GROUPBY_g_e
-a_bg_c_p_az_an_g_e
-a_bg_c_p_dp_g_e
-a_bg_c_p_ORDERBY_g_e
-a_bg_c_p_MULTI_eh_g_e
-a_bg_c_p_br_WHERE_gu_cu_SUBOBJECT
-a_bg_c_p_WHERE_gu_cu_ROOTOBJECT
-a_bg_c_p_n_WHERE_bi_bm_SUBOBJECT
-a_bg_c_p_n_bu_bl
-a_bg_c_p_CONTEXT_PREPARE_q
-a_bg_c_p_br_aj_gl_cu_ROOT
-a_bg_c_p_MUSTBE_aj_gl_bm_SINGLETON
-a_bg_c_p_MUSTBE_aj_gl_bm_NESTED
-a_bg_c_p_br_aj_OBJ_cu_ARRAYAGG
-a_bg_c_p_RELATIONSHIP_RULES_VIOLATED
-a_bg_c_p_o_bl_g_e
-a_bg_c_p_gd_BASE_f_g_e
-a_bg_c_p_f_di_PK_cj
-a_bg_c_p_f_di_PK_PROJECTION_cj
-a_bg_c_p_ID_ar_fn_BY_g_ROOT_f
-a_bg_c_p_ID_ar_g_fn_BY_ROOT_f
-a_bg_c_f_ANNOTATIONS_bm_SINGLETON_OBJ
-a_bg_c_f_ANNOTATIONS_bm_NESTED_OBJ
-a_bg_c_p_cy_KEYS_g_e
-a_bg_c_p_cy_o_g_e
-a_bg_c_p_SAME_f_do_PROJECTION
-a_bg_c_p_o_hj_g_e
-a_bg_c_p_do_f_bu_cu_THE_gl
-a_bg_c_p_WHERE_USES_gd_IMMEDIATE_PARENT
-a_bg_c_p_COMPOSITE_ar_fn
-a_bg_c_p_ALIAS_g_fn_bm_SAME_eh
-a_bg_af_g_e 0A000
-a_bg_bq_OR_REPLACE_g_e
-a_bg_c_aj_DUALITY_gl_USAGE
-a_bg_cm_aj_bl
-a_bg_hb_ar_fm_BE_PROVIDED
-a_bg_JOIN_gu_g_SATISFIED
-a_bg_PK_DUPLICATES_g_IDENTICAL
-a_bg_UNMAPPED_ar
-a_bg_ad_ii_TAG
-a_bg_ad_READONLY_SUBOBJECT
-a_bg_JOIN_gu_VIOLATION
-a_bg_ad_ETAG
-a_bg_ETAG_ax
-a_bg_ad_v
-a_bg_PK_UPDATES_g_ac
-a_bg_ad_by_TAG
-a_bg_ad_ic_TAG
-a_bg_en_ii_v
-a_bg_ii_v_g_FIXED
-a_bg_en_by_v
-a_bg_by_v_g_FIXED
-b_a_bg_hr_EDITION_dp
-a_bg_k_BE_fn_as
-a_bg_DML_INFO
-b_a_bg_ad_v_bm_AG_o
-a_bg_c_BINARY_bl_gk
-a_ETAG_g_e
-a_al_du_ho
-a_EXTERNAL_bi_g_e
-a_EXTERNAL_f_c_bn
-a_EXTERNAL_f_al_g_e
-a_EXTERNAL_f_al_g_SPECIFIED
-a_ca_br_FILES_cj_br_SECURE_be_PRIV
-a_ca_it_ap_ad
-a_ca_it_ap_cy
-a_ca_bc_OCI_GENAI_bz
-a_ca_bc_hv_be_PARSE_gj
-a_bg_EXPLICIT_dv_gy_g_ac
-a_ca_gc_it_ap_ax
-a_ca_DELTA_bo_ax
-a_ca_DELTA_hs_cq_d
-a_ca_DELTA_t_d
-a_j_ACCOUNT_TRIMMED
-a_ca_j_DATETIME_cn_PARAM_hh
-a_ca_GENCOL_d
-a_TEMPORAL_an_hu 22008
-a_ca_gc_o_ee_gj
-a_ca_EXTRA_gt_cu_be
-a_ca_fg_COMPLEX_dw
-a_y_z_dc
-a_y_z_r_aj_dq_PARSING_d
-a_y_z_q_ea_eo_eh
-a_y_z_q_ea_eo_f
-a_y_z_r_aj_dq_ap_k_BE_dd
-a_y_z_r_ay_ap_c_ci
-a_y_z_br_cp_INSTALLED
-a_y_z_r_k_cq_ae
-a_y_z_r_HOST_ap_c_ci
-a_y_z_r_aj_ay_ap_k_BE_dd
-a_y_z_r_cp_ID_ev_v_hz_c
-a_y_z_r_ew_c_cs_bl
-a_y_z_r_ew_c_cs_gb
-a_y_z_ABORT
-a_y_z_COULD_g_RELOAD_iy
-a_y_z_ew_c_cs_en
-a_y_z_ee_da_CLOSE_ea_ROTATE_gm_da
-a_y_z_ee_da_hg_PRUNE_SECONDS_PRECEDENCE
-a_y_z_ae_HAS_g_BEEN_cl
-a_y_z_c_f_p
-a_y_z_r_dq_q_ea_STORE_f_FLDS
-a_y_z_r_dq_q_ea_INIT_f_bm_cq
-a_y_z_r_dq_q_ea_ic_FROM_f
-a_y_z_aj_dq_gg_g_fd_ay
-a_ca_CUSTOM_ce_PLACEMENT_OVERRIDES
-a_ca_fu_FILES_ce_bl_ax
-a_y_z_r_c_dq_ABORT
-a_y_z_r_aj_c_dq_k_BE_fn
-a_j_y_z_iy_c
-a_bg_ao_hg_EXPLICIT_PKS_g_ac
-a_de_ds_r_d
-a_de_ds_fa_at 42000
-a_de_ds_EXPECTS_CASE 42000
-a_de_ds_EXPECTS_CASE_hf 42000
-a_de_ds_ad_ELSE 42000
-a_de_ds_ONE_hf_REQUIRED 42000
-a_de_ds_fm_RETURN_cs 42000
-a_de_ds_c_GATEKEEPER 42000
-a_de_ds_gd_LITERAL_GATEKEEPER_ARG 42000
-a_de_ds_ix_CONSTRUCT 42000
-a_de_ds_c_o_hc 42000
-a_de_ds_cd_o_hr 42000
-a_de_ds_cd_TYPES 42000
-a_de_ds_gd_DETERMINISTIC_gw 42000
-a_FK_ee_eh_cu_CASCADE_CHAIN_ct
-a_FK_CASCADE_TRIGGER_UPDATING_FK_gt_g_e
-a_l_by_fn_f_cu_FK_CASCADE
-a_j_cl_OPERATIONS_BUFFER
-a_bg_cm_c_v
+rwOFFLINEnvqh
+!barwOFFLINEnvnm
+oonqofosox
+oonqnswqsx
+oonqENCODINGsx
+oonqnsnznlsx
+oonqocsx
+oomcmzATTRsx
+oonqOBJpesx
+ooofSEGMENTSnc
+oonqnsnkzv
+phqsREGULARpfysqd
+snANALYZEmxnwqnge 0A000
+srDML_DYNAMICvo
+DEPRECATEsrCOMPOSABLEpbmz
+nymxc
+nyBLOBnkvf
+ofsfPLANox
+ooCPnksoCHANGES
+ooCPgENABLED
+ooCPofwaye
+ooCPofvunv
+!baooCPmrwnnv
+ooCPxbme
+oonqcou
+oowanksoENTRIES
+nyqtpaENCLOSED_BYow
+CMD_NEED_SUPER_ORmwultqov
+swrs
+cswpiCONTEXT
+cswCOMBINATION
+jREDACTED_PRIVILEGES
+cOUTERtq
+LIBRARIESge
+oojSUMMARY
+oojsqtvnpDELIMITERS
+LIBRARYc
+kPERSISTnaISOLATION
+oosicyy
+oocmjpiwa
+oojwaLOSSYqk
+oonqTRUNCATIONd
+oonqPAGE_CHUNKj
+oonqnksoCHUNKS
+ojpjFIREWALL 28000
+ooDECOMPRESSIONsx
+nucmdmbwz
+nuALGO_TEMPTABLEge
+nungppobge
+nucmdsrSIMPLEodge
+nucmdCTEge
+nucmdGROUPBYge
+nucmdnnnbge
+nucmdqdge
+nucmdORDERBYge
+nucmdMULTIqvge
+nucmdofWHEREtipiSUBOBJECT
+nucmdWHEREtipiROOTOBJECT
+nucmdmbWHEREnwoaSUBOBJECT
+nucmdmboinz
+nucmdCONTEXT_PREPAREme
+nucmdofmxszpiROOT
+nucmdMUSTBEmxszoaSINGLETON
+nucmdMUSTBEmxszoayw
+nucmdofmxOBJpiARRAYAGG
+nucmdRELATIONSHIP_RULES_VIOLATED
+nucmdmcnzge
+nucmdsrBASEfge
+nucmdfpwPKox
+nucmdfpwPK_PROJECTIONox
+nucmdIDnfsbBYgROOTf
+nucmdIDnfgsbBY_ROOTf
+nucfwzoaSINGLETON_OBJ
+nucfwzoaywOBJ
+nucmdpmKEYSge
+nucmdpmmcge
+nucmdwhfqcPROJECTION
+nucmdmctxge
+nucmdqcfoipiTHEsz
+nucmdWHERE_USESsrIMMEDIATExk
+nucmdCOMPOSITEnfsb
+nucmdALIASgsboawhqv
+numtge 0A000
+nuoeOR_REPLACEge
+nucmxDUALITYszUSAGE
+nupamxnz
+nutpnfsayoPROVIDED
+nuJOINtigSATISFIED
+nuPK_DUPLICATESgIDENTICAL
+nuUNMAPPEDnf
+numruwTAG
+numrycSUBOBJECT
+nuJOINtiVIOLATION
+numrETAG
+nuETAGnl
+numrmj
+nuPK_UPDATESgmq
+numromTAG
+numruqTAG
+nurbuwmj
+nuuwmjgFIXED
+nurbommj
+nuommjgFIXED
+!banuufEDITIONqd
+nukyosbng
+nuDMLwe
+!banumrmjoaAGmc
+nucBINARYnzsy
+ETAGge
+mzqiuc
+vvnwge
+vvfcob
+vvfmzge
+vvfmzgwv
+ooofwnoxofzansPRIV
+oovhndmr
+oovhndpm
+oonqOCI_GENAIon
+oonqujnswqsx
+nuEXPLICITqjtmgmq
+oosqvhndnl
+ooDELTAocnl
+ooDELTAugped
+ooDELTAmhd
+jACCOUNT_TRIMMED
+oojxtpbybtv
+ooGENCOLd
+TEMPORALnbui 22008
+oosqmcqssx
+ooEXTRAthpins
+ooruCOMPLEXqk
+mmmnpq
+mmmnmfmxqezzd
+mmmnmeqorcqv
+mmmnmeqorcf
+mmmnmfmxqendkyopr
+mmmnmfnmndcow
+mmmnofpdzu
+mmmnmfkpems
+mmmnmfzrndcow
+mmmnmfmxnmndkyopr
+mmmnmfpdIDrjmjunc
+mmmnmfrkcpgnz
+mmmnmfrkcpgsp
+mmmnABORT
+mmmnCOULDgRELOADvm
+mmmnrkcpgrb
+mmmnqspoCLOSEqoyztapo
+mmmnqspotuPRUNE_SECONDS_PRECEDENCE
+mmmnmsHASgBEENoz
+mmmncfmd
+mmmnmfqemeqoyefFLDS
+mmmnmfqemeqozsfoape
+mmmnmfqemeqouqFROMf
+mmmnmxqesugrrnm
+ooCUSTOMosPLACEMENT_OVERRIDES
+oosiwnosnznl
+mmmnmfcqeABORT
+mmmnmfmxcqekyosb
+jmmmnvmc
+nunctuEXPLICIT_PKSgmq
+psqgmfd
+psqgronh 42000
+psqgEXPECTS_CASE 42000
+psqgEXPECTS_CASEtt 42000
+psqgmrELSE 42000
+psqgONEttvz 42000
+psqgsaRETURNpg 42000
+psqgcGATEKEEPER 42000
+psqgsrLITERAL_GATEKEEPER_ARG 42000
+psqgvlCONSTRUCT 42000
+psqgcmctq 42000
+psqgormcuf 42000
+psqgorTYPES 42000
+psqgsrDETERMINISTICtk 42000
+wyqsqvpiCASCADE_CHAINph
+wyCASCADExnUPDATINGwythge
+lomsbfpiwyCASCADE
+jozOPERATIONSyq
+nupacmj
 @6900
-a_CRST_x_ek_dz
-a_CRST_ek_WORKER_gb_ff_go_av
-a_CRST_ek_WORKER_gb_cx_bm_CSA
-a_CSA_t_UNTIL_COND
-a_CRST_ek_bs_MEMORY_dp_cx_bm_CSA
-a_j_CRST_ek_bs_MEMORY_dp_ff_go_av
-a_CSA_CRST_DELAYED_ek_g_e
-a_CSA_CRST_REQUIREMENT_eg_bi
-a_CSA_CRST_REQUIREMENT_u_cx
-a_DA_k_REPLICATE_di_i
-a_s_IDENTITY_ho
-a_bk_fh_PATH_hz_DIRECTORY
-a_bg_o_TAG_g_e_bm_SUBQUERY
-a_bg_by_o_TAG_g_e_bm_PK`
+zjmlqyqn
+zjqyWORKERsprttcnj
+zjqyWORKERspploaCSA
+CSAmhUNTIL_COND
+zjqyogMEMORYqdploaCSA
+jzjqyogMEMORYqdrttcnj
+CSAzjDELAYEDqyge
+CSAzjREQUIREMENTqunw
+CSAzjREQUIREMENTmipl
+xskwupwi
+mgIDENTITYuc
+nyrvvpunDIRECTORY
+numcTAGgeoayf
+nuommcTAGgeoaPK`
