@@ -2789,6 +2789,7 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     const wide = column.type.type === FIELD_TYPE.LONGLONG
     const index = def.indexes.find((i) => i.kind === 'primary' && i.parts.length === 1 && i.parts[0]!.column === column.name)
     if (!index) return false
+    const pointFor = (key: bigint | undefined) => key === undefined ? undefined : pointAccess(index, column, intValue(key))
     const source = literal.value as string
     const { text, fractional } = numericPrefix(source)
     const value = Number(text)
@@ -2800,28 +2801,33 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     const max = Number(MAX_UNSIGNED)
     // Adjacent BIGINT keys can have the same DOUBLE representation.
     const wideKey = !safe && wide && !terminal && (decimal || !fractional) && Math.abs(value) <= max
-    let key: bigint | undefined
-    if (safe || wideKey) {
-      // Rescaling the mantissa shifts its coefficient before half-away rounding.
-      key = decimal && value ? rescale(parseDecimal(mantissa), Number(exponent ?? 0)).v : BigInt(wideKey ? text : value)
-    }
     // A terminal exponent sign uses the unscaled coefficient when it fits.
     const digits = terminal && mantissa.replace('.', '')
-    const coefficient = digits && Math.abs(Number(digits)) <= max ? BigInt(digits) : undefined
-    const terminalPoint = coefficient === undefined ? undefined : pointAccess(index, column, intValue(coefficient))
-    const empty = { ranges: [] }
-    const point = terminalPoint ?? (key === undefined ? undefined : pointAccess(index, column, intValue(key)))
-    const access = safe && terminal && !terminalPoint ? empty : point
-    // Out-of-range keys cannot produce rows. A const-left warning still
-    // depends on finding the endpoint of the right column's range.
-    const range = !point && leftTable && !wide ? integerRange(column.type) : undefined
-    on.lookup = range ? pointAccess(index, column, intValue(value < 0 ? range.min : range.max)) : access
-    if (!on.lookup) return false
-    if (wide) {
-      on.binding = condition
-      on.recheck = point === access && value !== Number(terminalPoint ? coefficient : key)
+    let key = digits && Math.abs(Number(digits)) <= max ? BigInt(digits) : undefined
+    let point = pointFor(key)
+    const terminalPoint = point
+    if (!terminalPoint && (safe || wideKey)) {
+      // Rescaling the mantissa shifts its coefficient before half-away rounding.
+      key = decimal && value ? rescale(parseDecimal(mantissa), Number(exponent ?? 0)).v : BigInt(wideKey ? text : value)
+      point = pointFor(key)
     }
-    if (decimal || wideKey || !access) on.rounded = { condition, access: access ?? empty }
+    const empty = { ranges: [] }
+    const access = safe && terminal && !terminalPoint ? empty : point
+    // An out-of-range key's warning depends on finding the clamped endpoint.
+    const range = !point && leftTable && !(wide && fractional) ? integerRange(column.type) : undefined
+    const endpoint = range && (value < 0 ? range.min : range.max)
+    on.lookup = pointFor(endpoint) ?? access
+    if (!on.lookup) return false
+    if (wide && !range) {
+      on.binding = condition
+      on.recheck = point === access && value !== Number(key)
+    }
+    if (decimal || wideKey || !access) on.rounded = {
+      condition,
+      access: access ?? empty,
+      // A const-left recheck can compare equal to the clamped BIGINT as DOUBLE.
+      constAccess: wide && value === Number(endpoint) ? on.lookup : undefined,
+    }
     return true
   }
   if (!key) return true

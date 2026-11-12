@@ -67,10 +67,11 @@ original comparison. Out-of-range TINYINT through INT keys use a visible
 right boundary row to decide warning demand. In-range BIGINT text uses the
 exact rounded point key and publishes ON warnings while binding. A later
 recheck warns only when a const left input finds a right key that differs
-from the original DOUBLE value. A terminal exponent sign uses the unscaled
-coefficient when it fits the right key. Coefficient overflow, out-of-range
-BIGINT keys, exponent conversion on integer writes and nonunique right-side
-conditions remain open.
+from the original DOUBLE value. Plain integral BIGINT overflow uses the
+clamped endpoint for a const-left recheck. A terminal exponent sign uses
+the unscaled coefficient when it fits the right key. Coefficient overflow,
+fractional and exponent BIGINT overflow, exponent conversion on integer
+writes and nonunique right-side conditions remain open.
 M5.10 remains partial, with M5.47, M5.49 and M5.50 work before browser work.
 [Row-dependent DOUBLE conversion](#row-dependent-double-conversion)
 
@@ -4554,6 +4555,23 @@ all 1,800 tests, typecheck, lint, package smoke and the MySQL 8.4.11 client
 check. The 32,803-response replay preserves all 27,469 complete matches and
 886,912 matching protocol facts. Seeded fuzzing, 2,127 of 2,248 matching
 plans and all 38 passing MySQL test IDs retain their results.
+Plain integral BIGINT overflow keeps the right row NULL-extended during a
+left scan. A const left input demands the ON warning after WHERE only when
+the clamped right endpoint exists. It can return that endpoint when the
+original DOUBLE comparison is equal. All 4,048 responses match MySQL, up
+from 2,692, resolving 144 row differences. All 2,464 fixed-ON responses also
+agree. The variable capture uses blank lines to separate the same records,
+preserving all 619 definitions and both SHOW outputs. Parser, core and
+facade measure 45,599, 334,358 and 334,265 B gzipped under the existing
+caps. Docker passes all 1,800 tests, typecheck, lint, package smoke and the
+MySQL 8.4.11 client check. The 32,803-response replay preserves all 27,469
+complete matches and 886,912 matching protocol facts. Seeded fuzzing, 2,127
+of 2,248 matching plans and all 38 passing MySQL test IDs retain their
+results.
+The fractional-overflow probe found that preparing a comparison against
+complete nonfinite text such as `'1.0e99999'` can fail locally with 1815.
+MySQL prepares it and can report a DOUBLE conversion warning when the
+const-left recheck reads the visible endpoint.
 Other computed ON conditions, multiple scalar
 projections, correlated and other subquery roles, inferred conditions, IN and
 BETWEEN, strict INSERT SELECT and marker inference still need their own rules.
@@ -11013,7 +11031,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,344 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-11. The facade is 334,249 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
+| Core bundle, gzipped | 334,358 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-11. The facade is 334,265 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

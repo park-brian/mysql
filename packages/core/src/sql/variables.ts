@@ -30,7 +30,7 @@ let registry: ReadonlyMap<string, SystemVariable> | undefined
 function variables(): ReadonlyMap<string, SystemVariable> {
   if (registry !== undefined) return registry
   const out = new Map<string, SystemVariable>()
-  for (const group of SYSTEM_VARIABLES) {
+  for (const group of SYSTEM_VARIABLES.split('\n\n')) {
     const [header, ...lines] = group.split('\n') as [string, ...string[]]
     const [flags, prefix] = header.split('\t') as [string, string]
     const kind = KINDS[flags[2] as keyof typeof KINDS]

@@ -183,7 +183,7 @@ export interface FromPlan {
   /** The const tables: those joined as constant rows (a STRAIGHT_JOIN's after its first non-const table), those read ahead and absent from the plan, and the tables an impossible ON NULL-complements (M5.48). Given before the plan is first asked for. */
   constants(rows: ReadonlySet<string>, readAhead: ReadonlySet<string>, nullTables?: ReadonlySet<string>, outerConstants?: ReadonlyMap<string, readonly Expression[]>): void
   /** Right primary-key access for a preserved LEFT JOIN whose text key needs conversion. */
-  rounded?: { readonly condition: Expression; readonly access: Access }
+  rounded?: { readonly condition: Expression; readonly access: Access; readonly constAccess: Access | undefined }
   /** Read the one base table whole in an index's order, for an ORDER BY or a grouping it gives; `force` drops a range on another index for it, and `reverse` reads it descending. */
   readInOrder(index: string, force: boolean, reverse?: boolean, alias?: string): void
   /** The FROM as 8.4.11's iterators (M5.44): the tree `rows` runs, as EXPLAIN shows it. */
@@ -1924,8 +1924,10 @@ function constJoinOp(outer: Op, inner: Op, innerSlots: readonly number[], on: re
 function constantRowOp(outer: Op, t: FromTable, slots: readonly number[], own: readonly Placed[], on: readonly Placed[], settings: LeafSettings, heldKey?: readonly Expression[]): Op {
   const point = heldKey && settings.rounded
   // A const left input retains the DOUBLE comparison after the rounded read.
-  const predicates = point && !settings.hidden?.size ? own.filter((c) => c.e !== point.condition) : own
-  const leaf = filterOp(tableOp(t, settings, point?.access), predicates)
+  const recheck = settings.hidden?.size
+  const predicates = point && !recheck ? own.filter((c) => c.e !== point.condition) : own
+  const access = (recheck && point?.constAccess) || point?.access
+  const leaf = filterOp(tableOp(t, settings, access), predicates)
   return {
     *rows(run, context) {
       let inner: JoinedRow[] | undefined
