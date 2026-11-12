@@ -66,6 +66,8 @@ test('text read as a number warns, and FIELD and the address functions quote, as
       }
       assert.deepEqual(actual, expected, sql)
     }
+    await conn.query('CREATE TABLE fixed_binary(v BINARY(4), w BINARY(33))')
+    await conn.query("INSERT INTO fixed_binary VALUES (X'31FF', X'31')")
     const nearLimit = '1' + 'a'.repeat(126)
     for (const [sql, quoted] of [
       [`SELECT _binary X'310078' + 0e0, CAST(X'31FF78' AS BINARY) + 0e0,
@@ -74,11 +76,12 @@ test('text read as a number warns, and FIELD and the address functions quote, as
       [`SELECT '1😀x' + 0e0, CAST('${nearLimit}éx' AS DOUBLE), '${nearLimit}字x' + 0e0,
         '${nearLimit.slice(1)}字x' + 1e0`,
       ["'1?x'", `'${nearLimit}?'`, `'${nearLimit}`, `'${nearLimit.slice(1)}??'`]],
+      ['SELECT v + 0e0, w + 0e0 FROM fixed_binary', ["'1\\xFF\\x00\\x00'", `'1${'\\x00'.repeat(31)}\\x0'`]],
     ] as const) {
       const options = { sql, rowsAsArray: true }
       for (const method of ['query', 'execute'] as const) {
         const [rows] = method === 'query' ? await conn.query(options) : await conn.execute(options)
-        assert.deepEqual(rows, [[1, 1, 1, 1]], method)
+        assert.deepEqual(rows, [quoted.map(() => 1)], method)
         const [warnings] = await conn.query({ sql: 'SHOW WARNINGS', rowsAsArray: true })
         assert.deepEqual(warnings, quoted.map((text) => ['Warning', 1292, `Truncated incorrect DOUBLE value: ${text}`]), method)
       }

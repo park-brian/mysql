@@ -364,11 +364,12 @@ function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECI
   // INTEGER casts warn even for empty or whitespace-only strings and bytes.
   if (kind !== 'DECIMAL' && diagnosticKind === undefined && /^[ \t\n\r]*$/.test(text)) return
   const double = kind === 'DOUBLE'
+  const fixed = c.type.field === FIELD_TYPE.STRING
   let diagnostic: string
   let suffix: string | undefined
-  if (v.kind === 'bytes' && (diagnosticKind === 'bytes' || (double && !column))) diagnostic = escapedBytes(v.v.subarray(0, 128)).slice(0, 128)
+  if (v.kind === 'bytes' && (diagnosticKind === 'bytes' || (double && (!column || fixed)))) diagnostic = escapedBytes(v.v.subarray(0, 128)).slice(0, 128)
   // Fixed CHAR and expressions with a known collation derivation use ErrConvString for DOUBLE.
-  else if (diagnosticKind === 'string' || (double && v.kind === 'string' && (column ? c.type.field === FIELD_TYPE.STRING : c.type.coercibility !== undefined))) {
+  else if (diagnosticKind === 'string' || (double && v.kind === 'string' && (column ? fixed : c.type.coercibility !== undefined))) {
     const normalized = bmpText(warnedText(v)).slice(0, 128)
     // Decode the warning's opening quote with the value to retain a leading BOM.
     const bytes = utf8(double ? "'" + normalized : normalized)
