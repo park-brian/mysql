@@ -76,7 +76,7 @@ import { showCreateView, showQuery, shownColumns, tableStatusQuery, variablesCol
 import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Condition, type Value } from '@myjs/types'
 import { charsetChange, ensureCollationResident, utf8StrictDecoder } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
-import { appendConditions, systemVariable, compile, EMPTY_SCOPE, raise, type Env } from './compile.ts'
+import { appendConditions, systemVariable, compile, EMPTY_SCOPE, parameterBindings, raise, type Env } from './compile.ts'
 import { renderTree } from './explain.ts'
 import { analyze, keepShown } from './stats.ts'
 import { alterTable } from './alter.ts'
@@ -329,7 +329,9 @@ export class SqlExecutor implements Executor {
   }
 
   async execute(session: Session, sql: string, parameters: readonly Parameter[], prepared?: object): Promise<StatementResult | StatementResult[]> {
-    const params = parameters.filter((p) => p.name === '').map((p) => parameterValue(p, session))
+    const bindings = parameters.filter((p) => p.name === '')
+    const params = bindings.map((p) => parameterValue(p, session))
+    parameterBindings.set(params, bindings)
     // Thousands of parameters took a slice to decode before this ran: the
     // other connections go next, before the statement does (D-77).
     if (params.length >= MANY_PARAMETERS) await pause()

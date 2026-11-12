@@ -135,6 +135,14 @@ test('leading U+FEFF survives UTF-8 input and stored values as in MySQL 8.4.11',
         await client.end()
       }
     }
+    await conn.query('SET NAMES utf8mb3')
+    const nearLimit = '1' + 'x'.repeat(126)
+    const [bound] = await conn.execute('SELECT CAST(? AS DOUBLE), ? + 0e0, ABS(?), SQRT(?)',
+      [value, Buffer.from([0x31, 0xe5, 0xad, 0x78]), '1\0x', `${nearLimit}é`])
+    assert.deepEqual(bound, [[0, 1, 1, 1]])
+    const [warnings] = await conn.query('SHOW WARNINGS')
+    assert.deepEqual(warnings, ['\\xEF\\xBB\\xBF1x', '1\\xE5\\xADx', '1\\x00x', `${nearLimit}\\`]
+      .map((quoted) => ['Warning', 1292, `Truncated incorrect DOUBLE value: '${quoted}'`]))
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()

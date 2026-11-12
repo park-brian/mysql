@@ -109,6 +109,12 @@ The pitfalls, in the order they will bite an implementation:
    `mysql_query_attribute_string()`. Named or not, the first `num_params` are
    positional.
 
+When a direct marker is read as DOUBLE and truncates, MySQL can quote the
+binding's bytes as `\xHH` escapes, including NUL and malformed UTF-8. The
+executor keeps the original positional bindings with the current execution so
+the warning formatter can use them alongside the decoded values. The rendered
+text is limited to 128 bytes before the closing quote.
+
 Worked example from the specification — statement 1, one parameter, type
 `VAR_STRING` (`0x0f`… note the example shows `0f 00` because the low byte of the
 `int<2>` is the type), value `"foo"`:

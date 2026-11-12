@@ -97,6 +97,7 @@ function text(bytes: Uint8Array, c: ColumnDefinition): string {
 
 /** JSON, its unsafe integers kept as their digits under `supportBigNumbers` (`parseJson`). */
 function json(source: string, o: TypeOptions): unknown {
+  if (o.jsonStrings === true) return source
   if (o.supportBigNumbers === true && /\d{16}/.test(source)) {
     return JSON.parse(source, (_key, value: unknown, context?: { source?: string }) =>
       typeof value === 'number' && !Number.isSafeInteger(value) && context?.source !== undefined && /^-?\d+$/.test(context.source) ? context.source : value,
@@ -105,12 +106,11 @@ function json(source: string, o: TypeOptions): unknown {
   return JSON.parse(source)
 }
 
-/** A text BIGINT (`parseLengthCodedInt`). */
-function bigintText(s: string, o: TypeOptions): number | string {
-  if (o.supportBigNumbers === true && o.bigNumberStrings === true) return s
-  const n = Number(s)
-  if (o.supportBigNumbers !== true) return n
-  return Number.isSafeInteger(n) ? n : s
+/** A BIGINT shaped by the client's numeric options. */
+function bigintValue(value: string | bigint, o: TypeOptions): number | string {
+  if (o.supportBigNumbers === true && o.bigNumberStrings === true) return String(value)
+  const n = Number(value)
+  return o.supportBigNumbers !== true || Number.isSafeInteger(n) ? n : String(value)
 }
 
 /** A text DATE (`parseDate`). */
@@ -163,7 +163,7 @@ function textValue(bytes: Uint8Array | null, c: ColumnDefinition, o: TypeOptions
     case FIELD_TYPE.YEAR:
       return bytes.length === 0 ? 0 : Number(fromUtf8(bytes))
     case FIELD_TYPE.LONGLONG:
-      return bytes.length === 0 ? 0 : bigintText(fromUtf8(bytes), o)
+      return bytes.length === 0 ? 0 : bigintValue(fromUtf8(bytes), o)
     case FIELD_TYPE.FLOAT:
     case FIELD_TYPE.DOUBLE:
       return bytes.length === 0 ? 0 : Number.parseFloat(fromUtf8(bytes))
@@ -181,7 +181,7 @@ function textValue(bytes: Uint8Array | null, c: ColumnDefinition, o: TypeOptions
     case FIELD_TYPE.GEOMETRY:
       return geometry(bytes)
     case FIELD_TYPE.JSON:
-      return o.jsonStrings === true ? fromUtf8(bytes) : json(fromUtf8(bytes), o)
+      return json(fromUtf8(bytes), o)
     default:
       return c.characterSet === BINARY ? bytes.slice() : text(bytes, c)
   }
@@ -207,7 +207,6 @@ export function binaryRow(packet: Uint8Array, columns: readonly ColumnDefinition
 
 function binaryValue(r: Reader, c: ColumnDefinition, o: TypeOptions): unknown {
   const unsigned = (c.flags & COLUMN_FLAG.UNSIGNED) !== 0
-  const zone = o.timezone ?? 'local'
   switch (c.type) {
     case FIELD_TYPE.TINY:
       return unsigned ? r.u8() : r.i8()
@@ -228,7 +227,7 @@ function binaryValue(r: Reader, c: ColumnDefinition, o: TypeOptions): unknown {
     case FIELD_TYPE.DATETIME:
     case FIELD_TYPE.TIMESTAMP:
     case FIELD_TYPE.NEWDATE:
-      return datesAsText(c.type, o) ? dateTimeString(r, c.decimals, c.type) : dateTime(r, zone)
+      return dateTime(r, c, o)
     case FIELD_TYPE.TIME:
       return timeString(r)
     case FIELD_TYPE.DECIMAL:
@@ -238,16 +237,10 @@ function binaryValue(r: Reader, c: ColumnDefinition, o: TypeOptions): unknown {
     }
     case FIELD_TYPE.GEOMETRY:
       return geometry(r.lenEncBytes() ?? new Uint8Array(0))
-    case FIELD_TYPE.JSON: {
-      const s = fromUtf8(r.lenEncBytes() ?? new Uint8Array(0))
-      return o.jsonStrings === true ? s : json(s, o)
-    }
-    case FIELD_TYPE.LONGLONG: {
-      const v = unsigned ? r.u64() : r.i64()
-      if (o.supportBigNumbers !== true) return Number(v)
-      if (o.bigNumberStrings === true) return v.toString()
-      return Number.isSafeInteger(Number(v)) ? Number(v) : v.toString()
-    }
+    case FIELD_TYPE.JSON:
+      return json(fromUtf8(r.lenEncBytes() ?? new Uint8Array(0)), o)
+    case FIELD_TYPE.LONGLONG:
+      return bigintValue(unsigned ? r.u64() : r.i64(), o)
     default: {
       const bytes = r.lenEncBytes() ?? new Uint8Array(0)
       return c.characterSet === BINARY ? bytes.slice() : text(bytes, c)
@@ -255,8 +248,10 @@ function binaryValue(r: Reader, c: ColumnDefinition, o: TypeOptions): unknown {
   }
 }
 
-/** A binary DATE, DATETIME or TIMESTAMP as a `Date` (`readDateTime`). */
-function dateTime(r: Reader, zone: string): Date {
+/** A binary DATE, DATETIME or TIMESTAMP, shaped as `mysql2` does. */
+function dateTime(r: Reader, c: ColumnDefinition, o: TypeOptions): Date | string {
+  const zone = o.timezone ?? 'local'
+  const asText = datesAsText(c.type, o)
   const length = r.u8()
   let y = 0
   let m = 0
@@ -264,7 +259,6 @@ function dateTime(r: Reader, zone: string): Date {
   let H = 0
   let M = 0
   let S = 0
-  let ms = 0
   if (length > 3) {
     y = r.u16()
     m = r.u8()
@@ -275,41 +269,24 @@ function dateTime(r: Reader, zone: string): Date {
     M = r.u8()
     S = r.u8()
   }
-  let micro = 0
-  if (length > 10) {
-    micro = r.u32()
-    ms = micro / 1000
-  }
-  if (zone === 'local' || zone === 'Z') {
+  const micro = length > 10 ? r.u32() : 0
+  if (!asText && (zone === 'local' || zone === 'Z')) {
+    const ms = micro / 1000
     if (y + m + d + H + M + S + ms === 0) return new Date(Number.NaN)
     return zone === 'Z' ? new Date(Date.UTC(y, m - 1, d, H, M, S, ms)) : new Date(y, m - 1, d, H, M, S, ms)
   }
   let s = ZERO_DATE
   if (length > 3) s = `${pad(4, y)}-${pad(2, m)}-${pad(2, d)}`
-  if (length > 6) s += `T${pad(2, H)}:${pad(2, M)}:${pad(2, S)}`
-  if (length > 10) s += `.${pad(6, micro)}`
+  if (length > 6) s += `${asText ? ' ' : 'T'}${pad(2, H)}:${pad(2, M)}:${pad(2, S)}`
+  else if (asText && (c.type === FIELD_TYPE.DATETIME || c.type === FIELD_TYPE.TIMESTAMP)) s += ' 00:00:00'
+  if (length > 10) {
+    const digits = asText ? c.decimals : undefined
+    s += `.${digits === 0 ? micro : pad(6, micro).slice(0, digits)}`
+  }
+  if (asText) return s
   if (s.startsWith(ZERO_DATE)) return new Date(Number.NaN)
   if (s.length === 10) s += 'T00:00:00'
   return new Date(s + zone)
-}
-
-/** A binary DATE, DATETIME or TIMESTAMP as its text (`readDateTimeString`). */
-function dateTimeString(r: Reader, decimals: number, type: number): string {
-  const length = r.u8()
-  let s = ZERO_DATE
-  if (length > 3) s = `${pad(4, r.u16())}-${pad(2, r.u8())}-${pad(2, r.u8())}`
-  if (length > 6) s += ` ${pad(2, r.u8())}:${pad(2, r.u8())}:${pad(2, r.u8())}`
-  else if (type === FIELD_TYPE.DATETIME || type === FIELD_TYPE.TIMESTAMP) s += ' 00:00:00'
-  if (length > 10) {
-    let ms: number | string = r.u32()
-    s += '.'
-    if (decimals !== 0) {
-      ms = pad(6, ms)
-      if (ms.length > decimals) ms = ms.slice(0, decimals)
-    }
-    s += String(ms)
-  }
-  return s
 }
 
 /** A binary TIME as its text (`readTimeString`). */
@@ -441,39 +418,26 @@ function parameter(v: unknown, timezone: string): Encoded {
   if (typeof v === 'boolean') return { type: FIELD_TYPE.TINY, write: (w) => w.u8(v ? 1 : 0) }
   if (v instanceof Date) return { type: FIELD_TYPE.DATETIME, write: (w) => writeDate(w, v, timezone) }
   if (v instanceof Uint8Array) return { type: FIELD_TYPE.BLOB, write: (w) => w.lenEncBytes(v) }
-  if (typeof v === 'object' && isPlainJson(v)) {
-    const s = utf8(JSON.stringify(v))
-    return { type: FIELD_TYPE.JSON, write: (w) => w.lenEncBytes(s) }
-  }
-  const s = utf8(String(v))
-  return { type: FIELD_TYPE.VAR_STRING, write: (w) => w.lenEncBytes(s) }
+  const json = typeof v === 'object' && isPlainJson(v)
+  const bytes = utf8(json ? JSON.stringify(v) : String(v))
+  return { type: json ? FIELD_TYPE.JSON : FIELD_TYPE.VAR_STRING, write: (w) => w.lenEncBytes(bytes) }
 }
 
 /** A `Date` as a binary DATETIME: its local fields, or its fields in `timezone` (`writeDate`). */
 function writeDate(w: Writer, d: Date, timezone: string): void {
-  w.u8(11)
-  if (timezone === 'local') {
-    w.u16(d.getFullYear())
-    w.u8(d.getMonth() + 1)
-    w.u8(d.getDate())
-    w.u8(d.getHours())
-    w.u8(d.getMinutes())
-    w.u8(d.getSeconds())
-    w.u32(d.getMilliseconds() * 1000)
-    return
-  }
   let t = d
-  if (timezone !== 'Z') {
+  if (timezone !== 'local' && timezone !== 'Z') {
     const offset = (timezone[0] === '-' ? -1 : 1) * (Number.parseInt(timezone.slice(1, 3), 10) * 60 + Number.parseInt(timezone.slice(4), 10))
     if (offset !== 0) t = new Date(d.getTime() + 60000 * offset)
   }
-  w.u16(t.getUTCFullYear())
-  w.u8(t.getUTCMonth() + 1)
-  w.u8(t.getUTCDate())
-  w.u8(t.getUTCHours())
-  w.u8(t.getUTCMinutes())
-  w.u8(t.getUTCSeconds())
-  w.u32(t.getUTCMilliseconds() * 1000)
+  const [year, month, day, hour, minute, second, ms] = dateParts(t, timezone === 'local')
+  w.u8(11).u16(year).u8(month).u8(day)
+    .u8(hour).u8(minute).u8(second).u32(ms * 1000)
+}
+
+function dateParts(d: Date, local: boolean): readonly [number, number, number, number, number, number, number] {
+  return local ? [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds()]
+    : [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds()]
 }
 
 // --- query values ----------------------------------------------------------
@@ -575,15 +539,13 @@ function escapeValue(v: unknown, noBackslashEscapes: boolean, timezone: string):
 /** A `Date` as sql-escaper writes it: 'YYYY-MM-DD HH:MM:SS.mmm', in `timezone`, or NULL if invalid. */
 function dateLiteral(d: Date, timezone: string, noBackslashEscapes: boolean): string {
   if (Number.isNaN(d.getTime())) return 'NULL'
-  let f: number[]
-  if (timezone === 'local') f = [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds()]
-  else {
+  let t = d
+  if (timezone !== 'local') {
     // sql-escaper's `convertTimezone`: 'Z', or ±HH[:MM]; anything else is no shift.
     const m = /([+\-\s])(\d\d):?(\d\d)?/.exec(timezone)
     const minutes = timezone === 'Z' || m === null ? 0 : (m[1] === '-' ? -1 : 1) * (Number.parseInt(m[2] as string, 10) * 60 + (m[3] === undefined ? 0 : Number.parseInt(m[3], 10)))
-    const t = new Date(d.getTime() + minutes * 60000)
-    f = [t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate(), t.getUTCHours(), t.getUTCMinutes(), t.getUTCSeconds(), t.getUTCMilliseconds()]
+    t = new Date(d.getTime() + minutes * 60000)
   }
-  const [y, mo, da, h, mi, s, ms] = f as [number, number, number, number, number, number, number]
+  const [y, mo, da, h, mi, s, ms] = dateParts(t, timezone === 'local')
   return escapeString(`${pad(4, y)}-${pad(2, mo)}-${pad(2, da)} ${pad(2, h)}:${pad(2, mi)}:${pad(2, s)}.${pad(3, ms)}`, noBackslashEscapes)
 }

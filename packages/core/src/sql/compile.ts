@@ -18,7 +18,7 @@ import { resolveCollation } from './collation.ts'
 import { decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, type VariableNode, quoteName } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
-import { fromUtf8, sqlError, messages, utf8, type Session, type SqlError } from '@myjs/protocol'
+import { fromUtf8, sqlError, messages, utf8, type Parameter, type Session, type SqlError } from '@myjs/protocol'
 import { promotedError } from './strict.ts'
 import {
   COERCIBILITY,
@@ -161,6 +161,9 @@ export interface Env {
   readonly conditions?: Condition[] | undefined
 }
 
+/** Keep original wire bindings with their execution, outside decoded values. */
+export const parameterBindings = new WeakMap<readonly Value[], readonly Parameter[]>()
+
 function readNonNull(read: Compiled['eval'], convert: (value: Exclude<Value, null>) => Value): Compiled['eval'] {
   return (r, env) => {
     const value = read(r, env)
@@ -180,7 +183,7 @@ function doubleReader(read: Compiled['eval']): Compiled['eval'] {
  * Field readers can suppress empty/whitespace warnings; INTEGER casts retain them.
  * ENUM indices and numeric hex literals are quiet. An owned REAL reader returns a scalar DOUBLE; other values pass unchanged.
  */
-export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', once: boolean | Expression = false, source: 'field' | 'cast' = 'field'): Compiled {
+export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', once: boolean | Expression = false, source: 'field' | 'cast' | 'logical' = 'field'): Compiled {
   // Numeric callers may subsequently read the same item as DECIMAL. Keep its
   // precise value and reader capabilities unless this is a STRING_RESULT read.
   if (kind === 'DOUBLE' && (isText(c.type) || c.type.kind === 'json') && c.realOf !== undefined) return { ...c, eval: doubleReader(c.realOf(once)) }
@@ -262,7 +265,10 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
     if (kind !== 'DECIMAL' && diagnosticKind === undefined && /^[ \t\n\r]*$/.test(text)) return
     const fixed = field === FIELD_TYPE.STRING
     let diagnostic: string
-    if (v.kind === 'bytes' && (diagnosticKind === 'bytes' || (double && (!column || fixed)))) diagnostic = escapedBytes(v.v.subarray(0, 128)).slice(0, 128)
+    const binding = double && c.parameter !== undefined && source !== 'logical' ? parameterBindings.get(env.params)?.[c.parameter]?.value : undefined
+    const bytesToEscape = binding instanceof Uint8Array ? binding :
+      v.kind === 'bytes' && (diagnosticKind === 'bytes' || (double && (!column || fixed))) ? v.v : undefined
+    if (bytesToEscape) diagnostic = escapedBytes(bytesToEscape.subarray(0, 128)).slice(0, 128)
     // Fixed CHAR and expressions with a known collation derivation use ErrConvString for DOUBLE.
     else if (rawVarchar || diagnosticKind === 'string' || (double && v.kind === 'string' && (column ? fixed : c.type.coercibility !== undefined))) {
       const bytes = rawVarchar ? valueBytes(v) : utf8(bmpText(warnedText(v)).slice(0, 128))
@@ -306,7 +312,7 @@ export function logicalOperand(c: Compiled, written: Expression | false, ctx?: C
       return v === null || v.kind !== 'json' ? v : bool(jsonTruth(v))
     }
   }
-  return asNumber(c, 'DOUBLE', written !== false && constantNode(written) && written).eval
+  return asNumber(c, 'DOUBLE', written !== false && constantNode(written) && written, 'logical').eval
 }
 
 /**
@@ -590,6 +596,8 @@ export interface SessionValues {
 export interface Compiled {
   readonly eval: (row: Row, env: Env) => Value
   readonly type: ResultType
+  /** The source is a direct prepared parameter. */
+  readonly parameter?: number
   /** This expression's DECIMAL reader accepts a numeric prefix quietly. */
   readonly decimalPrefix?: true
   /** Read the selected original branch as DECIMAL, before result-type merging. */
@@ -842,7 +850,7 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
       const index = e.index
       // Unbound — a prepare — `?` reports a 16,383-character string, as 8.4.11 does.
       // A marker remains nullable across executions even when this binding is non-NULL.
-      return { eval: (_row, env) => env.params[index] ?? null, type: known === undefined ? stringType(16383, ctx.connectionCollation, true) : { ...typeOfValue(known), nullable: true } }
+      return { eval: (_row, env) => env.params[index] ?? null, type: known === undefined ? stringType(16383, ctx.connectionCollation, true) : { ...typeOfValue(known), nullable: true }, parameter: index }
     }
 
     case NODE.COLUMN: {
@@ -2551,7 +2559,7 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
     return jsonText ? comparisonText(c) : c
   }
   const operand = given === undefined ? undefined : numeric ? number(given) : jsonText ? comparisonText(given) : given
-  const whens = rawWhens.map((w, i) => numeric ? number(w) : given === undefined ? asNumber(w, 'DOUBLE') : whenComparison(w, e.whens[i]!.when))
+  const whens = rawWhens.map((w, i) => numeric ? number(w) : given === undefined ? asNumber(w, 'DOUBLE', false, 'logical') : whenComparison(w, e.whens[i]!.when))
   const otherwise = e.else === undefined ? lit(null, NULL_TYPE) : compile(e.else, ctx)
   const results = [...compiled.map((w) => w.then), otherwise]
   const type = aggregate(results.map((x) => x.type), results.some((x) => x.type.nullable), ctx.connectionCollation, 'case')
