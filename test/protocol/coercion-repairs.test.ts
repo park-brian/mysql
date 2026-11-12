@@ -76,6 +76,38 @@ test('integer writes round complete exponent text before converting to a number'
   }
 })
 
+test('approximate values round to even when written to an integer field', async () => {
+  const { db, conn } = await integerWriteConnection()
+  const schema = 'approximate_integer_writes'
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query("SET sql_mode='STRICT_TRANS_TABLES'")
+    await conn.query('CREATE TABLE t(i TINYINT, u TINYINT UNSIGNED, b BIGINT, src DOUBLE, single_precision FLOAT)')
+    for (const method of ['query', 'execute'] as const) {
+      const write = (sql: string) => method === 'query' ? conn.query(sql) : conn.execute(sql)
+      await conn.query('DELETE FROM t')
+      await write('INSERT INTO t VALUES (2.5e0,-0.5e0,2.5,-2.5e0,4.5e0)')
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      assert.deepEqual((await conn.query('SELECT i,u,b FROM t'))[0], [[2, 0, '3']])
+      await write('UPDATE t SET i=src,u=254.5e0,b=single_precision')
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      assert.deepEqual((await conn.query('SELECT i,u,b FROM t'))[0], [[-2, 254, '4']])
+      await assert.rejects(() => write('UPDATE t SET u=255.5e0'), { errno: 1264, sqlState: '22003' })
+      await write('UPDATE IGNORE t SET u=255.5e0')
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [['Warning', 1264, "Out of range value for column 'u' at row 1"]])
+      assert.deepEqual((await conn.query('SELECT u FROM t'))[0], [[255]])
+    }
+    await conn.execute('UPDATE t SET i=?,b=?', [-2.5, 2.5])
+    assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+    assert.deepEqual((await conn.query('SELECT i,b FROM t'))[0], [[-2, '2']])
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
 test('NULL division resolves numeric metadata through both protocols', async () => {
   const db = await MySQL.open(':memory:')
   const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })

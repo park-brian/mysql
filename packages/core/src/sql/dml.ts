@@ -526,7 +526,11 @@ function insertSource(run: Run, node: InsertNode, def: TableDef, trx: Trx): {
     return i
   }
 
-  let targets: number[]
+  const set = node.query === undefined ? node.set : undefined
+  const target = (column: ColumnNode): number => columnIndex(column.parts[column.parts.length - 1] as string)
+  const targets = set !== undefined
+    ? set.map((a) => target(a.column))
+    : node.columns?.map(target) ?? def.columns.map((_, i) => i)
   let rows: (readonly (Expression | undefined)[])[]
   // `INSERT … SELECT` (M5.20): the query's rows, read in full before the first
   // is written — as MySQL does through a temporary table when the query reads
@@ -539,7 +543,6 @@ function insertSource(run: Run, node: InsertNode, def: TableDef, trx: Trx): {
   const fieldCopies = new Set<number>()
   let selectRefs: { readonly ref: ColumnNode; readonly type: ResultType }[] = []
   if (node.query !== undefined) {
-    targets = node.columns === undefined ? def.columns.map((_, i) => i) : node.columns.map((c) => columnIndex(c.parts[c.parts.length - 1] as string))
     const refs = selectReferences(run, node)
     const query = node.query
     const augmented = refs.length === 0 || query.body.kind !== QUERY.SELECT ? query : { ...query, body: { ...query.body, items: [...query.body.items, ...refs.map((ref) => ({ expr: ref }))] } }
@@ -551,11 +554,9 @@ function insertSource(run: Run, node: InsertNode, def: TableDef, trx: Trx): {
     })
     selected = [...plan.rows(trx, run.env)]
     rows = []
-  } else if (node.set !== undefined) {
-    targets = node.set.map((a) => columnIndex(a.column.parts[a.column.parts.length - 1] as string))
-    rows = [node.set.map((a) => a.value)]
+  } else if (set !== undefined) {
+    rows = [set.map((a) => a.value)]
   } else {
-    targets = node.columns === undefined ? def.columns.map((_, i) => i) : node.columns.map((c) => columnIndex(c.parts[c.parts.length - 1] as string))
     rows = (node.values ?? []).map((r, n) => {
       // `VALUES ()` is a row of defaults, with or without a column list.
       if (r.length === 0 && (node.columns === undefined || node.columns.length === 0)) return []

@@ -422,7 +422,8 @@ export function roundedIntegerText(text: string, bounded = false): bigint | unde
 function encodeIntField(v: Exclude<Value, null>, width: number, column: FieldColumn, ctx: StoreContext): Uint8Array {
   const unsigned = column.type.unsigned === true
   const range = unsigned ? unsignedRange(width) : signedRange(width)
-  let n = toInteger(v)
+  // MySQL's approximate-value field store rounds with rint before checking the range.
+  let n = v.kind === 'double' && Number.isFinite(v.v) ? BigInt(roundHalfEven(v.v)) : toInteger(v)
   if (n < range.min || n > range.max) n = adjust(ctx, () => columnOutOfRange(column.name, ctx.row), n < range.min ? range.min : range.max)
   return encodeInt(n, width, unsigned)
 }
