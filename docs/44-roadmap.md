@@ -75,8 +75,9 @@ reader's bounded coefficient even when the original coefficient exceeds 64
 bits. A key outside the right column's range uses the clamped endpoint for
 the const-left recheck. DOUBLE warnings quote up to 128 ASCII bytes.
 Binary expression warnings escape nonprintable bytes before that limit.
-Multibyte warning text, binary field and parameter diagnostics, exponent
-conversion on integer writes and nonunique right-side conditions remain open.
+Plain text and fixed CHAR warnings normalize to utf8mb3 before the byte limit.
+VARCHAR, binary field and parameter diagnostics, exponent conversion on
+integer writes and nonunique right-side conditions remain open.
 M5.10 remains partial, with M5.47, M5.49 and M5.50 work before browser work.
 [Row-dependent DOUBLE conversion](#row-dependent-double-conversion)
 
@@ -4668,6 +4669,21 @@ and the MySQL 8.4.11 client check. The 32,803-response replay preserves all
 fuzzing, 2,127 of 2,248 matching plans and all 38 passing MySQL test IDs
 retain their results.
 [MySQL 8.4.11 binary diagnostic conversion](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_error.cc#L848)
+Plain text and fixed CHAR DOUBLE warnings now convert supplementary code
+points to `?` and quote the first 128 UTF-8 bytes. If the cap cuts a character
+one byte short, MySQL replaces each retained byte of the fragment with `?`
+and keeps the closing quote. MySQL drops a one-byte fragment of a three-byte
+character along with the quote. All 378 targeted responses match MySQL
+8.4.11, up from 91, across literal arithmetic,
+CAST, standalone comparisons, introduced text and CHAR reads. The 108
+VARCHAR and TEXT responses and the 699 binary responses retain their prior
+outcomes. Reusing the protocol's UTF-8 codecs removes duplicate encoder and
+decoder instances. Parser, core and facade measure 45,599, 334,348 and
+334,259 B gzipped under the existing caps. Docker passes all 1,800 tests,
+typecheck, lint, package smoke and the MySQL 8.4.11 client check. The
+32,803-response replay preserves all 27,469 complete matches and 886,912
+matching protocol facts. Seeded executor fuzzing, 2,127 of 2,248 matching
+plans and all 38 passing MySQL test IDs retain their results.
 Other computed ON conditions, multiple scalar
 projections, correlated and other subquery roles, inferred conditions, IN and
 BETWEEN, strict INSERT SELECT and marker inference still need their own rules.
@@ -11127,7 +11143,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,355 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-11. The facade is 334,264 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
+| Core bundle, gzipped | 334,348 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-11. The facade is 334,259 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

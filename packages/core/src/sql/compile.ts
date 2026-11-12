@@ -18,7 +18,7 @@ import { resolveCollation } from './collation.ts'
 import { decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, type VariableNode, quoteName } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
-import { sqlError, messages, type Session, type SqlError } from '@myjs/protocol'
+import { fromUtf8, sqlError, messages, utf8, type Session, type SqlError } from '@myjs/protocol'
 import { promotedError } from './strict.ts'
 import {
   COERCIBILITY,
@@ -263,7 +263,7 @@ function unconvertedBytes(v: Exclude<Value, null>, integer?: string): number {
     end = prefix.valid ? text.indexOf(prefix.text) + prefix.text.length : 0
   }
   const rest = text.slice(end)
-  return v.kind === 'bytes' ? rest.length : new TextEncoder().encode(rest).length
+  return v.kind === 'bytes' ? rest.length : utf8(rest).length
 }
 
 /** Text on one side and a number on the other: a comparison of doubles. */
@@ -363,17 +363,31 @@ function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECI
     (kind !== 'INTEGER' || (!p.fractional && BigInt(p.text) <= MAX_UNSIGNED && BigInt(p.text) >= MIN_SIGNED))) return
   // INTEGER casts warn even for empty or whitespace-only strings and bytes.
   if (kind !== 'DECIMAL' && diagnosticKind === undefined && /^[ \t\n\r]*$/.test(text)) return
+  const double = kind === 'DOUBLE'
   let diagnostic: string
-  if (v.kind === 'bytes' && (diagnosticKind === 'bytes' || (kind === 'DOUBLE' && !column))) diagnostic = escapedBytes(v.v.subarray(0, 128)).slice(0, 128)
-  else if (diagnosticKind === 'string') diagnostic = fixedNumericText(v)
+  let suffix: string | undefined
+  if (v.kind === 'bytes' && (diagnosticKind === 'bytes' || (double && !column))) diagnostic = escapedBytes(v.v.subarray(0, 128)).slice(0, 128)
+  // Fixed CHAR and expressions with a known collation derivation use ErrConvString for DOUBLE.
+  else if (diagnosticKind === 'string' || (double && v.kind === 'string' && (column ? c.type.field === FIELD_TYPE.STRING : c.type.coercibility !== undefined))) {
+    const normalized = bmpText(warnedText(v)).slice(0, 128)
+    // Decode the warning's opening quote with the value to retain a leading BOM.
+    const bytes = utf8(double ? "'" + normalized : normalized)
+    let end = double ? 129 : 128
+    if (double) {
+      while (((bytes[end] ?? 0) >> 6) === 2) end--
+      // A split character that needs two more bytes also hides the closing quote.
+      suffix = end === 128 && bytes[end]! >= 0xe0 ? '' : '?'.repeat(129 - end) + "'"
+    }
+    diagnostic = fromUtf8(bytes.subarray(0, end)).slice(double ? 1 : 0)
+  }
   else diagnostic = warnedText(v)
-  truncated(env, kind, diagnostic)
+  truncated(env, kind, diagnostic, suffix)
 }
 
 /** A truncated conversion's message; each reader retains its text policy. */
-function truncated(env: Pick<Env, 'conditions'>, kind: string, text: string): void {
+function truncated(env: Pick<Env, 'conditions'>, kind: string, text: string, suffix = "'"): void {
   if (kind === 'DOUBLE' && /^[\x00-\x7F]{129,}$/.test(text)) text = text.slice(0, 128)
-  raise(env, 1292, `Truncated incorrect ${kind} value: '${text}'`)
+  raise(env, 1292, `Truncated incorrect ${kind} value: '${text}${suffix}`)
 }
 
 /**
@@ -384,19 +398,13 @@ function truncated(env: Pick<Env, 'conditions'>, kind: string, text: string): vo
 export function warnedText(v: Exclude<Value, null>): string {
   if (v.kind === 'bytes') {
     const nul = v.v.indexOf(0)
-    return new TextDecoder().decode(nul < 0 ? v.v : v.v.subarray(0, nul))
+    return fromUtf8(nul < 0 ? v.v : v.v.subarray(0, nul))
   }
   return toText(v).split('\0', 1)[0]!
 }
 
 /** utf8mb3 carries no character past the BMP. */
 const bmpText = (text: string): string => text.replace(/[\u{10000}-\u{10FFFF}]/gu, '?')
-
-/** INTEGER casts and fixed CHAR DECIMAL fields normalize before the UTF-8 byte cap. */
-function fixedNumericText(v: Exclude<Value, null>): string {
-  const text = bmpText(warnedText(v)).slice(0, 128)
-  return new TextDecoder().decode(new TextEncoder().encode(text).subarray(0, 128))
-}
 
 /** An invalid string argument: one 1411 warning for this evaluation, then NULL. */
 export function invalidString(env: Env, text: string, fn: string): null {
@@ -2470,7 +2478,7 @@ export const ownText = (t: ResultType): boolean => (t.field === FIELD_TYPE.YEAR 
 export function asBinary(v: Exclude<Value, null>, from: ResultType): Value {
   const bytes = binaryStringBytes(v, from)
   if (bytes !== undefined) return bytesValue(bytes)
-  if (ownText(from)) return bytesValue(new TextEncoder().encode(textOf(v, from)))
+  if (ownText(from)) return bytesValue(utf8(textOf(v, from)))
   return v.kind === 'string' ? bytesValue(encodeCollation(v.v, v.collationId)) : v
 }
 

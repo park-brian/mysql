@@ -7,7 +7,7 @@
 import { CHARSET_BINARY, FIELD_TYPE, hex, type MysqlDateTime } from '@myjs/bytes'
 import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { NODE, deparse, type CallNode, type Expression, type LiteralNode } from '@myjs/parser'
-import { dateToMysql, messages, sqlError, webCryptoRandom } from '@myjs/protocol'
+import { dateToMysql, messages, sqlError, utf8, webCryptoRandom } from '@myjs/protocol'
 import {
   COERCIBILITY,
   MAX_SIGNED,
@@ -800,7 +800,7 @@ function chosenOf(x: Compiled, result: ResultType): (v: Exclude<Value, null>, en
   if (!isBits(x.type) || !(result.kind === 'bytes' || isBits(result))) return (v) => convertTo(v, result)
   const bits = x.type.length
   if (result.kind === 'bytes') return (v) => (v.kind === 'int' ? bytesValue(bitBytes(v.v, bits)) : convertTo(v, result))
-  return (v) => (v.kind === 'int' ? { ...v, str: new TextEncoder().encode(v.v.toString()) } : v)
+  return (v) => (v.kind === 'int' ? { ...v, str: utf8(v.v.toString()) } : v)
 }
 
 /** Bytes as `HEX()` writes them: two upper-case digits each. */

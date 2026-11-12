@@ -22,7 +22,7 @@ import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { clusteredIndexOf, type ColumnDef, type EngineName, type IndexDef, type TableSpec } from '@myjs/engine'
 import { BINARY_DEPRECATION, KEY, NODE, NO_SQL_MODE, deparse, type ColumnDefinition, type CreateTableNode, type DataType, type KeyDefinition, type SqlMode } from '@myjs/parser'
-import { messages, sqlError } from '@myjs/protocol'
+import { fromUtf8, messages, sqlError } from '@myjs/protocol'
 import type { ColumnType } from '@myjs/types'
 import { checkFulltext, type FulltextDef } from './fulltext.ts'
 import { checkGenerated, checkGeneratedDefault } from './generated.ts'
@@ -265,7 +265,7 @@ function resolveColumnType(t: DataType, tableCollation: number, column: string):
     if (t.binary === true && collationId !== CHARSET_BINARY) collationId = resolveCollation(undefined, `${requireCollationInfo(collationId).charset}_bin`, collationId)
   }
   if (code === FIELD_TYPE.ENUM || code === FIELD_TYPE.SET) {
-    const members = (t.values ?? []).map((v) => (typeof v === 'string' ? v : new TextDecoder().decode(v)))
+    const members = (t.values ?? []).map((v) => (typeof v === 'string' ? v : fromUtf8(v)))
     return { type: code, members, collationId }
   }
   if (code === FIELD_TYPE.VAR_STRING) {

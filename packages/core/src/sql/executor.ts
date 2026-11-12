@@ -55,6 +55,7 @@ import {
   CHARSET_UTF8MB4_0900_AI_CI,
   defaultStatistics,
   dateToMysql,
+  fromUtf8,
   SqlError,
   messages,
   sqlError,
@@ -107,7 +108,7 @@ function parameterValue(p: Parameter, session: Session): Value {
   const v = p.value
   if (v === null) return null
   if (v instanceof Uint8Array) {
-    if (p.type === FIELD_TYPE.NEWDECIMAL || p.type === FIELD_TYPE.DECIMAL) return parseDecimal(new TextDecoder().decode(v))
+    if (p.type === FIELD_TYPE.NEWDECIMAL || p.type === FIELD_TYPE.DECIMAL) return parseDecimal(fromUtf8(v))
     let text: string
     try {
       text = session.characterSet === CHARSET_UTF8MB4_0900_AI_CI || session.transcoder === undefined ? UTF8_FATAL.decode(v) : session.transcoder.decode(v, session.characterSet)

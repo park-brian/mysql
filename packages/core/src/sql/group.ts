@@ -36,7 +36,7 @@ import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
 import { nativeCallName, someNode } from './ast.ts'
 import { unknownColumnError } from './scope.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
-import { messages, sqlError } from '@myjs/protocol'
+import { messages, sqlError, utf8 } from '@myjs/protocol'
 import {
   avgAccumulator,
   avgPrecision,
@@ -400,7 +400,7 @@ function groupConcat(e: CallNode, args: readonly Compiled[], type: ResultType, d
             })
           }
           if (binary) {
-            const sep = new TextEncoder().encode(separator)
+            const sep = utf8(separator)
             const all = concatBytes(entries.flatMap((x, i) => (i === 0 ? [x.bytes as Uint8Array] : [sep, x.bytes as Uint8Array])))
             return bytesValue(all.length > max ? all.slice(0, max) : all)
           }

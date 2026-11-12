@@ -21,7 +21,7 @@
 // is the scalar), where `[*]` matches nothing; `**` is the value and every
 // value below it, each match reported once, in document order.
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
-import { sqlError } from '@myjs/protocol'
+import { sqlError, utf8 } from '@myjs/protocol'
 import {
   COERCIBILITY,
   JsonSyntaxError,
@@ -62,7 +62,6 @@ const wildcardNotAllowed = () => sqlError('ER_INVALID_JSON_PATH_WILDCARD', 'In t
 
 // --- parsing ------------------------------------------------------------------------
 
-const UTF8 = new TextEncoder()
 const UTF8_DECODE = new TextDecoder('utf-8', { fatal: true })
 
 /** `my_isspace` under utf8mb4_bin: tab through carriage return, and space. */
@@ -109,7 +108,7 @@ function jsonString(bytes: Uint8Array): string | undefined {
 
 /** A path, or ER_INVALID_JSON_PATH naming where it went wrong. */
 function parseJsonPath(text: string): JsonPath {
-  const b = UTF8.encode(text)
+  const b = utf8(text)
   let at = 0
   const end = b.length
   const legs: Leg[] = []
