@@ -24,3 +24,14 @@ export function forwardKeyColumn(def: TableDef, index: IndexDef): ColumnDef | un
   return def.columns.find((c) => c.name === part.column)
 }
 
+/** A one-part ascending nonunique ref access. Callers prove column coverage. */
+export function singleRefIndex(index: IndexDef | undefined): index is IndexDef {
+  return index?.kind === 'index' && index.parts.length === 1 && index.parts[0]?.descending !== true
+}
+
+/** The first visible index leading on the canonical column. */
+export function leadingIndex(def: TableDef | undefined, column: ColumnDef | undefined, complete: boolean): IndexDef | undefined {
+  if (column === undefined) return undefined
+  return def?.indexes.find((i) => i.invisible !== true && i.parts[0]?.column === column.name && (!complete || i.parts[0].prefix === undefined))
+}
+

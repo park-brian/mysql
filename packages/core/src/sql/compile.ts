@@ -3038,23 +3038,7 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
     const kind = !membership ? 'scan' : !all ? 'in' : plainNotIn ? 'keyed-int-not-in' : 'not-in'
     ctx.quantified?.(right.query, { kind, nullable: a0.type.nullable })
   }
-  const type = boolType(true)
-  if (!keyed) return { eval: compareAll, type }
-  return {
-    eval: (row, env) => {
-      if (env.memo === undefined) return compareAll(row, env)
-      const keys = memoValue(env.memo, key, () => {
-        const keys = new Set<string>()
-        for (const r of plan.rows(env)) keys.add(valueKey(r[0] ?? null))
-        return keys
-      })
-      if (keys.size === 0) return bool(all)
-      const v = a0.eval(row, env)
-      if (v !== null && keys.has(valueKey(v))) return bool(!all)
-      return v === null || keys.has(NULL_VALUE_KEY) ? null : bool(all)
-    },
-    type,
-  }
+  return { eval: keyed ? membershipReader(a0.eval, plan.rows, all, null, compareAll) : compareAll, type: boolType(true) }
 
   /** Every subquery row compared in turn. */
   function compareAll(row: Row, env: Env): Value {
@@ -3068,6 +3052,24 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
       else if (test(c) !== all) return bool(!all)
     }
     return sawNull ? null : bool(all)
+  }
+}
+
+/** One compatible uncorrelated key set, with the caller's treatment of UNKNOWN. */
+export function membershipReader(left: Compiled['eval'], rows: SubqueryPlan['rows'], negated: boolean, unknown: Value, fallback?: Compiled['eval']): Compiled['eval'] {
+  const key = {}
+  const absent = bool(negated)
+  return (row, env) => {
+    if (env.memo === undefined && fallback !== undefined) return fallback(row, env)
+    const keys = memoValue(env.memo, key, () => {
+      const keys = new Set<string>()
+      for (const r of rows(env)) keys.add(valueKey(r[0] ?? null))
+      return keys
+    })
+    if (keys.size === 0) return absent
+    const value = left(row, env)
+    if (value !== null && keys.has(valueKey(value))) return bool(!negated)
+    return value === null || keys.has(NULL_VALUE_KEY) ? unknown : absent
   }
 }
 

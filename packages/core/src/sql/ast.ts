@@ -1,4 +1,4 @@
-import { LITERAL, NODE, QUERY, nativeFunctionWord, type CallNode, type Expression, type LiteralNode, type QueryBody, type QueryExpression } from '@myjs/parser'
+import { LITERAL, NODE, QUERY, nativeFunctionWord, type BinaryNode, type CallNode, type Expression, type LiteralNode, type QueryBody, type QueryExpression } from '@myjs/parser'
 
 /** AND can stop on false, OR on true. Other operators have no such value. */
 export const logicalShortCircuit = (op: string): boolean | undefined => op === 'AND' || op === '&&' ? false : op === 'OR' || op === '||' ? true : undefined
@@ -11,6 +11,9 @@ export function isOrderedComparison(op: string): boolean {
   const reversed = REVERSE_COMPARISON[op]
   return typeof reversed === 'string' && reversed !== op
 }
+
+/** Visit a binary predicate's possible key and value in written order. */
+export const operandPairs = ({ left, right }: BinaryNode) => [[left, right], [right, left]] as const
 
 /** Lookup eligibility, not existence; raw names and collision roles stay on the AST. */
 export function nativeCallName(e: Pick<CallNode, 'name' | 'stored' | 'schema'>): string {
@@ -27,23 +30,21 @@ export function queryBody(query: QueryExpression): Exclude<QueryBody, QueryExpre
 /** A direct SELECT field, including stars and transparent unary plus, at its own query owner. */
 export function hasDirectFields(query: QueryExpression): boolean {
   const body = queryBody(query)
-  return body.kind === QUERY.SELECT && body.items.some(({ expr }) => {
-    while (expr.kind === NODE.UNARY && expr.op === '+') expr = expr.operand
-    return expr.kind === NODE.COLUMN
-  })
+  return body.kind === QUERY.SELECT && body.items.some(({ expr }) => withoutUnaryPlus(expr).kind === NODE.COLUMN)
+}
+
+/** Unary plus preserves reader identity and keeps the original expression intact. */
+export function withoutUnaryPlus(e: Expression): Expression {
+  while (e.kind === NODE.UNARY && e.op === '+') e = e.operand
+  return e
 }
 
 /** Read-only AST proofs: true matches, false prunes, undefined visits children. */
 export function someNode(e: unknown, check: (node: object) => boolean | undefined): boolean {
   if (e === null || typeof e !== 'object') return false
-  const match = check(e)
-  if (match !== undefined) return match
-  for (const child of Object.values(e)) {
-    if (Array.isArray(child)) {
-      for (const item of child) if (someNode(item, check)) return true
-    } else if (someNode(child, check)) return true
-  }
-  return false
+  // Lists carry children, not syntax for the visitor to admit or prune.
+  const match = Array.isArray(e) ? undefined : check(e)
+  return match ?? Object.values(e).some((child) => someNode(child, check))
 }
 
 /** Rewrite an expression tree. A replacement prunes its children. */

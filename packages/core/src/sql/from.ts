@@ -35,7 +35,7 @@
 // physical range and exact point equality already enforce it.
 import { notSupported, wrongUsage } from './errors.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
-import { and, isOrderedComparison, logicalShortCircuit, someNode } from './ast.ts'
+import { and, isOrderedComparison, logicalShortCircuit, operandPairs, someNode } from './ast.ts'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, type Expression, type IndexHint, type QueryExpression, type TableReference } from '@myjs/parser'
@@ -44,12 +44,12 @@ import { integerBytes, truth, type Value } from '@myjs/types'
 import { compatibleEqualityKeys, isComparison, type Compiled, type Env, type Row, type Scope } from './compile.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
 import { FULL_SCAN, chooseAccess, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type InferredRange, type OuterColumn, type RangeCosting } from './plan.ts'
-import { MEMORY_CREATE, ROW_EVALUATE, bestAccess, floorFilter, indexScanCost, joinOrder, materializedAntijoinWins, type Candidate, type FirstMatch, type KeyChoice, type Positioned, type RangeRead } from './cost.ts'
+import { ROW_EVALUATE, bestAccess, floorFilter, indexScanCost, joinOrder, materializedAntijoinWins, membershipCost, type Candidate, type FirstMatch, type KeyChoice, type Positioned, type RangeRead } from './cost.ts'
 import { rowKey, valueKey } from './keys.ts'
 import { columnResultType } from './meta.ts'
 import { fulltextOf } from './fulltext.ts'
 import { chooseStrategy } from './group.ts'
-import { clusteredIndex, forwardKeyColumn, indexPartMatchesColumn, indexParts } from './indexes.ts'
+import { clusteredIndex, forwardKeyColumn, indexPartMatchesColumn, indexParts, leadingIndex, singleRefIndex } from './indexes.ts'
 import { accessRows, distinct, sort as sortRows, type SortKey } from './operators.ts'
 import { neverEqual, rejectsNullExtension } from './optimize.ts'
 import type { TableStatistics } from './stats.ts'
@@ -749,18 +749,16 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const table = node.inner.table
       const index = node.lookup?.index
       const stats = table.def === undefined || table.table === undefined ? undefined : ctx.statistics?.(table.def, table.table)
-      if (stats === undefined || table.def === undefined || index?.kind !== 'index' || index.parts.length !== 1 || index.parts[0]?.descending === true || !holdsRead(table.def, index, settings.read.get(alias) ?? 'all')) return undefined
+      if (stats === undefined || table.def === undefined || !singleRefIndex(index) || !holdsRead(table.def, index, settings.read.get(alias) ?? 'all')) return undefined
       if (!materialization) return 'lookup'
       // A proved materialized candidate need not beat disabled weedout.
       if (!firstMatch && !optimizerEnabled(ctx.env, 'duplicateweedout')) return 'materialized'
       const built = placeTable(table, undefined, NONE, NONE, scope, settings, stats)
       if (!firstMatch) return materializedAntijoinWins(outer, probe, built) ? 'materialized' : 'lookup'
       const rows = outer.fetched * outer.filter
-      const buildCost = built.read + ROW_EVALUATE * built.fetched * 2
-      const evaluate = ROW_EVALUATE * rows * probe.fetched
       // Probe work does not multiply the preserved-side output cardinality.
-      return buildCost + MEMORY_CREATE + ROW_EVALUATE * rows
-        < probe.read + evaluate
+      return membershipCost(built.read, built.fetched, rows)
+        < probe.read + ROW_EVALUATE * rows * probe.fetched
         ? 'materialized' : 'lookup'
     },
     hashAntijoin(key, rows, describe) {
@@ -1074,7 +1072,7 @@ function rangeCosting(t: FromTable, settings: LeafSettings, env: Env, quote = fa
     },
     quote,
     forceRange: settings.eligibleIndexes?.force === 'JOIN',
-    shape: (i) => ({ clustered: i === clustered, covering: holdsRead(def, i, read), recordBytes: indexBytes(def, i) + indexBytes(def, clustered), minRecordBytes }),
+    shape: (i) => ({ clustered: i === clustered, covering: holdsRead(def, i, read), recordBytes: indexRecordBytes(def, i), minRecordBytes }),
     coveringScan: cover === undefined ? undefined : def.indexes.find((i) => i.name === cover),
     count(index, range, limit) {
       return countRows(accessRows(table, { index, ranges: [range] }, env.trx), limit)
@@ -1384,7 +1382,7 @@ function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, set
     const loose = driver?.def === undefined || index === undefined || stats === undefined ? undefined : {
       alias: driver.alias,
       rows: stats.rows,
-      read: indexScanCost(stats.rows, indexBytes(driver.def, index) + indexBytes(driver.def, clusteredIndex(driver.def))),
+      read: indexScanCost(stats.rows, indexRecordBytes(driver.def, index)),
       fetched: stats.rows / stats.recordsPerKey(index, 1),
     }
     const order = joinOrder(candidates, sort, loose, settings.firstMatch, materialization, weedout)
@@ -1443,10 +1441,7 @@ function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, set
 
 /** Whether a condition compares an indexed column of `t` by `<`, `<=`, `>`, `>=` or BETWEEN with columns of the tables in `before` alone. */
 function comparesWithEarlier(t: FromTable, e: Expression, before: ReadonlySet<string>, scope: TableScope): boolean {
-  const leads = (x: Expression): boolean => {
-    const c = columnOf(t, x, scope)
-    return c !== undefined && t.def?.indexes.some((i) => i.invisible !== true && i.parts[0]?.column === c.name && i.parts[0].prefix === undefined) === true
-  }
+  const leads = (x: Expression): boolean => leadingIndex(t.def, columnOf(t, x, scope), true) !== undefined
   const earlier = (x: Expression | undefined): boolean => within(x === undefined ? undefined : aliasesOf(x, scope), before)
   return splitAnd(e).some((c) => {
     if (c.kind !== NODE.BINARY) return false
@@ -1602,12 +1597,11 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: rea
 /** The tables an index lookup into `t` could take its key from: the other side of an equality with a column an index leads (`key_dependent`). */
 function keySources(t: FromTable, conditions: readonly Weighed[], scope: TableScope): Set<string> {
   const out = new Set<string>()
-  const leads = (c: ColumnDef | undefined): boolean => c !== undefined && t.def?.indexes.some((i) => i.invisible !== true && i.parts[0]?.column === c.name) === true
   // planJoins owns top-level conjunct splitting for WHERE and ON.
   for (const { e } of conditions) {
     if (e.kind !== NODE.BINARY || e.op !== '=') continue
-    for (const [own, other] of [[e.left, e.right], [e.right, e.left]] as const) {
-      if (!leads(columnOf(t, own, scope))) continue
+    for (const [own, other] of operandPairs(e)) {
+      if (leadingIndex(t.def, columnOf(t, own, scope), false) === undefined) continue
       for (const a of aliasesOf(other, scope) ?? []) if (a !== t.alias) out.add(a)
     }
   }
@@ -1640,7 +1634,7 @@ function placeTable(t: FromTable, lookup: EqRef | undefined, prefix: readonly Po
           kind: lookup.unique ? 'unique' : lookup.index === clusteredIndex(def) ? 'clustered' : 'ref',
           fanout: lookup.unique ? 1 : stats.recordsPerKey(lookup.index, 1),
           covering: holdsRead(def, lookup.index, read),
-          recordBytes: indexBytes(def, lookup.index) + indexBytes(def, clusteredIndex(def)),
+          recordBytes: indexRecordBytes(def, lookup.index),
           keyFrom: new Set([...(aliasesOf(lookup.condition, scope) ?? [])].filter((a) => a !== t.alias)),
         }
   const coveredByAnyIndex = def.indexes.some((i) => holdsRead(def, i, read))
@@ -1803,9 +1797,9 @@ function tableOp(t: FromTable, settings: LeafSettings, held?: Access): Op {
       const index = t.def.indexes.find((i) => i.name === access.index)
       const points = access.ranges.every((r) => r.from !== undefined && r.from === r.to)
       // A secondary index that holds every column the query reads is read alone.
-      const covering = settings.covering.get(t.alias) === access.index ? 'Covering index' : 'Index'
-      if (points && access.ranges.length === 1 && index !== undefined && index.kind !== 'primary') return planNode(`${covering} lookup on ${t.alias} using ${access.index}`)
-      return planNode(`${covering} range scan on ${t.alias} using ${access.index}${access.over === undefined ? '' : ` over ${access.over}`}`)
+      const covering = settings.covering.get(t.alias) === access.index
+      if (points && access.ranges.length === 1 && index !== undefined && index.kind !== 'primary') return indexLookup(t.alias, access.index, false, covering)
+      return planNode(`${covering ? 'Covering index' : 'Index'} range scan on ${t.alias} using ${access.index}${access.over === undefined ? '' : ` over ${access.over}`}`)
     },
   }
 }
@@ -2152,9 +2146,14 @@ function keyBytes(c: ColumnDef): number {
 }
 
 /** An index's key bytes (`key_length`); a hidden row id's 6. */
-function indexBytes(def: TableDef, index: IndexDef | undefined): number {
+function indexBytes(def: TableDef, index = clusteredIndex(def)): number {
   if (index === undefined) return 6
   return index.parts.reduce((n, p) => n + keyBytes(def.columns.find((c) => c.name === p.column) as ColumnDef), 0)
+}
+
+/** Key bytes plus the clustered record address, for the optimizer's index read cost. */
+export function indexRecordBytes(def: TableDef, index: IndexDef): number {
+  return indexBytes(def, index) + indexBytes(def)
 }
 
 /** Whether an index holds every complete column read, including a secondary key's clustered parts. */

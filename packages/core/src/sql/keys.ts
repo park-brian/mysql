@@ -20,6 +20,13 @@ function trimFraction(text: string): string {
 
 export const NULL_VALUE_KEY = 'N'
 
+/** A byte sequence as a string key, preserving every byte and its order. */
+export function byteKey(bytes: Uint8Array): string {
+  let key = ''
+  for (const byte of bytes) key += String.fromCharCode(byte)
+  return key
+}
+
 /** The key of one value. */
 export function valueKey(v: Value): string {
   if (v === null) return NULL_VALUE_KEY

@@ -107,6 +107,11 @@ export interface RangeRead {
 /** A table scan: each of its clustered index's pages. */
 export const scanCost = (t: TableStatistics): number => PAGE_READ * t.pages
 
+/** The scan, row evaluation, in-memory deduplication and probes for a membership set. */
+export function membershipCost(read: number, rows: number, probes: number): number {
+  return read + ROW_EVALUATE * rows * 2 + MEMORY_CREATE + ROW_EVALUATE * probes
+}
+
 /** The most one lookup is costed at (`worst_seeks`): three scans' worth, never below two pages, nor below a tenth of the rows' pages. */
 const worstSeeks = (t: TableStatistics): number => Math.max(Math.min(PAGE_READ * (t.rows / 10), 3 * scanCost(t)), PAGE_READ * 2)
 

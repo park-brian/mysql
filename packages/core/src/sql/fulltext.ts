@@ -48,6 +48,7 @@ import type { ColumnDef, TableDef } from '@myjs/engine'
 import { SqlError, sqlError } from '@myjs/protocol'
 import { toText, type Value } from '@myjs/types'
 import { FT_MAX_TOKEN, FT_MIN_TOKEN, FT_STOPWORDS } from './fulltext-params.ts'
+import { byteKey } from './keys.ts'
 
 export interface FulltextDef {
   readonly name: string
@@ -88,12 +89,7 @@ const WORD = /[\p{L}\p{N}_]+/gu
 /** A word as the index compares it: its collation's sort key, so 'Müller' and 'muller' meet where the collation says they do. */
 function folder(collationId: number): (w: string) => string {
   const c = collation(collationId)
-  return (w) => {
-    const key = c.sortKey(encodeCollation(w, collationId))
-    let out = ''
-    for (const b of key) out += String.fromCharCode(b)
-    return out
-  }
+  return (w) => byteKey(c.sortKey(encodeCollation(w, collationId)))
 }
 
 /** Whether a word is one the index keeps. */

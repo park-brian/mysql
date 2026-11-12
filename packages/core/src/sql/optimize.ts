@@ -33,7 +33,7 @@ import { equalBounds, pointAccess, splitAnd } from './plan.ts'
 import { accessRows } from './operators.ts'
 import { intersect, rangeOf, type RangeSet } from './ranges.ts'
 import { safeResolve } from './scope.ts'
-import { REVERSE_COMPARISON, isOrderedComparison, logicalShortCircuit, rewriteExpression } from './ast.ts'
+import { REVERSE_COMPARISON, isOrderedComparison, logicalShortCircuit, operandPairs, rewriteExpression } from './ast.ts'
 
 /** A schema key that identifies a row even when comparisons can see NULL. */
 export function uniqueKey(def: TableDef, index: IndexDef): boolean {
@@ -372,7 +372,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     const held = new Map<string, Expression>()
     for (const c of splitAnd(j.on, [])) {
       if (c.kind !== NODE.BINARY || (c.op !== '=' && c.op !== '<=>')) continue
-      for (const [col, other] of [[c.left, c.right], [c.right, c.left]] as const) {
+      for (const [col, other] of operandPairs(c)) {
         const i = slot(col)
         if (i !== undefined && aliasOf(i) === alias && isConstant(other)) held.set((scope.columnAt(i)?.column.name ?? '').toLowerCase(), c)
       }

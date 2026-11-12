@@ -52,7 +52,7 @@ test('quantified subquery coverage distinguishes complete and prefix index parts
   }
 })
 
-test('forced nullable integer NOT IN describes its retained membership build', async () => {
+test('nullable integer NOT IN describes forced and costed membership builds across retained executions', async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = await mysql.createConnection(db === undefined
@@ -73,7 +73,8 @@ test('forced nullable integer NOT IN describes its retained membership build', a
         ['id', 3, 11, 20483, 0, 63, schema, 'p', 'p', 'id'], ['label', 253, 64, 4097, 0, 224, schema, 'p', 'p', 'label'],
       ])
       assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
-      const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
+      const explainSql = `EXPLAIN FORMAT=TREE ${sql}`
+      const [explain] = method === 'query' ? await conn.query<mysql.RowDataPacket[]>(explainSql) : await conn.execute<mysql.RowDataPacket[]>(explainSql)
       assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan)
     }
   }
@@ -95,6 +96,16 @@ test('forced nullable integer NOT IN describes its retained membership build', a
     await read(all.slice(3), materialized)
     await conn.query('DELETE FROM c')
     await read(all, materialized)
+    await conn.query("SET optimizer_switch='default'")
+    await conn.query('INSERT INTO c VALUES (1,0)')
+    await read(all.slice(2), dependent)
+    await conn.query("INSERT INTO p VALUES (6,5,'p5'),(7,6,'p6')")
+    const grown = [...all, [6, 'p5'], [7, 'p6']]
+    await read(grown.slice(2), materialized)
+    await conn.query('INSERT INTO c VALUES (2,2),(3,3)')
+    await read(grown.slice(4), dependent)
+    await conn.query('DELETE FROM c')
+    await read(grown, materialized)
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()

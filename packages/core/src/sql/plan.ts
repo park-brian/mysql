@@ -59,6 +59,7 @@ import type { TableStatistics } from './stats.ts'
 import { forwardKeyColumn } from './indexes.ts'
 import { columnIndex } from './scope.ts'
 import { REVERSE_COMPARISON, logicalShortCircuit, signedOperand } from './ast.ts'
+import { byteKey } from './keys.ts'
 
 /** Whether a named transformation is enabled in the normalized session settings. */
 export function optimizerEnabled(env: Env | undefined, name: string): boolean {
@@ -438,13 +439,6 @@ export function keyOrder(def: TableDef, indexes = def.indexes): IndexDef[] {
 
 const ctx = (): StoreContext => ({ strict: true, row: 1, warnings: 0 })
 
-/** Bytes as a string of one character each, whose order is theirs. */
-function latin1(bytes: Uint8Array): string {
-  let s = ''
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i] as number)
-  return s
-}
-
 function bound(v: Value, column: ColumnDef, inclusive: boolean): KeyBound | undefined {
   try {
     return { values: [encodeField(v, column.nullable ? column : { ...column, nullable: true }, ctx())], inclusive }
@@ -517,7 +511,7 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
       for (const v of values as Value[]) {
         const b = bound(v, nullable, true)
         if (b === undefined) return undefined
-        points.set(latin1(encodeKey(b.values, [part])), b)
+        points.set(byteKey(encodeKey(b.values, [part])), b)
       }
       const ranges = [...points.entries()].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)).map(([, b]) => ({ from: b, to: b }))
       return { access: { index: index.name, ranges }, score: 3 }
