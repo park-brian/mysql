@@ -1142,27 +1142,31 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     extra = pair.extra
   }
   if (!column(innerKey, innerAlias) || !column(outerKey, outerAlias)) return undefined
-  const innerColumn = innerKey.parts.at(-1) as string
+  const innerColumn = (innerKey.parts.at(-1) as string).toLowerCase()
   if (extra !== undefined && !(extra.kind === NODE.BINARY && isComparison(extra.op) && column(extra.left, innerAlias) && extra.right.kind === NODE.LITERAL && numeric(extra.right))) return undefined
   try {
     const def = nonTemporaryDefinition(run, inner.table)
     if (def === undefined) return undefined
-    const candidates = def.indexes.filter((i) => i.kind === 'index' && i.invisible !== true && i.parts[0]?.column.toLowerCase() === innerColumn.toLowerCase() && i.parts[0].prefix === undefined && i.parts[0].descending !== true)
-    // Keep the established single-part choice. The leading part of a lone
-    // composite candidate also keeps equal keys adjacent in a forward scan.
+    let candidates = def.indexes.filter((i) => {
+      const part = i.parts[0]
+      return i.kind === 'index' && i.invisible !== true && part?.column.toLowerCase() === innerColumn && part.prefix === undefined
+    })
+    // Either direction keeps equal leading keys adjacent in a forward scan.
+    // Multiple candidates and limited plans keep the established selection.
+    if (candidates.length > 1 || q.limit !== undefined) candidates = candidates.filter((i) => !i.parts[0]!.descending)
     const index = candidates.length === 1 ? candidates[0] : candidates.find((i) => i.parts.length === 1)
     if (index === undefined) return undefined
     const qualify = (e: Extract<Expression, { kind: typeof NODE.COLUMN }>, alias: string): Expression => ({ ...e, parts: [alias, e.parts.at(-1) as string] })
     innerKey = qualify(innerKey, innerAlias)
     outerKey = qualify(outerKey, outerAlias)
-    if (extra?.kind === NODE.BINARY && extra.left.kind === NODE.COLUMN) extra = { ...extra, left: qualify(extra.left, innerAlias) }
+    if (extra?.left.kind === NODE.COLUMN) extra = { ...extra, left: qualify(extra.left, innerAlias) }
     const equality: Expression = { kind: NODE.BINARY, op: '=', left: innerKey, right: outerKey, at: where?.at ?? node.at }
     const predicate: Expression = and(equality, extra)
     // Keep the outer table's slots first: its logical scope remains the SELECT's scope.
     const alternative = planFrom([outer, inner], fromContext(run), predicate)
     const ctx = compileContext(run, alternative.scope, 'where clause')
     const key = compile(innerKey, ctx)
-    if (!exactInteger(key) || !exactInteger(compile(outerKey, ctx)) || (extra?.kind === NODE.BINARY && !exactInteger(compile(extra.left, ctx)))) return undefined
+    if (!exactInteger(key) || !exactInteger(compile(outerKey, ctx)) || (extra !== undefined && !exactInteger(compile(extra.left, ctx)))) return undefined
     const read = columnsRead(from.scope, node, q)
     const innerRead = keyReads(innerColumn, extra)
     read.set(innerAlias, innerRead)

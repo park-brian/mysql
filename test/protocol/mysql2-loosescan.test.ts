@@ -98,17 +98,19 @@ test('integer LooseScan semijoins share execution, metadata and the costed plan'
   }
 })
 
-test('a covering composite LooseScan filters rows before deduplicating the leading key', async () => {
+test('LooseScan follows the leading key order and filters before deduplication', async () => {
   const { db, conn } = await looseScanConnection()
   const schema = 'loose_composite'
-  const sql = 'SELECT id,label FROM p WHERE id IN (SELECT pid FROM c WHERE qty>2)'
+  const base = 'SELECT id,label FROM p WHERE id IN (SELECT pid FROM c'
   const loose = 'Nested loop inner join\n    Remove duplicates from input sorted on by_parent\n        Filter\n            Covering index scan on c using by_parent\n    Single-row index lookup on p using PRIMARY'
-  const options = { sql, rowsAsArray: true }
-  async function read(method: 'query' | 'execute', expected: unknown[][], plan?: string) {
+  const sorted = 'Sort\n    Stream results\n        ' + loose.replaceAll('\n', '\n        ')
+  const ascending = [[1, 'b'], [3, 'c']]
+  async function read(sql: string, method: 'query' | 'execute', expected: unknown[][], plan?: string, idFlags = 20483) {
+    const options = { sql, rowsAsArray: true }
     const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
     assert.deepEqual(rows, expected)
     assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
-      ['id', 3, 11, 20483, 0, 63, schema, 'p', 'p', 'id'], ['label', 253, 64, 4097, 0, 224, schema, 'p', 'p', 'label'],
+      ['id', 3, 11, idFlags, 0, 63, schema, 'p', 'p', 'id'], ['label', 253, 64, 4097, 0, 224, schema, 'p', 'p', 'label'],
     ])
     assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
     const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
@@ -121,20 +123,35 @@ test('a covering composite LooseScan filters rows before deduplicating the leadi
     await conn.query(`USE ${schema}`)
     await conn.query('CREATE TABLE p(id INT PRIMARY KEY, label VARCHAR(16) NOT NULL) STATS_AUTO_RECALC=0')
     await conn.query("INSERT INTO p VALUES(1,'b'),(2,'a'),(3,'c'),(4,'d'),(5,'e')")
-    for (const trailing of ['qty', 'qty DESC']) {
-      await conn.query(`CREATE TABLE c(id INT PRIMARY KEY,pid INT,qty INT,KEY by_parent(pid,${trailing})) STATS_AUTO_RECALC=0`)
+    for (const parts of ['pid,qty', 'pid,qty DESC', 'pid DESC,qty', 'pid DESC']) {
+      const filtered = parts.includes('qty')
+      const descending = parts.startsWith('pid DESC')
+      const sql = base + (filtered ? ' WHERE qty>2)' : ')')
+      const inKeyOrder = descending ? ascending.toReversed() : ascending
+      const options = { sql, rowsAsArray: true }
+      await conn.query(`CREATE TABLE c(id INT PRIMARY KEY,pid INT,qty INT,KEY by_parent(${parts})) STATS_AUTO_RECALC=0`)
       await conn.query('INSERT INTO c VALUES(1,1,5),(2,1,1),(3,3,6),(4,NULL,2),(5,8,1)')
       await conn.query('ANALYZE TABLE p,c')
-      await read('query', [[1, 'b'], [3, 'c']], loose)
-      await read('execute', [[1, 'b'], [3, 'c']], loose)
-      await conn.query('UPDATE c SET qty=0 WHERE id=1')
-      await read('execute', [[3, 'c']], loose)
-      await conn.query('UPDATE c SET qty=5 WHERE id=1')
-      await read('execute', [[1, 'b'], [3, 'c']], loose)
+      for (const method of ['query', 'execute'] as const) {
+        await read(sql, method, inKeyOrder, loose)
+        if (descending) {
+          await read(`${sql} ORDER BY id`, method, ascending, sorted, 4097)
+          await read(`${sql} ORDER BY id DESC`, method, inKeyOrder, sorted, 4097)
+          const limited = { sql: `${base}) ORDER BY id LIMIT 1`, rowsAsArray: true }
+          const [rows] = method === 'query' ? await conn.query(limited) : await conn.execute(limited)
+          assert.deepEqual(rows, ascending.slice(0, 1))
+          const [plan] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${limited.sql}`)
+          assert.doesNotMatch(planSkeleton(plan[0]?.EXPLAIN), /Remove duplicates from input sorted/)
+        }
+      }
+      await conn.query(filtered ? 'UPDATE c SET qty=0 WHERE id=1' : 'UPDATE c SET pid=8 WHERE id IN(1,2)')
+      await read(sql, 'execute', [[3, 'c']], loose)
+      await conn.query(filtered ? 'UPDATE c SET qty=5 WHERE id=1' : 'UPDATE c SET pid=1 WHERE id IN(1,2)')
+      await read(sql, 'execute', inKeyOrder, loose)
       await conn.query("SET optimizer_switch='loosescan=off'")
       conn.unprepare(options)
-      await read('query', [[1, 'b'], [3, 'c']])
-      await read('execute', [[1, 'b'], [3, 'c']])
+      await read(sql, 'query', ascending)
+      await read(sql, 'execute', ascending)
       conn.unprepare(options)
       await conn.query("SET optimizer_switch='loosescan=on'")
       await conn.query('DROP TABLE c')
@@ -146,7 +163,7 @@ test('a covering composite LooseScan filters rows before deduplicating the leadi
   }
 })
 
-for (const index of ['KEY(pa_id)', 'KEY by_parent(pa_id,id)']) test(`returning from a LooseScan locking stream releases both scans and its writer: ${index}`, async () => {
+for (const index of ['KEY(pa_id)', 'KEY by_parent(pa_id,id)', 'KEY by_parent(pa_id DESC,id)']) test(`returning from a LooseScan locking stream releases both scans and its writer: ${index}`, async () => {
   const db = await MySQL.open(':memory:')
   try {
     await db.query('CREATE DATABASE d')
@@ -156,6 +173,7 @@ for (const index of ['KEY(pa_id)', 'KEY by_parent(pa_id,id)']) test(`returning f
     await db.query('INSERT INTO d.ch VALUES(1,1),(2,1),(3,3)')
     await db.query('ANALYZE TABLE d.pa,d.ch')
     const sql = 'SELECT id FROM d.pa WHERE id IN (SELECT pa_id FROM d.ch)'
+    const expected = index.includes('DESC') ? [{ id: 3 }, { id: 1 }] : [{ id: 1 }, { id: 3 }]
     assert.match(JSON.stringify((await db.query(`EXPLAIN FORMAT=TREE ${sql} FOR UPDATE`))[0]), /Remove duplicates from input sorted/)
     const catalog = db.catalog!
     const open = catalog.table.bind(catalog)
@@ -183,12 +201,12 @@ for (const index of ['KEY(pa_id)', 'KEY by_parent(pa_id,id)']) test(`returning f
       return table
     }
     try {
-      assert.deepEqual((await db.query(sql))[0], [{ id: 1 }, { id: 3 }])
+      assert.deepEqual((await db.query(sql))[0], expected)
       assert.equal(probes, 2, 'one primary lookup per distinct non-NULL inner key')
       assert.equal(innerScans, 1)
       assert.equal(active, 0)
       for await (const row of db.stream(`${sql} FOR UPDATE`)) {
-        assert.deepEqual(row, { id: 1 })
+        assert.deepEqual(row, expected[0])
         break
       }
       assert.equal(innerScans, 2)

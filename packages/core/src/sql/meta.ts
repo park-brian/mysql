@@ -19,6 +19,7 @@ import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, TableDef } from '@myjs/engine'
 import type { ColumnDefinition } from '@myjs/protocol'
+import { blobByteLimit } from '@myjs/types'
 
 /** `PART_KEY_FLAG`, `include/mysql_com.h`: the column is in some index. */
 const PART_KEY_FLAG = 0x4000
@@ -169,13 +170,6 @@ const INT_WIDTH: Readonly<Record<number, readonly [number, number]>> = {
   [FIELD_TYPE.INT24]: [9, 8],
   [FIELD_TYPE.LONG]: [11, 10],
   [FIELD_TYPE.LONGLONG]: [20, 20],
-}
-
-const BLOB_BYTES: Readonly<Record<number, number>> = {
-  [FIELD_TYPE.TINY_BLOB]: 255,
-  [FIELD_TYPE.BLOB]: 65535,
-  [FIELD_TYPE.MEDIUM_BLOB]: 16777215,
-  [FIELD_TYPE.LONG_BLOB]: 4294967295,
 }
 
 /** Metadata shared by scalar types that do not carry a character collation. */
@@ -347,7 +341,7 @@ export function columnResultType(def: TableDef, column: ColumnDef, tableAlias: s
       return { ...stringType(length, t.collationId ?? 255, nullable), ...base, field: FIELD_TYPE.STRING, scale: 0, coercibility: 2, column: { ...source, flags: flags | kindFlag } }
     }
     default: {
-      const blob = BLOB_BYTES[t.type]
+      const blob = blobByteLimit(t.type)
       return {
         ...stringType(blob ?? t.length ?? 1, t.collationId ?? CHARSET_BINARY, nullable),
         ...base,

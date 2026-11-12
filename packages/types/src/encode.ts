@@ -143,12 +143,16 @@ export function integerRange(t: { readonly type: number; readonly unsigned?: boo
   return t.unsigned === true ? unsignedRange(width) : signedRange(width)
 }
 
-/** BLOB and TEXT's byte limits, from `Field_blob`'s pack length. */
 const BLOB_BYTES: Readonly<Record<number, number>> = {
   [FIELD_TYPE.TINY_BLOB]: 255,
   [FIELD_TYPE.BLOB]: 65535,
   [FIELD_TYPE.MEDIUM_BLOB]: 16777215,
   [FIELD_TYPE.LONG_BLOB]: 4294967295,
+}
+
+/** BLOB and TEXT's byte limits, from `Field_blob`'s pack length. */
+export function blobByteLimit(type: number): number | undefined {
+  return BLOB_BYTES[type]
 }
 
 const FLOAT_MAX = 3.4028234663852886e38
@@ -569,7 +573,7 @@ function memberIndex(value: Exclude<Value, null>, members: readonly string[], co
 function encodeBinaryField(value: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext): Uint8Array {
   const t = column.type
   let b = valueBytes(value)
-  const limit = BLOB_BYTES[t.type] ?? t.length ?? 1
+  const limit = blobByteLimit(t.type) ?? t.length ?? 1
   if (b.length > limit) b = adjust(ctx, () => dataTooLong(column.name, ctx.row), b.subarray(0, limit), () => truncated(column.name, ctx.row))
   return t.type === FIELD_TYPE.STRING ? padBinary(b, t.length ?? 1) : b
 }
@@ -578,7 +582,7 @@ function encodeTextField(value: Exclude<Value, null>, column: FieldColumn, ctx: 
   const t = column.type
   const id = t.collationId as number
   let text = value.kind === 'bytes' ? decodeCollation(value.v, id) : toText(value)
-  const blobLimit = BLOB_BYTES[t.type]
+  const blobLimit = blobByteLimit(t.type)
   if (blobLimit === undefined) {
     const chars = [...text]
     const length = t.length ?? 1
