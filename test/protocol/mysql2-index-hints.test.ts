@@ -57,6 +57,7 @@ test('legacy index hints resolve on physical SELECT sources before column bindin
     [select + ' USE INDEX (`ix_a `)', missing('ix_a ')],
     [`${select} USE INDEX (missing, later)`, missing('later')],
     [`${select} USE INDEX (missing) IGNORE INDEX (later)`, missing('later')],
+    [`${select} USE INDEX FOR ORDER BY (missing) IGNORE INDEX FOR GROUP BY (later)`, missing('later')],
     [`${select} USE INDEX FOR GROUP BY (missing) IGNORE INDEX FOR ORDER BY (later) ORDER BY x.id`, missing('later')],
     [`${select} FORCE INDEX (missing) USE INDEX (ix_a)`, missing('missing')],
     [`${select} USE INDEX FOR JOIN () FORCE INDEX FOR GROUP BY (ix_a)`, conflict],
@@ -147,6 +148,7 @@ test('plain SELECT reads honor unscoped and FOR JOIN USE and IGNORE INDEX', asyn
   const ranged = data.filter(({ a }) => a >= 2 && a < 4)
   const idField = ID_FIELD
   const wideFields = [idField, ['payload', 253, 80, 0, 0, 224]]
+  const byB = ids(data.slice().sort((left, right) => left.b - right.b))
   const scan = 'Table scan on t'
   const filtered = `Filter\n    ${scan}`
   const lookup = 'Covering index lookup on t using by_a'
@@ -157,7 +159,7 @@ test('plain SELECT reads honor unscoped and FOR JOIN USE and IGNORE INDEX', asyn
     await conn.query(`USE ${schema}`)
     await createHintTable(conn)
     await read('SELECT id FROM t USE INDEX FOR JOIN ()', ids(data), [idField], scan)
-    await read('SELECT id FROM t USE INDEX (BY_B)', ids(data.slice().sort((left, right) => left.b - right.b)), [idField], 'Covering index scan on t using by_b')
+    await read('SELECT id FROM t USE INDEX (BY_B)', byB, [idField], 'Covering index scan on t using by_b')
     for (const hint of ['USE INDEX ()', 'USE INDEX () USE INDEX (by_a)', 'USE INDEX (by_a) IGNORE INDEX (by_a)', 'IGNORE INDEX (by_a) USE INDEX (by_a)', 'IGNORE INDEX FOR JOIN (by_a,by_ab)']) {
       await read(`SELECT id FROM t ${hint} WHERE a=2`, point, [idField], filtered)
     }
@@ -166,7 +168,15 @@ test('plain SELECT reads honor unscoped and FOR JOIN USE and IGNORE INDEX', asyn
     await read('SELECT id,payload FROM t USE INDEX (by_a) WHERE a>=2 AND a<4', wide(ranged.slice().sort((left, right) => left.a - right.a)), wideFields, 'Index range scan on t using by_a over')
     await read('SELECT id,payload FROM t IGNORE INDEX (PRIMARY) WHERE id=7', [[7, 'payload6']], wideFields, filtered)
     await read('SELECT id,payload FROM t USE INDEX (PRIMARY) WHERE id=7', [[7, 'payload6']], wideFields, 'Rows fetched before execution')
-    const retained = { sql: 'SELECT id FROM t USE INDEX FOR JOIN () WHERE a=?', rowsAsArray: true }
+
+    await read('SELECT id FROM t USE INDEX FOR JOIN () USE INDEX FOR ORDER BY (by_a)', ids(data), [idField], scan)
+    await read('SELECT id FROM t IGNORE INDEX FOR JOIN (by_a) USE INDEX FOR GROUP BY (by_a)', byB, [idField], 'Covering index scan on t using by_b')
+    await read('SELECT id FROM t USE INDEX (by_a) USE INDEX FOR GROUP BY (by_b) WHERE a=2', point, [idField], lookup)
+    await read('SELECT id,payload FROM t USE INDEX FOR JOIN (by_a) USE INDEX FOR ORDER BY (PRIMARY) WHERE id=7',
+      [[7, 'payload6']], wideFields, filtered)
+    await read("SELECT id FROM t USE INDEX FOR JOIN () IGNORE INDEX FOR ORDER BY (by_a) WHERE id='7x'",
+      [[7]], [idField], filtered, [['Warning', 1292, "Truncated incorrect DOUBLE value: '7x'"]])
+    const retained = { sql: 'SELECT id FROM t USE INDEX FOR JOIN () USE INDEX FOR GROUP BY (by_b) WHERE a=?', rowsAsArray: true }
     assert.deepEqual((await conn.execute(retained, [2]))[0], point)
     await conn.query('UPDATE t SET a=0 WHERE id=3')
     assert.deepEqual((await conn.execute(retained, [2]))[0], point.slice(1))

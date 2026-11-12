@@ -243,9 +243,7 @@ function indexHintEligibility(def: TableDef, alias: string, hints: readonly Inde
   const keys = [...def.indexes, ...fulltextOf(def)].map((key) => ({ key, folded: foldIndexName(key.name) }))
   type HintKey = (typeof keys)[number]['key']
   // Ordering and grouping have their own eligibility, separate from the scan.
-  const scopes = scope !== undefined && scope !== 'JOIN'
-    ? ['JOIN', scope] as const
-    : scope && hints.every((hint) => (hint.for ?? 'JOIN') === scope) ? [scope] : []
+  const scopes = scope === undefined ? [] : scope === 'JOIN' ? [scope] : ['JOIN', scope] as const
   const masks = keys.some(({ key }) => key.invisible) || hints.some((hint) => hint.type === 'FORCE') ? [] : scopes
     .filter((scope) => hints.some((hint) => hint.for === undefined || hint.for === scope))
     .map((scope) => ({ scope, used: undefined as Set<HintKey> | undefined, ignored: new Set<HintKey>() }))
