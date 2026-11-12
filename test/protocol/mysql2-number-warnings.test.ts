@@ -66,6 +66,19 @@ test('text read as a number warns, and FIELD and the address functions quote, as
       }
       assert.deepEqual(actual, expected, sql)
     }
+    const binary = {
+      sql: `SELECT _binary X'310078' + 0e0, CAST(X'31FF78' AS BINARY) + 0e0,
+        CONCAT(_binary '', _binary X'31C3A9') + 0e0, _binary X'31${'78'.repeat(126)}C3A9' + 0e0`,
+      rowsAsArray: true,
+    }
+    for (const method of ['query', 'execute'] as const) {
+      const [rows] = method === 'query' ? await conn.query(binary) : await conn.execute(binary)
+      assert.deepEqual(rows, [[1, 1, 1, 1]], method)
+      const [warnings] = await conn.query({ sql: 'SHOW WARNINGS', rowsAsArray: true })
+      assert.deepEqual(warnings, ['1\\x00x', '1\\xFFx', '1\\xC3\\xA9', '1' + 'x'.repeat(126) + '\\'].map(
+        (text) => ['Warning', 1292, `Truncated incorrect DOUBLE value: '${text}'`],
+      ), method)
+    }
   } finally {
     await conn.end()
     await db.end()

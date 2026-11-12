@@ -364,7 +364,7 @@ function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECI
   // INTEGER casts warn even for empty or whitespace-only strings and bytes.
   if (kind !== 'DECIMAL' && diagnosticKind === undefined && /^[ \t\n\r]*$/.test(text)) return
   let diagnostic: string
-  if (diagnosticKind === 'bytes' && v.kind === 'bytes') diagnostic = escapedBytes(v.v.subarray(0, 128)).slice(0, 128)
+  if (v.kind === 'bytes' && (diagnosticKind === 'bytes' || (kind === 'DOUBLE' && !column))) diagnostic = escapedBytes(v.v.subarray(0, 128)).slice(0, 128)
   else if (diagnosticKind === 'string') diagnostic = fixedNumericText(v)
   else diagnostic = warnedText(v)
   truncated(env, kind, diagnostic)
@@ -384,7 +384,7 @@ function truncated(env: Pick<Env, 'conditions'>, kind: string, text: string): vo
 export function warnedText(v: Exclude<Value, null>): string {
   if (v.kind === 'bytes') {
     const nul = v.v.indexOf(0)
-    return new TextDecoder().decode(nul === -1 ? v.v : v.v.subarray(0, nul))
+    return new TextDecoder().decode(nul < 0 ? v.v : v.v.subarray(0, nul))
   }
   return toText(v).split('\0', 1)[0]!
 }
