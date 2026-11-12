@@ -164,6 +164,12 @@ including TIS620, which does not have a generated map yet. Every host decoder
 must pass the substitution check before use. Missing decoders and unavailable
 inverse encoders raise typed errors rather than guessing a mapping.
 
+MySQL treats leading U+FEFF as part of a `utf8mb3` or `utf8mb4` value. The
+UTF-8 charset decoder preserves it for SQL input, text conversion, storage and
+result rows. The strict UTF-8 decoder preserves it in prepared text bindings
+while still rejecting malformed byte sequences. A U+FEFF before the first SQL
+keyword reaches the parser and produces error 1064.
+
 The multi-byte sets that `TextDecoder` does not cover need generated tables.
 `gbk` and `sjis` also have a security dimension — the classic
 `addslashes()`/`SET NAMES` injection relies on a multi-byte lead byte swallowing

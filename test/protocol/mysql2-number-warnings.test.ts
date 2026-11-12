@@ -96,3 +96,48 @@ test('text read as a number warns, and FIELD and the address functions quote, as
     await db.end()
   }
 })
+
+test('leading U+FEFF survives UTF-8 input and stored values as in MySQL 8.4.11', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection({
+    ...(db === undefined ? { host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306),
+      password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' } : { stream: db.createStream() }),
+    user: 'root', rowsAsArray: true,
+  })
+  const schema = 'utf8_bom_warnings'
+  const value = '\uFEFF1x'
+  const select = 'SELECT v, HEX(v), v + 0e0 FROM t ORDER BY id'
+  const expected = Array.from({ length: 3 }, () => [value, 'EFBBBF3178', 0])
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY, v VARCHAR(64) CHARACTER SET utf8mb4)')
+    await conn.query(`INSERT INTO t VALUES (1, '${value}'), (2, CONVERT(X'EFBBBF3178' USING utf8mb4))`)
+    await conn.execute('INSERT INTO t VALUES (3, ?)', [value])
+    for (const method of ['query', 'execute'] as const) {
+      const run = (sql: string) => method === 'query' ? conn.query(sql) : conn.execute(sql)
+      await assert.rejects(() => run('\uFEFFSELECT 1'), { errno: 1064, message: /\uFEFFSELECT/ })
+      const [introduced] = await run("SELECT _utf8mb3 X'EFBBBF3178', _utf8mb4 X'EFBBBF3178'")
+      assert.deepEqual(introduced, [[value, value]], method)
+      const [rows] = await run(select)
+      assert.deepEqual(rows, expected, method)
+      const [warnings] = await conn.query('SHOW WARNINGS')
+      assert.deepEqual(warnings, expected.map(() => ['Warning', 1292, `Truncated incorrect DOUBLE value: '${value}'`]), method)
+    }
+    if (db !== undefined) {
+      const client = await db.connect({ database: schema })
+      try {
+        for (const method of ['query', 'execute'] as const) {
+          assert.deepEqual((await client[method]({ sql: select, rowsAsArray: true }))[0], expected, method)
+        }
+      } finally {
+        await client.end()
+      }
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})

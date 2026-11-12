@@ -147,7 +147,8 @@ function decoderFor(charset: string): TextDecoder {
   if (label === undefined) throw unsupportedCharset(charset)
   let decoder: TextDecoder
   try {
-    decoder = new TextDecoder(label)
+    // MySQL treats a leading U+FEFF as data in UTF-8 strings and SQL text.
+    decoder = new TextDecoder(label, { ignoreBOM: label === 'utf-8' })
   } catch {
     // A runtime built without the full encoding set. This branch is real, and
     // it is *not* the only way that happens — see the probe below.

@@ -15,7 +15,7 @@
 // is sent as bytes (a BLOB) as `mysql2` sends a `Buffer`.
 import { FIELD_TYPE, hex, Reader, Writer } from '@myjs/bytes'
 import { COLUMN_FLAG, COM, fromUtf8, utf8, type ColumnDefinition } from '@myjs/protocol'
-import { collationInfo, decodeCollation } from '@myjs/charsets'
+import { collationInfo, decodeCharset } from '@myjs/charsets'
 
 /** The options that change a value's JavaScript form: `mysql2`'s, by the same names. */
 export interface TypeOptions {
@@ -90,12 +90,9 @@ function offsetMinutes(zone: string): number | null {
   return (zone[0] === '-' ? -1 : 1) * (Number.parseInt(zone.slice(1, 3), 10) * 60 + Number.parseInt(zone.slice(4), 10))
 }
 
-const text = (bytes: Uint8Array, c: ColumnDefinition): string => (isUtf8(c.characterSet) ? fromUtf8(bytes) : decodeCollation(bytes, c.characterSet))
-
-/** Whether a collation's charset is UTF-8, which TextDecoder reads as it is. */
-function isUtf8(collation: number): boolean {
-  const charset = collationInfo(collation)?.charset
-  return charset === undefined || charset === 'utf8mb4' || charset === 'utf8mb3'
+function text(bytes: Uint8Array, c: ColumnDefinition): string {
+  const charset = collationInfo(c.characterSet)?.charset
+  return charset === undefined ? fromUtf8(bytes) : decodeCharset(bytes, charset)
 }
 
 /** JSON, its unsafe integers kept as their digits under `supportBigNumbers` (`parseJson`). */
