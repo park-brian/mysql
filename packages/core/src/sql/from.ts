@@ -1147,7 +1147,7 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
             yield row
           }
         },
-        describe: (env) => planNode(`Remove duplicates from input sorted on ${loose.index.parts[0]?.column}`, [input.describe(env)]),
+        describe: (env) => planNode(`Remove duplicates from input sorted on ${loose.index.name}`, [input.describe(env)]),
       }
     }
     if (settings.firstSort?.alias === node.table.alias) {

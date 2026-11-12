@@ -1147,7 +1147,10 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   try {
     const def = nonTemporaryDefinition(run, inner.table)
     if (def === undefined) return undefined
-    const index = def.indexes.find((i) => i.kind === 'index' && i.invisible !== true && i.parts.length === 1 && i.parts[0]?.column.toLowerCase() === innerColumn.toLowerCase() && i.parts[0].prefix === undefined && i.parts[0].descending !== true)
+    const candidates = def.indexes.filter((i) => i.kind === 'index' && i.invisible !== true && i.parts[0]?.column.toLowerCase() === innerColumn.toLowerCase() && i.parts[0].prefix === undefined && i.parts[0].descending !== true)
+    // Keep the established single-part choice. The leading part of a lone
+    // composite candidate also keeps equal keys adjacent in a forward scan.
+    const index = candidates.length === 1 ? candidates[0] : candidates.find((i) => i.parts.length === 1)
     if (index === undefined) return undefined
     const qualify = (e: Extract<Expression, { kind: typeof NODE.COLUMN }>, alias: string): Expression => ({ ...e, parts: [alias, e.parts.at(-1) as string] })
     innerKey = qualify(innerKey, innerAlias)

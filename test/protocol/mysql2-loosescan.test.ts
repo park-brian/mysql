@@ -6,12 +6,17 @@ import { MySQL } from '@myjs/core'
 // @ts-expect-error — the capture owns plan normalization.
 import { planSkeleton } from '../../tools/capture-relational.mjs'
 
-test('integer LooseScan semijoins share execution, metadata and the costed plan', async () => {
+async function looseScanConnection() {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = await mysql.createConnection(db === undefined
     ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
     : { stream: db.createStream(), user: 'root', password: '' })
+  return { db, conn }
+}
+
+test('integer LooseScan semijoins share execution, metadata and the costed plan', async () => {
+  const { db, conn } = await looseScanConnection()
   const base = 'SELECT name FROM pa WHERE id IN (SELECT pa_id FROM ch)'
   const exists = 'SELECT name FROM pa WHERE EXISTS (SELECT 1 FROM ch WHERE ch.pa_id=pa.id)'
   const loose = 'Nested loop inner join\n    Remove duplicates from input sorted on pa_id\n        Filter\n            Covering index scan on ch using pa_id\n    Single-row index lookup on pa using PRIMARY'
@@ -93,12 +98,60 @@ test('integer LooseScan semijoins share execution, metadata and the costed plan'
   }
 })
 
-test('returning from an integer LooseScan locking stream releases both scans and its writer', async () => {
+test('a covering composite LooseScan filters rows before deduplicating the leading key', async () => {
+  const { db, conn } = await looseScanConnection()
+  const schema = 'loose_composite'
+  const sql = 'SELECT id,label FROM p WHERE id IN (SELECT pid FROM c WHERE qty>2)'
+  const loose = 'Nested loop inner join\n    Remove duplicates from input sorted on by_parent\n        Filter\n            Covering index scan on c using by_parent\n    Single-row index lookup on p using PRIMARY'
+  const options = { sql, rowsAsArray: true }
+  async function read(method: 'query' | 'execute', expected: unknown[][], plan?: string) {
+    const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+    assert.deepEqual(rows, expected)
+    assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
+      ['id', 3, 11, 20483, 0, 63, schema, 'p', 'p', 'id'], ['label', 253, 64, 4097, 0, 224, schema, 'p', 'p', 'label'],
+    ])
+    assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+    const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
+    const actual = planSkeleton(explain[0]?.EXPLAIN)
+    if (plan === undefined) assert.doesNotMatch(actual, /Remove duplicates from input sorted/)
+    else assert.equal(actual, plan)
+  }
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY, label VARCHAR(16) NOT NULL) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO p VALUES(1,'b'),(2,'a'),(3,'c'),(4,'d'),(5,'e')")
+    for (const trailing of ['qty', 'qty DESC']) {
+      await conn.query(`CREATE TABLE c(id INT PRIMARY KEY,pid INT,qty INT,KEY by_parent(pid,${trailing})) STATS_AUTO_RECALC=0`)
+      await conn.query('INSERT INTO c VALUES(1,1,5),(2,1,1),(3,3,6),(4,NULL,2),(5,8,1)')
+      await conn.query('ANALYZE TABLE p,c')
+      await read('query', [[1, 'b'], [3, 'c']], loose)
+      await read('execute', [[1, 'b'], [3, 'c']], loose)
+      await conn.query('UPDATE c SET qty=0 WHERE id=1')
+      await read('execute', [[3, 'c']], loose)
+      await conn.query('UPDATE c SET qty=5 WHERE id=1')
+      await read('execute', [[1, 'b'], [3, 'c']], loose)
+      await conn.query("SET optimizer_switch='loosescan=off'")
+      conn.unprepare(options)
+      await read('query', [[1, 'b'], [3, 'c']])
+      await read('execute', [[1, 'b'], [3, 'c']])
+      conn.unprepare(options)
+      await conn.query("SET optimizer_switch='loosescan=on'")
+      await conn.query('DROP TABLE c')
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
+for (const index of ['KEY(pa_id)', 'KEY by_parent(pa_id,id)']) test(`returning from a LooseScan locking stream releases both scans and its writer: ${index}`, async () => {
   const db = await MySQL.open(':memory:')
   try {
     await db.query('CREATE DATABASE d')
     await db.query('CREATE TABLE d.pa(id INT PRIMARY KEY) STATS_AUTO_RECALC=0')
-    await db.query('CREATE TABLE d.ch(id INT PRIMARY KEY,pa_id INT,KEY(pa_id)) STATS_AUTO_RECALC=0')
+    await db.query(`CREATE TABLE d.ch(id INT PRIMARY KEY,pa_id INT,${index}) STATS_AUTO_RECALC=0`)
     await db.query('INSERT INTO d.pa VALUES(1),(2),(3),(4),(5)')
     await db.query('INSERT INTO d.ch VALUES(1,1),(2,1),(3,3)')
     await db.query('ANALYZE TABLE d.pa,d.ch')
@@ -107,13 +160,24 @@ test('returning from an integer LooseScan locking stream releases both scans and
     const catalog = db.catalog!
     const open = catalog.table.bind(catalog)
     let probes = 0
+    let innerScans = 0
+    let active = 0
     catalog.table = (schema, name, trx) => {
       const table = open(schema, name, trx)
       if (schema === 'd' && name === 'pa') {
         const scan = table.scan.bind(table)
         table.scan = function*(range, transaction, mode) {
           if (range?.from !== undefined && range.to !== undefined) probes++
-          yield* scan(range, transaction, mode)
+          active++
+          try { yield* scan(range, transaction, mode) } finally { active-- }
+        }
+      }
+      if (schema === 'd' && name === 'ch') {
+        const scan = table.indexScan.bind(table)
+        table.indexScan = function*(key, range, transaction, mode) {
+          innerScans++
+          active++
+          try { yield* scan(key, range, transaction, mode) } finally { active-- }
         }
       }
       return table
@@ -121,12 +185,16 @@ test('returning from an integer LooseScan locking stream releases both scans and
     try {
       assert.deepEqual((await db.query(sql))[0], [{ id: 1 }, { id: 3 }])
       assert.equal(probes, 2, 'one primary lookup per distinct non-NULL inner key')
+      assert.equal(innerScans, 1)
+      assert.equal(active, 0)
+      for await (const row of db.stream(`${sql} FOR UPDATE`)) {
+        assert.deepEqual(row, { id: 1 })
+        break
+      }
+      assert.equal(innerScans, 2)
+      assert.equal(active, 0)
     } finally {
       catalog.table = open
-    }
-    for await (const row of db.stream(`${sql} FOR UPDATE`)) {
-      assert.deepEqual(row, { id: 1 })
-      break
     }
     assert.equal(db.openConnections, 1)
     const other = await db.connect()
