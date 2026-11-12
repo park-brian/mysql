@@ -7,7 +7,7 @@
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import type { ColumnDef } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
-import { compareValues, integerRange, type Value } from '@myjs/types'
+import { compareValues, integerBytes, type Value } from '@myjs/types'
 
 /** A constant's value while planning — a literal, or a bound `?` — or `undefined` for anything else. */
 export type Constant = (e: Expression) => Value | undefined
@@ -25,7 +25,8 @@ function constantFor(e: Expression, column: ColumnDef, value: Constant): Value |
   if (v === undefined || v === null) return v
   const text = column.type.collationId !== undefined && column.type.collationId !== CHARSET_BINARY
   if (text) return v.kind === 'string' ? { ...v, collationId: column.type.collationId as number, coercibility: 2 } : undefined
-  if (integerRange(column.type) !== undefined || column.type.type === FIELD_TYPE.NEWDECIMAL || column.type.type === FIELD_TYPE.DECIMAL) return v.kind === 'int' || v.kind === 'decimal' ? v : undefined
+  const { type } = column.type
+  if (integerBytes(type) || type === FIELD_TYPE.NEWDECIMAL || type === FIELD_TYPE.DECIMAL) return v.kind === 'int' || v.kind === 'decimal' ? v : undefined
   return undefined
 }
 

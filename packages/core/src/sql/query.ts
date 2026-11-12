@@ -2794,39 +2794,43 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     const { text, fractional } = numericPrefix(source)
     const value = Number(text)
     const [mantissa, exponent] = text.split(/[eE]/) as [string, string?]
-    const leftTable = tables[0]!.def
-    const decimal = fractional && leftTable
-    const safe = Number.isSafeInteger(decimal ? Math.trunc(value) : value)
-    const terminal = decimal && !exponent && /^[eE][+-]$/.test(source.trimStart().slice(text.length))
+    const safe = Number.isSafeInteger(fractional ? Math.trunc(value) : value)
+    let unresolvedTerminal = fractional && !exponent && /^[eE][+-]$/.test(source.trimStart().slice(text.length))
     const max = Number(MAX_UNSIGNED)
     // Adjacent BIGINT keys can have the same DOUBLE representation.
-    const wideKey = !safe && wide && !terminal && (decimal || !fractional) && Math.abs(value) <= max
-    // A terminal exponent sign uses the unscaled coefficient when it fits.
-    const digits = terminal && mantissa.replace('.', '')
-    let key = digits && Math.abs(Number(digits)) <= max ? BigInt(digits) : undefined
-    let point = pointFor(key)
-    const terminalPoint = point
-    if (!terminalPoint && (safe || wideKey)) {
+    const wideKey = !safe && wide && !unresolvedTerminal && Math.abs(value) <= max
+    let key: bigint | undefined
+    let point: Access | undefined
+    if (unresolvedTerminal) {
+      // A terminal exponent sign uses the unscaled coefficient.
+      const digits = mantissa.replace('.', '')
+      if (Math.abs(Number(digits)) <= max) {
+        key = BigInt(digits)
+        point = pointFor(key)
+        if (point || (!wide && key >= -MAX_UNSIGNED && key <= MAX_UNSIGNED)) unresolvedTerminal = false
+      }
+    }
+    if ((key === undefined || unresolvedTerminal) && (safe || wideKey)) {
       // Rescaling the mantissa shifts its coefficient before half-away rounding.
-      key = decimal && value ? rescale(parseDecimal(mantissa), Number(exponent ?? 0)).v : BigInt(wideKey ? text : value)
+      key = fractional && value ? rescale(parseDecimal(mantissa), Number(exponent ?? 0)).v : BigInt(wideKey ? text : value)
       point = pointFor(key)
     }
     const empty = { ranges: [] }
-    const access = safe && terminal && !terminalPoint ? empty : point
+    const access = safe && unresolvedTerminal ? empty : point
     // An out-of-range key's warning depends on finding the clamped endpoint.
-    const range = !point && leftTable && !(wide && terminal) ? integerRange(column.type) : undefined
-    const endpoint = range && (value < 0 ? range.min : range.max)
+    const range = !point && !(wide && unresolvedTerminal) ? integerRange(column.type) : undefined
+    const endpoint = range && (text[0] === '-' ? range.min : range.max)
     on.lookup = pointFor(endpoint) ?? access
     if (!on.lookup) return false
     if (wide && !range) {
       on.binding = condition
-      on.recheck = point === access && value !== Number(key)
+      on.recheck = !unresolvedTerminal && value !== Number(key)
     }
-    if (decimal || wideKey || !access) on.rounded = {
+    if (fractional || wideKey || !access) on.rounded = {
       condition,
       access: access ?? empty,
-      // A const-left recheck can compare equal to the clamped BIGINT as DOUBLE.
-      constAccess: wide && value === Number(endpoint) ? on.lookup : undefined,
+      // A const-left recheck can compare equal to the clamped endpoint as DOUBLE.
+      constAccess: value === Number(endpoint) ? on.lookup : undefined,
     }
     return true
   }
