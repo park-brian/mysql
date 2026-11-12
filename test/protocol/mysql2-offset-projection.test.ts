@@ -24,8 +24,8 @@ test('ordered OFFSET reads bound the scan, skip SELECT effects and release locki
   try {
     await db.query('CREATE DATABASE d')
     await db.query('USE d')
-    await db.query('CREATE TABLE t(id INT PRIMARY KEY,g INT,KEY kg(g DESC))')
-    await db.query('INSERT INTO t VALUES(1,3),(2,1),(3,1),(4,NULL)')
+    await db.query('CREATE TABLE t(id INT PRIMARY KEY,g INT,payload CHAR(2),KEY kg(g DESC))')
+    await db.query("INSERT INTO t VALUES(1,3,'p1'),(2,1,'p2'),(3,1,'p3'),(4,NULL,'p4')")
     const catalog = db.catalog!
     const open = catalog.table.bind(catalog)
     let read = 0
@@ -111,6 +111,27 @@ test('ordered OFFSET reads bound the scan, skip SELECT effects and release locki
           await other.end()
         }
         assert.equal(db.openConnections, 1)
+      }
+
+      const sql = "SELECT id,payload,CAST(CONCAT(g,'x') AS SIGNED) AS x,LAST_INSERT_ID(LAST_INSERT_ID()+1) AS calls" +
+        ' FROM t FORCE INDEX FOR ORDER BY (kg) ORDER BY g DESC,id LIMIT '
+      for (const [count, offset] of [[1, 0], [1, 1], [0, 1], [1, 8]] as const) {
+        for (const method of ['query', 'execute'] as const) {
+          await db.query('SELECT LAST_INSERT_ID(0)')
+          read = closed = 0
+          indexes.length = 0
+          const [rows] = method === 'query'
+            ? await db.query(sql + count + ' OFFSET ' + offset)
+            : await db.execute(sql + '? OFFSET ?', [count, offset])
+          const id = count !== 0 && offset < g.length ? offset + 1 : undefined
+          const x = id === undefined ? undefined : g[id - 1]
+          assert.deepEqual(rows, id === undefined ? [] : [{ id, payload: 'p' + id, x, calls: 1 }])
+          assert.equal(read, count === 0 ? 0 : Math.min(offset + count, g.length))
+          assert.equal(closed, count === 0 ? 0 : 1)
+          assert.deepEqual(indexes, count === 0 ? [] : ['kg'])
+          assert.deepEqual((await db.query('SHOW WARNINGS'))[0], x == null ? [] : [{ Level: 'Warning', Code: 1292, Message: "Truncated incorrect INTEGER value: '" + x + "x'" }])
+          assert.deepEqual((await db.query('SELECT LAST_INSERT_ID() AS calls'))[0], [{ calls: id === undefined ? 0 : 1 }])
+        }
       }
     } finally {
       catalog.table = open

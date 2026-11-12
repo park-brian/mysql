@@ -245,7 +245,7 @@ function hintApplies(hint: IndexHint, scope: IndexHint['for']): boolean {
   return hint.for === undefined || hint.for === scope
 }
 
-function indexHintEligibility(def: TableDef, alias: string, hints: readonly IndexHint[], env: Env | undefined, validate: boolean, scope: IndexHint['for'], unbounded: boolean): HintEligibility | undefined {
+function indexHintEligibility(def: TableDef, alias: string, hints: readonly IndexHint[], env: Env | undefined, validate: boolean, scope: IndexHint['for']): HintEligibility | undefined {
   const keys = [...def.indexes, ...fulltextOf(def)].map((key) => ({ key, folded: foldIndexName(key.name) }))
   type HintKey = (typeof keys)[number]['key']
   type Mask = { readonly scope: NonNullable<IndexHint['for']>; used?: Set<HintKey>; readonly ignored: Set<HintKey> }
@@ -256,7 +256,7 @@ function indexHintEligibility(def: TableDef, alias: string, hints: readonly Inde
   const force = hints.some((hint) => hint.type === 'FORCE')
   // Any FORCE scope affects the range cost, even when its name mask is inactive.
   const forceScope = visible && force && keys.length === def.indexes.length && scope !== undefined &&
-    (scope !== 'ORDER BY' || unbounded && hints.some((hint) => hint.type === 'FORCE' && hintApplies(hint, scope))) ? scope : undefined
+    (scope !== 'ORDER BY' || hints.some((hint) => hint.type === 'FORCE' && hintApplies(hint, scope))) ? scope : undefined
   const masks = !visible || (force && forceScope === undefined) ? [] : scopes
     .filter((scope) => hints.some((hint) => hintApplies(hint, scope)))
     .map((scope): Mask => ({ scope, ignored: new Set() }))
@@ -374,7 +374,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     const validate = hints.previous !== tableIds
     if (validate || hintScope !== undefined) {
       for (const p of pending) {
-        if (p.indexHints !== undefined) eligibleIndexes = indexHintEligibility(p.def!, p.alias, p.indexHints, ctx.env, validate, hintScope, hints.query.limit === undefined)
+        if (p.indexHints !== undefined) eligibleIndexes = indexHintEligibility(p.def!, p.alias, p.indexHints, ctx.env, validate, hintScope)
       }
     }
     hints.checked = tableIds

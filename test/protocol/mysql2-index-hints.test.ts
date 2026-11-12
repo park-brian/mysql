@@ -294,6 +294,14 @@ test('ORDER BY index hints leave JOIN covering reads eligible', async () => {
         wide(byA), wideFields, 'Index scan on t using by_a')
       await read('SELECT id,a FROM t FORCE INDEX FOR JOIN (by_b) FORCE INDEX FOR ORDER BY (by_a) ORDER BY a',
         byA.map(({ id, a }) => [id, a]), [ID_FIELD, aField], 'Index scan on t using by_a')
+      await read('SELECT id,payload FROM t FORCE INDEX FOR ORDER BY (by_a) ORDER BY a,id LIMIT 4 OFFSET 7',
+        wide(byA.slice(7, 11)), wideFields, 'Limit/Offset\n    Index scan on t using by_a')
+      await read('SELECT id,payload FROM t FORCE INDEX (by_ab) ORDER BY a DESC,b DESC,id DESC LIMIT 4',
+        wide(byAb.slice().reverse().slice(0, 4)), wideFields, 'Limit\n    Index scan on t using by_ab')
+      await read('SELECT id,payload FROM t FORCE INDEX FOR ORDER BY (by_a) ORDER BY a,id LIMIT 0 OFFSET 7',
+        [], wideFields, 'Limit/Offset\n    Index scan on t using by_a')
+      await read('SELECT id,payload FROM t FORCE INDEX FOR ORDER BY (by_a) ORDER BY a,id DESC LIMIT 4',
+        wide(byA.slice(0, 8).reverse().slice(0, 4)), wideFields, 'Limit\n    Sort\n        Table scan on t')
     }
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)

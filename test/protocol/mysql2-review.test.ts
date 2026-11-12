@@ -190,7 +190,7 @@ test('review gap: multiple statements run, when the switch and the client both a
   }
 })
 
-test('review gap: end() rolls back what live connections hold, and a closed port frees the writer', async () => {
+test('review gap: end() rolls back live transactions and closing a port ends its connection', { timeout: 2000 }, async (t) => {
   const { db, conn, connect } = await open()
   await conn.query('CREATE TABLE t (id INT PRIMARY KEY)')
   await conn.end()
@@ -203,10 +203,23 @@ test('review gap: end() rolls back what live connections hold, and a closed port
 
   // A port: its connection ends when the port is closed.
   const db2 = await MySQL.open(':memory:')
+  const connection = db2.createConnection()
+  t.mock.method(db2, 'createConnection', () => connection)
+  const closed = new Promise<void>((resolve) => {
+    const close = connection.close.bind(connection)
+    t.mock.method(connection, 'close', () => {
+      close()
+      resolve()
+    })
+  })
   const port = db2.createPort()
-  assert.equal(db2.openConnections, 1)
-  port.close()
-  await new Promise((r) => setTimeout(r, 10))
-  assert.equal(db2.openConnections, 0, "the port's connection ended when the port closed")
-  await db2.end()
+  try {
+    assert.equal(db2.openConnections, 1)
+    port.close()
+    await closed
+    assert.equal(db2.openConnections, 0, "the port's connection ended when the port closed")
+  } finally {
+    port.close()
+    await db2.end()
+  }
 })
