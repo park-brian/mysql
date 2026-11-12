@@ -98,6 +98,10 @@ unordered `LIMIT` and `OFFSET`. With FirstMatch disabled, the existing cost
 search can choose it under explicit `ORDER BY` and a limit. Ordered FirstMatch
 competition, residual predicate costs and competing keys remain open.
 
+**M5.47 left hash antijoin.** A buffered left join can use the antijoin for
+a direct `WHERE` null test on a declared `NOT NULL` right field. Indexed and
+nested-loop variants remain open.
+
 **0.3 is staged**, with exact workspace versions and installed-package smoke
 checks. Publication still requires claiming the npm scope/name and publishing
 leaves first. M5.53's stabilization preserves the wire API and native format.
@@ -1885,6 +1889,22 @@ The older 672-response direction audit gains 24 exact matches and retains
 every previously matching fact. Ordered FirstMatch competition, some
 residual-filter costs and multiple leading-key candidates remain open.
 [MySQL sort costing](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_planner.cc#L2507)
+
+**M5.47 buffered left hash antijoin, verified.** A two-table buffered left
+join with an equality across its inputs can use the antijoin when the upper
+filter tests a declared `NOT NULL` right field with `IS NULL` or `<=> NULL`.
+It emits the NULL-extended outer row only for an unmatched probe, preserving
+ON evaluation order, the upper filter and column metadata. The same- and
+mixed-collation MySQL 8.4.11 audits improve from 432 to 720 of 864 and from
+216 to 360 of 864 complete matches. All 66,472 previously matching facts are
+preserved. Both protocols cover the NULL-test spellings, writes, nullable
+fields, `OR` and optimizer switches. The relational corpus gains one plan,
+reaching 2,128 of 2,248, with the 2,118 floor unchanged. Join binding shares
+inner slot layout, predicate placement classifies each condition once, and
+hash keys, scan filters and reversed comparisons share their existing rules.
+Indexed and nested-loop left antijoins and broader predicate shapes remain
+open.
+[MySQL left antijoin eligibility](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_optimizer.cc#L8478)
 
 **M5.49 legacy index hint admission, verified.** Simple outer SELECTs over
 physical tables, including temporary tables, check index names after opening
@@ -11923,11 +11943,11 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,355 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 334,266 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
+| Core bundle, gzipped | 334,342 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 334,250 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |
-| Plans agreeing with a real MySQL 8.4 (`EXPLAIN FORMAT=TREE`, costs stripped) | 2,127 / 2,248 relational SELECTs observed, with a required floor of 2,118 skeletons in `relational-vectors.test.ts`. A plan that agrees also has its rows compared in order. `npm run plans` lists the remaining differences, including join order, `ref` access, semijoins and constant tables | every corpus SELECT |
+| Plans agreeing with a real MySQL 8.4 (`EXPLAIN FORMAT=TREE`, costs stripped) | 2,128 / 2,248 relational SELECTs observed, with a required floor of 2,118 skeletons in `relational-vectors.test.ts`. A plan that agrees also has its rows compared in order. `npm run plans` lists the remaining differences, including join order, `ref` access, semijoins and constant tables | every corpus SELECT |
 | Cold start, browser | — | published, tracked |
 
 ---

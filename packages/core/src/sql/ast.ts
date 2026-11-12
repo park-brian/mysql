@@ -1,5 +1,14 @@
 import { LITERAL, NODE, QUERY, nativeFunctionWord, type CallNode, type Expression, type LiteralNode, type QueryBody, type QueryExpression } from '@myjs/parser'
 
+/** A comparison written with its two operands swapped. */
+export const REVERSE_COMPARISON: Readonly<Record<string, string>> = { '<': '>', '<=': '>=', '>': '<', '>=': '<=', '=': '=', '<=>': '<=>', '<>': '<>', '!=': '!=' }
+
+/** A comparison whose direction changes when its operands are swapped. */
+export function isOrderedComparison(op: string): boolean {
+  const reversed = REVERSE_COMPARISON[op]
+  return typeof reversed === 'string' && reversed !== op
+}
+
 /** Lookup eligibility, not existence; raw names and collision roles stay on the AST. */
 export function nativeCallName(e: Pick<CallNode, 'name' | 'stored' | 'schema'>): string {
   return e.stored || e.schema !== undefined ? '' : nativeFunctionWord(e.name)

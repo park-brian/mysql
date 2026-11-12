@@ -58,7 +58,7 @@ import { intersect, normalize, rangeOf, type Constant, type Interval, type Range
 import type { TableStatistics } from './stats.ts'
 import { forwardKeyColumn } from './indexes.ts'
 import { columnIndex } from './scope.ts'
-import { signedOperand } from './ast.ts'
+import { REVERSE_COMPARISON, signedOperand } from './ast.ts'
 
 /** Whether a named optimizer transformation is enabled in this statement's session. */
 export function optimizerEnabled(env: Env | undefined, name: string): boolean {
@@ -99,7 +99,6 @@ interface Condition {
   readonly constants: readonly Expression[]
 }
 
-const FLIP: Readonly<Record<string, Op>> = { '=': '=', '<=>': '<=>', '<': '>', '<=': '>=', '>': '<', '>=': '<=' }
 
 /**
  * A column of an enclosing query, compiled, when `e` is one: a constant for
@@ -163,7 +162,7 @@ function conditionOf(e: Expression, def: TableDef, alias: string, outer: OuterCo
     const column = tableColumn(e.left, def, alias)
     if (column !== undefined && equalBounds(e, env, column)) return { column: column.name, op: '=', constants: [e.right] }
   }
-  const op = FLIP[e.op === '<>' || e.op === '!=' ? '' : e.op]
+  const op = e.op === '<>' || e.op === '!=' ? undefined : REVERSE_COMPARISON[e.op] as Op | undefined
   if (op === undefined) return undefined
   const left = tableColumn(e.left, def, alias)?.name
   if (left !== undefined && constant(e.right)) return { column: left, op: e.op as Op, constants: [e.right] }

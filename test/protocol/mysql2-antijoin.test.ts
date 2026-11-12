@@ -84,6 +84,63 @@ test('integer antijoins cost their strategy and rebuild keys for each execution'
   }
 })
 
+test('a right-side NOT NULL field can select a buffered antijoin', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection(db === undefined
+    ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+    : { stream: db.createStream(), user: 'root', password: '' })
+  const schema = 'left_hash_antijoin'
+  const select = 'SELECT l.id,l.t,r.id,r.qty FROM l LEFT JOIN r ON l.t=r.t'
+  const order = ' ORDER BY l.id,r.id'
+  const unmatched = [[3, 'three', null, null], [4, null, null, null]]
+  const hash = (join: string, filter = false) => `Sort\n    Stream results\n        Filter\n            ${join}\n                Table scan on l\n                Hash\n${filter ? '                    Filter\n    ' : ''}                    Table scan on r`
+  async function read(condition: string, expected: unknown[][], plan: string | undefined, nullable = false) {
+    const sql = select + condition + order
+    for (const method of ['query', 'execute'] as const) {
+      const options = { sql, rowsAsArray: true }
+      const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+      assert.deepEqual(rows, expected, `${method} ${sql}`)
+      assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
+        ['id', 3, 11, 4097, 0, 63, schema, 'l', 'l', 'id'], ['t', 253, 64, 128, 0, 224, schema, 'l', 'l', 't'],
+        ['id', 3, 11, 4096, 0, 63, schema, 'r', 'r', 'id'], ['qty', 3, 11, nullable ? 0 : 4096, 0, 63, schema, 'r', 'r', 'qty'],
+      ])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
+      const actual = planSkeleton(explain[0]?.EXPLAIN)
+      if (plan === undefined) assert.doesNotMatch(actual, /Hash antijoin/)
+      else assert.equal(actual, plan, `${method} ${sql}`)
+    }
+  }
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE l(id INT PRIMARY KEY,t VARCHAR(16) COLLATE utf8mb4_bin) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE r(id INT PRIMARY KEY,t VARCHAR(16),qty INT NOT NULL) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO l VALUES (1,'one'),(2,'two'),(3,'three'),(4,NULL),(5,'one')")
+    await conn.query("INSERT INTO r VALUES (1,'one',4),(2,'one',1),(3,'two',6),(4,NULL,2),(5,'absent',1)")
+    await conn.query('ANALYZE TABLE l,r')
+    await read(' WHERE r.qty IS NULL', unmatched, hash('Hash antijoin'))
+    await read(' WHERE NULL <=> r.qty', unmatched, hash('Hash antijoin'))
+    await read(' AND r.qty IS NULL WHERE r.qty <=> NULL', [[1, 'one', null, null], [2, 'two', null, null], ...unmatched, [5, 'one', null, null]], hash('Hash antijoin', true))
+    await read(' WHERE r.qty IS NULL OR l.id=1', [[1, 'one', 1, 4], [1, 'one', 2, 1], ...unmatched], hash('Left hash join'))
+    await conn.query("SET optimizer_switch='semijoin=off'")
+    await read(' WHERE r.qty IS NULL', unmatched, hash('Hash antijoin'))
+    await conn.query("SET optimizer_switch='block_nested_loop=off'")
+    await read(' WHERE r.qty IS NULL', unmatched, undefined)
+    await conn.query("SET optimizer_switch='default'")
+    await conn.query('DELETE FROM r WHERE id=3')
+    await read(' WHERE r.qty IS NULL', [[2, 'two', null, null], ...unmatched], hash('Hash antijoin'))
+    await conn.query('ALTER TABLE r MODIFY qty INT NULL')
+    await conn.query('UPDATE r SET qty=NULL WHERE id=2')
+    await read(' WHERE r.qty IS NULL', [[1, 'one', 2, null], [2, 'two', null, null], ...unmatched, [5, 'one', 2, null]], hash('Left hash join'), true)
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
 test('returning from a hash antijoin stream releases its writer and execution state', async () => {
   const db = await MySQL.open(':memory:')
   try {

@@ -8,6 +8,7 @@ import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import type { ColumnDef } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
 import { compareValues, integerBytes, type Value } from '@myjs/types'
+import { REVERSE_COMPARISON } from './ast.ts'
 
 /** A constant's value while planning — a literal, or a bound `?` — or `undefined` for anything else. */
 export type Constant = (e: Expression) => Value | undefined
@@ -72,15 +73,14 @@ export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, col
     out.push(lo === undefined ? ALL_VALUES : { lo })
     return out
   }
-  const FLIP: Readonly<Record<string, string>> = { '<': '>', '<=': '>=', '>': '<', '>=': '<=', '=': '=', '<=>': '<=>', '<>': '<>', '!=': '!=' }
   let op = e.op
   let other: Expression
   if (isColumn(e.left)) other = e.right
   else if (isColumn(e.right)) {
     other = e.left
-    op = FLIP[op] ?? op
+    op = REVERSE_COMPARISON[op] ?? op
   } else return 'all'
-  if (!(op in FLIP)) return 'all'
+  if (!(op in REVERSE_COMPARISON)) return 'all'
   const v = constantFor(other, column, value)
   if (v === undefined) return 'all'
   if (v === null) return op === '<=>' && column.nullable ? ['null'] : []

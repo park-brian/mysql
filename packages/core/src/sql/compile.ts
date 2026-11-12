@@ -2062,6 +2062,11 @@ interface SortedItems {
 }
 
 const exactNumber = (kind: string): boolean => kind === 'int' || kind === 'decimal'
+
+/** Equal values must have equal keys for joins and quantified comparisons. */
+export function compatibleEqualityKeys(a: ResultType, b: ResultType): boolean {
+  return (exactNumber(a.kind) && exactNumber(b.kind)) || (a.kind === 'string' && b.kind === 'string' && a.collationId === b.collationId)
+}
 const numericKind = (kind: string): boolean => exactNumber(kind) || kind === 'double'
 const exactOrNull = (c: Compiled): boolean => exactNumber(c.type.kind) || c.type.kind === 'null'
 
@@ -3011,7 +3016,7 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
   const keyed =
     as.length === 1 &&
     (all ? op === '<>' : op === '=') &&
-    ((exactNumber(a0.type.kind) && exactNumber(sub.kind)) || (a0.type.kind === 'string' && sub.kind === 'string' && a0.type.collationId === sub.collationId))
+    compatibleEqualityKeys(a0.type, sub)
   const type = boolType(true)
   if (!keyed || plan.correlated) return { eval: compareAll, type }
   const setKey = {}

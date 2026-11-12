@@ -33,7 +33,7 @@ import { equalBounds, pointAccess, splitAnd } from './plan.ts'
 import { accessRows } from './operators.ts'
 import { intersect, rangeOf, type RangeSet } from './ranges.ts'
 import { safeResolve } from './scope.ts'
-import { rewriteExpression } from './ast.ts'
+import { REVERSE_COMPARISON, isOrderedComparison, rewriteExpression } from './ast.ts'
 
 /** A schema key that identifies a row even when comparisons can see NULL. */
 export function uniqueKey(def: TableDef, index: IndexDef): boolean {
@@ -202,7 +202,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
       if (col !== undefined && !col.column.nullable) return true
     }
     if (c.kind !== NODE.BINARY) return false
-    if (['=', '<', '<=', '>', '>=', '<>', '!='].includes(c.op)) {
+    if (isComparison(c.op)) {
       const l = slot(c.left)
       const r = slot(c.right)
       const i = l ?? r
@@ -216,13 +216,12 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
       const i = l ?? slot(c.right)
       if (i !== undefined && neverEqual(columnAt(i)?.column, l !== undefined ? c.right : c.left)) return true
     }
-    if (['<', '<=', '>', '>='].includes(c.op)) {
+    if (isOrderedComparison(c.op)) {
       const l = slot(c.left)
       const r = slot(c.right)
       // With the column on the left; `5 < c` is `c > 5`.
-      const flip: Record<string, string> = { '<': '>', '<=': '>=', '>': '<', '>=': '<=' }
       const at = l ?? r
-      const op = l !== undefined ? c.op : (flip[c.op] as string)
+      const op = l !== undefined ? c.op : REVERSE_COMPARISON[c.op]!
       if (at !== undefined && pastRange(columnAt(at)?.column, op, l !== undefined ? c.right : c.left)) return true
     }
     if (c.op === 'BETWEEN') {

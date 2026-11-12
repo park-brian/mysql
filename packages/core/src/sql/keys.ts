@@ -11,7 +11,12 @@
 // each row against every earlier one; a key makes it one lookup.
 import { CHARSET_BINARY, hex } from '@myjs/bytes'
 import { encodeCollation } from '@myjs/charsets'
-import { equalityKey, jsonKey, renderDecimal, toDecimal, toText, type Value } from '@myjs/types'
+import { equalityKey, jsonKey, renderDecimal, toText, type Value } from '@myjs/types'
+
+/** Keep the integer part and remove only padding on a fractional part. */
+function trimFraction(text: string): string {
+  return text.includes('.') ? text.replace(/\.?0+$/, '') : text
+}
 
 /** The key of one value. */
 export function valueKey(v: Value): string {
@@ -24,22 +29,16 @@ export function valueKey(v: Value): string {
     case 'bytes':
       return `b${hex(v.v)}`
     case 'int':
-    case 'decimal': {
-      // `1.50` and `1.5` and `1` with `1.0` are one value.
-      const text = renderDecimal(toDecimal(v))
-      return `n${text.includes('.') ? text.replace(/0+$/, '').replace(/\.$/, '') : text}`.replace(/^n-0$/, 'n0')
-    }
+      return `n${v.v}`
+    case 'decimal':
+      return `n${trimFraction(renderDecimal(v))}`
     case 'double':
-      return `d${Object.is(v.v, -0) ? 0 : v.v}`
+      return `d${v.v}`
     case 'json':
       return `j${jsonKey(v.v)}`
     case 'datetime':
     case 'time':
-    {
-      // `10:00:00.500` and `10:00:00.5` are one value: only the fraction is normalised.
-      const text = toText(v)
-      return `t${text.includes('.') ? text.replace(/0+$/, '').replace(/\.$/, '') : text}`
-    }
+      return `t${trimFraction(toText(v))}`
   }
 }
 
