@@ -676,7 +676,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   const outerLoop = (semi?.innerFirst === false || anti?.kind === 'materialized' || anti?.kind === 'correlated') && source !== undefined && sortBy === source.alias
   // Reconsider PRIMARY for ordinary scans and the modeled outer-first loop.
   // A proved UNIQUE projection can reconsider PRIMARY as an ordinary scan does.
-  const ordered = source !== undefined && !deduplicated && !windowed && (anti === undefined || anti.kind !== 'hash') && match === undefined && keys.length > 0 && read!.ranges === undefined ? orderingIndex(source.def, source.alias, order, items, lookup, read!.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index'), from?.eligibleIndexes?.['ORDER BY'], reads?.get(source.alias)) : undefined
+  const ordered = source !== undefined && !deduplicated && !windowed && (anti === undefined || anti.kind !== 'hash') && match === undefined && keys.length > 0 && read!.ranges === undefined ? orderingIndex(source.def, source.alias, order, items, lookup, read!.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index'), from?.eligibleIndexes, reads?.get(source.alias)) : undefined
   if (ordered !== undefined) from!.readInOrder(ordered.index, false, ordered.reverse, source!.alias)
   // Only whole scans can be replaced above, so this selected range is final.
   // A pinned complete PRIMARY point binds ORDER but needs none of its readers.
@@ -1401,7 +1401,7 @@ function emptySubquery(run: Run, query: QueryExpression): boolean {
  * the clustered key it carries. 8.4.11 reads the index in that order and sorts nothing ("Index
  * scan on t using PRIMARY", "Covering index scan on t using name").
  */
-function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary: boolean, eligible?: readonly IndexDef[], columns: ReadonlySet<string> | 'all' = 'all'): { readonly index: string; readonly reverse: boolean } | undefined {
+function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary: boolean, eligibility?: FromPlan['eligibleIndexes'], columns: ReadonlySet<string> | 'all' = 'all'): { readonly index: string; readonly reverse: boolean } | undefined {
   const clustered = clusteredIndex(def)
   const index = readBy === undefined ? clustered : def.indexes.find((i) => i.name === readBy)
   if (index === undefined || clustered === undefined) return undefined
@@ -1419,10 +1419,12 @@ function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[]
   }
   // A clustered scan covers every row field. For a whole-table scan,
   // MySQL prefers it over a scan plus sort when prefer_ordering_index is on.
+  const eligible = eligibility?.['ORDER BY']
+  // If the chosen covering scan cannot order, reconsider only JOIN-eligible covering keys.
   const coveringOnly = eligible !== undefined && readBy !== undefined && !eligible.includes(index)
   for (const candidate of primary ? [index, clustered] : [index]) {
     if (eligible && !eligible.includes(candidate)) continue
-    if (coveringOnly && !holdsRead(def, candidate, columns)) continue
+    if (coveringOnly && (eligibility?.JOIN?.includes(candidate) === false || !holdsRead(def, candidate, columns))) continue
     const parts = indexParts(def, candidate)
     const reverse = keys[0]!.desc !== (candidate.parts[0]?.descending === true)
     // Every requested key part must agree on the scan direction, including

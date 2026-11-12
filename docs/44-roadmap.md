@@ -1911,7 +1911,14 @@ IGNORE share one eligibility list for the scan and the grouping strategy.
 An empty mask feeds the table scan into temporary aggregation, with groups
 in first-seen order and copied field metadata. The 312-response MySQL
 8.4.11 audit improves from 80 to 214 complete matches, with every previously
-matching fact preserved. Mixed JOIN and ORDER BY hints are next.
+matching fact preserved.
+
+**M5.49 mixed JOIN and ORDER BY hints on whole reads, verified.** The scan
+and ordering strategy apply USE, empty USE and IGNORE independently. When
+ORDER BY excludes the covering scan, reconsideration also respects JOIN
+coverage. Three MySQL 8.4.11 audits improve from 522 to 1,048 complete
+matches across 1,280 responses, with no loss of matching facts. Mixed
+JOIN and GROUP BY hints are next.
 
 **M5.10 written utf8 failure histories, verified:** the shared
 expression helper now retains warning 3719 for the written alias at introducers,
@@ -8247,6 +8254,26 @@ mixed scopes and FORCE require separate proofs. Parser, core and facade
 are 45,611, 334,247 and 334,151 B gzipped within the existing caps.
 M5.49 remains partial.
 
+### Verified mixed JOIN and ORDER BY hints on whole reads (M5.49)
+
+Simple single-table ORDER BY without WHERE uses distinct JOIN and ORDER
+BY eligibility lists. Unscoped clauses contribute to both lists.
+Empty USE resets only the applicable lists in native reverse traversal,
+and IGNORE removes keys from the resulting lists. A covering JOIN read
+can still feed a sort when ORDER BY excludes its index. An eligible
+PRIMARY can supply order from an initial table scan, and its covering
+label reflects the JOIN mask. Unused GROUP BY clauses still resolve key
+names in diagnostic order.
+
+Both protocols cover these distinctions with rows, field metadata,
+warnings and EXPLAIN. The main audit improves from 234 to 574 complete
+matches of 704, all 128 PRIMARY responses now agree, and a 448-response
+layout audit improves from 210 to 346. All 1,774 earlier JOIN, ORDER BY
+and GROUP BY controls reproduce exactly. Ranges, mixed grouping,
+invisible indexes, FORCE and costed alternate secondary ordering remain
+open. Parser, core and facade are 45,611, 334,278 and 334,186 B gzipped
+within the existing caps. M5.49 remains partial.
+
 ### Verified ordered-read projection boundary (M5.49)
 
 The pinned 8.4.11 probe covers 392 query/execute outcomes: ordinary PRIMARY and
@@ -11519,7 +11546,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,247 B (326.4 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 334,151 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
+| Core bundle, gzipped | 334,278 B (326.4 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 334,186 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

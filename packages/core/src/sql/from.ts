@@ -237,21 +237,27 @@ function foldIndexName(name: string): string {
   return name.replace(/[A-Z]/g, (letter) => letter.toLowerCase())
 }
 
-function indexHintKeys(def: TableDef, alias: string, hints: readonly IndexHint[], env: Env | undefined, validate: boolean, scope: IndexHint['for']): readonly IndexDef[] | undefined {
+function indexHintEligibility(def: TableDef, alias: string, hints: readonly IndexHint[], env: Env | undefined, validate: boolean, scope: IndexHint['for']): FromPlan['eligibleIndexes'] {
   const keys = [...def.indexes, ...fulltextOf(def)].map((key) => ({ key, folded: foldIndexName(key.name) }))
-  const apply = scope !== undefined && keys.every(({ key }) => !key.invisible) &&
-    hints.every((hint) => hint.type !== 'FORCE' && (hint.for ?? 'JOIN') === scope)
-  if (!apply && !validate) return undefined
   type HintKey = (typeof keys)[number]['key']
-  const ignored = apply ? new Set<HintKey>() : undefined
-  let used: Set<HintKey> | undefined
+  // Ordered reads support independent masks; grouped reads still require one scope or all unscoped hints.
+  const scopes = scope === 'ORDER BY' || (scope === 'GROUP BY' && hints.every((hint) => hint.for === undefined))
+    ? ['JOIN', scope] as const
+    : scope && hints.every((hint) => (hint.for ?? 'JOIN') === scope) ? [scope] : []
+  const masks = keys.some(({ key }) => key.invisible) || hints.some((hint) => hint.type === 'FORCE') ? [] : scopes
+    .filter((scope) => hints.some((hint) => hint.for === undefined || hint.for === scope))
+    .map((scope) => ({ scope, used: undefined as Set<HintKey> | undefined, ignored: new Set<HintKey>() }))
+  if (masks.length === 0 && !validate) return undefined
   let use = false
   let force = false
   // MySQL visits the parsed hint list in reverse, including names in one clause.
   for (const hint of hints.slice().reverse()) {
     const useHint = hint.type === 'USE'
-    if (apply && useHint && (used === undefined || hint.indexes.length === 0)) used = new Set()
-    const selected = useHint ? used : ignored
+    const selected = masks.filter((mask) => hint.for === undefined || hint.for === mask.scope).map((mask) => {
+      if (!useHint) return mask.ignored
+      if (mask.used === undefined || hint.indexes.length === 0) mask.used = new Set()
+      return mask.used
+    })
     for (const name of hint.indexes.slice().reverse()) {
       const folded = foldIndexName(name)
       const prefixes = keys.filter((candidate) => candidate.folded.startsWith(folded))
@@ -259,13 +265,16 @@ function indexHintKeys(def: TableDef, alias: string, hints: readonly IndexHint[]
       if (validate && (key === undefined || (key.invisible && !optimizerEnabled(env, 'use_invisible_indexes')))) {
         throw sqlError('ER_KEY_DOES_NOT_EXITS', `Key '${name}' doesn't exist in table '${alias}'`)
       }
-      if (key !== undefined) selected?.add(key)
+      if (key === undefined) continue
+      for (const set of selected) set.add(key)
     }
     use ||= useHint
     force ||= hint.type === 'FORCE'
   }
   if (validate && use && force) throw wrongUsage('USE INDEX', 'FORCE INDEX')
-  return ignored && def.indexes.filter((key) => (used === undefined || used.has(key)) && !ignored.has(key))
+  if (masks.length === 0) return undefined
+  return Object.fromEntries(masks.map(({ scope, used, ignored }) => [scope,
+    def.indexes.filter((key) => (used === undefined || used.has(key)) && !ignored.has(key))]))
 }
 
 /** The written FROM, as a plan: its scope, and how to read it. */
@@ -347,23 +356,18 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   const width = offset
 
   // Open all direct sources and check aliases before hints, then bind ON and projections.
-  let hintedIndexes: readonly IndexDef[] | undefined
-  // An unscoped list applies to the read and the requested ordering or grouping.
-  const shareIndexes = hintScope && hintScope !== 'JOIN' && pending[0]?.indexHints?.every((hint) => hint.for === undefined)
+  let eligibleIndexes: FromPlan['eligibleIndexes']
   if (hints && pending.some((p) => p.indexHints) && pending.every((p) => p.def) &&
       !someNode(hints.query, (node) => (node !== hints.query && (node as QueryExpression).kind === QUERY.QUERY) || undefined)) {
     const tableIds = pending.map((p) => p.def!.id).join(',')
     const validate = hints.previous !== tableIds
     if (validate || hintScope !== undefined) {
       for (const p of pending) {
-        if (p.indexHints !== undefined) hintedIndexes = indexHintKeys(p.def!, p.alias, p.indexHints, ctx.env, validate, shareIndexes ? 'JOIN' : hintScope)
+        if (p.indexHints !== undefined) eligibleIndexes = indexHintEligibility(p.def!, p.alias, p.indexHints, ctx.env, validate, hintScope)
       }
     }
     hints.checked = tableIds
   }
-  const eligibleIndexes: FromPlan['eligibleIndexes'] = hintedIndexes && (shareIndexes
-    ? { JOIN: hintedIndexes, [hintScope!]: hintedIndexes }
-    : { [hintScope!]: hintedIndexes })
   const joinIndexes = eligibleIndexes?.JOIN
 
   // Second pass: the joins — USING and NATURAL merge columns, which changes
@@ -758,7 +762,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       sort = alias === undefined ? undefined : { alias, limit }
     },
     readInOrder(index, force, reverse = false, alias) {
-      const covering = single && eligibleIndexes?.[force ? 'GROUP BY' : 'ORDER BY']?.some(
+      const indexes = joinIndexes ?? eligibleIndexes?.[force ? 'GROUP BY' : 'ORDER BY']
+      const covering = single && indexes?.some(
         (key) => key.name === index && holdsRead(single.def, key, settings.read.get(single.alias) ?? 'all'),
       )
       settings.ordered = { index, force, reverse, alias, covering }

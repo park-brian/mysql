@@ -50,6 +50,7 @@ test('legacy index hints resolve on physical SELECT sources before column bindin
     [select + ' USE INDEX (`ix_a `)', missing('ix_a ')],
     [`${select} USE INDEX (missing, later)`, missing('later')],
     [`${select} USE INDEX (missing) IGNORE INDEX (later)`, missing('later')],
+    [`${select} USE INDEX FOR GROUP BY (missing) IGNORE INDEX FOR ORDER BY (later) ORDER BY x.id`, missing('later')],
     [`${select} FORCE INDEX (missing) USE INDEX (ix_a)`, missing('missing')],
     [`${select} USE INDEX FOR JOIN () FORCE INDEX FOR GROUP BY (ix_a)`, conflict],
     [`${select} USE INDEX (ix_a) FORCE INDEX (ix_ab)`, conflict],
@@ -324,6 +325,50 @@ test('unscoped index hints govern both the scan and ORDER BY', async () => {
       byB.slice(4, 10).map(({ id, b }) => [id, b]), [ID_FIELD, bField], 'Limit/Offset\n    Covering index scan on t using by_b')
     await conn.query("SET optimizer_switch='prefer_ordering_index=off'")
     await read('SELECT id,a FROM t IGNORE INDEX (by_a,by_ab) ORDER BY a,id LIMIT 6', first, [ID_FIELD, aField], sortedTable)
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
+test('mixed JOIN and ORDER BY hints retain independent eligibility', async () => {
+  const { db, conn } = await indexHintConnection()
+  const schema = 'index_hint_mixed_order'
+  const read = checkIndexRead.bind(undefined, conn)
+  const fields = [ID_FIELD, ['a', 3, 11, 20489, 0, 63]]
+  const byA = DATA.slice().sort((left, right) => left.a - right.a || left.id - right.id)
+  const first = byA.slice(0, 6).map(({ id, a }) => [id, a])
+  const ids = DATA.slice(-6).reverse().map(({ id }) => [id])
+  const coverA = 'Covering index scan on t using by_a'
+  const sortedA = `Limit\n    Sort\n        ${coverA}`
+  const sortedAb = 'Limit\n    Sort\n        Covering index scan on t using by_ab'
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await createHintTable(conn)
+    for (const [hint, plan] of [
+      ['USE INDEX (by_a) IGNORE INDEX FOR ORDER BY (by_a)', sortedA],
+      ['USE INDEX FOR ORDER BY () USE INDEX FOR JOIN (by_a)', sortedA],
+      ['USE INDEX (by_a) USE INDEX FOR ORDER BY (by_b)', `Limit\n    ${coverA}`],
+      ['IGNORE INDEX FOR JOIN (by_a) USE INDEX FOR ORDER BY (by_a)', sortedAb],
+      ['IGNORE INDEX (by_a) USE INDEX FOR ORDER BY (by_a)', sortedAb],
+      ['USE INDEX (by_a) USE INDEX FOR GROUP BY (by_b)', `Limit\n    ${coverA}`],
+      ['USE INDEX FOR GROUP BY (by_b) IGNORE INDEX FOR ORDER BY (by_a)', sortedA],
+    ] as const) {
+      await read(`SELECT id,a FROM t ${hint} ORDER BY 2,1 LIMIT 6`, first, fields, plan)
+    }
+    await read('SELECT id,a FROM t USE INDEX (by_a) IGNORE INDEX FOR JOIN (by_a) ORDER BY a,id',
+      byA.map(({ id, a }) => [id, a]), fields, 'Sort\n    Table scan on t')
+    await read('SELECT id FROM t USE INDEX FOR JOIN (by_a) USE INDEX FOR ORDER BY (PRIMARY) ORDER BY id DESC LIMIT 6',
+      ids, [ID_FIELD], sortedA)
+    await read('SELECT id FROM t USE INDEX FOR JOIN () USE INDEX FOR ORDER BY (PRIMARY) ORDER BY id DESC LIMIT 6',
+      ids, [ID_FIELD], 'Limit\n    Index scan on t using PRIMARY')
+    await read('SELECT id FROM t USE INDEX FOR JOIN (PRIMARY) USE INDEX FOR ORDER BY (PRIMARY) ORDER BY id DESC LIMIT 6',
+      ids, [ID_FIELD], 'Limit\n    Covering index scan on t using PRIMARY')
+    await conn.query("SET optimizer_switch='prefer_ordering_index=off'")
+    await read('SELECT id,a FROM t IGNORE INDEX FOR JOIN (by_a) USE INDEX FOR ORDER BY (by_a) ORDER BY a,id LIMIT 6',
+      first, fields, sortedAb)
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()
