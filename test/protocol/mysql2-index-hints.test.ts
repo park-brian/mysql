@@ -138,7 +138,7 @@ test('legacy index hints resolve on physical SELECT sources before column bindin
   }
 })
 
-test('plain SELECT reads honor unscoped and FOR JOIN USE and IGNORE INDEX', async () => {
+test('plain SELECT reads honor USE, IGNORE and FORCE INDEX', async () => {
   const { db, conn } = await indexHintConnection()
   const schema = 'index_hint_access'
   const data = DATA
@@ -148,6 +148,7 @@ test('plain SELECT reads honor unscoped and FOR JOIN USE and IGNORE INDEX', asyn
   const ranged = data.filter(({ a }) => a >= 2 && a < 4)
   const idField = ID_FIELD
   const wideFields = [idField, ['payload', 253, 80, 0, 0, 224]]
+  const byA = data.slice().sort((left, right) => left.a - right.a)
   const byB = ids(data.slice().sort((left, right) => left.b - right.b))
   const scan = 'Table scan on t'
   const filtered = `Filter\n    ${scan}`
@@ -176,10 +177,28 @@ test('plain SELECT reads honor unscoped and FOR JOIN USE and IGNORE INDEX', asyn
       [[7, 'payload6']], wideFields, filtered)
     await read("SELECT id FROM t USE INDEX FOR JOIN () IGNORE INDEX FOR ORDER BY (by_a) WHERE id='7x'",
       [[7]], [idField], filtered, [['Warning', 1292, "Truncated incorrect DOUBLE value: '7x'"]])
+    await read('SELECT id FROM t FORCE INDEX (by_b)', byB, [idField], 'Covering index scan on t using by_b')
+    await read('SELECT id,payload FROM t FORCE INDEX FOR JOIN (by_a) WHERE id=7', [[7, 'payload6']], wideFields, filtered)
+    await read('SELECT id,payload FROM t FORCE INDEX FOR ORDER BY (by_b) WHERE id=7',
+      [[7, 'payload6']], wideFields, 'Rows fetched before execution')
+    for (const hint of ['FORCE INDEX FOR JOIN (by_a)', 'FORCE INDEX FOR ORDER BY (by_b)', 'FORCE INDEX FOR GROUP BY (by_b)']) {
+      await read(`SELECT id,payload FROM t ${hint} WHERE a>=0`, wide(byA), wideFields, 'Index range scan on t using by_a over')
+    }
+    await read('SELECT id,payload FROM t FORCE INDEX (by_a) IGNORE INDEX (by_a) WHERE a>=0', wide(data), wideFields, filtered)
+    const coveringRows = byA.map(({ id, a }) => [id, a])
+    const coveringFields = [idField, ['a', 3, 11, 20489, 0, 63]]
+    await read('SELECT id,a FROM t FORCE INDEX (by_a) WHERE a>=0',
+      coveringRows, coveringFields, 'Filter\n    Covering index range scan on t using by_a over')
+    await read('SELECT id,a FROM t FORCE INDEX (by_a,by_ab) WHERE a>=0',
+      coveringRows, coveringFields, 'Filter\n    Covering index scan on t using by_a')
+
     const retained = { sql: 'SELECT id FROM t USE INDEX FOR JOIN () USE INDEX FOR GROUP BY (by_b) WHERE a=?', rowsAsArray: true }
+    const forced = { sql: 'SELECT id FROM t FORCE INDEX (by_a) WHERE a=?', rowsAsArray: true }
     assert.deepEqual((await conn.execute(retained, [2]))[0], point)
+    assert.deepEqual((await conn.execute(forced, [2]))[0], point)
     await conn.query('UPDATE t SET a=0 WHERE id=3')
     assert.deepEqual((await conn.execute(retained, [2]))[0], point.slice(1))
+    assert.deepEqual((await conn.execute(forced, [2]))[0], point.slice(1))
     assert.deepEqual((await conn.execute(retained, [0]))[0], ids(data.filter(({ id, a }) => id === 3 || a === 0)))
 
     for (const [table, clustered, rows] of [
@@ -210,6 +229,9 @@ test('plain SELECT reads honor unscoped and FOR JOIN USE and IGNORE INDEX', asyn
     }
     try {
       await read('SELECT id FROM same_key USE INDEX (alternative) WHERE id=2', [[2]], [['id', 3, 11, 20487, 0, 63]], 'Rows fetched before execution')
+      if (db) assert.deepEqual(new Set(reads), new Set(['alternative']))
+      reads.length = 0
+      await read('SELECT id FROM same_key FORCE INDEX (alternative) WHERE id=2', [[2]], [['id', 3, 11, 20487, 0, 63]], 'Rows fetched before execution')
       if (db) assert.deepEqual(new Set(reads), new Set(['alternative']))
     } finally {
       if (catalog && open) catalog.table = open

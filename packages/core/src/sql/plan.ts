@@ -261,6 +261,8 @@ export function dynamicAccess(def: TableDef, alias: string, conjuncts: readonly 
 export interface RangeCosting {
   /** Request selected-range row estimates alongside the physical access. */
   readonly quote?: boolean
+  /** FORCE INDEX excludes the table-scan cost for an eligible unordered read. */
+  readonly forceRange?: boolean | undefined
   readonly stats: TableStatistics
   /** The existing range price inputs for one index. */
   shape(index: IndexDef): RangeShape
@@ -300,12 +302,14 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
   }
   // No range at all reads no statistics.
   if (candidates.length === 0) return undefined
-  const t = costing.stats
-  let best = rangeBaseline(t, costing.coveringScan === undefined ? undefined : costing.shape(costing.coveringScan).recordBytes)
+  const { stats: t, coveringScan, forceRange } = costing
+  let best = rangeBaseline(t, coveringScan && costing.shape(coveringScan).recordBytes, forceRange)
   const access = (c: (typeof candidates)[number], rows: number): Access => ({ index: c.index.name, ranges: c.keyed.map((k) => k.range), over: describeIntervals(c.intervals, c.column.name), implied: c.implied, quote: costing.quote ? { index: c.index.name, rows, cost: best } : undefined })
   // One range that wins even reading every row needs no count: no other is weighed against it.
   const only = candidates.length === 1 ? candidates[0] : undefined
   if (!costing.quote && only !== undefined && rangeCost(t, only.shape, only.keyed.length, t.rows) < best) return access(only, t.rows)
+  // MySQL skips index dives for one forced key. A nonpoint, non-NULL range estimates one row.
+  const skipDive = forceRange && indexes.length === 1
   let chosen: Access | undefined
   for (const c of candidates) {
     const limit = mostRows((rows) => rangeCost(t, c.shape, c.keyed.length, rows), best)
@@ -314,7 +318,8 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
     const unique = c.index.parts.length === 1 && (c.index.kind === 'primary' || (c.index.kind === 'unique' && !c.column.nullable))
     let rows = 0
     for (const { range, point } of c.keyed) {
-      rows += unique && point ? 1 : Math.max(1, costing.count(c.index.name, range, limit - rows + 1))
+      const estimated = point ? unique : skipDive && range.to?.values[0] !== null
+      rows += estimated ? 1 : Math.max(1, costing.count(c.index.name, range, limit - rows + 1))
       if (rows > limit) break
     }
     if (rows > limit) continue

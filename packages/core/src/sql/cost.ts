@@ -396,9 +396,10 @@ export const indexScanCost = (rows: number, recordBytes: number): number => {
  * What the range optimizer must beat (`test_quick_select`): a table scan, with
  * the server's fixed 1.1 and 1 added; or, where an index covers the query, a
  * full scan of the shortest one (`coveringRecordBytes`), if that is cheaper.
+ * FORCE removes the table-scan cost and still lets a covering scan compete.
  */
-export function rangeBaseline(t: TableStatistics, coveringRecordBytes: number | undefined): number {
-  const scan = PAGE_READ * t.pages + 1.1 + ROW_EVALUATE * t.rows + 1
+export function rangeBaseline(t: TableStatistics, coveringRecordBytes: number | undefined, forceRange?: boolean): number {
+  const scan = forceRange ? Infinity : PAGE_READ * t.pages + 1.1 + ROW_EVALUATE * t.rows + 1
   if (coveringRecordBytes === undefined) return scan
   return Math.min(scan, indexScanCost(t.rows, coveringRecordBytes) + ROW_EVALUATE * t.rows)
 }

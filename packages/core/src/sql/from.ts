@@ -239,22 +239,27 @@ function foldIndexName(name: string): string {
   return name.replace(/[A-Z]/g, (letter) => letter.toLowerCase())
 }
 
-function indexHintEligibility(def: TableDef, alias: string, hints: readonly IndexHint[], env: Env | undefined, validate: boolean, scope: IndexHint['for']): FromPlan['eligibleIndexes'] {
-  const keys = [...def.indexes, ...fulltextOf(def)].map((key) => ({ key, folded: foldIndexName(key.name) }))
+type HintEligibility = NonNullable<FromPlan['eligibleIndexes']> & { readonly forceRange: boolean }
+
+function indexHintEligibility(def: TableDef, alias: string, hints: readonly IndexHint[], env: Env | undefined, validate: boolean, scope: IndexHint['for']): HintEligibility | undefined {
+  const fulltext = fulltextOf(def)
+  const keys = [...def.indexes, ...fulltext].map((key) => ({ key, folded: foldIndexName(key.name) }))
   type HintKey = (typeof keys)[number]['key']
   // Ordering and grouping have their own eligibility, separate from the scan.
   const scopes = scope === undefined ? [] : scope === 'JOIN' ? [scope] : ['JOIN', scope] as const
-  const masks = keys.some(({ key }) => key.invisible) || hints.some((hint) => hint.type === 'FORCE') ? [] : scopes
+  const visible = !keys.some(({ key }) => key.invisible)
+  const force = hints.some((hint) => hint.type === 'FORCE')
+  // Any FORCE scope affects the range cost, even when its name mask is inactive.
+  const forceRange = visible && force && scope === 'JOIN' && fulltext.length === 0
+  const masks = !visible || (force && !forceRange) ? [] : scopes
     .filter((scope) => hints.some((hint) => hint.for === undefined || hint.for === scope))
     .map((scope) => ({ scope, used: undefined as Set<HintKey> | undefined, ignored: new Set<HintKey>() }))
-  if (masks.length === 0 && !validate) return undefined
-  let use = false
-  let force = false
+  const enabled = forceRange || masks.length > 0
+  if (!enabled && !validate) return undefined
   // MySQL visits the parsed hint list in reverse, including names in one clause.
   for (const hint of hints.slice().reverse()) {
-    const useHint = hint.type === 'USE'
     const selected = masks.filter((mask) => hint.for === undefined || hint.for === mask.scope).map((mask) => {
-      if (!useHint) return mask.ignored
+      if (hint.type === 'IGNORE') return mask.ignored
       if (mask.used === undefined || hint.indexes.length === 0) mask.used = new Set()
       return mask.used
     })
@@ -265,16 +270,16 @@ function indexHintEligibility(def: TableDef, alias: string, hints: readonly Inde
       if (validate && (key === undefined || (key.invisible && !optimizerEnabled(env, 'use_invisible_indexes')))) {
         throw sqlError('ER_KEY_DOES_NOT_EXITS', `Key '${name}' doesn't exist in table '${alias}'`)
       }
-      if (key === undefined) continue
-      for (const set of selected) set.add(key)
+      if (key !== undefined) for (const set of selected) set.add(key)
     }
-    use ||= useHint
-    force ||= hint.type === 'FORCE'
   }
-  if (validate && use && force) throw wrongUsage('USE INDEX', 'FORCE INDEX')
-  if (masks.length === 0) return undefined
-  return Object.fromEntries(masks.map(({ scope, used, ignored }) => [scope,
-    def.indexes.filter((key) => (used === undefined || used.has(key)) && !ignored.has(key))]))
+  if (validate && force && hints.some((hint) => hint.type === 'USE')) throw wrongUsage('USE INDEX', 'FORCE INDEX')
+  if (!enabled) return undefined
+  const eligible: HintEligibility = { forceRange }
+  for (const { scope, used, ignored } of masks) {
+    eligible[scope] = def.indexes.filter((key) => (used === undefined || used.has(key)) && !ignored.has(key))
+  }
+  return eligible
 }
 
 /** The written FROM, as a plan: its scope, and how to read it. */
@@ -356,7 +361,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   const width = offset
 
   // Open all direct sources and check aliases before hints, then bind ON and projections.
-  let eligibleIndexes: FromPlan['eligibleIndexes']
+  let eligibleIndexes: HintEligibility | undefined
   if (hints && pending.some((p) => p.indexHints) && pending.every((p) => p.def) &&
       !someNode(hints.query, (node) => (node !== hints.query && (node as QueryExpression).kind === QUERY.QUERY) || undefined)) {
     const tableIds = pending.map((p) => p.def!.id).join(',')
@@ -521,7 +526,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   const single = only?.def !== undefined && only.table !== undefined ? only as NonNullable<FromPlan['single']> : undefined
 
   // The physical tree: built once the WHERE is placed (`filter`), or without one.
-  const settings: LeafSettings = { covering, read: new Map(), inferred: new Map(), chosen: new WeakMap(), scope, tables: byAlias, outer, where, joinIndexes, statistics: ctx.statistics, buffered: optimizerEnabled(ctx.env, 'block_nested_loop') }
+  const settings: LeafSettings = { covering, read: new Map(), inferred: new Map(), chosen: new WeakMap(), scope, tables: byAlias, outer, where, eligibleIndexes, statistics: ctx.statistics, buffered: optimizerEnabled(ctx.env, 'block_nested_loop') }
   // The join order and each join's access: the cost model's, over the WHERE's conjuncts, once the columns read are known (M5.7).
   // The index lookup into `t` after the tables in `before`, by the WHERE or an ON.
   const lookupAfter = (t: FromTable, before: ReadonlySet<string>, conditions: readonly Expression[]): EqRef | undefined => {
@@ -955,7 +960,7 @@ type Materialization = false | 'lookup' | 'scan' | 'loop'
 
 /** How the FROM's base tables are read: what the WHERE is, what covers them, and an order asked for. */
 interface LeafSettings {
-  readonly joinIndexes?: readonly IndexDef[] | undefined
+  readonly eligibleIndexes?: HintEligibility | undefined
   where?: Expression | undefined
   /** Proven integer-equality range predicates, shared by costing and physical reads. */
   readonly inferred: Map<string, InferredRange>
@@ -1035,7 +1040,7 @@ function chosenAccess(t: FromTable, settings: LeafSettings, env: Env, quote = fa
   let chosen = settings.chosen.get(env)
   if (chosen === undefined) settings.chosen.set(env, (chosen = new Map()))
   let access = chosen.get(t.alias)
-  if (access === undefined) chosen.set(t.alias, (access = chooseAccess(t.def, t.alias, settings.where, env, settings.outer, rangeCosting(t, settings, env, quote), settings.inferred.get(t.alias), settings.joinIndexes)))
+  if (access === undefined) chosen.set(t.alias, (access = chooseAccess(t.def, t.alias, settings.where, env, settings.outer, rangeCosting(t, settings, env, quote), settings.inferred.get(t.alias), settings.eligibleIndexes?.JOIN)))
   return access
 }
 
@@ -1057,6 +1062,7 @@ function rangeCosting(t: FromTable, settings: LeafSettings, env: Env, quote = fa
       return (stats ??= statistics(def, table))
     },
     quote,
+    forceRange: settings.eligibleIndexes?.forceRange,
     shape: (i) => ({ clustered: i === clustered, covering: holdsRead(def, i, read), recordBytes: indexBytes(def, i) + indexBytes(def, clustered), minRecordBytes }),
     coveringScan: cover === undefined ? undefined : def.indexes.find((i) => i.name === cover),
     count(index, range, limit) {
