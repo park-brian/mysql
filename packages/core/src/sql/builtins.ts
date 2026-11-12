@@ -61,6 +61,7 @@ import {
   isBits,
   isText,
   lit,
+  literalConcat,
   literalTextOf,
   readsColumn,
   readSlot,
@@ -211,9 +212,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
       // in bytes too (8.4.11).
       const width = types.reduce((n, t) => n + charWidth(t) * (binary && t.kind === 'string' ? requireCollationInfo(t.collationId).mbmaxlen : 1), 0)
       const tooWide = width * (binary ? 1 : requireCollationInfo(id).mbmaxlen) > maxPacket(ctx)
-      const literalText = !binary && !tooWide && e.args.every((arg, i) => literalTextOf(arg, types[i]!) !== undefined)
-        ? types.map((t) => t.literalText).join('')
-        : undefined
+      const literalText = binary || tooWide ? undefined : literalConcat(e.args, types)
       return {
         eval: (r, env) => {
           const parts: Exclude<Value, null>[] = []

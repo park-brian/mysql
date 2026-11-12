@@ -205,12 +205,12 @@ async function collationConnection() {
   return { db, conn }
 }
 
-async function readCollationRows(conn: mysql.Connection, sql: string, rows: unknown[][], fields: unknown[][]) {
+async function readCollationRows(conn: mysql.Connection, sql: string, rows: unknown[][], fields?: unknown[][]) {
   for (const method of ['query', 'execute'] as const) {
     const options = { sql, rowsAsArray: true }
     const [actual, metadata] = method === 'query' ? await conn.query(options) : await conn.execute(options)
     assert.deepEqual(actual, rows, `${method}: ${sql}`)
-    assert.deepEqual(metadata.map((field) => [field.name, field.columnType, field.columnLength, field.flags, field.decimals, field.characterSet]), fields, `${method}: ${sql}`)
+    if (fields !== undefined) assert.deepEqual(metadata.map((field) => [field.name, field.columnType, field.columnLength, field.flags, field.decimals, field.characterSet]), fields, `${method}: ${sql}`)
     assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], `${method}: ${sql}`)
   }
 }
@@ -265,7 +265,7 @@ test('M5.10: text choices use their resolved collation for grouping and bytes', 
   }
 })
 
-test('M5.10: literal CONCAT text is checked during collation resolution', async () => {
+test('M5.10: literal CONCAT and CONCAT_WS text is checked during collation resolution', async () => {
   const { db, conn } = await collationConnection()
   const schema = 'concat_collation'
   const read = readCollationRows.bind(undefined, conn)
@@ -281,6 +281,10 @@ test('M5.10: literal CONCAT text is checked during collation resolution', async 
       ["COALESCE(g,CONCAT('a',CONCAT('😀','b')))", 'coalesce', 'utf8mb4_general_ci'],
       ["g=CONCAT(_utf8mb4'😀',_latin1'ñ')", '=', 'utf8mb4_0900_ai_ci'],
       ["g LIKE CONCAT('😀','x')", 'like', 'utf8mb4_general_ci'],
+      ["COALESCE(g,CONCAT_WS('😀','x',NULL,'y'))", 'coalesce', 'utf8mb4_general_ci'],
+      ["g=CONCAT_WS('😀','','')", '=', 'utf8mb4_general_ci'],
+      ["COALESCE(g,CONCAT('a',CONCAT_WS('-',NULL,CONCAT('😀','x'))))", 'coalesce', 'utf8mb4_general_ci'],
+      ["COALESCE(g,CONCAT_WS(CONCAT_WS('','😀',''),'x','y'))", 'coalesce', 'utf8mb4_general_ci'],
     ] as const) {
       const sql = `SELECT id,${expr} AS result FROM t ORDER BY id`
       const message = `Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (${collation},COERCIBLE) for operation '${operation}'`
@@ -290,6 +294,18 @@ test('M5.10: literal CONCAT text is checked during collation resolution', async 
       [[1, 'éx'], [2, 'éx'], [3, 'éx'], [4, 'ab']], fields)
     await read("SELECT id,IFNULL(g,CONCAT(NULLIF('😀','😀'),'x')) AS result FROM t ORDER BY id",
       [[1, null], [2, 'éx'], [3, null], [4, 'ab']], fields)
+    for (const [expr, value] of [
+      ["CONCAT_WS('😀','x',NULL)", 'x'],
+      ["CONCAT_WS('😀',NULL,NULL)", ''],
+      ["CONCAT_WS(NULL,'😀','x')", null],
+      ["CONCAT_WS('-','é','x')", 'é-x'],
+    ] as const) {
+      await read(`SELECT id,COALESCE(g,${expr}) AS result FROM t ORDER BY id`,
+        [[1, value], [2, 'éx'], [3, value], [4, 'ab']], fields)
+    }
+    // Mixed derivation still has a field metadata gap. Pin its accepted text and conditions.
+    await read("SELECT id,COALESCE(g,CONCAT_WS(_latin1'é',_utf8mb4'😀','x')) AS result FROM t ORDER BY id",
+      [[1, '😀Ã©x'], [2, 'éx'], [3, '😀Ã©x'], [4, 'ab']])
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()
@@ -302,6 +318,7 @@ test('M5.10: NULL-producing expressions do not supply text to collation resoluti
   const schema = 'nullable_collation'
   const result = (expr: string) => `SELECT COALESCE(_latin1'q' COLLATE latin1_swedish_ci,${expr}) AS result`
   const text = "CONCAT('😀','x')"
+  const separated = "CONCAT_WS('','😀','x')"
   try {
     await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_general_ci')
     for (const expr of [
@@ -312,12 +329,14 @@ test('M5.10: NULL-producing expressions do not supply text to collation resoluti
       `NULLIF(${text},X'F09F988078')`,
       `NULLIF(NULLIF(${text},'y'),'😀X')`,
       `NULLIF(${text},NULLIF(${text},'y'))`,
+      `NULLIF(${separated},CONCAT_WS('','😀','X'))`,
       `ANY_VALUE(NULLIF(${text},${text}))`,
       `(SELECT ${text} WHERE 0)`,
       `(SELECT ${text} WHERE 1=0)`,
       `(SELECT ${text} WHERE 0 OR 0)`,
       `(SELECT ${text} HAVING FALSE)`,
       `(SELECT ${text} WHERE 0 LIMIT 0)`,
+      `(SELECT ${separated} WHERE 0)`,
     ]) {
       await readCollationRows(conn, result(expr), [['q']], [['result', 253, 8, 0, 31, 45]])
     }
@@ -329,6 +348,7 @@ test('M5.10: NULL-producing expressions do not supply text to collation resoluti
       `NULLIF(${text},NULLIF(${text},'😀X'))`,
       `(SELECT ${text})`,
       `(SELECT ${text} LIMIT 0)`,
+      `(SELECT ${separated} LIMIT 0)`,
       `(SELECT ${text} WHERE 0 HAVING COUNT(*)=0)`,
     ]) {
       await rejectCollation(conn, result(expr), error)

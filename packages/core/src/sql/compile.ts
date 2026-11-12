@@ -788,9 +788,24 @@ export function literalTextOf(expr: Expression, type: ResultType, allowNullIf = 
   if (expr.kind === NODE.LITERAL || expr.kind === NODE.COLLATE) return type.literalText
   if (expr.kind === NODE.CALL) {
     const name = nativeCallName(expr)
-    if (name === 'CONCAT' || (allowNullIf && name === 'NULLIF' && type.literalTextState === undefined)) return type.literalText
+    if (name === 'CONCAT' || name === 'CONCAT_WS' || (allowNullIf && name === 'NULLIF' && type.literalTextState === undefined)) return type.literalText
   }
   return undefined
+}
+
+/** The written parts of CONCAT or CONCAT_WS, including the latter's separator. */
+export function literalConcat(args: readonly Expression[], types: readonly ResultType[], separated = false): string | undefined {
+  const separator = separated ? literalTextOf(args[0]!, types[0]!) : ''
+  if (separator === undefined) return undefined
+  const parts: string[] = []
+  for (let i = separated ? 1 : 0; i < args.length; i++) {
+    const arg = args[i]!
+    if (separated && arg.kind === NODE.LITERAL && arg.type === LITERAL.NULL) continue
+    const text = literalTextOf(arg, types[i]!)
+    if (text === undefined) return undefined
+    parts.push(text)
+  }
+  return parts.join(separator)
 }
 
 /**
@@ -839,6 +854,11 @@ function conditionalTextCheck(t: ResultType, derived: Derived | undefined): ((v:
   if (t.kind !== 'string' || t.literalTextState !== 'conditional' || derived === undefined || derived.collationId === CHARSET_BINARY) return undefined
   const target = derived.collationId
   return (v) => { if (v?.kind === 'string') convertTextCharset(v.v, v.collationId, target) }
+}
+
+function comparisonTextChecks(a: ResultType, b: ResultType, operation: string) {
+  const derived = isText(a) && isText(b) ? aggregateCollations([a, b], operation, 'runtime') : undefined
+  return [conditionalTextCheck(a, derived), conditionalTextCheck(b, derived)] as const
 }
 
 function collationMix(items: readonly Derived[], operation: string): unknown {
@@ -1653,8 +1673,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     }
     default: {
       if (!compared) throw notSupported(`The operator ${op}`)
-      const derived = isText(ca.type) && isText(cb.type) ? aggregateCollations([ca.type, cb.type], op === '!=' ? '<>' : op, 'runtime') : undefined
-      const checkLeft = conditionalTextCheck(ca.type, derived), checkRight = conditionalTextCheck(cb.type, derived)
+      const [checkLeft, checkRight] = comparisonTextChecks(ca.type, cb.type, op === '!=' ? '<>' : op)
       const nullSafe = !test
       const cmp = nullSafe && fixedTolerance(a.type, b.type) === undefined ? undefined : comparer(a.type, b.type)
       return {
@@ -2231,8 +2250,7 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
  * character, and the escape (default `\`) makes either literal.
  */
 function like(negated: boolean, a: Compiled, pattern: Compiled, escape: Compiled | undefined): Compiled {
-  const derived = isText(a.type) && isText(pattern.type) ? aggregateCollations([a.type, pattern.type], 'like', 'runtime') : undefined
-  const checkLeft = conditionalTextCheck(a.type, derived), checkRight = conditionalTextCheck(pattern.type, derived)
+  const [checkLeft, checkRight] = comparisonTextChecks(a.type, pattern.type, 'like')
   return {
     eval: (r, env) => {
       const v = a.eval(r, env)

@@ -35,6 +35,7 @@ import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
 import {
   COERCIBILITY,
+  DERIVATION_NONE,
   MAX_SIGNED,
   MIN_SIGNED,
   bytesValue,
@@ -72,6 +73,7 @@ import {
   compile,
   constantNode,
   convertTo,
+  literalConcat,
   printedArgument,
   raise,
   rowNumber,
@@ -110,20 +112,18 @@ function constantInt(c: Compiled | undefined, constant: boolean, ctx: CompileCon
   }
 }
 
-/** A string operand as the function sees it: text in the result's collation, or bytes when the result is binary. */
-export interface Str {
-  readonly binary: boolean
-  /** Code points, or bytes as Latin-1 code units for a binary result. */
-  readonly units: readonly string[]
+/** Read code points, or one Latin-1 code unit per byte for a binary result. */
+function stringUnits(v: V, binary: boolean, collation: number): string[] {
+  if (binary) return Array.from(valueBytes(v), (x) => String.fromCharCode(x))
+  return [...collatedText(v, collation)]
 }
 
-function strOf(v: V, binary: boolean, collation: number): Str {
-  if (binary) {
-    const b = valueBytes(v)
-    return { binary, units: Array.from(b, (x) => String.fromCharCode(x)) }
-  }
-  const text = v.kind === 'bytes' ? asText(v.v, collation) : v.kind === 'string' ? convertTextCharset(v.v, v.collationId, collation) : toText(v)
-  return { binary, units: [...text] }
+function stringText(v: V, binary: boolean, collation: number): string {
+  return binary ? stringUnits(v, true, collation).join('') : collatedText(v, collation)
+}
+
+function collatedText(v: V, collation: number): string {
+  return v.kind === 'bytes' ? asText(v.v, collation) : v.kind === 'string' ? convertTextCharset(v.v, v.collationId, collation) : toText(v)
 }
 
 /** Text moved into another character set: 3854 when a character has no place there (8.4.11). */
@@ -132,10 +132,7 @@ export function convertTextCharset(text: string, from: number, to: number): stri
   const b = requireCollationInfo(to).charset
   if (a === b || b.startsWith('utf8mb4')) return text
   const back = decodeCollation(encodeCollation(text, to), to)
-  if (back !== text) {
-    const shown = escapedBytes(encodeCollation(text, from).subarray(0, 16))
-    throw sqlError('ER_CANNOT_CONVERT_STRING', `Cannot convert string '${shown}' from ${a} to ${b}`)
-  }
+  if (back !== text) throw conversionError(encodeCollation(text, from), a, b)
   return text
 }
 
@@ -143,16 +140,18 @@ export function convertTextCharset(text: string, from: number, to: number): stri
 function asText(bytes: Uint8Array, collation: number): string {
   const text = decodeCollation(bytes, collation)
   const back = encodeCollation(text, collation)
-  if (!equalBytes(back, bytes)) {
-    const shown = escapedBytes(bytes.subarray(0, 16))
-    throw sqlError('ER_CANNOT_CONVERT_STRING', `Cannot convert string '${shown}' from binary to ${requireCollationInfo(collation).charset}`)
-  }
+  if (!equalBytes(back, bytes)) throw conversionError(bytes, 'binary', requireCollationInfo(collation).charset)
   return text
 }
 
-export function result(units: readonly string[], binary: boolean, collation: number, coercibility: number): Value {
+function conversionError(bytes: Uint8Array, from: string, to: string) {
+  const shown = escapedBytes(bytes.subarray(0, 16))
+  return sqlError('ER_CANNOT_CONVERT_STRING', `Cannot convert string '${shown}' from ${from} to ${to}`)
+}
+
+export function result(units: readonly string[] | string, binary: boolean, collation: number, coercibility: number): Value {
   if (binary) return bytesValue(Uint8Array.from(units, (u) => u.charCodeAt(0)))
-  return stringValue(units.join(''), collation, coercibility)
+  return stringValue(typeof units === 'string' ? units : units.join(''), collation, coercibility)
 }
 
 /** The collation a string function's first argument gives its result: NULL's is binary. */
@@ -171,10 +170,9 @@ export function widthOf(t: ResultType, binary: boolean): number {
 /** The collation several string arguments aggregate to: a binary one wins only at the lowest coercibility. */
 function aggregateString(types: readonly ResultType[], conn: number): { readonly binary: boolean; readonly collation: number; readonly coercibility: number } {
   const live = types.filter((t) => t.kind === 'string' || t.kind === 'bytes')
-  if (live.length === 0) return { binary: false, collation: conn, coercibility: COERCIBILITY.NUMERIC }
-  const least = Math.min(...live.map(coercibilityOf))
-  if (live.some((t) => t.kind === 'bytes' && coercibilityOf(t) === least)) return { binary: true, collation: CHARSET_BINARY, coercibility: least }
-  return { binary: false, collation: aggregateTypes(live, conn), coercibility: least }
+  const coercibility = live.length === 0 ? COERCIBILITY.NUMERIC : Math.min(...live.map(coercibilityOf))
+  const binary = live.some((t) => t.kind === 'bytes' && coercibilityOf(t) === coercibility)
+  return { binary, collation: binary ? CHARSET_BINARY : aggregateTypes(live, conn), coercibility }
 }
 
 /** Every argument evaluated; `undefined` when one is NULL. */
@@ -241,20 +239,13 @@ function libraryCall(name: string, args: readonly Compiled[], callName: string, 
   const integers = READS_INTEGER[name]
   const xs = READS_DOUBLE.has(name) && args[0] !== undefined ? [asNumber(args[0], 'DOUBLE'), ...args.slice(1)] : integers !== undefined ? args.map((a, i) => (integers.includes(i) ? asNumber(a, 'INTEGER') : a)) : args
   const conn = ctx.connectionCollation
-  const arity = nativeArity(callName, xs.length)
-  const first = () => firstCollation((xs[0] as Compiled).type, conn)
-  return {
-    integers,
-    xs,
-    conn,
-    arity,
-    first,
-  }
+  return { xs, conn, arity: nativeArity(callName, xs.length) }
 }
 
 /** The string library: SUBSTRING, LEFT and RIGHT, the pads and trims, REPEAT, REVERSE, REPLACE, CONCAT_WS, SPACE, ASCII, LOCATE. */
-function libraryFunction(name: string, args: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext): Compiled {
-  const { xs, conn, arity, first } = libraryCall(name, args, callName, ctx)
+function libraryFunction(name: string, args: readonly Compiled[], e: CallNode, constant: readonly boolean[], ctx: CompileContext): Compiled {
+  const { xs, conn, arity } = libraryCall(name, args, e.name, ctx)
+  const first = () => firstCollation(xs[0]!.type, conn)
   switch (name) {
     case 'SUBSTRING':
     case 'SUBSTR':
@@ -275,7 +266,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
         eval: (r, env) => {
           const v = all(xs, r, env)
           if (v === undefined) return null
-          const s = strOf(v[0] as V, binary, collation).units
+          const s = stringUnits(v[0] as V, binary, collation)
           const empty = result([], binary, collation, coercibility)
           let from = valInt(v[1] as V)
           const len = v[2] === undefined ? INT_MAX32 : valInt(v[2])
@@ -299,7 +290,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
         eval: (r, env) => {
           const v = all(xs, r, env)
           if (v === undefined) return null
-          const s = strOf(v[0] as V, binary, collation).units
+          const s = stringUnits(v[0] as V, binary, collation)
           const count = valInt(v[1] as V)
           if (count <= 0n) return result([], binary, collation, coercibility)
           const k = count >= BigInt(s.length) ? s.length : Number(count)
@@ -319,7 +310,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
         eval: (r, env) => {
           const v = all(xs, r, env)
           if (v === undefined) return null
-          const s = strOf(v[0] as V, binary, collation).units
+          const s = stringUnits(v[0] as V, binary, collation)
           const count = valInt(v[1] as V)
           if (count < 0n) return null
           // A count past INT_MAX32 is INT_MAX32, and a result past
@@ -327,7 +318,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           const k = Number(count > INT_MAX32 ? INT_MAX32 : count)
           if (k <= s.length) return result(s.slice(0, k), binary, collation, coercibility)
           if (byteLength(s, binary, collation) + (k - s.length) * (binary ? 1 : requireCollationInfo(collation).mbmaxlen) > maxPacket(env)) return packetOverflow(env, name)
-          const pad = strOf(v[2] as V, binary, collation).units
+          const pad = stringUnits(v[2] as V, binary, collation)
           if (pad.length === 0) return result([], binary, collation, coercibility)
           const fill: string[] = []
           while (fill.length < k - s.length) fill.push(pad[fill.length % pad.length] as string)
@@ -345,7 +336,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
         eval: (r, env) => {
           const v = all(xs, r, env)
           if (v === undefined) return null
-          const s = strOf(v[0] as V, binary, collation).units
+          const s = stringUnits(v[0] as V, binary, collation)
           const count = valInt(v[1] as V)
           if (count <= 0n || s.length === 0) return result([], binary, collation, coercibility)
           if (BigInt(byteLength(s, binary, collation)) * (count > INT_MAX32 ? INT_MAX32 : count) > BigInt(maxPacket(env))) return packetOverflow(env, name)
@@ -366,7 +357,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
         eval: (r, env) => {
           const v = (xs[0] as Compiled).eval(r, env)
           if (v === null) return null
-          const s = [...strOf(v, binary, collation).units]
+          const s = stringUnits(v, binary, collation)
           if (name === 'REVERSE') return result(s.reverse(), binary, collation, coercibility)
           let a = 0
           let b = s.length
@@ -392,8 +383,8 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           if (v === null) return null
           const rv = remove === undefined ? undefined : remove.eval(r, env)
           if (rv === null) return null
-          const s = strOf(v, binary, collation).units
-          const rm = rv === undefined ? [' '] : strOf(rv, binary, collation).units
+          const s = stringUnits(v, binary, collation)
+          const rm = rv === undefined ? [' '] : stringUnits(rv, binary, collation)
           if (rm.length === 0) return result(s, binary, collation, coercibility)
           let a = 0
           let b = s.length
@@ -413,9 +404,9 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
         eval: (r, env) => {
           const v = all(xs, r, env)
           if (v === undefined) return null
-          const s = strOf(v[0] as V, binary, collation).units
-          const from = strOf(v[1] as V, binary, collation).units
-          const to = strOf(v[2] as V, binary, collation).units
+          const s = stringUnits(v[0] as V, binary, collation)
+          const from = stringUnits(v[1] as V, binary, collation)
+          const to = stringUnits(v[2] as V, binary, collation)
           if (from.length === 0) return result(s, binary, collation, coercibility)
           const out: string[] = []
           for (let i = 0; i < s.length; ) {
@@ -431,29 +422,25 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
     }
     case 'CONCAT_WS': {
       arity(2, Infinity)
-      aggregateCollations(
-        xs.map((x) => x.type),
-        'concat_ws',
-        false,
-      )
-      const { binary, collation, coercibility } = aggregateString(
-        xs.map((x) => x.type),
-        conn,
-      )
-      const width = widthOf((xs[0] as Compiled).type, binary) * (xs.length - 2) + xs.slice(1).reduce((n, x) => n + widthOf(x.type, binary), 0)
+      const types = xs.map((x) => x.type)
+      const derived = aggregateCollations(types, 'concat_ws', false)
+      const { binary, collation, coercibility } = aggregateString(types, conn)
+      const separator = xs[0]!, items = xs.slice(1)
+      const width = widthOf(separator.type, binary) * (items.length - 1) + items.reduce((n, x) => n + widthOf(x.type, binary), 0)
+      const literalText = binary || derived?.derivation === DERIVATION_NONE || width * requireCollationInfo(collation).mbmaxlen > maxPacket(ctx)
+        ? undefined : literalConcat(e.args, types, true)
       return {
         eval: (r, env) => {
-          const sep = (xs[0] as Compiled).eval(r, env)
+          const sep = separator.eval(r, env)
           if (sep === null) return null
-          const parts: string[][] = []
-          for (const x of xs.slice(1)) {
+          const parts: string[] = []
+          for (const x of items) {
             const v = x.eval(r, env)
-            if (v !== null) parts.push([...strOf(v, binary, collation).units])
+            if (v !== null) parts.push(stringText(v, binary, collation))
           }
-          const s = strOf(sep, binary, collation).units
-          return result(parts.flatMap((p, i) => (i === 0 ? p : [...s, ...p])), binary, collation, coercibility)
+          return result(parts.join(stringText(sep, binary, collation)), binary, collation, coercibility)
         },
-        type: stringResultType(width, binary, collation, coercibility, true),
+        type: { ...stringResultType(width, binary, collation, coercibility, true), literalText },
       }
     }
     case 'SPACE': {
@@ -502,9 +489,9 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           if (v === undefined) return null
           const [n, h] = name === 'INSTR' ? [v[1] as V, v[0] as V] : [v[0] as V, v[1] as V]
           const start = v[2] === undefined ? 0n : valInt(v[2]) - 1n
-          const hs = strOf(h, binary, collation).units
+          const hs = stringUnits(h, binary, collation)
           if (start < 0n || start > BigInt(hs.length)) return intValue(0n)
-          const ns = strOf(n, binary, collation).units
+          const ns = stringUnits(n, binary, collation)
           // An empty needle is found where the search starts, counted in bytes
           // as the server counts it (8.4.11: LOCATE('', 'ÄÖ', 2) is 3).
           if (ns.length === 0) return intValue(BigInt((binary ? Number(start) : encodeCollation(hs.slice(0, Number(start)).join(''), collation).length) + 1))
@@ -1015,27 +1002,18 @@ function fromBase64(text: string): Uint8Array | undefined {
 }
 
 /** What the other string functions' compilers ask of a call: its count checked, whether any argument may be NULL, a hex string's type, a string in the connection's collation, the name as the server prints it. */
-function stringCall(name: string, xs: readonly Compiled[], callName: string, ctx: CompileContext) {
+function stringCall(xs: readonly Compiled[], callName: string, ctx: CompileContext) {
   const conn = ctx.connectionCollation
   const arity = nativeArity(callName, xs.length)
-  const nullableAny = (...cs: readonly Compiled[]): boolean => cs.some((c) => c.type.nullable)
-  const hexText = (chars: number, nullable: boolean): ResultType => ({ ...stringType(chars, conn, nullable), coercibility: COERCIBILITY.COERCIBLE })
+  const hexText = (chars: number): ResultType => ({ ...stringType(chars, conn, true), coercibility: COERCIBILITY.COERCIBLE })
   const conv = (s: string): Value => stringValue(s, conn, COERCIBILITY.COERCIBLE)
-  const fn = name.toLowerCase()
-  return {
-    conn,
-    arity,
-    nullableAny,
-    hexText,
-    conv,
-    fn,
-  }
+  return { conn, arity, hexText, conv }
 }
 
 /** The rest of the string functions: CHAR, FIELD, ELT, the sets, INSERT, SUBSTRING_INDEX, QUOTE, SOUNDEX, FORMAT, BIT_LENGTH, CONV, base64, ORD. */
 /** Edits of a string: INSERT, SUBSTRING_INDEX, QUOTE, SOUNDEX. */
 function moreStringFunction(name: string, xs: readonly Compiled[], callName: string, label: string, using: string | undefined, constant: readonly boolean[], ctx: CompileContext, args: readonly string[]): Compiled {
-  const { conn, arity } = stringCall(name, xs, callName, ctx)
+  const { conn, arity } = stringCall(xs, callName, ctx)
   switch (name) {
     case 'INSERT': {
       arity(4)
@@ -1061,9 +1039,9 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
           const l = len(r, env)
           const w = sub.eval(r, env)
           if (v === null || p === null || l === null || w === null) return null
-          const units = strOf(v, binary, collation).units
+          const units = stringUnits(v, binary, collation)
           // The inserted text is converted first, and fails (3854) even when it is not used.
-          const inserted = strOf(w, binary, collation).units
+          const inserted = stringUnits(w, binary, collation)
           if (p < 1n || p > BigInt(units.length)) return result(units, binary, collation, coercibility)
           const start = Number(p) - 1
           const rest = units.length - start
@@ -1085,8 +1063,8 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
           const d = delimC.eval(r, env)
           const c = count(r, env)
           if (v === null || d === null || c === null) return null
-          const text = strOf(v, binary, collation).units
-          const delim = strOf(d, binary, collation).units
+          const text = stringUnits(v, binary, collation)
+          const delim = stringUnits(d, binary, collation)
           if (delim.length === 0 || c === 0n) return result([], binary, collation, coercibility)
           const hits: number[] = []
           for (let i = 0; i + delim.length <= text.length; ) {
@@ -1118,7 +1096,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
           const v = s.eval(r, env)
           if (v === null) return result([...'NULL'], binary, collation, coercibility)
           const out: string[] = ["'"]
-          for (const u of strOf(v, binary, collation).units) {
+          for (const u of stringUnits(v, binary, collation)) {
             if (u === '\\' || u === "'") out.push('\\', u)
             else if (u === '\0') out.push('\\', '0')
             else if (u === '\x1a') out.push('\\', 'Z')
@@ -1139,7 +1117,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
         eval: (r, env) => {
           const v = s.eval(r, env)
           if (v === null) return null
-          return result([...soundex(strOf(v, binary, collation).units.join(''))], binary, collation, coercibility)
+          return result(soundex(stringText(v, binary, collation)), binary, collation, coercibility)
         },
         type: stringResultType(Math.max(widthOf(s.type, binary), 4), binary, collation, coercibility),
       }
@@ -1151,7 +1129,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
 
 /** A string as a list or a set: FIELD, ELT, MAKE_SET, EXPORT_SET, FIND_IN_SET. */
 function listFunction(name: string, xs: readonly Compiled[], callName: string, label: string, using: string | undefined, constant: readonly boolean[], ctx: CompileContext, args: readonly string[]): Compiled {
-  const { conn, arity, nullableAny, fn } = stringCall(name, xs, callName, ctx)
+  const { conn, arity } = stringCall(xs, callName, ctx)
   switch (name) {
     case 'FIELD': {
       arity(2, Infinity)
@@ -1172,7 +1150,7 @@ function listFunction(name: string, xs: readonly Compiled[], callName: string, l
         for (let i = 1; i < xs.length; i++) {
           if (constant[i] !== true) continue
           const v = (xs[i] as Compiled).eval([], env)
-          if (v !== null) strOf(v, allBytes, id)
+          if (v !== null) stringUnits(v, allBytes, id)
         }
       }
       const reads = textual ? xs : xs.map((x) => (exact ? asNumber(x, 'DECIMAL') : asNumber(x, 'DOUBLE')))
@@ -1185,8 +1163,8 @@ function listFunction(name: string, xs: readonly Compiled[], callName: string, l
             if (w === null) continue
             let equal: boolean
             if (textual) {
-              const a = strOf(v, allBytes, id).units.join('')
-              const b = strOf(w, allBytes, id).units.join('')
+              const a = stringText(v, allBytes, id)
+              const b = stringText(w, allBytes, id)
               equal = allBytes ? a === b : compareValues(stringValue(a, id), stringValue(b, id)) === 0
             } else if (integral || exact) equal = compareValues(decimalValue(toDecimal(v).v, toDecimal(v).scale), decimalValue(toDecimal(w).v, toDecimal(w).scale)) === 0
             else equal = toDouble(v) === toDouble(w)
@@ -1218,7 +1196,7 @@ function listFunction(name: string, xs: readonly Compiled[], callName: string, l
           const i = n(r, env)
           if (i === null || i < 1n || i > BigInt(choices.length)) return null
           const v = (choices[Number(i) - 1] as Compiled).eval(r, env)
-          return v === null ? null : result(strOf(v, binary, collation).units, binary, collation, coercibility)
+          return v === null ? null : result(stringUnits(v, binary, collation), binary, collation, coercibility)
         },
         type: stringResultType(Math.max(...choices.map((c) => charsOf(c.type))), binary, collation, coercibility),
       }
@@ -1231,7 +1209,7 @@ function listFunction(name: string, xs: readonly Compiled[], callName: string, l
       const parts = make ? xs.slice(1) : xs.slice(1, 4)
       aggregateCollations(
         parts.map((c) => c.type),
-        fn,
+        name.toLowerCase(),
         false,
       )
       const texts = parts.some((c) => c.type.kind !== 'null')
@@ -1253,18 +1231,17 @@ function listFunction(name: string, xs: readonly Compiled[], callName: string, l
           if (b === null) return null
           const mask = BigInt.asUintN(64, b)
           if (make) {
-            const out: string[][] = []
+            const out: string[] = []
             for (let i = 0; i < parts.length; i++) {
               if (((mask >> BigInt(i)) & 1n) === 0n) continue
               const v = (parts[i] as Compiled).eval(r, env)
-              if (v !== null) out.push([...strOf(v, binary, collation).units])
+              if (v !== null) out.push(stringText(v, binary, collation))
             }
-            return result(out.flatMap((u, i) => (i === 0 ? u : [',', ...u])), binary, collation, coercibility)
+            return result(out.join(','), binary, collation, coercibility)
           }
           const vs = all(parts, r, env)
           if (vs === undefined) return null
-          const [on, off] = vs.map((v) => strOf(v, binary, collation).units) as [readonly string[], readonly string[]]
-          const sep = vs[2] === undefined ? [','] : strOf(vs[2], binary, collation).units
+          const [on, off, sep = ','] = vs.map((v) => stringText(v, binary, collation))
           let n = 64
           if (count !== undefined) {
             const c = count(r, env)
@@ -1273,10 +1250,9 @@ function listFunction(name: string, xs: readonly Compiled[], callName: string, l
           }
           const out: string[] = []
           for (let i = 0; i < n; i++) {
-            if (i > 0) out.push(...sep)
-            out.push(...(((mask >> BigInt(i)) & 1n) === 1n ? on : off))
+            out.push(((mask >> BigInt(i)) & 1n) === 1n ? on! : off!)
           }
-          return result(out, binary, collation, coercibility)
+          return result(out.join(sep), binary, collation, coercibility)
         },
         type: { ...stringResultType(chars, binary, collation, coercibility, true), nullable },
       }
@@ -1292,8 +1268,8 @@ function listFunction(name: string, xs: readonly Compiled[], callName: string, l
           const a = s.eval(r, env)
           const b = list.eval(r, env)
           if (a === null || b === null) return null
-          const needle = strOf(a, binary, id).units.join('')
-          const hay = strOf(b, binary, id).units.join('')
+          const needle = stringText(a, binary, id)
+          const hay = stringText(b, binary, id)
           if (needle.includes(',') || hay === '') return intValue(0n)
           const items = hay.split(',')
           for (let i = 0; i < items.length; i++) {
@@ -1302,7 +1278,7 @@ function listFunction(name: string, xs: readonly Compiled[], callName: string, l
           }
           return intValue(0n)
         },
-        type: intType(3, nullableAny(s, list)),
+        type: intType(3, s.type.nullable || list.type.nullable),
       }
     }
     default:
@@ -1312,7 +1288,7 @@ function listFunction(name: string, xs: readonly Compiled[], callName: string, l
 
 /** Strings to and from numbers, bytes and other bases: CHAR, ORD, FORMAT, BIT_LENGTH, CONV, TO_BASE64, FROM_BASE64. */
 function conversionFunction(name: string, xs: readonly Compiled[], callName: string, label: string, using: string | undefined, constant: readonly boolean[], ctx: CompileContext, args: readonly string[]): Compiled {
-  const { arity, hexText, conv } = stringCall(name, xs, callName, ctx)
+  const { arity, hexText, conv } = stringCall(xs, callName, ctx)
   switch (name) {
     case 'CHAR': {
       arity(1, Infinity)
@@ -1386,7 +1362,7 @@ function conversionFunction(name: string, xs: readonly Compiled[], callName: str
           const p = signed < 0n ? 0 : signed > 30n ? 30 : Number(signed)
           return conv(format(v, p, locale))
         },
-        type: hexText(chars + Math.floor(chars / 3) + 1 + 1 + 30, true),
+        type: hexText(chars + Math.floor(chars / 3) + 1 + 1 + 30),
       }
     }
     case 'BIT_LENGTH': {
@@ -1422,7 +1398,7 @@ function conversionFunction(name: string, xs: readonly Compiled[], callName: str
           const n = parseInBase(text, fb, f < 0n, () => raise(env, 1292, `Truncated incorrect DECIMAL value: '${text}'`))
           return conv(toBase(n, Number(t)))
         },
-        type: hexText(65, true),
+        type: hexText(65),
       }
     }
     case 'TO_BASE64': {
@@ -1435,7 +1411,7 @@ function conversionFunction(name: string, xs: readonly Compiled[], callName: str
           const v = s.eval(r, env)
           return v === null ? null : conv(toBase64(valueBytes(v)))
         },
-        type: hexText(len + Math.floor(len / 76), true),
+        type: hexText(len + Math.floor(len / 76)),
       }
     }
     case 'FROM_BASE64': {
@@ -1479,7 +1455,7 @@ function conversionFunction(name: string, xs: readonly Compiled[], callName: str
 
 /** The hashes: MD5, SHA1 and SHA, SHA2, CRC32. */
 function hashFunction(name: string, xs: readonly Compiled[], callName: string, label: string, using: string | undefined, constant: readonly boolean[], ctx: CompileContext, args: readonly string[]): Compiled {
-  const { arity, hexText, conv } = stringCall(name, xs, callName, ctx)
+  const { arity, hexText, conv } = stringCall(xs, callName, ctx)
   switch (name) {
     case 'MD5':
     case 'SHA1':
@@ -1502,7 +1478,7 @@ function hashFunction(name: string, xs: readonly Compiled[], callName: string, l
           const v = s.eval(r, env)
           return v === null ? null : conv(digest(valueBytes(v)))
         },
-        type: hexText(name === 'MD5' ? 32 : 40, true),
+        type: hexText(name === 'MD5' ? 32 : 40),
       }
     }
     case 'SHA2': {
@@ -1542,7 +1518,7 @@ function hashFunction(name: string, xs: readonly Compiled[], callName: string, l
           const data = valueBytes(v)
           return conv(n <= 256n ? sha256(data, Number(n) as 224 | 256) : sha512(data, Number(n) as 384 | 512))
         },
-        type: hexText(shaWidth, true),
+        type: hexText(shaWidth),
       }
     }
     default:
@@ -1573,7 +1549,7 @@ export function stringFunction(name: string, e: CallNode, ctx: CompileContext): 
     if (NUMBER_FUNCTIONS.has(name)) return numberFunction(name, xs, e.name, constant, ctx, e.args)
     // These scalar string constructors own their DECIMAL prefix diagnostics.
     // Their integral results bypass text conversion in asNumber.
-    return { ...libraryFunction(name, xs, e.name, constant, ctx), decimalPrefix: true }
+    return { ...libraryFunction(name, xs, e, constant, ctx), decimalPrefix: true }
   }
   const family = HASH_FUNCTIONS.has(name) ? hashFunction : LIST_FUNCTIONS.has(name) ? listFunction : CONVERSION_FUNCTIONS.has(name) ? conversionFunction : moreStringFunction
   return { ...family(name, e.args.map((a) => compile(a, ctx)), e.name, deparse(e), e.using, constant, ctx, e.args.map((a) => printedArgument(a, ctx))), decimalPrefix: true }

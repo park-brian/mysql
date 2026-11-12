@@ -1954,6 +1954,13 @@ unrepresentable value. The MySQL 8.4.11 audits improve from 184 to 544
 complete matches of 544 across both protocols. Broader quantified
 subqueries and prepared argument admission remain open.
 
+**M5.10 literal CONCAT_WS collation admission, verified.** Bounded
+nonbinary CONCAT_WS shares CONCAT's written-text check. Explicit NULL
+items are skipped and the separator contributes text only between
+items that survive. The four MySQL 8.4.11 audits improve from 354 to 628
+complete matches of 704. Mixed derivation, numeric or dynamic operands,
+binary result differences and prepared argument admission remain open.
+
 **M5.10 written utf8 failure histories, verified:** the shared
 expression helper now retains warning 3719 for the written alias at introducers,
 CONVERT USING and CAST CHAR. Successful-root provenance and independent DDL/SET
@@ -8412,6 +8419,25 @@ codes. Parser, core and facade are 45,611, 334,316 and 334,228 B gzipped
 within the existing caps. Prepared arguments and collation handling in
 broader quantified subqueries remain open. M5.10 remains partial.
 
+### Verified literal CONCAT_WS admission (M5.10)
+
+CONCAT and CONCAT_WS use one written-text check within their packet
+width bound. Either can supply known text to the other. CONCAT_WS
+skips written NULL items and inserts the separator only between items
+that survive, including between two empty strings. NULLIF and table-free
+scalar filters use the same established NULL rules for the resulting text.
+Mixed derivation still has separate metadata and conversion behavior.
+
+Four MySQL 8.4.11 audits gain 274 complete matches across 704 responses.
+The regressions cover rows, metadata and conditions on both protocols,
+plus accepted text and conditions for a mixed-derivation control whose
+metadata differs. The string readers share conversion diagnostics, use
+code-point arrays only where needed and join strings directly in the
+separator-based functions. Parser, core and facade are 45,611, 334,278
+and 334,197 B gzipped within the existing caps. Numeric and dynamic
+arguments, binary result differences and prepared argument admission
+remain open. M5.10 remains partial.
+
 ### Verified ordered-read projection boundary (M5.49)
 
 The pinned 8.4.11 probe covers 392 query/execute outcomes: ordinary PRIMARY and
@@ -11684,7 +11710,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,316 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 334,228 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
+| Core bundle, gzipped | 334,278 B (326.4 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 334,197 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |
