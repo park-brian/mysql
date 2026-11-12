@@ -348,18 +348,21 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
 
   // Open all direct sources and check aliases before hints, then bind ON and projections.
   let hintedIndexes: readonly IndexDef[] | undefined
+  const unscopedOrder = hintScope === 'ORDER BY' && pending[0]?.indexHints?.every((hint) => hint.for === undefined)
   if (hints && pending.some((p) => p.indexHints) && pending.every((p) => p.def) &&
       !someNode(hints.query, (node) => (node !== hints.query && (node as QueryExpression).kind === QUERY.QUERY) || undefined)) {
     const tableIds = pending.map((p) => p.def!.id).join(',')
     const validate = hints.previous !== tableIds
     if (validate || hintScope !== undefined) {
       for (const p of pending) {
-        if (p.indexHints !== undefined) hintedIndexes = indexHintKeys(p.def!, p.alias, p.indexHints, ctx.env, validate, hintScope)
+        if (p.indexHints !== undefined) hintedIndexes = indexHintKeys(p.def!, p.alias, p.indexHints, ctx.env, validate, unscopedOrder ? 'JOIN' : hintScope)
       }
     }
     hints.checked = tableIds
   }
-  const eligibleIndexes: FromPlan['eligibleIndexes'] = hintedIndexes && { [hintScope!]: hintedIndexes }
+  const eligibleIndexes: FromPlan['eligibleIndexes'] = hintedIndexes && (unscopedOrder
+    ? { JOIN: hintedIndexes, 'ORDER BY': hintedIndexes }
+    : { [hintScope!]: hintedIndexes })
   const joinIndexes = eligibleIndexes?.JOIN
 
   // Second pass: the joins — USING and NATURAL merge columns, which changes

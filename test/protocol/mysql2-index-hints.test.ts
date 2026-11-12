@@ -290,3 +290,43 @@ test('GROUP BY index hints select ordered grouping or temporary aggregation', as
     await db?.end()
   }
 })
+
+test('unscoped index hints govern both the scan and ORDER BY', async () => {
+  const { db, conn } = await indexHintConnection()
+  const schema = 'index_hint_unscoped_order'
+  const read = checkIndexRead.bind(undefined, conn)
+  const aField = ['a', 3, 11, 20489, 0, 63]
+  const bField = ['b', 3, 11, 20489, 0, 63]
+  const byA = DATA.slice().sort((left, right) => left.a - right.a || left.id - right.id)
+  const first = byA.slice(0, 6).map(({ id, a }) => [id, a])
+  const byId = DATA.slice(-6).reverse()
+  const sortedTable = 'Limit\n    Sort\n        Table scan on t'
+  const coverA = 'Covering index scan on t using by_a'
+  const sortedA = `Limit\n    Sort\n        ${coverA}`
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await createHintTable(conn)
+    for (const hint of ['USE INDEX ()', 'USE INDEX () USE INDEX (by_a)', 'USE INDEX (by_a) IGNORE INDEX (by_a)']) {
+      await read(`SELECT id,a FROM t ${hint} ORDER BY 2,1 LIMIT 6`, first, [ID_FIELD, aField], sortedTable)
+    }
+    await read('SELECT id,a FROM t IGNORE INDEX (by_a) ORDER BY a,id LIMIT 6', first, [ID_FIELD, aField],
+      'Limit\n    Sort\n        Covering index scan on t using by_ab')
+    await read('SELECT id,a FROM t USE INDEX (by_a) USE INDEX () ORDER BY a,id LIMIT 6', first,
+      [ID_FIELD, aField], `Limit\n    ${coverA}`)
+    await read('SELECT id,a FROM t USE INDEX (by_b) ORDER BY a+0,id LIMIT 6', first, [ID_FIELD, aField], sortedTable)
+    await read('SELECT id,a FROM t USE INDEX (by_a) ORDER BY id DESC LIMIT 6', byId.map(({ id, a }) => [id, a]),
+      [ID_FIELD, aField], sortedA)
+    await read('SELECT id FROM t USE INDEX (PRIMARY) ORDER BY id DESC LIMIT 6', byId.map(({ id }) => [id]),
+      [ID_FIELD], 'Limit\n    Covering index scan on t using PRIMARY')
+    const byB = DATA.slice().sort((left, right) => right.b - left.b || right.id - left.id)
+    await read('SELECT id,b FROM t USE INDEX (by_b) ORDER BY b DESC,id DESC LIMIT 6 OFFSET 4',
+      byB.slice(4, 10).map(({ id, b }) => [id, b]), [ID_FIELD, bField], 'Limit/Offset\n    Covering index scan on t using by_b')
+    await conn.query("SET optimizer_switch='prefer_ordering_index=off'")
+    await read('SELECT id,a FROM t IGNORE INDEX (by_a,by_ab) ORDER BY a,id LIMIT 6', first, [ID_FIELD, aField], sortedTable)
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})

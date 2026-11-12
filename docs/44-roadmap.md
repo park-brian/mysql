@@ -1899,6 +1899,13 @@ their actual coverage. The pinned 312-response audit improves from 96 to
 214 complete matches, with all previous matches preserved. Unscoped hints
 on ordered reads are next.
 
+**M5.49 unscoped hints on ordered whole reads, verified.** Unscoped USE and
+IGNORE feed one eligible index list to both the scan and the ordering proof.
+An empty USE list gives a table scan followed by a sort. IGNORE can leave
+another index covering the scan while still requiring a sort. The pinned
+484-response audit improves from 140 to 426 complete matches, preserving
+every previously matching fact. Unscoped hints on grouped reads are next.
+
 **M5.10 written utf8 failure histories, verified:** the shared
 expression helper now retains warning 3719 for the written alias at introducers,
 CONVERT USING and CAST CHAR. Successful-root provenance and independent DDL/SET
@@ -8199,6 +8206,25 @@ HAVING, ROLLUP, windows, mixed scopes, FORCE and joins require separate
 proofs. Parser, core and facade are 45,611, 334,355 and 334,265 B gzipped
 within the existing caps. M5.49 remains partial.
 
+### Verified unscoped hints on ordered whole reads (M5.49)
+
+Simple single-table ORDER BY queries without WHERE now share the resolved
+unscoped USE and IGNORE list across JOIN and ORDER BY eligibility. The
+existing scan and sort operators account for covering, PRIMARY and composite
+keys, reverse order and LIMIT/OFFSET. Both protocols retain the existing
+rows, fields and warning outcomes from the 484-response audit, including
+both ordering preferences. The 396-response warning, expression and tie
+audit improves from 112 to 272 complete matches. The 176-response constant
+and computed-order audit improves from 12 to 20. All previously matching
+components are preserved. Alternate noncovering ordering scans, ranges,
+computed-key and tie behavior, mixed scopes, FORCE and grouping require
+separate proofs.
+
+The generated error dictionary uses more of its existing two-letter codes.
+Its digest still covers all 2,132 public mappings. Parser, core and facade
+are 45,611, 334,243 and 334,148 B gzipped within the existing caps. M5.49
+remains partial.
+
 ### Verified ordered-read projection boundary (M5.49)
 
 The pinned 8.4.11 probe covers 392 query/execute outcomes: ordinary PRIMARY and
@@ -11471,7 +11497,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,355 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 334,265 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
+| Core bundle, gzipped | 334,243 B (326.4 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 334,148 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

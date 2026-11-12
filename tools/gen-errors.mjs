@@ -107,7 +107,8 @@ for (const { symbol } of entries) {
   }
 }
 const letters = 'abcdefghijklmnopqrstuvwxyz'
-const tokens = [...letters, ...['a', 'b'].flatMap((prefix) => [...letters].map((letter) => prefix + letter))]
+// Nine two-letter blocks reduce the compressed size of the pinned dictionary.
+const tokens = [...letters, ...[...letters.slice(0, 9)].flatMap((prefix) => [...letters].map((letter) => prefix + letter))]
 const words = [...wordSavings.keys()].sort().sort((a, b) => wordSavings.get(b) - wordSavings.get(a)).slice(0, tokens.length)
 const codes = new Map(words.map((word, i) => [word, tokens[i]]))
 

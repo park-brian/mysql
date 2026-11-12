@@ -36,7 +36,7 @@ function load(): { bySymbol: Map<string, Entry>; byErrno: Map<number, Entry> } {
     const n = new Map<number, Entry>()
     const words = ERROR_NAME_WORDS.split(' ')
     const unpack = (token: string): string => {
-      // Codes a–z, aa–az and ba–bz address consecutive blocks of 26 words.
+      // One letter addresses block zero. A two-letter code starts with its block.
       const block = token.length === 1 ? 0 : token.charCodeAt(0) - 96
       return words[26 * block + token.charCodeAt(token.length - 1) - 97]!
     }
