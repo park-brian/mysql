@@ -74,7 +74,7 @@ import { StatementConditions, conditionsFor, promotedError } from './strict.ts'
 import { renameTables } from './rename.ts'
 import { showCreateView, showQuery, shownColumns, tableStatusQuery, variablesColumns, variablesQuery } from './show.ts'
 import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Condition, type Value } from '@myjs/types'
-import { charsetChange, ensureCollationResident } from '../transcoder.ts'
+import { charsetChange, ensureCollationResident, utf8StrictDecoder } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
 import { appendConditions, systemVariable, compile, EMPTY_SCOPE, raise, type Env } from './compile.ts'
 import { renderTree } from './explain.ts'
@@ -101,8 +101,6 @@ export interface SqlExecutorOptions extends ServerOptions {
   readonly catalog?: Catalog
 }
 
-const UTF8_FATAL = new TextDecoder('utf-8', { fatal: true })
-
 /** A wire parameter as a value: a string in the client's charset, unless its bytes are not text, in which case they are bytes. */
 function parameterValue(p: Parameter, session: Session): Value {
   const v = p.value
@@ -111,7 +109,7 @@ function parameterValue(p: Parameter, session: Session): Value {
     if (p.type === FIELD_TYPE.NEWDECIMAL || p.type === FIELD_TYPE.DECIMAL) return parseDecimal(fromUtf8(v))
     let text: string
     try {
-      text = session.characterSet === CHARSET_UTF8MB4_0900_AI_CI || session.transcoder === undefined ? UTF8_FATAL.decode(v) : session.transcoder.decode(v, session.characterSet)
+      text = session.characterSet === CHARSET_UTF8MB4_0900_AI_CI || session.transcoder === undefined ? utf8StrictDecoder.decode(v) : session.transcoder.decode(v, session.characterSet)
     } catch {
       return { kind: 'bytes', v }
     }

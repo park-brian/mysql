@@ -21,6 +21,7 @@ import {
   PacketFramer,
   SERVER_STATUS,
   capabilities,
+  fromUtf8,
   hasCap,
   parseColumnDefinition41,
   parseEof,
@@ -29,6 +30,7 @@ import {
   parseOk,
   sha1,
   sha256,
+  utf8,
   writeHandshakeResponse41,
   xor,
   type Capabilities,
@@ -160,7 +162,7 @@ export class WireClient {
     // What the server does not offer is not asked for.
     flags &= hello.capabilities
     const caps = capabilities(flags)
-    const password = new TextEncoder().encode(options.password)
+    const password = utf8(options.password)
     const plugin = hello.authPluginName === MYSQL_NATIVE_PASSWORD ? MYSQL_NATIVE_PASSWORD : CACHING_SHA2_PASSWORD
     const w = new Writer(128)
     writeHandshakeResponse41(w, {
@@ -185,7 +187,7 @@ export class WireClient {
       if (packet[0] === EOF) {
         // AuthSwitchRequest: the plugin name, NUL, and its data.
         const r = new Reader(packet, 1)
-        const name = new TextDecoder().decode(r.nulString())
+        const name = fromUtf8(r.nulString())
         const data = r.restBytes()
         const nonce = data[data.length - 1] === 0 ? data.subarray(0, data.length - 1) : data
         reply = await exchange(server, framer, await scramble(name, password, nonce))

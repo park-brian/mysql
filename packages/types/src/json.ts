@@ -27,6 +27,7 @@
 //   and the text rendering both reflect the stored order, which is why
 //   `JSON_OBJECT('b',1,'a',2)` comes back with `a` first. Reproducing it is
 //   required for output compatibility, not a nicety.
+import { fromUtf8, utf8 } from './utf8.ts'
 import { invalidJson } from './errors.ts'
 import { decodeStorageValue, type ColumnMeta, type StorageValue } from './values.ts'
 
@@ -191,7 +192,7 @@ function decodeValue(
     case JSON_TYPE.STRING: {
       const { value: length, size } = varint(body, 0)
       need(body, size, length, 'string')
-      return new TextDecoder().decode(body.subarray(size, size + length))
+      return fromUtf8(body.subarray(size, size + length))
     }
     case JSON_TYPE.CUSTOM: {
       // Doc 28: "this is how `CAST(NOW() AS JSON)` round-trips a temporal
@@ -277,7 +278,7 @@ function decodeObject(
     // be < 64 KB".
     const keyLength = u16(container, keyEntry + offsetSize)
     need(container, keyOffset, keyLength, 'key')
-    const key = new TextDecoder().decode(container.subarray(keyOffset, keyOffset + keyLength))
+    const key = fromUtf8(container.subarray(keyOffset, keyOffset + keyLength))
     // `defineProperty` rather than `out[key] = …`, because a stored document is
     // untrusted input and `__proto__` is a legal JSON key. Plain assignment
     // would walk into the prototype setter instead of creating an own
@@ -303,8 +304,8 @@ function decodeObject(
  * it is storing the sorted form.
  */
 export function compareJsonKeys(a: string, b: string): number {
-  const ab = new TextEncoder().encode(a)
-  const bb = new TextEncoder().encode(b)
+  const ab = utf8(a)
+  const bb = utf8(b)
   if (ab.length !== bb.length) return ab.length - bb.length
   for (let i = 0; i < ab.length; i++) {
     if (ab[i] !== bb[i]) return (ab[i] as number) - (bb[i] as number)
@@ -361,11 +362,11 @@ function encodeScalar(value: JsonValue): Encoded {
   }
 
   if (typeof value === 'string') {
-    const utf8 = new TextEncoder().encode(value)
-    const length = writeVarint(utf8.length)
-    const body = new Uint8Array(length.length + utf8.length)
+    const encoded = utf8(value)
+    const length = writeVarint(encoded.length)
+    const body = new Uint8Array(length.length + encoded.length)
     body.set(length)
-    body.set(utf8, length.length)
+    body.set(encoded, length.length)
     return { type: JSON_TYPE.STRING, body }
   }
 
@@ -449,7 +450,7 @@ function encodeObjectBody(object: { [key: string]: JsonValue }, large: boolean):
   const valueEntrySize = 1 + offsetSize
 
   const keys = Object.keys(object).sort(compareJsonKeys)
-  const keyBytes = keys.map((k) => new TextEncoder().encode(k))
+  const keyBytes = keys.map(utf8)
   const encoded = keys.map((k) => encodeAny(object[k] as JsonValue, large))
 
   let cursor = headerSize + keys.length * (keyEntrySize + valueEntrySize)

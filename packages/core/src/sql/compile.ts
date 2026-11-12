@@ -350,45 +350,51 @@ function completeDouble(prefix: ReturnType<typeof numericPrefix>): boolean {
 function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env, c: Compiled, diagnosticKind?: ResultType['kind']): void {
   const text = toText(v)
   const p = numericPrefix(text)
-  const column = c.type.column
+  const { column, field } = c.type
+  const double = kind === 'DOUBLE'
   // Field_blob and CONCAT's Item_str_func reader discard truncation status;
   // an invalid prefix still raises the decimal converter's fatal 1366.
   if (kind === 'DECIMAL') {
     if ((column || c.decimalPrefix) && !p.valid) raise(env, 1366, "Incorrect DECIMAL value: '0' for column '' at row -1")
-    if (c.decimalPrefix || (column && c.type.field === FIELD_TYPE.BLOB)) return
+    if (c.decimalPrefix || (column && field === FIELD_TYPE.BLOB)) return
   }
   // An integer past 64 bits is truncated too, to the largest there is.
   // A double past the largest is truncated as well (8.4.11: `'1e400' + 0`).
-  if (kind === 'DOUBLE' ? completeDouble(p) : p.complete &&
+  if (double ? completeDouble(p) : p.complete &&
     (kind !== 'INTEGER' || (!p.fractional && BigInt(p.text) <= MAX_UNSIGNED && BigInt(p.text) >= MIN_SIGNED))) return
   // INTEGER casts warn even for empty or whitespace-only strings and bytes.
   if (kind !== 'DECIMAL' && diagnosticKind === undefined && /^[ \t\n\r]*$/.test(text)) return
-  const double = kind === 'DOUBLE'
-  const fixed = c.type.field === FIELD_TYPE.STRING
+  const fixed = field === FIELD_TYPE.STRING
+  const raw = double && column && field === FIELD_TYPE.VAR_STRING && v.kind === 'bytes' ? v.v : undefined
   let diagnostic: string
-  let suffix: string | undefined
   if (v.kind === 'bytes' && (diagnosticKind === 'bytes' || (double && (!column || fixed)))) diagnostic = escapedBytes(v.v.subarray(0, 128)).slice(0, 128)
   // Fixed CHAR and expressions with a known collation derivation use ErrConvString for DOUBLE.
-  else if (diagnosticKind === 'string' || (double && v.kind === 'string' && (column ? fixed : c.type.coercibility !== undefined))) {
-    const normalized = bmpText(warnedText(v)).slice(0, 128)
-    // Decode the warning's opening quote with the value to retain a leading BOM.
-    const bytes = utf8(double ? "'" + normalized : normalized)
-    let end = double ? 129 : 128
-    if (double) {
-      while (((bytes[end] ?? 0) >> 6) === 2) end--
-      // A split character that needs two more bytes also hides the closing quote.
-      suffix = end === 128 && bytes[end]! >= 0xe0 ? '' : '?'.repeat(129 - end) + "'"
-    }
-    diagnostic = fromUtf8(bytes.subarray(0, end)).slice(double ? 1 : 0)
+  else if (raw || diagnosticKind === 'string' || (double && v.kind === 'string' && (column ? fixed : c.type.coercibility !== undefined))) {
+    const bytes = raw ?? utf8(bmpText(warnedText(v)).slice(0, 128))
+    if (double) return raise(env, 1292, 'Truncated incorrect DOUBLE value: ' + utf8mb3WarningQuote(bytes))
+    diagnostic = fromUtf8(bytes.subarray(0, 128))
   }
-  else diagnostic = warnedText(v)
-  truncated(env, kind, diagnostic, suffix)
+  else {
+    diagnostic = warnedText(v)
+    if (double && /^[\x00-\x7F]{129,}$/.test(diagnostic)) diagnostic = diagnostic.slice(0, 128)
+  }
+  truncated(env, kind, diagnostic)
 }
 
 /** A truncated conversion's message; each reader retains its text policy. */
-function truncated(env: Pick<Env, 'conditions'>, kind: string, text: string, suffix = "'"): void {
-  if (kind === 'DOUBLE' && /^[\x00-\x7F]{129,}$/.test(text)) text = text.slice(0, 128)
-  raise(env, 1292, `Truncated incorrect ${kind} value: '${text}${suffix}`)
+function truncated(env: Pick<Env, 'conditions'>, kind: string, text: string): void {
+  raise(env, 1292, `Truncated incorrect ${kind} value: '${text}'`)
+}
+
+/** A byte-limited C string and its closing quote, read as the server's utf8mb3 warning text. */
+function utf8mb3WarningQuote(bytes: Uint8Array): string {
+  const raw = toText(bytesValue(bytes.subarray(0, 128))).split('\0', 1)[0]!
+  // A lone three-byte lead also hides the closing quote. Other invalid bytes become question marks.
+  const valid = ("'" + raw + "'").replace(
+    /[\xe0-\xef]'$|[\xc2-\xdf][\x80-\xbf]|(?!\xe0[\x80-\x9f]|\xed[\xa0-\xbf])[\xe0-\xef][\x80-\xbf]{2}|[\x80-\xff]/g,
+    (part) => part[1] === "'" ? '' : part.length === 1 ? '?' : part,
+  )
+  return fromUtf8(Uint8Array.from(valid, (char) => char.charCodeAt(0)))
 }
 
 /**

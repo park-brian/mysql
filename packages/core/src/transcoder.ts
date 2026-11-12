@@ -16,6 +16,8 @@ import {
 import { expectTyped } from '@myjs/bytes'
 import { messages, sqlError, type Transcoder } from '@myjs/protocol'
 
+export const utf8StrictDecoder = new TextDecoder('utf-8', { fatal: true })
+
 /** A `Transcoder` backed by the full charset registry. */
 export const charsetTranscoder: Transcoder = {
   encode(text: string, collationId: number): Uint8Array {

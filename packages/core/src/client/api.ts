@@ -8,7 +8,7 @@
 // each `begin()` and `transaction()` a connection of its own, since a
 // transaction is a session's state and two callers sharing one would share
 // it.
-import { CLIENT, hasCap, symbolOf, type ColumnDefinition } from '@myjs/protocol'
+import { CLIENT, hasCap, symbolOf, utf8, type ColumnDefinition } from '@myjs/protocol'
 import { binaryRow, executePacket, fieldInfo, formatQuery, textRow, type FieldInfo, type TypeOptions } from './values.ts'
 import { WireClient, WireError, type ConnectOptions, type ServerEnd, type WireResult } from './wire.ts'
 
@@ -72,8 +72,6 @@ export interface TransactionOptions extends BeginOptions {
 /** A prepared statement kept per connection, as `mysql2` keeps them, by text. */
 const PREPARED_KEPT = 256
 
-const encoder = new TextEncoder()
-
 /** `Connection`'s batches, for `ownedStream`: the class hands its private method out once. */
 let batchesOf: <T>(connection: Connection, sql: string | QueryOptions, values: readonly unknown[] | undefined) => AsyncGenerator<readonly T[], void, undefined>
 
@@ -106,7 +104,7 @@ export class Connection {
     const o = this.#options(sql, values)
     return this.#serial(async () => {
       const text = o.values === undefined ? o.sql : formatQuery(o.sql, o.values, this.#client.noBackslashEscapes, o.timezone)
-      const results = await this.#run(text, () => this.#client.query(encoder.encode(text)))
+      const results = await this.#run(text, () => this.#client.query(utf8(text)))
       return shape(results, o, false) as QueryResult<T>
     })
   }
@@ -146,7 +144,7 @@ export class Connection {
     })
     const text = o.values === undefined ? o.sql : formatQuery(o.sql, o.values, this.#client.noBackslashEscapes, o.timezone)
     try {
-      const { columns, rows } = await this.#client.stream(encoder.encode(text))
+      const { columns, rows } = await this.#client.stream(utf8(text))
       const shape = rowShape(columns, o, false)
       for await (const batch of rows) yield batch.map(shape) as T[]
     } catch (e) {
@@ -194,7 +192,7 @@ export class Connection {
   async #prepare(sql: string): Promise<number> {
     const kept = this.#prepared.get(sql)
     if (kept !== undefined) return kept
-    const id = await this.#run(sql, () => this.#client.prepare(encoder.encode(sql)))
+    const id = await this.#run(sql, () => this.#client.prepare(utf8(sql)))
     if (this.#prepared.size >= PREPARED_KEPT) {
       const [oldest, evicted] = this.#prepared.entries().next().value as [string, number]
       this.#prepared.delete(oldest)

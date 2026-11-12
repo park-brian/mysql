@@ -22,6 +22,7 @@
 // value below it, each match reported once, in document order.
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { sqlError, utf8 } from '@myjs/protocol'
+import { utf8StrictDecoder } from '../transcoder.ts'
 import {
   COERCIBILITY,
   JsonSyntaxError,
@@ -62,8 +63,6 @@ const wildcardNotAllowed = () => sqlError('ER_INVALID_JSON_PATH_WILDCARD', 'In t
 
 // --- parsing ------------------------------------------------------------------------
 
-const UTF8_DECODE = new TextDecoder('utf-8', { fatal: true })
-
 /** `my_isspace` under utf8mb4_bin: tab through carriage return, and space. */
 const isSpace = (b: number | undefined): boolean => b !== undefined && ((b >= 0x09 && b <= 0x0d) || b === 0x20)
 const isDigitByte = (b: number | undefined): boolean => b !== undefined && b >= 0x30 && b <= 0x39
@@ -93,7 +92,7 @@ function isIdentifier(name: string): boolean {
 function jsonString(bytes: Uint8Array): string | undefined {
   let text: string
   try {
-    text = UTF8_DECODE.decode(bytes)
+    text = utf8StrictDecoder.decode(bytes)
   } catch {
     return undefined
   }

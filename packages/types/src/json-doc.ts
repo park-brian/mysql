@@ -22,6 +22,7 @@
 // a fraction nor an exponent is an INT64 if it fits, a UINT64 if that fits, and
 // a double past both; `-0` is the integer 0 and `-0.0` the double -0. All of it
 // was read off 8.4.11 (tools/capture-json.mjs, M5.21).
+import { fromUtf8, utf8 } from './utf8.ts'
 import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
 import { compareBytes, MyjsError, renderMysqlDateTime, renderMysqlTime } from '@myjs/bytes'
 import { decodeDecimal, encodeDecimal } from './decimal.ts'
@@ -436,9 +437,6 @@ function compareNumbers(a: JsonDoc, b: JsonDoc): number {
   return da < db ? -1 : da > db ? 1 : 0
 }
 
-
-const utf8 = new TextEncoder()
-
 const temporalKey = (v: MysqlDateTime): number[] => [v.year, v.month, v.day, v.hour, v.minute, v.second, v.microsecond]
 const timeKey = (v: MysqlTime): number => (v.negative ? -1 : 1) * ((((v.days * 24 + v.hour) * 60 + v.minute) * 60 + v.second) * 1e6 + v.microsecond)
 
@@ -456,7 +454,7 @@ export function compareJson(a: JsonDoc, b: JsonDoc): number {
     case 'decimal':
       return compareNumbers(a, b)
     case 'string':
-      return sign(compareBytes(utf8.encode(a.v), utf8.encode((b as typeof a).v)))
+      return sign(compareBytes(utf8(a.v), utf8((b as typeof a).v)))
     case 'bool':
       return Number(a.v) - Number((b as typeof a).v)
     case 'array': {
@@ -587,7 +585,7 @@ function piece(doc: JsonDoc): Piece {
       return { type: JSON_TYPE.DOUBLE, body }
     }
     case 'string': {
-      const bytes = new TextEncoder().encode(doc.v)
+      const bytes = utf8(doc.v)
       const len = writeVarint(bytes.length)
       const body = new Uint8Array(len.length + bytes.length)
       body.set(len)
@@ -628,7 +626,7 @@ function piece(doc: JsonDoc): Piece {
  * large. Widths are per container, so each child has chosen its own already.
  */
 function container(members: readonly (readonly [string | undefined, JsonDoc])[], isObject: boolean): Piece {
-  const keys = isObject ? members.map(([k]) => utf8.encode(k as string)) : []
+  const keys = isObject ? members.map(([k]) => utf8(k as string)) : []
   const pieces = members.map(([, v]) => piece(v))
   const small = layout(keys, pieces, false)
   if (small !== undefined) return { type: isObject ? JSON_TYPE.SMALL_OBJECT : JSON_TYPE.SMALL_ARRAY, body: small }
@@ -736,7 +734,7 @@ function decodeAt(type: number, body: Uint8Array, inEntryOfLarge: boolean | unde
     case JSON_TYPE.STRING: {
       const { value: n, size } = varint(body, 0)
       need(body, size, n)
-      return { t: 'string', v: new TextDecoder().decode(body.subarray(size, size + n)) }
+      return { t: 'string', v: fromUtf8(body.subarray(size, size + n)) }
     }
     case JSON_TYPE.CUSTOM: {
       need(body, 0, 1)
@@ -812,7 +810,7 @@ function decodeContainer(c: Uint8Array, large: boolean, isObject: boolean): Json
     need(c, keyEntry + w, 2)
     const keyLength = v.getUint16(keyEntry + w, true)
     need(c, keyAt, keyLength)
-    members.push([new TextDecoder().decode(c.subarray(keyAt, keyAt + keyLength)), entry(values + i * (1 + w))])
+    members.push([fromUtf8(c.subarray(keyAt, keyAt + keyLength)), entry(values + i * (1 + w))])
   }
   return { t: 'object', v: members }
 }
@@ -924,7 +922,7 @@ export function jsonSortHash(doc: JsonDoc, seed: bigint): bigint {
       addDouble(Number(renderDecimal(doc.v)))
       break
     case 'string':
-      addBytes(utf8.encode(doc.v))
+      addBytes(utf8(doc.v))
       break
     case 'opaque':
       addBytes(doc.v)
@@ -932,7 +930,7 @@ export function jsonSortHash(doc: JsonDoc, seed: bigint): bigint {
     case 'object':
       add(0x05)
       for (const [k, v] of doc.v) {
-        addBytes(utf8.encode(k))
+        addBytes(utf8(k))
         addInteger(jsonSortHash(v, crc))
       }
       break

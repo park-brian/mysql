@@ -14,7 +14,7 @@
 // `Uint8Array` where `mysql2` gives a `Buffer`, and a `Uint8Array` parameter
 // is sent as bytes (a BLOB) as `mysql2` sends a `Buffer`.
 import { FIELD_TYPE, hex, Reader, Writer } from '@myjs/bytes'
-import { COLUMN_FLAG, COM, type ColumnDefinition } from '@myjs/protocol'
+import { COLUMN_FLAG, COM, fromUtf8, utf8, type ColumnDefinition } from '@myjs/protocol'
 import { collationInfo, decodeCollation } from '@myjs/charsets'
 
 /** The options that change a value's JavaScript form: `mysql2`'s, by the same names. */
@@ -72,7 +72,6 @@ export function fieldInfo(c: ColumnDefinition): FieldInfo {
 
 const BINARY = 63
 const ZERO_DATE = '0000-00-00'
-const utf8 = new TextDecoder()
 
 const pad = (n: number, v: number | string): string => {
   const s = String(v)
@@ -91,7 +90,7 @@ function offsetMinutes(zone: string): number | null {
   return (zone[0] === '-' ? -1 : 1) * (Number.parseInt(zone.slice(1, 3), 10) * 60 + Number.parseInt(zone.slice(4), 10))
 }
 
-const text = (bytes: Uint8Array, c: ColumnDefinition): string => (isUtf8(c.characterSet) ? utf8.decode(bytes) : decodeCollation(bytes, c.characterSet))
+const text = (bytes: Uint8Array, c: ColumnDefinition): string => (isUtf8(c.characterSet) ? fromUtf8(bytes) : decodeCollation(bytes, c.characterSet))
 
 /** Whether a collation's charset is UTF-8, which TextDecoder reads as it is. */
 function isUtf8(collation: number): boolean {
@@ -165,27 +164,27 @@ function textValue(bytes: Uint8Array | null, c: ColumnDefinition, o: TypeOptions
     case FIELD_TYPE.LONG:
     case FIELD_TYPE.INT24:
     case FIELD_TYPE.YEAR:
-      return bytes.length === 0 ? 0 : Number(utf8.decode(bytes))
+      return bytes.length === 0 ? 0 : Number(fromUtf8(bytes))
     case FIELD_TYPE.LONGLONG:
-      return bytes.length === 0 ? 0 : bigintText(utf8.decode(bytes), o)
+      return bytes.length === 0 ? 0 : bigintText(fromUtf8(bytes), o)
     case FIELD_TYPE.FLOAT:
     case FIELD_TYPE.DOUBLE:
-      return bytes.length === 0 ? 0 : Number.parseFloat(utf8.decode(bytes))
+      return bytes.length === 0 ? 0 : Number.parseFloat(fromUtf8(bytes))
     case FIELD_TYPE.NULL:
     case FIELD_TYPE.DECIMAL:
     case FIELD_TYPE.NEWDECIMAL:
-      return o.decimalNumbers === true ? (bytes.length === 0 ? 0 : Number.parseFloat(utf8.decode(bytes))) : utf8.decode(bytes)
+      return o.decimalNumbers === true ? (bytes.length === 0 ? 0 : Number.parseFloat(fromUtf8(bytes))) : fromUtf8(bytes)
     case FIELD_TYPE.DATE:
-      return datesAsText(c.type, o) ? utf8.decode(bytes) : dateText(utf8.decode(bytes), zone)
+      return datesAsText(c.type, o) ? fromUtf8(bytes) : dateText(fromUtf8(bytes), zone)
     case FIELD_TYPE.DATETIME:
     case FIELD_TYPE.TIMESTAMP:
-      return datesAsText(c.type, o) ? utf8.decode(bytes) : dateTimeText(utf8.decode(bytes), zone)
+      return datesAsText(c.type, o) ? fromUtf8(bytes) : dateTimeText(fromUtf8(bytes), zone)
     case FIELD_TYPE.TIME:
-      return utf8.decode(bytes)
+      return fromUtf8(bytes)
     case FIELD_TYPE.GEOMETRY:
       return geometry(bytes)
     case FIELD_TYPE.JSON:
-      return o.jsonStrings === true ? utf8.decode(bytes) : json(utf8.decode(bytes), o)
+      return o.jsonStrings === true ? fromUtf8(bytes) : json(fromUtf8(bytes), o)
     default:
       return c.characterSet === BINARY ? bytes.slice() : text(bytes, c)
   }
@@ -237,13 +236,13 @@ function binaryValue(r: Reader, c: ColumnDefinition, o: TypeOptions): unknown {
       return timeString(r)
     case FIELD_TYPE.DECIMAL:
     case FIELD_TYPE.NEWDECIMAL: {
-      const s = utf8.decode(r.lenEncBytes() ?? new Uint8Array(0))
+      const s = fromUtf8(r.lenEncBytes() ?? new Uint8Array(0))
       return o.decimalNumbers === true ? (s === '' ? 0 : Number.parseFloat(s)) : s
     }
     case FIELD_TYPE.GEOMETRY:
       return geometry(r.lenEncBytes() ?? new Uint8Array(0))
     case FIELD_TYPE.JSON: {
-      const s = utf8.decode(r.lenEncBytes() ?? new Uint8Array(0))
+      const s = fromUtf8(r.lenEncBytes() ?? new Uint8Array(0))
       return o.jsonStrings === true ? s : json(s, o)
     }
     case FIELD_TYPE.LONGLONG: {
@@ -438,8 +437,6 @@ interface Encoded {
   write(w: Writer): void
 }
 
-const encoder = new TextEncoder()
-
 function parameter(v: unknown, timezone: string): Encoded {
   if (v === undefined) throw new TypeError('Bind parameters must not contain undefined. To pass SQL NULL specify JS null')
   if (v === null) return { type: FIELD_TYPE.NULL, write: () => {} }
@@ -448,10 +445,10 @@ function parameter(v: unknown, timezone: string): Encoded {
   if (v instanceof Date) return { type: FIELD_TYPE.DATETIME, write: (w) => writeDate(w, v, timezone) }
   if (v instanceof Uint8Array) return { type: FIELD_TYPE.BLOB, write: (w) => w.lenEncBytes(v) }
   if (typeof v === 'object' && isPlainJson(v)) {
-    const s = encoder.encode(JSON.stringify(v))
+    const s = utf8(JSON.stringify(v))
     return { type: FIELD_TYPE.JSON, write: (w) => w.lenEncBytes(s) }
   }
-  const s = encoder.encode(String(v))
+  const s = utf8(String(v))
   return { type: FIELD_TYPE.VAR_STRING, write: (w) => w.lenEncBytes(s) }
 }
 

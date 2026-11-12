@@ -24,6 +24,7 @@
 // precision, the zero date, durations beyond 24 hours, DECIMAL beyond a
 // double. Widening one into the other would lose exactly the values that make
 // the distinction worth having.
+import { fromUtf8 } from './utf8.ts'
 import {
   CHARSET_BINARY,
   FIELD_TYPE,
@@ -317,7 +318,7 @@ function decodeJsonValue(bytes: Uint8Array): SqlValue {
   // Binary JSON's type tags are 0x00–0x0f; JSON text always starts with a
   // printable character, so the first byte is an unambiguous discriminator.
   if (tag <= 0x0f) return decodeJson(bytes) as SqlValue
-  return JSON.parse(new TextDecoder().decode(bytes)) as SqlValue
+  return JSON.parse(fromUtf8(bytes)) as SqlValue
 }
 
 function bitsToBytes(value: bigint, bits: number): Uint8Array {

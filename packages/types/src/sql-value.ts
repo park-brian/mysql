@@ -12,6 +12,7 @@
 //
 // A DECIMAL is an unscaled `bigint` and a scale, so arithmetic is exact and
 // needs no decimal library: `12.50` is `{ v: 1250n, scale: 2 }`.
+import { utf8 } from './utf8.ts'
 import { renderMysqlDateTime, renderMysqlTime, type MysqlDateTime, type MysqlTime } from '@myjs/bytes'
 import { decodeCollation, encodeCollation } from '@myjs/charsets'
 import { renderJson, type JsonDoc } from './json-doc.ts'
@@ -19,7 +20,6 @@ import { scanDateTime, scanTime, type Deprecation, type ScanFlags } from './temp
 import { daysInMonth } from './calendar.ts'
 import { timeFromSeconds, addDateTimeSeconds, TIME_MAX_SECONDS } from './temporal.ts'
 
-const UTF8 = new TextEncoder()
 /** MySQL's numeric strings use latin1_swedish_ci. */
 const NUMERIC_COLLATION = 8
 
@@ -28,7 +28,7 @@ export function valueBytes(v: Exclude<Value, null>): Uint8Array {
   if (v.kind === 'bytes') return v.v
   if (v.kind === 'double' && v.str instanceof Uint8Array) return v.str
   if (v.kind === 'string') return encodeCollation(v.v, v.collationId)
-  return UTF8.encode(toText(v))
+  return utf8(toText(v))
 }
 
 export type Value =
