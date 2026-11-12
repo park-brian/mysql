@@ -329,7 +329,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     from.tables.forEach((t, n) => {
       if (t.def === undefined || t.table === undefined || nullable.has(t.alias) || settled.has(t.alias)) return
       const def = t.def
-      const keys = (from.joinIndexes ?? def.indexes).filter((i) => uniqueKey(def, i))
+      const keys = (from.eligibleIndexes?.JOIN ?? def.indexes).filter((i) => uniqueKey(def, i))
       for (const index of keys) {
         if (index.parts.some((p) => p.prefix !== undefined)) continue
         const offsets = index.parts.map((p) => def.columns.findIndex((c) => c.name === p.column))

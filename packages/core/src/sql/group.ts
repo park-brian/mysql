@@ -31,7 +31,7 @@
 //   - `implicit`: aggregates and no GROUP BY. One row, whatever the input.
 import { CHARSET_BINARY, FIELD_TYPE, concatBytes } from '@myjs/bytes'
 import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import type { TableDef } from '@myjs/engine'
+import type { IndexDef, TableDef } from '@myjs/engine'
 import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
 import { nativeCallName, someNode } from './ast.ts'
 import { unknownColumnError } from './scope.ts'
@@ -536,14 +536,14 @@ export function* groupRows(source: Iterable<{ readonly row: Row }>, plan: GroupP
  * DISTINCT aggregate or a GROUP_CONCAT, none of which an aggregating
  * temporary table can hold; a temporary table otherwise.
  */
-export function chooseStrategy(def: TableDef | undefined, keyColumns: readonly (string | undefined)[], rollup: boolean, distinctAggregate: boolean): { strategy: GroupStrategy; index?: string } {
+export function chooseStrategy(def: TableDef | undefined, keyColumns: readonly (string | undefined)[], rollup: boolean, distinctAggregate: boolean, eligible?: readonly IndexDef[]): { strategy: GroupStrategy; index?: string } {
   if (keyColumns.length === 0) return { strategy: 'implicit' }
   if (def !== undefined && keyColumns.every((c) => c !== undefined)) {
     // Match canonical names once; repeated grouping columns need one physical part.
     const normalized = keyColumns.map((column) => column.toLowerCase())
     const columns = rollup ? normalized : [...new Set(normalized)]
     const pk = clusteredIndex(def)
-    const ordered = def.indexes.filter((i) => i.invisible !== true).sort((a, b) => (a === pk ? -1 : b === pk ? 1 : 0))
+    const ordered = (eligible ?? def.indexes).filter((i) => i.invisible !== true).sort((a, b) => (a === pk ? -1 : b === pk ? 1 : 0))
     for (const index of ordered) {
       // A secondary index carries the clustered key after its own parts.
       const parts = indexParts(def, index)

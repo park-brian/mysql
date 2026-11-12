@@ -409,11 +409,13 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   const on = !grouped && (pending || run.preparing === 'wire') ? joinConditions(q, node, pending) : undefined
   const only = refs.length === 1 ? refs[0] : undefined
   let hintScope: IndexHint['for']
-  if (hints !== undefined && only?.kind === REF.TABLE && only.indexHints !== undefined && !grouped && !node.distinct && !node.having &&
+  if (hints !== undefined && only?.kind === REF.TABLE && only.indexHints !== undefined && !node.distinct && !node.having &&
       q.locking === undefined && !containsWindow(node.items) &&
       !someNode([node.items, node.where, q.orderBy], (n) => (n as Expression).kind === NODE.MATCH || undefined)) {
-    if (q.orderBy === undefined && q.limit === undefined) hintScope = 'JOIN'
-    if (q.orderBy !== undefined && node.where === undefined) hintScope = 'ORDER BY'
+    if (q.orderBy === undefined && q.limit === undefined) {
+      if (!grouped) hintScope = 'JOIN'
+      else if (node.groupBy && !node.groupBy.rollup && node.where === undefined && !needsSortedGroups(node.items)) hintScope = 'GROUP BY'
+    } else if (!grouped && q.orderBy !== undefined && node.where === undefined) hintScope = 'ORDER BY'
   }
   let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run, on), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'), hints, hintScope)
   if (from && on?.rounded) from.rounded = on.rounded
@@ -531,7 +533,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   const loopSemijoin = semijoin && scope !== undefined && (semi !== undefined || (anti !== undefined && anti.kind !== 'hash') || nestedLoopSemijoin(node.where, scope))
   if (from !== undefined) from.sortedBy(sortBy, keep)
   if (from !== undefined && node.distinct === true) from.distinctReads(keyAliases(items.map((i) => i.expr), items, scope!))
-  const facts = source === undefined ? undefined : resolved.facts(source.def, source.alias, from?.joinIndexes)
+  const facts = source === undefined ? undefined : resolved.facts(source.def, source.alias, from?.eligibleIndexes?.JOIN)
   // A prepare reports a statement before MySQL optimizes it, so it never sees
   // the temporary table: COM_STMT_PREPARE's metadata has no GROUP_FLAG where
   // the execute's does (8.4.11, found by review).
@@ -674,8 +676,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   const outerLoop = (semi?.innerFirst === false || anti?.kind === 'materialized' || anti?.kind === 'correlated') && source !== undefined && sortBy === source.alias
   // Reconsider PRIMARY for ordinary scans and the modeled outer-first loop.
   // A proved UNIQUE projection can reconsider PRIMARY as an ordinary scan does.
-  const ordered = source !== undefined && !deduplicated && !windowed && (anti === undefined || anti.kind !== 'hash') && match === undefined && keys.length > 0 && read!.ranges === undefined ? orderingIndex(source.def, source.alias, order, items, lookup, read!.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index'), from?.orderIndexes, reads?.get(source.alias)) : undefined
-  if (ordered !== undefined) from!.readInOrder(ordered.index, false, ordered.reverse, source!.alias, ordered.covering)
+  const ordered = source !== undefined && !deduplicated && !windowed && (anti === undefined || anti.kind !== 'hash') && match === undefined && keys.length > 0 && read!.ranges === undefined ? orderingIndex(source.def, source.alias, order, items, lookup, read!.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index'), from?.eligibleIndexes?.['ORDER BY'], reads?.get(source.alias)) : undefined
+  if (ordered !== undefined) from!.readInOrder(ordered.index, false, ordered.reverse, source!.alias)
   // Only whole scans can be replaced above, so this selected range is final.
   // A pinned complete PRIMARY point binds ORDER but needs none of its readers.
   const point = read?.ranges?.length === 1 ? read.ranges[0] : undefined
@@ -1399,7 +1401,7 @@ function emptySubquery(run: Run, query: QueryExpression): boolean {
  * the clustered key it carries. 8.4.11 reads the index in that order and sorts nothing ("Index
  * scan on t using PRIMARY", "Covering index scan on t using name").
  */
-function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary: boolean, eligible?: readonly IndexDef[], columns: ReadonlySet<string> | 'all' = 'all'): { readonly index: string; readonly reverse: boolean; readonly covering: boolean } | undefined {
+function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary: boolean, eligible?: readonly IndexDef[], columns: ReadonlySet<string> | 'all' = 'all'): { readonly index: string; readonly reverse: boolean } | undefined {
   const clustered = clusteredIndex(def)
   const index = readBy === undefined ? clustered : def.indexes.find((i) => i.name === readBy)
   if (index === undefined || clustered === undefined) return undefined
@@ -1420,8 +1422,7 @@ function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[]
   const coveringOnly = eligible !== undefined && readBy !== undefined && !eligible.includes(index)
   for (const candidate of primary ? [index, clustered] : [index]) {
     if (eligible && !eligible.includes(candidate)) continue
-    const covering = eligible !== undefined && holdsRead(def, candidate, columns)
-    if (coveringOnly && !covering) continue
+    if (coveringOnly && !holdsRead(def, candidate, columns)) continue
     const parts = indexParts(def, candidate)
     const reverse = keys[0]!.desc !== (candidate.parts[0]?.descending === true)
     // Every requested key part must agree on the scan direction, including
@@ -1429,7 +1430,7 @@ function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[]
     if (keys.every((key, i) => {
       const part = parts[i]
       return part !== undefined && part.prefix === undefined && part.column.toLowerCase() === key.name && ((part.descending === true) !== key.desc) === reverse
-    })) return { index: candidate.name, reverse, covering }
+    })) return { index: candidate.name, reverse }
   }
   return undefined
 }
@@ -2345,7 +2346,7 @@ function planGrouped(
     keys.every((key) => constantNode(key.expr, true, true) && refersToRow(key.expr, lookup)) &&
     sink.specs.length > 0 && sink.specs.every((spec) => spec.name === 'AVG' && spec.type.kind === 'decimal') &&
     !items.some((item) => aggregateReaders.includes(item.compiled))
-  const { strategy, index: groupIndex } = oneGroup ? { strategy: 'index' as const, index: undefined } : chooseStrategy(copiedAverage ? undefined : alone?.def, keyColumns, rollup, distinctAggregate)
+  const { strategy, index: groupIndex } = oneGroup ? { strategy: 'index' as const, index: undefined } : chooseStrategy(copiedAverage ? undefined : alone?.def, keyColumns, rollup, distinctAggregate, from?.eligibleIndexes?.['GROUP BY'])
 
   // HAVING sees the select list's aliases, its columns and the keys; a column
   // that is none of those is 1054 even when the table has it (8.4.11).

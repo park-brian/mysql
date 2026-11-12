@@ -244,3 +244,49 @@ test('ORDER BY index hints leave JOIN covering reads eligible', async () => {
     await db?.end()
   }
 })
+
+test('GROUP BY index hints select ordered grouping or temporary aggregation', async () => {
+  const { db, conn } = await indexHintConnection()
+  const schema = 'index_hint_group'
+  const read = checkIndexRead.bind(undefined, conn)
+  const aField = ['a', 3, 11, 20489, 0, 63]
+  const copiedA = ['a', 3, 11, 4097, 0, 63]
+  const count = ['COUNT(*)', 8, 21, 129, 0, 63]
+  const copiedCount = ['COUNT(*)', 8, 21, 1, 0, 63]
+  const byA = DATA.slice().sort((left, right) => left.a - right.a || left.id - right.id)
+  const totals = Array.from({ length: 8 }, (_, a) => [a, 8])
+  const coverA = 'Covering index scan on t using by_a'
+  const coverAb = 'Covering index scan on t using by_ab'
+  const temporary = (input: string) => `Table scan on <temporary>\n    Aggregate using temporary table\n        ${input}`
+  const streaming = (input: string) => `Group aggregate\n    ${input}`
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await createHintTable(conn)
+    for (const hint of ['USE INDEX FOR GROUP BY ()', 'USE INDEX FOR GROUP BY () USE INDEX FOR GROUP BY (by_a)', 'USE INDEX FOR GROUP BY (by_a) IGNORE INDEX FOR GROUP BY (by_a)']) {
+      await read(`SELECT a,COUNT(*) FROM t ${hint} GROUP BY a`, totals, [copiedA, copiedCount], temporary(coverA))
+    }
+    for (const hint of ['IGNORE INDEX FOR GROUP BY (by_a)', 'USE INDEX FOR GROUP BY (BY_AB)']) {
+      await read(`SELECT a,COUNT(*) FROM t ${hint} GROUP BY a`, totals, [aField, count], streaming(coverAb))
+    }
+    await read('SELECT a AS bucket,COUNT(*) FROM t USE INDEX FOR GROUP BY (by_a) USE INDEX FOR GROUP BY () GROUP BY 1',
+      totals, [['bucket', ...aField.slice(1)], count], streaming(coverA))
+    const byAb = DATA.slice().sort((left, right) => left.a - right.a || left.b - right.b)
+    await read('SELECT a,b,COUNT(*) FROM t USE INDEX FOR GROUP BY () GROUP BY a,b',
+      byAb.map(({ a, b }) => [a, b, 1]), [copiedA, ['b', ...copiedA.slice(1)], copiedCount], temporary(coverAb))
+    await read('SELECT id,COUNT(*) FROM t USE INDEX FOR GROUP BY () GROUP BY id',
+      byA.map(({ id }) => [id, 1]), [['id', ...copiedA.slice(1)], copiedCount], temporary(coverA))
+    await read('SELECT id,COUNT(*) FROM t USE INDEX FOR GROUP BY (PRIMARY) GROUP BY id',
+      DATA.map(({ id }) => [id, 1]), [ID_FIELD, count], streaming('Covering index scan on t using PRIMARY'))
+    const sums = totals.map(([a]) => [a, String(DATA.filter((row) => row.a === a).reduce((sum, row) => sum + row.id, 0))])
+    await read('SELECT a,SUM(id) FROM t USE INDEX FOR GROUP BY () GROUP BY a',
+      sums, [copiedA, ['SUM(id)', 246, 33, 0, 0, 63]], temporary(coverA))
+    const minimums = totals.map(([a]) => [a, DATA.filter((row) => row.a === a).map((row) => row.payload).sort()[0]])
+    await read('SELECT a,MIN(payload) FROM t USE INDEX FOR GROUP BY (by_ab) GROUP BY a',
+      minimums, [aField, ['MIN(payload)', 253, 80, 0, 31, 224]], streaming('Index scan on t using by_ab'))
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
