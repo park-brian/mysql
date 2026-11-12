@@ -136,6 +136,8 @@ export interface FromPlan {
   readonly single?: { readonly alias: string; readonly def: TableDef; readonly table: Table } | undefined
   /** Legacy eligibility for the supported scopes of a single physical source. */
   readonly eligibleIndexes?: Partial<Record<NonNullable<IndexHint['for']>, readonly IndexDef[]>> | undefined
+  /** Eligible ordering keys after the covering scan has been selected. */
+  orderingIndexes(scope: 'ORDER BY' | 'GROUP BY'): readonly IndexDef[] | undefined
   /**
    * Every join's condition, with whether it is an outer join and whether it
    * sits inside an outer join's nullable side — what functional dependence
@@ -240,8 +242,8 @@ function foldIndexName(name: string): string {
 function indexHintEligibility(def: TableDef, alias: string, hints: readonly IndexHint[], env: Env | undefined, validate: boolean, scope: IndexHint['for']): FromPlan['eligibleIndexes'] {
   const keys = [...def.indexes, ...fulltextOf(def)].map((key) => ({ key, folded: foldIndexName(key.name) }))
   type HintKey = (typeof keys)[number]['key']
-  // Ordered reads support independent masks; grouped reads still require one scope or all unscoped hints.
-  const scopes = scope === 'ORDER BY' || (scope === 'GROUP BY' && hints.every((hint) => hint.for === undefined))
+  // Ordering and grouping have their own eligibility, separate from the scan.
+  const scopes = scope !== undefined && scope !== 'JOIN'
     ? ['JOIN', scope] as const
     : scope && hints.every((hint) => (hint.for ?? 'JOIN') === scope) ? [scope] : []
   const masks = keys.some(({ key }) => key.invisible) || hints.some((hint) => hint.type === 'FORCE') ? [] : scopes
@@ -583,6 +585,15 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     joins,
     straight,
     eligibleIndexes,
+    orderingIndexes(scope) {
+      const indexes = eligibleIndexes?.[scope]
+      if (indexes === undefined || single === undefined) return indexes
+      const scanned = covering.get(single.alias)
+      if (scanned === undefined || indexes.some((key) => key.name === scanned)) return indexes
+      // Reconsidering an excluded covering scan can only choose another covering key.
+      const read = settings.read.get(single.alias) ?? 'all'
+      return indexes.filter((key) => joinIndexes?.includes(key) !== false && holdsRead(single.def, key, read))
+    },
     reads(columns) {
       settings.chosen = new WeakMap()
       for (const t of tables) {

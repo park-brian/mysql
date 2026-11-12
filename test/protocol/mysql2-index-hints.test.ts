@@ -15,12 +15,19 @@ async function indexHintConnection() {
 }
 
 const DATA = Array.from({ length: 64 }, (_, i) => ({ id: i + 1, a: i % 8, b: (i * 11) % 17, payload: `payload${i}` }))
+const GROUP_DATA = DATA.map((row) => ({ ...row, a: (row.a * 7 + 3) % 8 }))
 const ID_FIELD = ['id', 3, 11, 20483, 0, 63]
 
 async function createHintTable(conn: mysql.Connection, data = DATA) {
   await conn.query('CREATE TABLE t(id INT PRIMARY KEY,a INT NOT NULL,b INT NOT NULL,payload VARCHAR(20),KEY by_a(a),KEY by_ab(a,b),KEY by_b(b)) STATS_AUTO_RECALC=0')
   await conn.query('INSERT INTO t VALUES ' + data.map(({ id, a, b, payload }) => `(${id},${a},${b},'${payload}')`).join(','))
   await conn.query('ANALYZE TABLE t')
+}
+
+async function createTypedHintTable(conn: mysql.Connection) {
+  await conn.query('CREATE TABLE typed_keys(id INT PRIMARY KEY,g VARCHAR(12) COLLATE utf8mb4_0900_ai_ci,d DECIMAL(8,2),n INT,KEY by_g(g),KEY by_gd(g,d),KEY by_d(d)) STATS_AUTO_RECALC=0')
+  await conn.query("INSERT INTO typed_keys VALUES (1,'é',3.20,1),(2,'a',2.40,3),(3,NULL,1.30,NULL),(4,'A',1.30,5),(5,'É',2.40,0),(6,'a ',3.20,4),(7,NULL,NULL,9),(8,'z',3.20,NULL),(9,'Ä',NULL,7),(10,'x',1.30,8)")
+  await conn.query('ANALYZE TABLE typed_keys')
 }
 
 async function checkIndexRead(conn: mysql.Connection, sql: string, rows: readonly (readonly unknown[])[], fields: unknown[][], plan: string, warnings: unknown[][] = []) {
@@ -380,7 +387,7 @@ test('unscoped index hints govern both the scan and GROUP BY', async () => {
   const { db, conn } = await indexHintConnection()
   const schema = 'index_hint_unscoped_group'
   const read = checkIndexRead.bind(undefined, conn)
-  const data = DATA.map((row) => ({ ...row, a: (row.a * 7 + 3) % 8 }))
+  const data = GROUP_DATA
   const aField = ['a', 3, 11, 20489, 0, 63]
   const copiedA = ['a', 3, 11, 4097, 0, 63]
   const count = ['COUNT(*)', 8, 21, 129, 0, 63]
@@ -402,15 +409,55 @@ test('unscoped index hints govern both the scan and GROUP BY', async () => {
     await read('SELECT id,COUNT(*) FROM t USE INDEX (PRIMARY) GROUP BY id',
       data.map(({ id }) => [id, 1]), [ID_FIELD, count], 'Group aggregate\n    Covering index scan on t using PRIMARY')
 
-    await conn.query('CREATE TABLE typed_keys(id INT PRIMARY KEY,g VARCHAR(12) COLLATE utf8mb4_0900_ai_ci,d DECIMAL(8,2),n INT,KEY by_g(g),KEY by_gd(g,d),KEY by_d(d)) STATS_AUTO_RECALC=0')
-    await conn.query("INSERT INTO typed_keys VALUES (1,'é',3.20,1),(2,'a',2.40,3),(3,NULL,1.30,NULL),(4,'A',1.30,5),(5,'É',2.40,0),(6,'a ',3.20,4),(7,NULL,NULL,9),(8,'z',3.20,NULL),(9,'Ä',NULL,7),(10,'x',1.30,8)")
-    await conn.query('ANALYZE TABLE typed_keys')
+    await createTypedHintTable(conn)
     await read('SELECT g,COUNT(*) FROM typed_keys USE INDEX () GROUP BY g',
       [['é', 2], ['a', 3], [null, 2], ['a ', 1], ['z', 1], ['x', 1]],
       [['g', 253, 48, 32768, 0, 224], copiedCount], temporary('Table scan on typed_keys'))
     await read('SELECT g,SUM(d) FROM typed_keys IGNORE INDEX (by_g) GROUP BY g',
       [[null, '1.30'], ['Ä', '3.70'], ['a ', '3.20'], ['É', '5.60'], ['x', '1.30'], ['z', '3.20']],
       [['g', 253, 48, 16392, 0, 224], ['SUM(d)', 246, 32, 128, 2, 63]], 'Group aggregate\n    Covering index scan on typed_keys using by_gd')
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
+test('mixed JOIN and GROUP BY hints retain the eligible scan when grouping needs a temporary table', async () => {
+  const { db, conn } = await indexHintConnection()
+  const schema = 'index_hint_mixed_group'
+  const read = checkIndexRead.bind(undefined, conn)
+  const firstSeen = GROUP_DATA.slice(0, 8).map(({ a }) => [a, 8] as const)
+  const sorted = firstSeen.slice().sort((left, right) => left[0] - right[0])
+  const byA = GROUP_DATA.slice().sort((left, right) => left.a - right.a || left.id - right.id)
+  const copiedA = ['a', 3, 11, 4097, 0, 63]
+  const copiedCount = ['COUNT(*)', 8, 21, 1, 0, 63]
+  const count = ['COUNT(*)', 8, 21, 129, 0, 63]
+  const coverA = 'Covering index scan on t using by_a'
+  const temporary = (input: string) => `Table scan on <temporary>\n    Aggregate using temporary table\n        ${input}`
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await createHintTable(conn, GROUP_DATA)
+    await read('SELECT a,COUNT(*) FROM t USE INDEX (by_a) IGNORE INDEX FOR GROUP BY (by_a) GROUP BY a',
+      sorted, [copiedA, copiedCount], temporary(coverA))
+    await read('SELECT a,COUNT(*) FROM t USE INDEX () USE INDEX FOR GROUP BY (by_a) GROUP BY a',
+      firstSeen, [copiedA, copiedCount], temporary('Table scan on t'))
+    await read('SELECT a,COUNT(*) FROM t USE INDEX FOR GROUP BY (by_a) USE INDEX () GROUP BY a',
+      sorted, [['a', 3, 11, 20489, 0, 63], count], 'Group aggregate\n    Index scan on t using by_a')
+    await read('SELECT a,COUNT(*) FROM t IGNORE INDEX FOR JOIN (by_a) USE INDEX FOR GROUP BY (by_a) GROUP BY a',
+      sorted, [copiedA, copiedCount], temporary('Covering index scan on t using by_ab'))
+    await read('SELECT id,COUNT(*) FROM t USE INDEX FOR JOIN (by_a) USE INDEX FOR GROUP BY (PRIMARY) GROUP BY id',
+      byA.map(({ id }) => [id, 1]), [['id', ...copiedA.slice(1)], copiedCount], temporary(coverA))
+    await read('SELECT id,COUNT(*) FROM t USE INDEX FOR JOIN () USE INDEX FOR GROUP BY (PRIMARY) GROUP BY id',
+      GROUP_DATA.map(({ id }) => [id, 1]), [ID_FIELD, count], 'Group aggregate\n    Index scan on t using PRIMARY')
+
+    await createTypedHintTable(conn)
+    const sums = [[null, '1.30'], ['Ä', '3.70'], ['a ', '3.20'], ['É', '5.60'], ['x', '1.30'], ['z', '3.20']]
+    await read('SELECT g,SUM(d) FROM typed_keys IGNORE INDEX FOR JOIN (by_g) USE INDEX FOR GROUP BY (by_g) GROUP BY g',
+      sums, [['g', 253, 48, 32768, 0, 224], ['SUM(d)', 246, 32, 0, 2, 63]], temporary('Covering index scan on typed_keys using by_gd'))
+    await read('SELECT g,SUM(d) FROM typed_keys USE INDEX FOR JOIN (by_g) USE INDEX FOR GROUP BY (by_gd) GROUP BY g',
+      sums, [['g', 253, 48, 16392, 0, 224], ['SUM(d)', 246, 32, 128, 2, 63]], 'Group aggregate\n    Index scan on typed_keys using by_gd')
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()
