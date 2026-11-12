@@ -35,6 +35,11 @@ function load(): { bySymbol: Map<string, Entry>; byErrno: Map<number, Entry> } {
     const s = new Map<string, Entry>()
     const n = new Map<number, Entry>()
     const words = ERROR_NAME_WORDS.split(' ')
+    const unpack = (token: string): string => {
+      // Codes a–z, aa–az and ba–bz address consecutive blocks of 26 words.
+      const block = token.length === 1 ? 0 : token.charCodeAt(0) - 96
+      return words[26 * block + token.charCodeAt(token.length - 1) - 97]!
+    }
     let errno = 0
     for (const line of PACKED_ERROR_TABLE.split('\n')) {
       if (line === '') continue
@@ -44,7 +49,7 @@ function load(): { bySymbol: Map<string, Entry>; byErrno: Map<number, Entry> } {
       }
       const space = line.indexOf(' ')
       const packedSymbol = space === -1 ? line : line.slice(0, space)
-      const symbol = packedSymbol.replace(/[a-z]/g, (letter) => words[letter.charCodeAt(0) - 97]!)
+      const symbol = packedSymbol.replace(/[a-z]+/g, unpack)
       const sqlState = space === -1 ? DEFAULT_SQLSTATE : line.slice(space + 1)
       const entry: Entry = { errno, symbol, sqlState }
       s.set(symbol, entry)

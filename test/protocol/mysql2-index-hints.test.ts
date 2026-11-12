@@ -14,6 +14,27 @@ async function indexHintConnection() {
   return { db, conn }
 }
 
+const DATA = Array.from({ length: 64 }, (_, i) => ({ id: i + 1, a: i % 8, b: (i * 11) % 17, payload: `payload${i}` }))
+const ID_FIELD = ['id', 3, 11, 20483, 0, 63]
+
+async function createHintTable(conn: mysql.Connection) {
+  await conn.query('CREATE TABLE t(id INT PRIMARY KEY,a INT NOT NULL,b INT NOT NULL,payload VARCHAR(20),KEY by_a(a),KEY by_ab(a,b),KEY by_b(b)) STATS_AUTO_RECALC=0')
+  await conn.query('INSERT INTO t VALUES ' + DATA.map(({ id, a, b, payload }) => `(${id},${a},${b},'${payload}')`).join(','))
+  await conn.query('ANALYZE TABLE t')
+}
+
+async function checkIndexRead(conn: mysql.Connection, sql: string, rows: readonly (readonly unknown[])[], fields: unknown[][], plan: string, warnings: unknown[][] = []) {
+  for (const method of ['query', 'execute'] as const) {
+    const options = { sql, rowsAsArray: true }
+    const [actual, metadata] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+    assert.deepEqual(actual, rows, `${method}: ${sql}`)
+    assert.deepEqual(metadata.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet]), fields, `${method}: ${sql}`)
+    assert.deepEqual((await conn.query({ sql: 'SHOW WARNINGS', rowsAsArray: true }))[0], warnings, `${method}: ${sql}`)
+  }
+  const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
+  assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan, sql)
+}
+
 test('legacy index hints resolve on physical SELECT sources before column binding', async () => {
   const { db, conn } = await indexHintConnection()
   const schema = 'index_hint_admission'
@@ -111,34 +132,22 @@ test('legacy index hints resolve on physical SELECT sources before column bindin
 test('plain SELECT reads honor unscoped and FOR JOIN USE and IGNORE INDEX', async () => {
   const { db, conn } = await indexHintConnection()
   const schema = 'index_hint_access'
-  const data = Array.from({ length: 64 }, (_, i) => ({ id: i + 1, a: i % 8, b: (i * 11) % 17, payload: `payload${i}` }))
+  const data = DATA
   const ids = (rows: typeof data) => rows.map(({ id }) => [id])
   const wide = (rows: typeof data) => rows.map(({ id, payload }) => [id, payload])
   const point = ids(data.filter(({ a }) => a === 2))
   const ranged = data.filter(({ a }) => a >= 2 && a < 4)
-  const idField = ['id', 3, 11, 20483, 0, 63]
+  const idField = ID_FIELD
   const wideFields = [idField, ['payload', 253, 80, 0, 0, 224]]
   const scan = 'Table scan on t'
   const filtered = `Filter\n    ${scan}`
   const lookup = 'Covering index lookup on t using by_a'
 
-  async function read(sql: string, rows: readonly (readonly unknown[])[], fields: unknown[][], plan: string) {
-    for (const method of ['query', 'execute'] as const) {
-      const options = { sql, rowsAsArray: true }
-      const [actual, metadata] = method === 'query' ? await conn.query(options) : await conn.execute(options)
-      assert.deepEqual(actual, rows, `${method}: ${sql}`)
-      assert.deepEqual(metadata.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet]), fields, `${method}: ${sql}`)
-      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], `${method}: ${sql}`)
-    }
-    const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
-    assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan, sql)
-  }
+  const read = checkIndexRead.bind(undefined, conn)
   try {
     await conn.query(`CREATE DATABASE ${schema}`)
     await conn.query(`USE ${schema}`)
-    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,a INT NOT NULL,b INT NOT NULL,payload VARCHAR(20),KEY by_a(a),KEY by_ab(a,b),KEY by_b(b)) STATS_AUTO_RECALC=0')
-    await conn.query('INSERT INTO t VALUES ' + data.map(({ id, a, b, payload }) => `(${id},${a},${b},'${payload}')`).join(','))
-    await conn.query('ANALYZE TABLE t')
+    await createHintTable(conn)
     await read('SELECT id FROM t USE INDEX FOR JOIN ()', ids(data), [idField], scan)
     await read('SELECT id FROM t USE INDEX (BY_B)', ids(data.slice().sort((left, right) => left.b - right.b)), [idField], 'Covering index scan on t using by_b')
     for (const hint of ['USE INDEX ()', 'USE INDEX () USE INDEX (by_a)', 'USE INDEX (by_a) IGNORE INDEX (by_a)', 'IGNORE INDEX (by_a) USE INDEX (by_a)', 'IGNORE INDEX FOR JOIN (by_a,by_ab)']) {
@@ -187,6 +196,48 @@ test('plain SELECT reads honor unscoped and FOR JOIN USE and IGNORE INDEX', asyn
     } finally {
       if (catalog && open) catalog.table = open
     }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
+test('ORDER BY index hints leave JOIN covering reads eligible', async () => {
+  const { db, conn } = await indexHintConnection()
+  const schema = 'index_hint_order'
+  const read = checkIndexRead.bind(undefined, conn)
+  const aField = ['a', 3, 11, 20489, 0, 63]
+  const bField = ['b', 3, 11, 20489, 0, 63]
+  const byA = DATA.slice().sort((left, right) => left.a - right.a || left.id - right.id)
+  const byId = DATA.slice(-6).reverse()
+  const byAb = DATA.slice().sort((left, right) => left.a - right.a || left.b - right.b || left.id - right.id)
+  const first = byA.slice(0, 6).map(({ id, a }) => [id, a])
+  const coverA = 'Covering index scan on t using by_a'
+  const sortedA = `Limit\n    Sort\n        ${coverA}`
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await createHintTable(conn)
+    for (const hint of ['USE INDEX FOR ORDER BY ()', 'IGNORE INDEX FOR ORDER BY (by_a)', 'USE INDEX FOR ORDER BY () USE INDEX FOR ORDER BY (by_a)', 'USE INDEX FOR ORDER BY (by_a) IGNORE INDEX FOR ORDER BY (by_a)']) {
+      await read(`SELECT id,a FROM t ${hint} ORDER BY 2,1 LIMIT 6`, first, [ID_FIELD, aField], sortedA)
+    }
+    await read('SELECT id,a FROM t USE INDEX FOR ORDER BY (by_a) USE INDEX FOR ORDER BY () ORDER BY a,id LIMIT 6', first,
+      [ID_FIELD, aField], `Limit\n    ${coverA}`)
+    await read('SELECT id,a FROM t USE INDEX FOR ORDER BY () ORDER BY a DESC,id DESC LIMIT 6 OFFSET 4',
+      byA.slice().reverse().slice(4, 10).map(({ id, a }) => [id, a]), [ID_FIELD, aField], `Limit/Offset\n    Sort\n        ${coverA}`)
+    await read('SELECT id,a,b FROM t USE INDEX FOR ORDER BY (by_ab) ORDER BY a,b,id LIMIT 6',
+      byAb.slice(0, 6).map(({ id, a, b }) => [id, a, b]), [ID_FIELD, aField, bField], 'Limit\n    Covering index scan on t using by_ab')
+    await read('SELECT id,a FROM t USE INDEX FOR ORDER BY (PRIMARY) ORDER BY id DESC LIMIT 6', byId.map(({ id, a }) => [id, a]),
+      [ID_FIELD, aField], sortedA)
+    await read('SELECT id,a FROM t IGNORE INDEX FOR ORDER BY (by_b) ORDER BY id DESC LIMIT 6', byId.map(({ id, a }) => [id, a]),
+      [ID_FIELD, aField], 'Limit\n    Index scan on t using PRIMARY')
+    await read('SELECT id FROM t USE INDEX FOR ORDER BY (PRIMARY) ORDER BY id DESC LIMIT 6', byId.map(({ id }) => [id]),
+      [ID_FIELD], 'Limit\n    Covering index scan on t using PRIMARY')
+    await read("SELECT id,CAST('bad' AS SIGNED) FROM t USE INDEX FOR ORDER BY () ORDER BY a,id LIMIT 6", byA.slice(0, 6).map(({ id }) => [id, 0]),
+      [ID_FIELD, ["CAST('bad' AS SIGNED)", 8, 21, 129, 0, 63]], sortedA, Array.from({ length: 6 }, () => ['Warning', 1292, "Truncated incorrect INTEGER value: 'bad'"]))
+    await conn.query("SET optimizer_switch='prefer_ordering_index=off'")
+    await read('SELECT id,a FROM t IGNORE INDEX FOR ORDER BY (by_a,by_ab) ORDER BY a,id LIMIT 6', first, [ID_FIELD, aField], sortedA)
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()

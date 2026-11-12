@@ -136,6 +136,8 @@ export interface FromPlan {
   readonly single?: { readonly alias: string; readonly def: TableDef; readonly table: Table } | undefined
   /** The eligible access keys of a single table with a legacy JOIN-scope mask. */
   readonly joinIndexes?: readonly IndexDef[] | undefined
+  /** Explicit ORDER BY eligibility, independent of the table's access keys. */
+  readonly orderIndexes?: readonly IndexDef[] | undefined
   /**
    * Every join's condition, with whether it is an outer join and whether it
    * sits inside an outer join's nullable side — what functional dependence
@@ -188,7 +190,7 @@ export interface FromPlan {
   /** Right primary-key access for a preserved LEFT JOIN whose text key needs conversion. */
   rounded?: { readonly condition: Expression; readonly access: Access; readonly constAccess: Access | undefined }
   /** Read the one base table whole in an index's order, for an ORDER BY or a grouping it gives; `force` drops a range on another index for it, and `reverse` reads it descending. */
-  readInOrder(index: string, force: boolean, reverse?: boolean, alias?: string): void
+  readInOrder(index: string, force: boolean, reverse?: boolean, alias?: string, covering?: boolean): void
   /** The FROM as 8.4.11's iterators (M5.44): the tree `rows` runs, as EXPLAIN shows it. */
   explain(env: Env): PlanNode
   /** How the one base table of a single-table FROM is read: what `rows` and `explain` read it by. */
@@ -237,10 +239,10 @@ function foldIndexName(name: string): string {
   return name.replace(/[A-Z]/g, (letter) => letter.toLowerCase())
 }
 
-function indexHintKeys(def: TableDef, alias: string, hints: readonly IndexHint[], env: Env | undefined, validate: boolean, plainRead: boolean): readonly IndexDef[] | undefined {
+function indexHintKeys(def: TableDef, alias: string, hints: readonly IndexHint[], env: Env | undefined, validate: boolean, scope: IndexHint['for']): readonly IndexDef[] | undefined {
   const keys = [...def.indexes, ...fulltextOf(def)].map((key) => ({ key, folded: foldIndexName(key.name) }))
-  const apply = plainRead && keys.every(({ key }) => !key.invisible) &&
-    hints.every((hint) => hint.type !== 'FORCE' && (hint.for === undefined || hint.for === 'JOIN'))
+  const apply = scope !== undefined && keys.every(({ key }) => !key.invisible) &&
+    hints.every((hint) => hint.type !== 'FORCE' && (hint.for === scope || (hint.for === undefined && scope === 'JOIN')))
   if (!apply && !validate) return undefined
   const ignored = apply ? new Set<string>() : undefined
   let used: Set<string> | undefined
@@ -268,7 +270,7 @@ function indexHintKeys(def: TableDef, alias: string, hints: readonly IndexHint[]
 
 /** The written FROM, as a plan: its scope, and how to read it. */
 /** `straight` is SELECT STRAIGHT_JOIN: the tables joined in the order written. */
-export function planFrom(refs: readonly TableReference[], ctx: FromContext, where?: Expression, straightJoin = false, hints?: HintAdmission, plainRead = false): FromPlan {
+export function planFrom(refs: readonly TableReference[], ctx: FromContext, where?: Expression, straightJoin = false, hints?: HintAdmission, hintScope?: IndexHint['for']): FromPlan {
   // First pass: the tables, in order, with whether an outer join can null them.
   interface Pending {
     alias: string
@@ -345,18 +347,20 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   const width = offset
 
   // Open all direct sources and check aliases before hints, then bind ON and projections.
-  let joinIndexes: readonly IndexDef[] | undefined
+  let hintedIndexes: readonly IndexDef[] | undefined
   if (hints && pending.some((p) => p.indexHints) && pending.every((p) => p.def) &&
       !someNode(hints.query, (node) => (node !== hints.query && (node as QueryExpression).kind === QUERY.QUERY) || undefined)) {
     const tableIds = pending.map((p) => p.def!.id).join(',')
     const validate = hints.previous !== tableIds
-    if (validate || plainRead) {
+    if (validate || hintScope !== undefined) {
       for (const p of pending) {
-        if (p.indexHints !== undefined) joinIndexes = indexHintKeys(p.def!, p.alias, p.indexHints, ctx.env, validate, plainRead)
+        if (p.indexHints !== undefined) hintedIndexes = indexHintKeys(p.def!, p.alias, p.indexHints, ctx.env, validate, hintScope)
       }
     }
     hints.checked = tableIds
   }
+  const joinIndexes = hintScope === 'JOIN' ? hintedIndexes : undefined
+  const orderIndexes = hintScope === 'ORDER BY' ? hintedIndexes : undefined
 
   // Second pass: the joins — USING and NATURAL merge columns, which changes
   // what a bare name means and what `*` is; each ON is resolved in the scope
@@ -571,6 +575,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     joins,
     straight,
     joinIndexes,
+    orderIndexes,
     reads(columns) {
       settings.chosen = new WeakMap()
       for (const t of tables) {
@@ -749,8 +754,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     sortedBy(alias, limit) {
       sort = alias === undefined ? undefined : { alias, limit }
     },
-    readInOrder(index, force, reverse = false, alias) {
-      settings.ordered = { index, force, reverse, alias }
+    readInOrder(index, force, reverse = false, alias, covering = false) {
+      settings.ordered = { index, force, reverse, alias, covering }
     },
     access(env) {
       return leafAccess(tables[0] as FromTable, settings, env)
@@ -965,7 +970,7 @@ interface LeafSettings {
   chosen: WeakMap<Env, Map<string, Access>>
   /** The one table read whole in this index's order (`readInOrder`). */
   /** Read in an index's order: the one table's, or `alias`'s in a join its const tables reduce to it. */
-  ordered?: { readonly index: string; readonly force: boolean; readonly reverse: boolean; readonly alias: string | undefined }
+  ordered?: { readonly index: string; readonly force: boolean; readonly reverse: boolean; readonly alias: string | undefined; readonly covering: boolean }
   /** Order supplied before an indexed join expands or discards first-table rows. */
   firstSort?: { readonly alias: string; readonly keys: readonly SortKey[] }
   /** LooseScan removes adjacent equal integer keys after the inner filter. */
@@ -1740,7 +1745,7 @@ function tableOp(t: FromTable, settings: LeafSettings, held?: Access): Op {
       const order = orderFor(t, settings)
       if (order !== undefined && access.ranges === undefined) {
         // Read whole in an index's order: covering when it holds every column the query reads.
-        const covers = settings.covering.get(t.alias) === order.index
+        const covers = order.covering || settings.covering.get(t.alias) === order.index
         return planNode(`${covers ? 'Covering index' : 'Index'} scan on ${t.alias} using ${order.index}${order.reverse ? ' (reverse)' : ''}`)
       }
       if (access.index === undefined) return planNode(`Table scan on ${t.alias}`)

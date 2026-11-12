@@ -107,8 +107,9 @@ for (const { symbol } of entries) {
   }
 }
 const letters = 'abcdefghijklmnopqrstuvwxyz'
-const words = [...wordSavings.keys()].sort().sort((a, b) => wordSavings.get(b) - wordSavings.get(a)).slice(0, letters.length)
-const codes = new Map(words.map((word, i) => [word, letters[i]]))
+const tokens = [...letters, ...['a', 'b'].flatMap((prefix) => [...letters].map((letter) => prefix + letter))]
+const words = [...wordSavings.keys()].sort().sort((a, b) => wordSavings.get(b) - wordSavings.get(a)).slice(0, tokens.length)
+const codes = new Map(words.map((word, i) => [word, tokens[i]]))
 
 // Error numbers advance sequentially within each upstream range. Store a
 // range start rather than repeating a number on every row; a reset also
@@ -151,7 +152,7 @@ export const STRICT_ERROR_SOURCE_SHA256 = '${strictSha256}'
 /** Native codes promoted by Strict_error_handler; no eager symbol-table lookup. */
 export const STRICT_ERROR_CODES: ReadonlySet<number> = new Set([${strictCodes.join(', ')}])
 
-/** Each lowercase letter in a packed symbol stands for one underscore-delimited word. */
+/** Each lowercase token in a packed symbol stands for one underscore-delimited word. */
 export const ERROR_NAME_WORDS = '${words.join(' ')}'
 
 /**
