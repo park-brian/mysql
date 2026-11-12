@@ -57,6 +57,7 @@ import {
   dateToMysql,
   fromUtf8,
   SqlError,
+  PreparedStatement,
   messages,
   sqlError,
   type ColumnDefinition,
@@ -87,7 +88,7 @@ import { foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencingKeys, wit
 import { checkDefaultAdmission, checkDefaults, insert, remove, update } from './dml.ts'
 import { fulltextOf } from './fulltext.ts'
 import { columnDefinition, intType, stringType } from './meta.ts'
-import { columnsOf, compileContext, planQuery, resultSet, resultSteps, viewTable, viewMergeable, type Run } from './query.ts'
+import { columnsOf, compileContext, planQuery, planStatementQuery, resultSet, resultSteps, viewTable, viewMergeable, type PreparedHints, type Run } from './query.ts'
 import { lengthArity } from './registry.ts'
 import { SqlSession, finish, isolationOf } from './session.ts'
 import { dropOrphans, sessionCatalog, TemporaryTables, type CatalogApi } from './temporary.ts'
@@ -281,6 +282,8 @@ export class SqlExecutor implements Executor {
    * one frozen), so one can be handed out twice.
    */
   readonly #parsed = new Map<string, Statement>()
+  /** The wire handle owns the exact columns array returned by PREPARE. */
+  readonly #preparedHints = new WeakMap<readonly ColumnDefinition[], PreparedHints>()
   /** An executed fallback belongs to the open prepared instance, never its shared AST. */
   readonly #viewFallback = new WeakSet<object>()
   /** Each session's temporary tables, dropped when it ends or is reset. */
@@ -376,6 +379,7 @@ export class SqlExecutor implements Executor {
       this.#alive(session)
       let columns: PreparedInfo['columns'] = []
       if (statement.kind === STATEMENT.QUERY) {
+        const hints: PreparedHints = {}
         const run: Run = {
           ...this.#run(session, sql, [], undefined, 'binary', conditions), preparing: 'wire',
           admitQuery: (query: QueryExpression, sources?: boolean): void => {
@@ -383,7 +387,8 @@ export class SqlExecutor implements Executor {
             if (admission?.diagnostic === true && construction === undefined) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
           },
         }
-        columns = columnsOf(run, planQuery(run, statement).columns)
+        columns = columnsOf(run, planStatementQuery(run, statement, undefined, hints).columns)
+        if (hints.tableIds !== undefined) this.#preparedHints.set(columns, hints)
       }
       // Every supported statement may have a large parameter response.
       if (paramCount >= MANY_PARAMETERS) await pause()
@@ -895,7 +900,8 @@ export class SqlExecutor implements Executor {
     switch (statement.kind) {
       case STATEMENT.QUERY: {
         const pending: Condition[] = []
-        const plan = planQuery({ ...run, preparedQuery: run.prepared !== undefined }, statement, pending)
+        const hints = run.prepared instanceof PreparedStatement ? this.#preparedHints.get(run.prepared.columns) : undefined
+        const plan = planStatementQuery({ ...run, preparedQuery: run.prepared !== undefined }, statement, pending, hints)
         appendConditions(run.env.conditions, pending)
         if (this.catalog === undefined) return resultSet(run, plan, undefined)
         return state.steps(this.catalog.store, plan.locking, (trx) => resultSteps(run, plan, trx, emit))
@@ -1317,7 +1323,7 @@ export class SqlExecutor implements Executor {
     if (statement.format !== 'TREE' || statement.analyze === true || statement.into !== undefined || statement.schema !== undefined || target === undefined || target.kind !== STATEMENT.QUERY) {
       throw notSupported(statement.format === 'TREE' ? 'EXPLAIN of this statement' : `EXPLAIN FORMAT=${statement.format ?? 'TRADITIONAL'}`)
     }
-    const roots = planQuery(run, target).explain?.()
+    const roots = planStatementQuery(run, target).explain?.()
     if (roots === undefined) throw notSupported('EXPLAIN of this query')
     const coll = run.env.session.characterSet
     return { columns: [columnDefinition('EXPLAIN', stringType(78, coll, false), coll)], rows: [[run.env.session.transcoder.encode(renderTree(roots), coll)]] }

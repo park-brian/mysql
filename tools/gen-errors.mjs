@@ -99,6 +99,17 @@ if (strictSymbols.length !== 23 || new Set(strictSymbols).size !== 23 || strictS
 }
 const strictCodes = strictSymbols.map((s) => bySymbol.get(s).errno)
 
+// Encode the most repeated parts of uppercase symbols with lowercase letters.
+const wordSavings = new Map()
+for (const { symbol } of entries) {
+  for (const word of symbol.split('_')) {
+    if (word.length > 1) wordSavings.set(word, (wordSavings.get(word) ?? 0) + word.length - 1)
+  }
+}
+const letters = 'abcdefghijklmnopqrstuvwxyz'
+const words = [...wordSavings.keys()].sort().sort((a, b) => wordSavings.get(b) - wordSavings.get(a)).slice(0, letters.length)
+const codes = new Map(words.map((word, i) => [word, letters[i]]))
+
 // Error numbers advance sequentially within each upstream range. Store a
 // range start rather than repeating a number on every row; a reset also
 // preserves any future gap or alias without changing entry order.
@@ -106,7 +117,8 @@ const lines = []
 let expected = null
 for (const entry of entries) {
   if (entry.errno !== expected) lines.push(`@${entry.errno}`)
-  lines.push(entry.sqlState === null ? entry.symbol : `${entry.symbol} ${entry.sqlState}`)
+  const symbol = entry.symbol.split('_').map((word) => codes.get(word) ?? word).join('_')
+  lines.push(entry.sqlState === null ? symbol : `${symbol} ${entry.sqlState}`)
   expected = entry.errno + 1
 }
 const packed = lines.join('\n')
@@ -139,9 +151,12 @@ export const STRICT_ERROR_SOURCE_SHA256 = '${strictSha256}'
 /** Native codes promoted by Strict_error_handler; no eager symbol-table lookup. */
 export const STRICT_ERROR_CODES: ReadonlySet<number> = new Set([${strictCodes.join(', ')}])
 
+/** Each lowercase letter in a packed symbol stands for one underscore-delimited word. */
+export const ERROR_NAME_WORDS = '${words.join(' ')}'
+
 /**
  * \`@errno\` starts a sequential range; each following line consumes one code.
- * Entry lines contain a symbol and an optional SQLSTATE. Expanded lazily by
+ * Entry lines contain a packed symbol and an optional SQLSTATE. Expanded lazily by
  * \`errors/index.ts\`; order preserves symbol and number alias precedence.
  */
 export const PACKED_ERROR_TABLE = \`${packed}\`

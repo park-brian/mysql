@@ -33,12 +33,12 @@
 // NULL` must still see the NULL rows the join made.
 // D-89 permits omitting a FirstMatch integer bound only when its selected
 // physical range and exact point equality already enforce it.
-import { notSupported } from './errors.ts'
+import { notSupported, wrongUsage } from './errors.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { and, someNode } from './ast.ts'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
-import { LITERAL, NODE, REF, type Expression, type TableReference } from '@myjs/parser'
+import { LITERAL, NODE, QUERY, REF, type Expression, type IndexHint, type QueryExpression, type TableReference } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { integerBytes, truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
@@ -47,6 +47,7 @@ import { FULL_SCAN, chooseAccess, dynamicAccess, keyOrder, optimizerEnabled, poi
 import { MEMORY_CREATE, ROW_EVALUATE, bestAccess, floorFilter, indexScanCost, joinOrder, materializedAntijoinWins, type Candidate, type FirstMatch, type KeyChoice, type Positioned, type RangeRead } from './cost.ts'
 import { rowKey } from './keys.ts'
 import { columnResultType } from './meta.ts'
+import { fulltextOf } from './fulltext.ts'
 import { chooseStrategy } from './group.ts'
 import { clusteredIndex, forwardKeyColumn, indexParts } from './indexes.ts'
 import { accessRows, distinct, sort as sortRows, type SortKey } from './operators.ts'
@@ -203,6 +204,12 @@ export interface JoinCondition {
   readonly nested: boolean
 }
 
+export interface HintAdmission {
+  readonly query: QueryExpression
+  readonly previous: string | undefined
+  checked?: string
+}
+
 export interface FromContext {
   /** Open a base table: ER_NO_SUCH_TABLE, ER_NO_DB_ERROR. */
   open(ref: { readonly schema?: string; readonly name: string }, alias?: string): { readonly schema: string; readonly def: TableDef; readonly table: Table }
@@ -224,14 +231,39 @@ export interface FromContext {
   readonly parent?: Scope | undefined
 }
 
+function foldIndexName(name: string): string {
+  return name.replace(/[A-Z]/g, (letter) => letter.toLowerCase())
+}
+
+function admitIndexHints(def: TableDef, alias: string, hints: readonly IndexHint[], env: Env | undefined): void {
+  const keys = [...def.indexes, ...fulltextOf(def)].map((key) => ({ name: foldIndexName(key.name), invisible: key.invisible }))
+  let use = false
+  let force = false
+  // MySQL visits the parsed hint list in reverse, including names in one clause.
+  for (const hint of hints.slice().reverse()) {
+    for (const name of hint.indexes.slice().reverse()) {
+      const folded = foldIndexName(name)
+      const prefixes = keys.filter((candidate) => candidate.name.startsWith(folded))
+      const key = prefixes.length === 1 ? prefixes[0] : prefixes.find((candidate) => candidate.name === folded)
+      if (key === undefined || (key.invisible && !optimizerEnabled(env, 'use_invisible_indexes'))) {
+        throw sqlError('ER_KEY_DOES_NOT_EXITS', `Key '${name}' doesn't exist in table '${alias}'`)
+      }
+    }
+    use ||= hint.type === 'USE'
+    force ||= hint.type === 'FORCE'
+  }
+  if (use && force) throw wrongUsage('USE INDEX', 'FORCE INDEX')
+}
+
 /** The written FROM, as a plan: its scope, and how to read it. */
 /** `straight` is SELECT STRAIGHT_JOIN: the tables joined in the order written. */
-export function planFrom(refs: readonly TableReference[], ctx: FromContext, where?: Expression, straightJoin = false): FromPlan {
+export function planFrom(refs: readonly TableReference[], ctx: FromContext, where?: Expression, straightJoin = false, hints?: HintAdmission): FromPlan {
   // First pass: the tables, in order, with whether an outer join can null them.
   interface Pending {
     alias: string
     def?: TableDef
     table?: Table
+    indexHints?: readonly IndexHint[] | undefined
     derivedRef?: TableReference & { readonly kind: typeof REF.DERIVED }
     /** Tables before it that a LATERAL one may not see: a RIGHT JOIN's left side (8.4.11: 1054). */
     hidden?: ReadonlySet<string>
@@ -251,7 +283,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         if (source === undefined) {
           try {
             const opened = ctx.open(ref.table, alias)
-            pending.push({ alias, def: opened.def, table: opened.table, nullable })
+            pending.push({ alias, def: opened.def, table: opened.table, indexHints: ref.indexHints, nullable })
             return
           } catch (e) {
             source = (e as { errno?: number }).errno === 1146 ? ctx.view?.(ref.table, alias) : undefined
@@ -300,6 +332,16 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     offset += width
   }
   const width = offset
+
+  // Open all direct sources and check aliases before hints, then bind ON and projections.
+  if (hints && pending.some((p) => p.indexHints) && pending.every((p) => p.def) &&
+      !someNode(hints.query, (node) => (node !== hints.query && (node as QueryExpression).kind === QUERY.QUERY) || undefined)) {
+    const tableIds = pending.map((p) => p.def!.id).join(',')
+    if (hints.previous !== tableIds) {
+      for (const p of pending) if (p.indexHints !== undefined) admitIndexHints(p.def!, p.alias, p.indexHints, ctx.env)
+    }
+    hints.checked = tableIds
+  }
 
   // Second pass: the joins — USING and NATURAL merge columns, which changes
   // what a bare name means and what `*` is; each ON is resolved in the scope

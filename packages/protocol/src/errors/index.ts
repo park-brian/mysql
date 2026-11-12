@@ -8,7 +8,7 @@
 // D-29: the table carries facts only. Message text is ours (see `messages.ts`).
 
 import { MyjsError, ProtocolError } from '@myjs/bytes'
-import { PACKED_ERROR_TABLE, STRICT_ERROR_CODES } from './table.ts'
+import { ERROR_NAME_WORDS, PACKED_ERROR_TABLE, STRICT_ERROR_CODES } from './table.ts'
 import type { StatementResult } from '../packets/resultset.ts'
 
 /** MySQL's fallback SQLSTATE for a code that declares none. */
@@ -34,6 +34,7 @@ function load(): { bySymbol: Map<string, Entry>; byErrno: Map<number, Entry> } {
   if (bySymbol === null || byErrno === null) {
     const s = new Map<string, Entry>()
     const n = new Map<number, Entry>()
+    const words = ERROR_NAME_WORDS.split(' ')
     let errno = 0
     for (const line of PACKED_ERROR_TABLE.split('\n')) {
       if (line === '') continue
@@ -42,7 +43,8 @@ function load(): { bySymbol: Map<string, Entry>; byErrno: Map<number, Entry> } {
         continue
       }
       const space = line.indexOf(' ')
-      const symbol = space === -1 ? line : line.slice(0, space)
+      const packedSymbol = space === -1 ? line : line.slice(0, space)
+      const symbol = packedSymbol.replace(/[a-z]/g, (letter) => words[letter.charCodeAt(0) - 97]!)
       const sqlState = space === -1 ? DEFAULT_SQLSTATE : line.slice(space + 1)
       const entry: Entry = { errno, symbol, sqlState }
       s.set(symbol, entry)

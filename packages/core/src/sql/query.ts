@@ -26,7 +26,7 @@ import { notSupported, wrongArgumentsError } from './errors.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
 import { collationInfoByName, encodeCollation } from '@myjs/charsets'
 import { ambiguousColumnError, unknownColumnError, requireSchema, safeResolve, TableScope, columnIndex as indexOfColumn } from './scope.ts'
-import { holdsRead, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
+import { holdsRead, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type HintAdmission, type JoinCondition } from './from.ts'
 import { firstKey, rowKey, valueKey } from './keys.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
 import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts'
@@ -356,18 +356,31 @@ interface SetMembers {
   readonly items: readonly { readonly node: PlanNode; readonly all: boolean }[]
 }
 
+export interface PreparedHints {
+  tableIds?: string | undefined
+}
+
+/** Admit hints on a statement's outer SELECT after opening its sources. */
+export function planStatementQuery(run: Run, q: QueryExpression, pending?: Condition[], prepared?: PreparedHints): SelectPlan {
+  const hints: HintAdmission = { query: q, previous: prepared?.tableIds }
+  const plan = planQuery(run, q, pending, hints)
+  // A failed reprepare keeps the previous admission.
+  if (prepared) prepared.tableIds = hints.checked
+  return plan
+}
+
 /**
  * Any query: a SELECT, a parenthesised query with its own ORDER BY and
  * LIMIT, or a set operation, under the CTEs its WITH defines.
  */
-export function planQuery(run: Run, q: QueryExpression, pending?: Condition[]): SelectPlan {
+export function planQuery(run: Run, q: QueryExpression, pending?: Condition[], hints?: HintAdmission): SelectPlan {
   run.admitQuery?.(q)
   if (q.into !== undefined) throw notSupported('SELECT … INTO')
   const r = q.with === undefined ? run : withClause(run, q.with)
   const body = q.body
   switch (body.kind) {
     case QUERY.SELECT:
-      return planSelect({ ...r, subqueries: [], quantified: new Map(), clauses: { 'where clause': body.where, 'having clause': body.having } }, q, body, pending)
+      return planSelect({ ...r, subqueries: [], quantified: new Map(), clauses: { 'where clause': body.where, 'having clause': body.having } }, q, body, pending, hints)
     case QUERY.QUERY: {
       // An unordered LIMIT belongs to the child before its projection, not its emitted rows.
       const pushed = q.orderBy === undefined && q.locking === undefined && q.limit !== undefined && body.limit === undefined
@@ -385,7 +398,7 @@ export function planQuery(run: Run, q: QueryExpression, pending?: Condition[]): 
   }
 }
 
-function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Condition[]): SelectPlan {
+function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Condition[], hints?: HintAdmission): SelectPlan {
   node = pushCountCondition(run, node)
   const order = q.orderBy ?? []
   // An aggregate in the select list or HAVING makes the query grouped.
@@ -394,7 +407,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   // The parser normalizes unquoted DUAL; every retained reference names a table.
   const refs = node.from ?? []
   const on = !grouped && (pending || run.preparing === 'wire') ? joinConditions(q, node, pending) : undefined
-  let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run, on), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'))
+  let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run, on), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'), hints)
   if (from && on?.rounded) from.rounded = on.rounded
   run.admitQuery?.(q, true)
   const scope = from?.scope
