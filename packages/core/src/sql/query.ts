@@ -2806,8 +2806,10 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
       const digits = mantissa.replace('.', '')
       if (Math.abs(Number(digits)) <= max) {
         key = BigInt(digits)
-        point = pointFor(key)
-        if (point || (!wide && key >= -MAX_UNSIGNED && key <= MAX_UNSIGNED)) unresolvedTerminal = false
+        if (key >= -MAX_UNSIGNED && key <= MAX_UNSIGNED) {
+          unresolvedTerminal = false
+          point = pointFor(key)
+        }
       }
     }
     if ((key === undefined || unresolvedTerminal) && (safe || wideKey)) {
