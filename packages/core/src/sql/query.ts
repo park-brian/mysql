@@ -1174,8 +1174,8 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     if (def === undefined) return undefined
     let candidates = def.indexes.filter((i) => i.kind === 'index' && i.invisible !== true && indexPartMatchesColumn(i.parts[0], innerColumn))
     // Either direction keeps equal leading keys adjacent in a forward scan.
-    // Multiple candidates and limited plans keep the established selection.
-    if (candidates.length > 1 || q.limit !== undefined) candidates = candidates.filter((i) => !i.parts[0]!.descending)
+    // Competing keys and explicit ordering with a limit need separate costing.
+    if (candidates.length > 1 || (q.orderBy !== undefined && q.limit !== undefined)) candidates = candidates.filter((i) => !i.parts[0]!.descending)
     const index = candidates.length === 1 ? candidates[0] : candidates.find((i) => i.parts.length === 1)
     if (index === undefined) return undefined
     const qualify = (e: Extract<Expression, { kind: typeof NODE.COLUMN }>, alias: string): Expression => ({ ...e, parts: [alias, e.parts.at(-1) as string] })

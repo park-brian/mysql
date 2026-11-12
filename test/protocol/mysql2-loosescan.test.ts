@@ -135,6 +135,10 @@ test('LooseScan follows the leading key order and filters before deduplication',
       for (const method of ['query', 'execute'] as const) {
         await read(sql, method, inKeyOrder, loose)
         if (descending) {
+          const limitedLoose = loose.replaceAll('\n', '\n    ')
+          await read(`${sql} LIMIT 1`, method, inKeyOrder.slice(0, 1), `Limit\n    ${limitedLoose}`)
+          await read(`${sql} LIMIT 2`, method, inKeyOrder, `Limit\n    ${limitedLoose}`)
+          await read(`${sql} LIMIT 1 OFFSET 1`, method, inKeyOrder.slice(1), `Limit/Offset\n    ${limitedLoose}`)
           await read(`${sql} ORDER BY id`, method, ascending, sorted, 4097)
           await read(`${sql} ORDER BY id DESC`, method, inKeyOrder, sorted, 4097)
           const limited = { sql: `${base}) ORDER BY id LIMIT 1`, rowsAsArray: true }
