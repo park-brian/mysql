@@ -2814,7 +2814,7 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     const empty = { ranges: [] }
     const access = safe && terminal && !terminalPoint ? empty : point
     // An out-of-range key's warning depends on finding the clamped endpoint.
-    const range = !point && leftTable && !(wide && fractional) ? integerRange(column.type) : undefined
+    const range = !point && leftTable && !(wide && terminal) ? integerRange(column.type) : undefined
     const endpoint = range && (value < 0 ? range.min : range.max)
     on.lookup = pointFor(endpoint) ?? access
     if (!on.lookup) return false
