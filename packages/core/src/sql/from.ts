@@ -134,6 +134,8 @@ export interface FromPlan {
   readonly width: number
   /** The one base table, when the FROM is exactly that. */
   readonly single?: { readonly alias: string; readonly def: TableDef; readonly table: Table } | undefined
+  /** The eligible access keys of a single table with a legacy JOIN-scope mask. */
+  readonly joinIndexes?: readonly IndexDef[] | undefined
   /**
    * Every join's condition, with whether it is an outer join and whether it
    * sits inside an outer join's nullable side — what functional dependence
@@ -235,29 +237,38 @@ function foldIndexName(name: string): string {
   return name.replace(/[A-Z]/g, (letter) => letter.toLowerCase())
 }
 
-function admitIndexHints(def: TableDef, alias: string, hints: readonly IndexHint[], env: Env | undefined): void {
-  const keys = [...def.indexes, ...fulltextOf(def)].map((key) => ({ name: foldIndexName(key.name), invisible: key.invisible }))
+function indexHintKeys(def: TableDef, alias: string, hints: readonly IndexHint[], env: Env | undefined, validate: boolean, plainRead: boolean): readonly IndexDef[] | undefined {
+  const keys = [...def.indexes, ...fulltextOf(def)].map((key) => ({ key, folded: foldIndexName(key.name) }))
+  const apply = plainRead && keys.every(({ key }) => !key.invisible) &&
+    hints.every((hint) => hint.type !== 'FORCE' && (hint.for === undefined || hint.for === 'JOIN'))
+  if (!apply && !validate) return undefined
+  const ignored = apply ? new Set<string>() : undefined
+  let used: Set<string> | undefined
   let use = false
   let force = false
   // MySQL visits the parsed hint list in reverse, including names in one clause.
   for (const hint of hints.slice().reverse()) {
+    if (apply && hint.type === 'USE' && (used === undefined || hint.indexes.length === 0)) used = new Set()
+    const selected = hint.type === 'USE' ? used : ignored
     for (const name of hint.indexes.slice().reverse()) {
       const folded = foldIndexName(name)
-      const prefixes = keys.filter((candidate) => candidate.name.startsWith(folded))
-      const key = prefixes.length === 1 ? prefixes[0] : prefixes.find((candidate) => candidate.name === folded)
-      if (key === undefined || (key.invisible && !optimizerEnabled(env, 'use_invisible_indexes'))) {
+      const prefixes = keys.filter((candidate) => candidate.folded.startsWith(folded))
+      const key = (prefixes.length === 1 ? prefixes[0] : prefixes.find((candidate) => candidate.folded === folded))?.key
+      if (validate && (key === undefined || (key.invisible && !optimizerEnabled(env, 'use_invisible_indexes')))) {
         throw sqlError('ER_KEY_DOES_NOT_EXITS', `Key '${name}' doesn't exist in table '${alias}'`)
       }
+      if (key !== undefined) selected?.add(key.name)
     }
     use ||= hint.type === 'USE'
     force ||= hint.type === 'FORCE'
   }
-  if (use && force) throw wrongUsage('USE INDEX', 'FORCE INDEX')
+  if (validate && use && force) throw wrongUsage('USE INDEX', 'FORCE INDEX')
+  return ignored && def.indexes.filter((key) => (used === undefined || used.has(key.name)) && !ignored.has(key.name))
 }
 
 /** The written FROM, as a plan: its scope, and how to read it. */
 /** `straight` is SELECT STRAIGHT_JOIN: the tables joined in the order written. */
-export function planFrom(refs: readonly TableReference[], ctx: FromContext, where?: Expression, straightJoin = false, hints?: HintAdmission): FromPlan {
+export function planFrom(refs: readonly TableReference[], ctx: FromContext, where?: Expression, straightJoin = false, hints?: HintAdmission, plainRead = false): FromPlan {
   // First pass: the tables, in order, with whether an outer join can null them.
   interface Pending {
     alias: string
@@ -334,11 +345,15 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   const width = offset
 
   // Open all direct sources and check aliases before hints, then bind ON and projections.
+  let joinIndexes: readonly IndexDef[] | undefined
   if (hints && pending.some((p) => p.indexHints) && pending.every((p) => p.def) &&
       !someNode(hints.query, (node) => (node !== hints.query && (node as QueryExpression).kind === QUERY.QUERY) || undefined)) {
     const tableIds = pending.map((p) => p.def!.id).join(',')
-    if (hints.previous !== tableIds) {
-      for (const p of pending) if (p.indexHints !== undefined) admitIndexHints(p.def!, p.alias, p.indexHints, ctx.env)
+    const validate = hints.previous !== tableIds
+    if (validate || plainRead) {
+      for (const p of pending) {
+        if (p.indexHints !== undefined) joinIndexes = indexHintKeys(p.def!, p.alias, p.indexHints, ctx.env, validate, plainRead)
+      }
     }
     hints.checked = tableIds
   }
@@ -494,7 +509,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   const single = only?.def !== undefined && only.table !== undefined ? only as NonNullable<FromPlan['single']> : undefined
 
   // The physical tree: built once the WHERE is placed (`filter`), or without one.
-  const settings: LeafSettings = { covering, read: new Map(), inferred: new Map(), chosen: new WeakMap(), scope, tables: byAlias, outer, where, statistics: ctx.statistics, buffered: optimizerEnabled(ctx.env, 'block_nested_loop') }
+  const settings: LeafSettings = { covering, read: new Map(), inferred: new Map(), chosen: new WeakMap(), scope, tables: byAlias, outer, where, joinIndexes, statistics: ctx.statistics, buffered: optimizerEnabled(ctx.env, 'block_nested_loop') }
   // The join order and each join's access: the cost model's, over the WHERE's conjuncts, once the columns read are known (M5.7).
   // The index lookup into `t` after the tables in `before`, by the WHERE or an ON.
   const lookupAfter = (t: FromTable, before: ReadonlySet<string>, conditions: readonly Expression[]): EqRef | undefined => {
@@ -555,12 +570,13 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     width,
     joins,
     straight,
+    joinIndexes,
     reads(columns) {
       settings.chosen = new WeakMap()
       for (const t of tables) {
         const read = columns.get(t.alias) ?? new Set<string>()
         settings.read.set(t.alias, read)
-        const best = t.def === undefined || t.nullable ? undefined : coveringIndex(t.def, read)
+        const best = t.def === undefined || t.nullable ? undefined : coveringIndex(t.def, read, joinIndexes)
         if (best !== undefined) covering.set(t.alias, best)
       }
     },
@@ -914,6 +930,7 @@ type Materialization = false | 'lookup' | 'scan' | 'loop'
 
 /** How the FROM's base tables are read: what the WHERE is, what covers them, and an order asked for. */
 interface LeafSettings {
+  readonly joinIndexes?: readonly IndexDef[] | undefined
   where?: Expression | undefined
   /** Proven integer-equality range predicates, shared by costing and physical reads. */
   readonly inferred: Map<string, InferredRange>
@@ -993,7 +1010,7 @@ function chosenAccess(t: FromTable, settings: LeafSettings, env: Env, quote = fa
   let chosen = settings.chosen.get(env)
   if (chosen === undefined) settings.chosen.set(env, (chosen = new Map()))
   let access = chosen.get(t.alias)
-  if (access === undefined) chosen.set(t.alias, (access = chooseAccess(t.def, t.alias, settings.where, env, settings.outer, rangeCosting(t, settings, env, quote), settings.inferred.get(t.alias))))
+  if (access === undefined) chosen.set(t.alias, (access = chooseAccess(t.def, t.alias, settings.where, env, settings.outer, rangeCosting(t, settings, env, quote), settings.inferred.get(t.alias), settings.joinIndexes)))
   return access
 }
 
@@ -2099,14 +2116,14 @@ export function holdsRead(def: TableDef, index: IndexDef, read: ReadonlySet<stri
  * else the clustered index itself when `read` is only its columns, which
  * 8.4.11 shows as a covering index scan of PRIMARY.
  */
-function coveringIndex(def: TableDef, read: ReadonlySet<string> | 'all'): string | undefined {
+function coveringIndex(def: TableDef, read: ReadonlySet<string> | 'all', indexes = def.indexes): string | undefined {
   let best: { name: string; bytes: number } | undefined
   const clustered = clusteredIndex(def)
-  for (const index of def.indexes) {
+  for (const index of indexes) {
     if (index === clustered || !holdsRead(def, index, read)) continue
     const bytes = indexBytes(def, index)
     if (best === undefined || bytes < best.bytes) best = { name: index.name, bytes }
   }
-  if (best === undefined && clustered !== undefined && holdsRead(def, clustered, read)) return clustered.name
+  if (best === undefined && clustered !== undefined && indexes.includes(clustered) && holdsRead(def, clustered, read)) return clustered.name
   return best?.name
 }

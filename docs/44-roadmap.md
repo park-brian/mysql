@@ -1873,6 +1873,15 @@ failed reprepare keeps the last successful admission. Applying the JOIN,
 ORDER BY and GROUP BY eligibility masks is
 next. Mixed sources and cross-block diagnostic priority remain open.
 
+**M5.49 legacy JOIN-scope access eligibility, verified.** A simple
+ungrouped, unordered single-table SELECT honors unscoped and `FOR JOIN`
+`USE INDEX` and `IGNORE INDEX`. Covering scans, point and range reads and
+const-table proofs use the same eligible keys. The targeted 8.4.11 audit
+improves from 64 to 188 complete matches of 204. All 128 hidden-row-ID,
+implicit-clustered-key and temporary-table responses match, up from 60.
+ORDER BY eligibility is next. FORCE costing, grouping, joins and access to
+invisible indexes remain open.
+
 **M5.10 written utf8 failure histories, verified:** the shared
 expression helper now retains warning 3719 for the written alias at introducers,
 CONVERT USING and CAST CHAR. Successful-root provenance and independent DDL/SET
@@ -8108,6 +8117,29 @@ Its existing digest test preserves all 2,132 public symbol, errno and
 SQLSTATE mappings. Parser, core and facade are 45,611, 334,025 and 333,953 B
 gzipped within the existing caps. M5.49 remains partial.
 
+### Verified legacy JOIN-scope access eligibility (M5.49)
+
+In a simple outer SELECT from one physical table with visible indexes,
+unscoped and JOIN-scope USE lists restrict which keys can read the table.
+An empty USE list clears the names already seen in the reverse traversal.
+IGNORE subtracts from the resulting set regardless of its written position.
+The original definition continues to own the clustered layout, constraints,
+result metadata and the clustered columns carried by secondary keys. A
+const-table proof carries its selected key through the row-existence check,
+including when a disallowed key has identical columns.
+
+Both protocols cover whole scans, range and point reads, PRIMARY and UNIQUE
+eligibility, metadata, warnings and retained statements after writes.
+A counted reader confirms that a const lookup uses the allowed duplicate-column
+index. Across 560 plan and result responses, complete agreement improves
+from 236 to 360. The 150-response comparison and parameter matrix improves
+from 56 to 93. All previously matching components are preserved. Composite
+point-filter display, multi-part ranges, full-text reads, LIMIT, locking,
+DISTINCT, windows, FORCE, ordering, grouping, joins and invisible-index
+eligibility require their own verification. Parser, core and facade are
+45,611, 334,243 and 334,147 B gzipped within the existing caps.
+M5.49 remains partial.
+
 ### Verified ordered-read projection boundary (M5.49)
 
 The pinned 8.4.11 probe covers 392 query/execute outcomes: ordinary PRIMARY and
@@ -11380,7 +11412,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,025 B (326.2 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 333,953 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
+| Core bundle, gzipped | 334,243 B (326.4 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 334,147 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

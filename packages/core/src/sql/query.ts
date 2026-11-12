@@ -407,7 +407,11 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   // The parser normalizes unquoted DUAL; every retained reference names a table.
   const refs = node.from ?? []
   const on = !grouped && (pending || run.preparing === 'wire') ? joinConditions(q, node, pending) : undefined
-  let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run, on), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'), hints)
+  const only = refs.length === 1 ? refs[0] : undefined
+  const plainRead = hints !== undefined && only?.kind === REF.TABLE && only.indexHints !== undefined && !grouped && !node.distinct && !node.having &&
+    q.orderBy === undefined && q.limit === undefined && q.locking === undefined &&
+    !containsWindow(node.items) && !someNode([node.items, node.where], (n) => (n as Expression).kind === NODE.MATCH || undefined)
+  let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run, on), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'), hints, plainRead)
   if (from && on?.rounded) from.rounded = on.rounded
   run.admitQuery?.(q, true)
   const scope = from?.scope
@@ -523,7 +527,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   const loopSemijoin = semijoin && scope !== undefined && (semi !== undefined || (anti !== undefined && anti.kind !== 'hash') || nestedLoopSemijoin(node.where, scope))
   if (from !== undefined) from.sortedBy(sortBy, keep)
   if (from !== undefined && node.distinct === true) from.distinctReads(keyAliases(items.map((i) => i.expr), items, scope!))
-  const facts = source === undefined ? undefined : resolved.facts(source.def, source.alias)
+  const facts = source === undefined ? undefined : resolved.facts(source.def, source.alias, from?.joinIndexes)
   // A prepare reports a statement before MySQL optimizes it, so it never sees
   // the temporary table: COM_STMT_PREPARE's metadata has no GROUP_FLAG where
   // the execute's does (8.4.11, found by review).
@@ -2901,14 +2905,14 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
     // New semijoin nodes are verified integer comparisons, in their expanded scope.
     read: (e: Expression, at = ctx) => entries.get(e) ?? compile(e, at),
     predicates: folded ? [folded] : [...entries.values()],
-    facts(def: TableDef, alias: string) {
+    facts(def: TableDef, alias: string, indexes = def.indexes) {
       // Column names are case-insensitive; share the same pin set with both readers.
       const facts = { impossible, pins: new Set<string>(), constTable: false }
       if (condition === undefined) return facts
       const columnOf = (e: Expression) => tableColumn(e, def, alias)
       facts.impossible ||= conjuncts.some((e) => impossiblePredicate(e, columnOf))
       for (const column of def.columns) if (pinOf(condition, column, columnOf, run.env) !== undefined) facts.pins.add(column.name.toLowerCase())
-      facts.constTable = def.indexes.some((i) => i.kind !== 'index' && i.parts.every((p) => p.prefix === undefined && facts.pins.has(p.column.toLowerCase())))
+      facts.constTable = indexes.some((i) => i.kind !== 'index' && i.parts.every((p) => p.prefix === undefined && facts.pins.has(p.column.toLowerCase())))
       return facts
     },
   }

@@ -44,6 +44,7 @@ export interface ConstTable {
   readonly alias: string
   readonly def: TableDef
   readonly table: Table
+  readonly index: IndexDef
   /**
    * The key's columns and the constants they are held to: an expression, or
    * a column of a const table found before this one (`from`, its place in
@@ -328,7 +329,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     from.tables.forEach((t, n) => {
       if (t.def === undefined || t.table === undefined || nullable.has(t.alias) || settled.has(t.alias)) return
       const def = t.def
-      const keys = def.indexes.filter((i) => uniqueKey(def, i))
+      const keys = (from.joinIndexes ?? def.indexes).filter((i) => uniqueKey(def, i))
       for (const index of keys) {
         if (index.parts.some((p) => p.prefix !== undefined)) continue
         const offsets = index.parts.map((p) => def.columns.findIndex((c) => c.name === p.column))
@@ -343,7 +344,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
         })
         if (key.every((k) => k !== undefined)) {
           const at = constTables.length
-          constTables.push({ alias: t.alias, def, table: t.table, key: key as ConstKeyPart[] })
+          constTables.push({ alias: t.alias, def, table: t.table, index, key: key as ConstKeyPart[] })
           settled.add(t.alias)
           found = true
           for (let i = 0; i < def.columns.length; i++) {
@@ -399,8 +400,7 @@ export function constTablesHaveRows(facts: OptimizerFacts, ctx: CompileContext, 
     }
     const values: Value[] = t.key.map((k) => ('value' in k ? compile(k.value, ctx).eval([], env) : (rows[k.from.table]?.[k.from.column] ?? null)))
     if (values.some((v) => v === null)) return false
-    const index = t.def.indexes.find((i) => i.parts.length === t.key.length && i.parts.every((p, n) => p.column === t.key[n]?.column.name))
-    const access = index !== undefined && t.key.length === 1 ? pointAccess(index, (t.key[0] as { column: ColumnDef }).column, values[0] as Value) : undefined
+    const access = t.key.length === 1 ? pointAccess(t.index, (t.key[0] as { column: ColumnDef }).column, values[0] as Value) : undefined
     let found = false
     for (const { row } of accessRows(t.table, access ?? {}, trx)) {
       // A full scan when the bound does not convert exactly: match as the comparison would.

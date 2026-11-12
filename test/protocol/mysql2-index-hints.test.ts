@@ -2,13 +2,20 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
 import { MySQL } from '@myjs/core'
+// @ts-expect-error — the capture owns plan normalization.
+import { planSkeleton } from '../../tools/capture-relational.mjs'
 
-test('legacy index hints resolve on physical SELECT sources before column binding', async () => {
+async function indexHintConnection() {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = await mysql.createConnection(db === undefined
     ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
     : { stream: db.createStream(), user: 'root' })
+  return { db, conn }
+}
+
+test('legacy index hints resolve on physical SELECT sources before column binding', async () => {
+  const { db, conn } = await indexHintConnection()
   const schema = 'index_hint_admission'
   const select = 'SELECT x.id FROM t x'
   const missing = (name: string, alias = 'x') => [1176, '42000', `Key '${name}' doesn't exist in table '${alias}'`] as const
@@ -94,6 +101,92 @@ test('legacy index hints resolve on physical SELECT sources before column bindin
     await assert.rejects(conn.execute(withExtra, [1]), { errno: 1054, sqlState: '42S22' })
     await conn.query("SET optimizer_switch='use_invisible_indexes=off'")
     await assert.rejects(conn.execute(withExtra, [1]), invisible)
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
+test('plain SELECT reads honor unscoped and FOR JOIN USE and IGNORE INDEX', async () => {
+  const { db, conn } = await indexHintConnection()
+  const schema = 'index_hint_access'
+  const data = Array.from({ length: 64 }, (_, i) => ({ id: i + 1, a: i % 8, b: (i * 11) % 17, payload: `payload${i}` }))
+  const ids = (rows: typeof data) => rows.map(({ id }) => [id])
+  const wide = (rows: typeof data) => rows.map(({ id, payload }) => [id, payload])
+  const point = ids(data.filter(({ a }) => a === 2))
+  const ranged = data.filter(({ a }) => a >= 2 && a < 4)
+  const idField = ['id', 3, 11, 20483, 0, 63]
+  const wideFields = [idField, ['payload', 253, 80, 0, 0, 224]]
+  const scan = 'Table scan on t'
+  const filtered = `Filter\n    ${scan}`
+  const lookup = 'Covering index lookup on t using by_a'
+
+  async function read(sql: string, rows: readonly (readonly unknown[])[], fields: unknown[][], plan: string) {
+    for (const method of ['query', 'execute'] as const) {
+      const options = { sql, rowsAsArray: true }
+      const [actual, metadata] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+      assert.deepEqual(actual, rows, `${method}: ${sql}`)
+      assert.deepEqual(metadata.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet]), fields, `${method}: ${sql}`)
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], `${method}: ${sql}`)
+    }
+    const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
+    assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan, sql)
+  }
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,a INT NOT NULL,b INT NOT NULL,payload VARCHAR(20),KEY by_a(a),KEY by_ab(a,b),KEY by_b(b)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO t VALUES ' + data.map(({ id, a, b, payload }) => `(${id},${a},${b},'${payload}')`).join(','))
+    await conn.query('ANALYZE TABLE t')
+    await read('SELECT id FROM t USE INDEX FOR JOIN ()', ids(data), [idField], scan)
+    await read('SELECT id FROM t USE INDEX (BY_B)', ids(data.slice().sort((left, right) => left.b - right.b)), [idField], 'Covering index scan on t using by_b')
+    for (const hint of ['USE INDEX ()', 'USE INDEX () USE INDEX (by_a)', 'USE INDEX (by_a) IGNORE INDEX (by_a)', 'IGNORE INDEX (by_a) USE INDEX (by_a)', 'IGNORE INDEX FOR JOIN (by_a,by_ab)']) {
+      await read(`SELECT id FROM t ${hint} WHERE a=2`, point, [idField], filtered)
+    }
+    await read('SELECT id FROM t USE INDEX (by_a) USE INDEX () WHERE a=2', point, [idField], lookup)
+    await read('SELECT id,payload FROM t USE INDEX () WHERE a>=2 AND a<4', wide(ranged), wideFields, filtered)
+    await read('SELECT id,payload FROM t USE INDEX (by_a) WHERE a>=2 AND a<4', wide(ranged.slice().sort((left, right) => left.a - right.a)), wideFields, 'Index range scan on t using by_a over')
+    await read('SELECT id,payload FROM t IGNORE INDEX (PRIMARY) WHERE id=7', [[7, 'payload6']], wideFields, filtered)
+    await read('SELECT id,payload FROM t USE INDEX (PRIMARY) WHERE id=7', [[7, 'payload6']], wideFields, 'Rows fetched before execution')
+    const retained = { sql: 'SELECT id FROM t USE INDEX FOR JOIN () WHERE a=?', rowsAsArray: true }
+    assert.deepEqual((await conn.execute(retained, [2]))[0], point)
+    await conn.query('UPDATE t SET a=0 WHERE id=3')
+    assert.deepEqual((await conn.execute(retained, [2]))[0], point.slice(1))
+    assert.deepEqual((await conn.execute(retained, [0]))[0], ids(data.filter(({ id, a }) => id === 3 || a === 0)))
+
+    for (const [table, clustered, rows] of [
+      ['hidden', '', [[3], [2], [1], [3], [2]]],
+      ['implicit_key', ',UNIQUE KEY by_id(id)', [[2], [2], [3], [1], [3]]],
+      ['tmp', ',PRIMARY KEY (id)', [[2], [2], [3], [1], [3]]],
+    ] as const) {
+      await conn.query(`CREATE ${table === 'tmp' ? 'TEMPORARY ' : ''}TABLE ${table}(id INT NOT NULL,a INT NOT NULL,KEY by_a(a)${clustered})`)
+      await conn.query(`INSERT INTO ${table} VALUES (5,3),(1,2),(4,1),(3,3),(2,2)`)
+      await read(`SELECT a FROM ${table} USE INDEX ()`, rows, [['a', 3, 11, 20489, 0, 63]], `Table scan on ${table}`)
+    }
+
+    await conn.query('CREATE TABLE same_key(id INT PRIMARY KEY,UNIQUE KEY alternative(id))')
+    await conn.query('INSERT INTO same_key VALUES (1),(2)')
+    const catalog = db?.catalog
+    const open = catalog?.table.bind(catalog)
+    const reads: string[] = []
+    if (catalog && open) catalog.table = (schemaName, tableName, trx) => {
+      const table = open(schemaName, tableName, trx)
+      if (schemaName === schema && tableName === 'same_key') {
+        const scan = table.indexScan.bind(table)
+        table.indexScan = (index, ...rest) => {
+          reads.push(index)
+          return scan(index, ...rest)
+        }
+      }
+      return table
+    }
+    try {
+      await read('SELECT id FROM same_key USE INDEX (alternative) WHERE id=2', [[2]], [['id', 3, 11, 20487, 0, 63]], 'Rows fetched before execution')
+      if (db) assert.deepEqual(new Set(reads), new Set(['alternative']))
+    } finally {
+      if (catalog && open) catalog.table = open
+    }
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()

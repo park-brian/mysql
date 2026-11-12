@@ -219,25 +219,25 @@ function exact(v: Value, c: ColumnDef): boolean {
  * statement gives the table. Constants are evaluated now, with `env`, which
  * is why the plan is made per execution (a `?` is a constant by then).
  */
-export function chooseAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, outer?: OuterColumn, costing?: RangeCosting, inferred?: InferredRange): Access {
+export function chooseAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, outer?: OuterColumn, costing?: RangeCosting, inferred?: InferredRange, indexes = def.indexes): Access {
   const conjuncts = splitAnd(inferred?.condition, splitAnd(where))
   const conditions = conjuncts
     .map((e) => conditionOf(e, def, alias, outer, env))
     .filter((c): c is Condition => c !== undefined)
   if (costing !== undefined) {
     // A key read by points stays one (`ref`); otherwise the range optimizer's choice.
-    const points = scoredAccess(def, conditions, env, outer, 3)
-    return points ?? rangeAccess(def, alias, conjuncts, env, costing, undefined, inferred) ?? FULL_SCAN
+    const points = scoredAccess(def, conditions, env, outer, indexes, 3)
+    return points ?? rangeAccess(def, alias, conjuncts, env, costing, undefined, inferred, indexes) ?? FULL_SCAN
   }
-  return scoredAccess(def, conditions, env, outer) ?? FULL_SCAN
+  return scoredAccess(def, conditions, env, outer, indexes) ?? FULL_SCAN
 }
 
 /** Shared candidate order and scoring; a minimum of 3 admits only point reads. */
-function scoredAccess(def: TableDef, conditions: readonly Condition[], env: Env, outer: OuterColumn | undefined, minimum = 0): Access | undefined {
+function scoredAccess(def: TableDef, conditions: readonly Condition[], env: Env, outer: OuterColumn | undefined, indexes: readonly IndexDef[], minimum = 0): Access | undefined {
   if (conditions.length === 0) return undefined
   let best: { access: Access; score: number } | undefined
   // Invisible indexes stay enforced but are never access candidates.
-  for (const index of def.indexes.slice().sort((a, b) => (a.kind === 'primary' ? -1 : 0) - (b.kind === 'primary' ? -1 : 0))) {
+  for (const index of indexes.slice().sort((a, b) => (a.kind === 'primary' ? -1 : 0) - (b.kind === 'primary' ? -1 : 0))) {
     const column = forwardKeyColumn(def, index)
     if (column === undefined) continue
     const access = accessFor(index, column, conditions.filter((c) => c.column === column.name), env, outer)
@@ -279,10 +279,10 @@ export interface RangeCosting {
  * point one; its cost `rangeCost`. Indexes are tried in the server's key order
  * and a later one wins only if strictly cheaper.
  */
-function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expression[], env: Env, costing: RangeCosting, known?: Constant, inferred?: InferredRange): Access | undefined {
+function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expression[], env: Env, costing: RangeCosting, known?: Constant, inferred?: InferredRange, indexes = def.indexes): Access | undefined {
   const value = (e: Expression): Value | undefined => (e.kind === NODE.PLACEHOLDER && e.index >= env.params.length ? undefined : isConstant(e) ? constantValue(e, env) : known?.(e))
   const candidates: { readonly index: IndexDef; readonly column: ColumnDef; readonly intervals: Interval[]; readonly keyed: { readonly range: KeyRange; readonly point: boolean }[]; readonly shape: RangeShape; readonly implied: ImpliedRange | undefined }[] = []
-  for (const index of keyOrder(def)) {
+  for (const index of keyOrder(def, indexes)) {
     const column = forwardKeyColumn(def, index)
     if (column === undefined) continue
     let set: RangeSet = 'all'
@@ -423,13 +423,13 @@ function keyRanges(intervals: readonly Interval[], column: ColumnDef): { readonl
  * PRIMARY KEY, then unique keys of NOT NULL columns, then other unique keys,
  * then the rest, each group as written. Invisible ones are left out.
  */
-export function keyOrder(def: TableDef): IndexDef[] {
+export function keyOrder(def: TableDef, indexes = def.indexes): IndexDef[] {
   const rank = (i: IndexDef): number => {
     if (i.kind === 'primary') return 0
     if (i.kind !== 'unique') return 3
     return i.parts.every((p) => def.columns.find((c) => c.name === p.column)?.nullable === false) ? 1 : 2
   }
-  return def.indexes.filter((i) => i.invisible !== true).sort((a, b) => rank(a) - rank(b))
+  return indexes.filter((i) => i.invisible !== true).sort((a, b) => rank(a) - rank(b))
 }
 
 const ctx = (): StoreContext => ({ strict: true, row: 1, warnings: 0 })
