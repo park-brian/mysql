@@ -290,7 +290,7 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
     await c.query('CREATE TABLE big_t(id BIGINT PRIMARY KEY,d INT)')
     await c.query('INSERT INTO big_t VALUES (1,1),(9007199254740992,92),(9007199254740993,93),(9007199254740996,96),(90071992547409935,35),(9223372036854775807,110)')
     await c.query('CREATE TABLE unsigned_t(id BIGINT UNSIGNED PRIMARY KEY,d INT)')
-    await c.query('INSERT INTO unsigned_t VALUES (0,20)')
+    await c.query('INSERT INTO unsigned_t VALUES (0,20),(18446744073709551615,120)')
     await c.query('CREATE TABLE terminal_t LIKE t')
     await c.query('INSERT INTO terminal_t VALUES (2,2),(15,15)')
     await c.query('CREATE TABLE tiny_t(id TINYINT PRIMARY KEY)')
@@ -481,6 +481,10 @@ test('M5.10: DOUBLE comparison warnings follow the SELECT wire phase', async () 
       { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='922337203685477580.8e+' WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x', '922337203685477580.8e+'] },
       { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='-922337203685477580.9e+' WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x'] },
       { sql: "SELECT b.d AS n FROM t a LEFT JOIN unsigned_t b ON b.id='-0.1e+' WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x', '-0.1e+'] },
+      { sql: "SELECT b.id AS n FROM t a LEFT JOIN tiny_t b ON b.id='127.00000000000000000000000000000001e+' WHERE a.id='2x'", rows: [[127]], fixed: [], demanded: ['2x', '127.00000000000000000000000000000001e+'] },
+      { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='9223372036854775807.4e+' WHERE a.id='2x'", rows: [[110]], fixed: ['9223372036854775807.4e+'], demanded: ['2x'] },
+      { sql: "SELECT b.d AS n FROM t a LEFT JOIN unsigned_t b ON b.id='1844674407370955161.6e+' WHERE a.d='2.5x'", rows: [[120]], fixed: ['1844674407370955161.6e+'], demanded: ['2.5x'] },
+      { sql: "SELECT b.d AS n FROM t a LEFT JOIN unsigned_t b ON b.id='184467440737095516160.1e+' WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x', '184467440737095516160.1e+'] },
       { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='9223372036854775808y' WHERE a.d='2.5x'", rows: [[null]], fixed: [], demanded: ['2.5x'] },
       { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='9223372036854775808y' WHERE a.id='2x'", rows: [[110]], fixed: [], demanded: ['2x', '9223372036854775808y'] },
       { sql: "SELECT b.d AS n FROM t a LEFT JOIN big_t b ON b.id='9223372036854779904y' WHERE a.id='2x'", rows: [[null]], fixed: [], demanded: ['2x', '9223372036854779904y'] },
