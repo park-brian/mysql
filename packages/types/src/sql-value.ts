@@ -386,7 +386,7 @@ export function toInteger(v: Exclude<Value, null>): bigint {
       if (v.kind === 'string' && v.ordinal !== undefined) return v.ordinal
       if (v.kind === 'bytes' && v.hex === true) return hexNumber(v.v)
       const p = numericPrefix(textOf(v))
-      return p.fractional ? (/[eE]/.test(p.text) ? roundDouble(Number(p.text)) : rescale(parseDecimal(p.text), 0).v) : BigInt(p.text.replace(/^\+/, ''))
+      return p.fractional ? (/[eE]/.test(p.text) ? roundDouble(Number(p.text)) : rescale(parseDecimal(p.text), 0).v) : BigInt(p.text)
     }
     case 'datetime':
     case 'time':

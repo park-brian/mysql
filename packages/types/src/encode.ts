@@ -50,6 +50,7 @@ import {
   renderDecimal,
   rescale,
   string,
+  textOf,
   toDateTime,
   toDecimal,
   toDouble,
@@ -179,42 +180,33 @@ function temporalWarning(value: Exclude<Value, null>, column: string, row: numbe
   return shaped ? () => columnOutOfRange(column, row) : () => truncated(column, row)
 }
 
-function nameOfType(t: ColumnType): string {
-  switch (t.type) {
-    case FIELD_TYPE.FLOAT:
-    case FIELD_TYPE.DOUBLE:
-      return 'double'
-    case FIELD_TYPE.DECIMAL:
-    case FIELD_TYPE.NEWDECIMAL:
-      return 'decimal'
-    default:
-      return 'integer'
-  }
-}
-
 /**
  * For a numeric column: whether the value is a number at all, refused or
  * warned about if not. Which error depends on the column, and is 8.4.11's: a
  * DOUBLE or FLOAT calls anything left over "Data truncated" (1265), even
  * `'abc'`; a DECIMAL calls it an incorrect value (1366), even `'1x'`; an
  * integer type says 1366 when there is no number at all and 1265 when one is
- * followed by more (`'1.5x'`). Integer fields pass whether the source is a
- * direct prepared parameter, which has its own conversion rules.
+ * followed by more (`'1.5x'`). Ordinary integer writes supply their range so
+ * overflow takes precedence over trailing text. Direct markers supply null.
  */
-function numericSource(v: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext, directIntegerParameter?: boolean): Exclude<Value, null> {
+function numericSource(v: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext, kind: 'double' | 'decimal' | 'integer', integerRange?: ReturnType<typeof signedRange> | null): Exclude<Value, null> {
   if (v.kind !== 'string' && v.kind !== 'bytes') return v
   if (v.kind === 'string' && v.ordinal !== undefined) return int(v.ordinal, true)
   if (v.kind === 'bytes' && v.hex === true) return int(hexNumber(v.v), true)
-  const text = toText(v)
+  const text = textOf(v)
   const p = numericPrefix(text)
-  if (directIntegerParameter !== undefined) {
-    let integer: bigint | undefined
-    if (!p.complete) integer = terminalIntegerValue(text)
-    else if (!directIntegerParameter && p.fractional && !/^[ \t]*[\r\n]/.test(text)) integer = roundedIntegerText(p.text, true)
-    if (integer !== undefined) return int(integer)
+  if (integerRange !== undefined && !p.complete) {
+    const terminal = terminalIntegerValue(text)
+    if (terminal !== undefined) return int(terminal)
+  }
+  if (integerRange && !/^[ \t]*[\r\n]/.test(text)) {
+    const exact = p.fractional ? roundedIntegerText(p.text, true) : BigInt(p.text)
+    if (exact !== undefined) {
+      v = int(exact)
+      if (exact < integerRange.min || exact > integerRange.max) return v
+    }
   }
   if (p.complete) return v
-  const kind = nameOfType(column.type)
   const truncation = kind === 'double' || (kind === 'integer' && p.valid)
   return adjust(ctx, () => (truncation ? truncated(column.name, ctx.row) : wrongValueForColumn(kind, text, column.name, ctx.row)), v)
 }
@@ -227,16 +219,16 @@ export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext
     return null
   }
   const width = integerBytes(t.type)
-  if (width !== undefined) return encodeIntField(numericSource(value, column, ctx, directParameter), width, column, ctx)
+  if (width !== undefined) return encodeIntField(value, width, column, ctx, directParameter)
 
   switch (t.type) {
     case FIELD_TYPE.DECIMAL:
     case FIELD_TYPE.NEWDECIMAL:
-      return encodeDecimalField(numericSource(value, column, ctx), column, ctx)
+      return encodeDecimalField(numericSource(value, column, ctx, 'decimal'), column, ctx)
 
     case FIELD_TYPE.FLOAT:
     case FIELD_TYPE.DOUBLE: {
-      let n = toDouble(numericSource(value, column, ctx))
+      let n = toDouble(numericSource(value, column, ctx, 'double'))
       let max = t.type === FIELD_TYPE.FLOAT ? FLOAT_MAX : Number.MAX_VALUE
       // FLOAT(M,D): rounded to D decimals, half to even on the fraction, and
       // at most M - D digits before the point (`Field_real::truncate`).
@@ -253,7 +245,7 @@ export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext
     }
 
     case FIELD_TYPE.YEAR: {
-      let y = Number(toInteger(numericSource(value, column, ctx)))
+      let y = Number(toInteger(numericSource(value, column, ctx, 'integer')))
       // Two-digit years: 1–69 are 2001–2069 and 70–99 are 1970–1999. A
       // numeric 0 is the zero year; a string '0' would be 2000, which the
       // value kind tells apart.
@@ -334,8 +326,9 @@ export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext
       // 49. A value too wide is "too long", 1406 — a warning under IGNORE in
       // a strict mode, and 1264 outside one (`Field_bit::store`, 8.4.11).
       const bits = t.bits ?? 1
-      const text = value.kind === 'string' && value.ordinal === undefined ? encodeCollation(value.v, value.collationId) : undefined
-      let n = value.kind === 'bytes' ? bytesToBigint(value.v) : text !== undefined ? bytesToBigint(text) : toInteger(value)
+      const bytes = value.kind === 'bytes' ? value.v
+        : value.kind === 'string' && value.ordinal === undefined ? encodeCollation(value.v, value.collationId) : undefined
+      let n = bytes === undefined ? toInteger(value) : decodeInt(bytes, true)
       if (n < 0n || n >= 1n << BigInt(bits)) {
         n = adjust(ctx, () => dataTooLong(column.name, ctx.row), (1n << BigInt(bits)) - 1n, () => (ctx.strictMode === false ? columnOutOfRange(column.name, ctx.row) : dataTooLong(column.name, ctx.row)))
       }
@@ -383,12 +376,6 @@ function truncated(column: string, row: number): TypeError_ {
   return new TypeError_('WARN_DATA_TRUNCATED', `Data truncated for column '${column}' at row ${row}`, { errno: 1265, sqlState: '01000' })
 }
 
-function bytesToBigint(b: Uint8Array): bigint {
-  let n = 0n
-  for (const x of b) n = (n << 8n) | BigInt(x)
-  return n
-}
-
 /** MySQL retains the coefficient when an exponent sign ends integer input. */
 export function terminalIntegerValue(text: string): bigint | undefined {
   const match = /^[ \t]*([+-]?)(\d*)(?:\.(\d*))?[eE][+-]$/.exec(text)
@@ -412,16 +399,18 @@ export function terminalIntegerValue(text: string): bigint | undefined {
 /** Shift a numeric prefix's coefficient before rounding, optionally within the integer field reader's bounds. */
 export function roundedIntegerText(text: string, bounded = false): bigint | undefined {
   const [mantissa, exponent] = text.split(/[eE]/) as [string, string?]
-  if (bounded && (exponent === undefined || mantissa.length > 22)) return undefined
+  const restrict = bounded && exponent !== undefined
+  if (restrict && mantissa.length > 22) return undefined
   const decimal = parseDecimal(mantissa)
   const scale = Number(exponent ?? 0)
-  if (bounded && (Math.abs(scale - decimal.scale) > 20 || decimal.v < -MAX_UNSIGNED || decimal.v > MAX_UNSIGNED)) return undefined
+  if (restrict && (Math.abs(scale - decimal.scale) > 20 || decimal.v < -MAX_UNSIGNED || decimal.v > MAX_UNSIGNED)) return undefined
   return rescale(decimal, scale).v
 }
 
-function encodeIntField(v: Exclude<Value, null>, width: number, column: FieldColumn, ctx: StoreContext): Uint8Array {
+function encodeIntField(value: Exclude<Value, null>, width: number, column: FieldColumn, ctx: StoreContext, directParameter: boolean): Uint8Array {
   const unsigned = column.type.unsigned === true
   const range = unsigned ? unsignedRange(width) : signedRange(width)
+  const v = numericSource(value, column, ctx, 'integer', directParameter ? null : range)
   // MySQL's approximate-value field store rounds with rint before checking the range.
   let n = v.kind === 'double' && Number.isFinite(v.v) ? BigInt(roundHalfEven(v.v)) : toInteger(v)
   if (n < range.min || n > range.max) n = adjust(ctx, () => columnOutOfRange(column.name, ctx.row), n < range.min ? range.min : range.max)

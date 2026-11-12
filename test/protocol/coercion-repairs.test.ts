@@ -108,6 +108,43 @@ test('approximate values round to even when written to an integer field', async 
   }
 })
 
+test('integer writes range-check a numeric prefix before warning about trailing text', async () => {
+  const { db, conn } = await integerWriteConnection()
+  const schema = 'integer_prefix_writes'
+  const range = "Out of range value for column 'i' at row 1"
+  const trailing = "Data truncated for column 'i' at row 1"
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE t(i TINYINT, b BIGINT, src VARCHAR(30))')
+    for (const method of ['query', 'execute'] as const) {
+      const write = (sql: string) => method === 'query' ? conn.query(sql) : conn.execute(sql)
+      await conn.query("SET sql_mode=''")
+      await conn.query('DELETE FROM t')
+      await write("INSERT INTO t VALUES ('127.4999999999999999e0x','9.007199254740993e15x','-1.4999999999999999e0x')")
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [
+        ['Warning', 1265, trailing], ['Warning', 1265, "Data truncated for column 'b' at row 1"],
+      ])
+      assert.deepEqual((await conn.query('SELECT i,b FROM t'))[0], [[127, '9007199254740993']])
+      await write('UPDATE t SET i=src')
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [['Warning', 1265, trailing]])
+      assert.deepEqual((await conn.query('SELECT i FROM t'))[0], [[-1]])
+
+      await conn.query("SET sql_mode='STRICT_TRANS_TABLES'")
+      await assert.rejects(() => write("UPDATE t SET i='127.5x'"), { errno: 1264, sqlState: '22003', sqlMessage: range })
+      await assert.rejects(() => write("UPDATE t SET i='1.4999999999999999e0x'"), { errno: 1265, sqlState: '01000', sqlMessage: trailing })
+      assert.deepEqual((await conn.query('SELECT i FROM t'))[0], [[-1]])
+      await write("UPDATE IGNORE t SET i='127.5x'")
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [['Warning', 1264, range]])
+      assert.deepEqual((await conn.query('SELECT i FROM t'))[0], [[127]])
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
 test('NULL division resolves numeric metadata through both protocols', async () => {
   const db = await MySQL.open(':memory:')
   const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })

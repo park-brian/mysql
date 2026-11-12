@@ -84,8 +84,10 @@ session charset diagnostics and additional VARCHAR charsets remain open. An
 integer write whose text ends at the exponent sign retains the coefficient.
 Ordinary integer writes also round complete exponent text from its decimal
 coefficient within the verified bounds below. Approximate numeric values
-round ties to even when stored in integer fields. Prepared integer inference,
-larger coefficients and shifts, and nonunique right-side conditions remain open.
+round ties to even when stored in integer fields. An ordinary integer write
+with a valid numeric prefix checks its range before warning about trailing
+text. Prepared integer inference, larger coefficients and shifts, and
+nonunique right-side conditions remain open.
 M5.10 remains partial, with M5.47, M5.49 and M5.50 work before browser work.
 [Row-dependent DOUBLE conversion](#row-dependent-double-conversion)
 
@@ -4785,7 +4787,7 @@ unsigned 64 bits and an effective decimal shift from −20 to 20. For example,
 `9007199254740993` in BIGINT. In the 840-response INSERT audit, literal and
 column-copy forms improve from 528 to 656 complete matches out of 672, with
 no lost matches. UPDATE literals and same-table column copies improve by the
-same count. The remaining differences in those forms concern the value
+same count. The remaining differences at that stage concerned the value
 stored in permissive mode after a trailing nonnumeric character. Both
 protocols cover permissive and strict modes. All 168 direct prepared INSERT
 marker responses retain their results. Inference for direct markers and
@@ -4817,6 +4819,24 @@ matches and 886,912 matching protocol facts across 32,803 responses. All
 executor fuzzing, 2,127 of 2,248 matching plans and all 38 passing MySQL
 test IDs retain their results. All 1,804 Docker tests, typecheck and lint pass.
 [MySQL approximate integer field storage](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/field.cc#L3191)
+Ordinary integer writes now round a valid numeric prefix before checking the
+destination range, even when trailing text is present. An in-range prefix
+with trailing junk reports 1265. An out-of-range prefix reports 1264 and
+clamps in permissive mode or with `IGNORE`. For example, TINYINT stores
+`'127.4999999999999999e0x'` as `127` with one truncation warning. All 768
+targeted responses match MySQL 8.4.11, up from 476, and all 352 controls
+reproduce their results. The audit covers literal and copied values through
+both protocols, strict and permissive modes, and `IGNORE`. The earlier INSERT
+and UPDATE audits now each match all 672 ordinary writes. Leading line
+breaks, exponent signs followed only by whitespace, wider exponent
+coefficients and prepared-marker inference remain open. BIT storage uses the
+shared unsigned byte reader. Parser, core and facade measure 45,611,
+334,320 and 334,251 B gzipped within the existing caps. The 208-profile
+replay retains 27,469 complete matches and 886,912 matching protocol facts
+across 32,803 responses. Seeded executor fuzzing, 2,127 of 2,248 matching
+plans and all 38 passing MySQL test IDs retain their results. All 1,805
+Docker tests, typecheck and lint pass.
+[MySQL integer field range check](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/field.cc#L1588)
 Other computed ON conditions, multiple scalar
 projections, correlated and other subquery roles, inferred conditions, IN and
 BETWEEN, strict INSERT SELECT and marker inference still need their own rules.
@@ -11276,7 +11296,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,335 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-11. The facade is 334,256 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
+| Core bundle, gzipped | 334,320 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 334,251 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |
