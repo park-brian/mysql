@@ -38,6 +38,9 @@ import {
 import type { KeyColumn } from './indexes.ts'
 import type { RecordLayout } from './record.ts'
 
+export const catalogEncoder = new TextEncoder()
+export const catalogDecoder = new TextDecoder('utf-8', { fatal: true })
+
 export type EngineName = 'native' | 'memory'
 
 export interface ColumnDef {
@@ -272,14 +275,14 @@ export function encodeTableDef(def: TableDef): Uint8Array {
   } catch (e) {
     throw misuse(`a table definition that is not JSON: ${e instanceof Error ? e.message : String(e)}`)
   }
-  return new TextEncoder().encode(json)
+  return catalogEncoder.encode(json)
 }
 
 /** A stored definition, checked field by field. Any bytes may be passed. */
 export function decodeTableDef(bytes: Uint8Array): TableDef {
   let v: unknown
   try {
-    v = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))
+    v = JSON.parse(catalogDecoder.decode(bytes))
   } catch (e) {
     throw corruptCatalog(`a table definition that is not JSON: ${e instanceof Error ? e.message : String(e)}`)
   }

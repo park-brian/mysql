@@ -6,7 +6,7 @@
 // filters their rows as it would any table's. These are those tables, and no
 // others: what performance_schema instruments, this executor does not keep.
 import type { TableName } from '@myjs/parser'
-import { messages, sqlError } from '@myjs/protocol'
+import { fromUtf8, messages, sqlError } from '@myjs/protocol'
 import { COERCIBILITY, stringValue, type Value } from '@myjs/types'
 import type { DerivedSource } from './from.ts'
 import type { InformationSchemaColumn } from './information-schema-defs.ts'
@@ -69,6 +69,6 @@ export function shownValue(name: string, v: Value): string {
   if (kind === 'bool' && v.kind === 'int') return v.v === 0n ? 'OFF' : 'ON'
   if (v.kind === 'double') return v.v.toFixed(6)
   if (v.kind === 'int' || v.kind === 'string') return String(v.v)
-  if (v.kind === 'bytes') return new TextDecoder().decode(v.v)
+  if (v.kind === 'bytes') return fromUtf8(v.v)
   return String((v as { v: unknown }).v)
 }

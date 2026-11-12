@@ -68,6 +68,9 @@ test('text read as a number warns, and FIELD and the address functions quote, as
     }
     await conn.query('CREATE TABLE binary_warnings(v BINARY(4), w BINARY(33), x VARBINARY(400), y VARBINARY(400))')
     await conn.query(`INSERT INTO binary_warnings VALUES (X'31FF', X'31', X'31E5AD78', X'31${'78'.repeat(126)}E5AD97')`)
+    await conn.query(`CREATE TABLE varchar_warnings(u VARCHAR(64) CHARACTER SET utf8mb4,
+      s VARCHAR(255) CHARACTER SET latin1, l VARCHAR(256) CHARACTER SET latin1, t VARCHAR(255) CHARACTER SET latin1)`)
+    await conn.query("INSERT INTO varchar_warnings VALUES ('1😀x', _latin1 X'31E978', _latin1 X'31E978', _latin1 X'31E9')")
     const nearLimit = '1' + 'a'.repeat(126)
     for (const [sql, quoted] of [
       [`SELECT _binary X'310078' + 0e0, CAST(X'31FF78' AS BINARY) + 0e0,
@@ -78,13 +81,14 @@ test('text read as a number warns, and FIELD and the address functions quote, as
       ["'1?x'", `'${nearLimit}?'`, `'${nearLimit}`, `'${nearLimit.slice(1)}??'`]],
       ['SELECT v + 0e0, w + 0e0, x + 0e0, y + 0e0 FROM binary_warnings',
         ["'1\\xFF\\x00\\x00'", `'1${'\\x00'.repeat(31)}\\x0'`, "'1??x'", `'1${'x'.repeat(126)}`]],
+      ['SELECT u + 0e0, s + 0e0, l + 0e0, t + 0e0 FROM varchar_warnings', ["'1????x'", null, "'1?x'", "'1"]],
     ] as const) {
       const options = { sql, rowsAsArray: true }
       for (const method of ['query', 'execute'] as const) {
         const [rows] = method === 'query' ? await conn.query(options) : await conn.execute(options)
         assert.deepEqual(rows, [quoted.map(() => 1)], method)
         const [warnings] = await conn.query({ sql: 'SHOW WARNINGS', rowsAsArray: true })
-        assert.deepEqual(warnings, quoted.map((text) => ['Warning', 1292, `Truncated incorrect DOUBLE value: ${text}`]), method)
+        assert.deepEqual(warnings, quoted.flatMap((text) => text === null ? [] : [['Warning', 1292, `Truncated incorrect DOUBLE value: ${text}`]]), method)
       }
     }
   } finally {

@@ -42,7 +42,7 @@ import { TypeError as TypeError_ } from '@myjs/types'
 import { badFormat, corruptCatalog, misuse, dbExists, dbMissingOnDrop, noSuchTable, notAView, notSupportedYet, tableExists, unknownDb, unknownTable, writerBusy, wrongDbName, wrongTableName } from './errors.ts'
 import { ClusteredIndex, type KeyColumn, type Row } from './indexes.ts'
 import { decodeRecord, externalRefs, type FieldBytes, type RecordLayout } from './record.ts'
-import { NAME_BYTES, checkName, clusteredKeyOf, decodeTableDef, encodeTableDef, keyColumnsOf, layoutOf, resolveTable, secondariesOf, type TableDef, type TableSpec } from './schema.ts'
+import { NAME_BYTES, catalogDecoder as text, catalogEncoder as utf8, checkName, clusteredKeyOf, decodeTableDef, encodeTableDef, keyColumnsOf, layoutOf, resolveTable, secondariesOf, type TableDef, type TableSpec } from './schema.ts'
 import type { Store } from './store.ts'
 import { MemoryEngine, NativeEngine, type StorageEngine, type Table, type TableHooks } from './table.ts'
 import { CLUSTERED_HEADER, versionOf, type Trx } from './trx.ts'
@@ -166,8 +166,6 @@ export interface CatalogOptions {
   readonly lowerCaseTableNames?: 0 | 1
 }
 
-const utf8 = new TextEncoder()
-const text = new TextDecoder('utf-8', { fatal: true })
 const readBe32 = (b: Uint8Array | null | undefined): number => {
   if (!(b instanceof Uint8Array) || b.length !== 4) throw corruptCatalog('an id that is not four bytes')
   return readU32(b)

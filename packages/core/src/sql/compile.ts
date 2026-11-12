@@ -203,19 +203,23 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
     return v
   } }
   if (!isText(c.type)) return c
-  const column = c.type.column
+  const { column, field } = c.type
+  const double = kind === 'DOUBLE'
   // Fixed CHAR/BINARY fields use ErrConvString, as explicit INTEGER casts do.
-  const diagnosticKind = (source === 'cast' && kind === 'INTEGER') || (column && kind === 'DECIMAL' && c.type.field === FIELD_TYPE.STRING) ? c.type.kind : undefined
+  const diagnosticKind = (source === 'cast' && kind === 'INTEGER') || (column && kind === 'DECIMAL' && field === FIELD_TYPE.STRING) ? c.type.kind : undefined
   // A TEXT or BLOB column reads as a double or an integer without a word
   // (`Field_blob::val_real` and `val_int` discard the error).
   const fieldRead = column && diagnosticKind === undefined && kind !== 'DECIMAL'
-  if (fieldRead && c.type.field === FIELD_TYPE.BLOB) return c
+  if (fieldRead && field === FIELD_TYPE.BLOB) return c
   // A VARCHAR or VARBINARY column, read as a double or an integer, is quiet
   // when the bytes left unconverted are exactly twice its length bytes — 2
   // under 256 bytes, 4 from there (8.4.11: in a VARCHAR(10), `v + 0` warns
   // for '1x' and '12x' but not for '1xy', 'xy' or 'é'; in a VARCHAR(400),
   // for those three but not for '1abc' or '1.2.3.4'). A CHAR always warns.
-  const quietTail = fieldRead && c.type.field === FIELD_TYPE.VAR_STRING ? (byteWidth(c.type) < 256 ? 2 : 4) : undefined
+  const quietTail = fieldRead && field === FIELD_TYPE.VAR_STRING ? (byteWidth(c.type) < 256 ? 2 : 4) : 0
+  const varcharCharset = quietTail && double ? charsetOfCollation(c.type.collationId) : ''
+  // These field charsets can reproduce the stored bytes for the warning.
+  const rawVarchar = ['binary', 'latin1', 'utf8mb3', 'utf8mb4'].includes(varcharCharset)
   // Once a statement, a constant: keyed by its node when it has one, so that
   // the optimizer's own evaluation of it and the plan's share the one warning (8.4.11).
   const key = typeof once === 'object' ? once : {}
@@ -229,10 +233,47 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
         env.memo?.set(key, true)
       }
       const integer = integerPrefix(v)
-      if (integer === undefined || (quietTail !== undefined && unconvertedBytes(v, kind === 'INTEGER' ? integer : undefined) === quietTail)) return v
-      checkNumber(v, kind, env, c, diagnosticKind)
+      if (integer !== undefined) checkNumber(v, env, integer)
       return v
     },
+  }
+
+  function checkNumber(v: Exclude<Value, null>, env: Env, integer: string): void {
+    const text = toText(v)
+    const p = numericPrefix(text)
+    // Field_varstring can suppress a warning based on the stored byte count.
+    if (quietTail && (double || text.startsWith(integer))) {
+      const end = double ? (p.valid ? text.indexOf(p.text) + p.text.length : 0) : integer.length
+      const rest = text.slice(end)
+      const bytes = v.kind === 'bytes' || varcharCharset === 'latin1' ? rest.length : utf8(rest).length
+      if (bytes === quietTail) return
+    }
+    // Field_blob and CONCAT's Item_str_func reader discard truncation status;
+    // an invalid prefix still raises the decimal converter's fatal 1366.
+    if (kind === 'DECIMAL') {
+      if ((column || c.decimalPrefix) && !p.valid) raise(env, 1366, "Incorrect DECIMAL value: '0' for column '' at row -1")
+      if (c.decimalPrefix || (column && field === FIELD_TYPE.BLOB)) return
+    }
+    // An integer past 64 bits is truncated too, to the largest there is.
+    // A double past the largest is truncated as well (8.4.11: `'1e400' + 0`).
+    if (double ? completeDouble(p) : p.complete &&
+      (kind !== 'INTEGER' || (!p.fractional && BigInt(p.text) <= MAX_UNSIGNED && BigInt(p.text) >= MIN_SIGNED))) return
+    // INTEGER casts warn even for empty or whitespace-only strings and bytes.
+    if (kind !== 'DECIMAL' && diagnosticKind === undefined && /^[ \t\n\r]*$/.test(text)) return
+    const fixed = field === FIELD_TYPE.STRING
+    let diagnostic: string
+    if (v.kind === 'bytes' && (diagnosticKind === 'bytes' || (double && (!column || fixed)))) diagnostic = escapedBytes(v.v.subarray(0, 128)).slice(0, 128)
+    // Fixed CHAR and expressions with a known collation derivation use ErrConvString for DOUBLE.
+    else if (rawVarchar || diagnosticKind === 'string' || (double && v.kind === 'string' && (column ? fixed : c.type.coercibility !== undefined))) {
+      const bytes = rawVarchar ? valueBytes(v) : utf8(bmpText(warnedText(v)).slice(0, 128))
+      if (double) return truncatedQuoted(env, kind, utf8mb3WarningQuote(bytes))
+      diagnostic = fromUtf8(bytes.subarray(0, 128))
+    }
+    else {
+      diagnostic = warnedText(v)
+      if (double && /^[\x00-\x7F]{129,}$/.test(diagnostic)) diagnostic = diagnostic.slice(0, 128)
+    }
+    truncated(env, kind, diagnostic)
   }
 }
 
@@ -249,21 +290,6 @@ export function numberConstant(c: Compiled, written: Expression, ctx: CompileCon
 
 function resolveConstant(c: Compiled, ctx: CompileContext): Compiled {
   return lit(c.eval([], { ...constantEnv(ctx), memo: new Map(), conditions: ctx.conditions }), c.type)
-}
-
-/** The bytes a number's reading leaves over: after the integer for an INTEGER (-1 when there is no digit), after the number for a DOUBLE (all of them, leading spaces too, when there is none). */
-function unconvertedBytes(v: Exclude<Value, null>, integer?: string): number {
-  const text = toText(v)
-  let end: number
-  if (integer !== undefined) {
-    if (!text.startsWith(integer)) return -1
-    end = integer.length
-  } else {
-    const prefix = numericPrefix(text)
-    end = prefix.valid ? text.indexOf(prefix.text) + prefix.text.length : 0
-  }
-  const rest = text.slice(end)
-  return v.kind === 'bytes' ? rest.length : utf8(rest).length
 }
 
 /** Text on one side and a number on the other: a comparison of doubles. */
@@ -346,53 +372,22 @@ function completeDouble(prefix: ReturnType<typeof numericPrefix>): boolean {
   return prefix.complete && Number.isFinite(Number(prefix.text))
 }
 
-/** `asNumber`'s check, for one value. */
-function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env, c: Compiled, diagnosticKind?: ResultType['kind']): void {
-  const text = toText(v)
-  const p = numericPrefix(text)
-  const { column, field } = c.type
-  const double = kind === 'DOUBLE'
-  // Field_blob and CONCAT's Item_str_func reader discard truncation status;
-  // an invalid prefix still raises the decimal converter's fatal 1366.
-  if (kind === 'DECIMAL') {
-    if ((column || c.decimalPrefix) && !p.valid) raise(env, 1366, "Incorrect DECIMAL value: '0' for column '' at row -1")
-    if (c.decimalPrefix || (column && field === FIELD_TYPE.BLOB)) return
-  }
-  // An integer past 64 bits is truncated too, to the largest there is.
-  // A double past the largest is truncated as well (8.4.11: `'1e400' + 0`).
-  if (double ? completeDouble(p) : p.complete &&
-    (kind !== 'INTEGER' || (!p.fractional && BigInt(p.text) <= MAX_UNSIGNED && BigInt(p.text) >= MIN_SIGNED))) return
-  // INTEGER casts warn even for empty or whitespace-only strings and bytes.
-  if (kind !== 'DECIMAL' && diagnosticKind === undefined && /^[ \t\n\r]*$/.test(text)) return
-  const fixed = field === FIELD_TYPE.STRING
-  const raw = double && column && field === FIELD_TYPE.VAR_STRING && v.kind === 'bytes' ? v.v : undefined
-  let diagnostic: string
-  if (v.kind === 'bytes' && (diagnosticKind === 'bytes' || (double && (!column || fixed)))) diagnostic = escapedBytes(v.v.subarray(0, 128)).slice(0, 128)
-  // Fixed CHAR and expressions with a known collation derivation use ErrConvString for DOUBLE.
-  else if (raw || diagnosticKind === 'string' || (double && v.kind === 'string' && (column ? fixed : c.type.coercibility !== undefined))) {
-    const bytes = raw ?? utf8(bmpText(warnedText(v)).slice(0, 128))
-    if (double) return raise(env, 1292, 'Truncated incorrect DOUBLE value: ' + utf8mb3WarningQuote(bytes))
-    diagnostic = fromUtf8(bytes.subarray(0, 128))
-  }
-  else {
-    diagnostic = warnedText(v)
-    if (double && /^[\x00-\x7F]{129,}$/.test(diagnostic)) diagnostic = diagnostic.slice(0, 128)
-  }
-  truncated(env, kind, diagnostic)
-}
-
 /** A truncated conversion's message; each reader retains its text policy. */
 function truncated(env: Pick<Env, 'conditions'>, kind: string, text: string): void {
-  raise(env, 1292, `Truncated incorrect ${kind} value: '${text}'`)
+  truncatedQuoted(env, kind, `'${text}'`)
+}
+
+function truncatedQuoted(env: Pick<Env, 'conditions'>, kind: string, quoted: string): void {
+  raise(env, 1292, `Truncated incorrect ${kind} value: ${quoted}`)
 }
 
 /** A byte-limited C string and its closing quote, read as the server's utf8mb3 warning text. */
 function utf8mb3WarningQuote(bytes: Uint8Array): string {
   const raw = toText(bytesValue(bytes.subarray(0, 128))).split('\0', 1)[0]!
   // A lone three-byte lead also hides the closing quote. Other invalid bytes become question marks.
-  const valid = ("'" + raw + "'").replace(
-    /[\xe0-\xef]'$|[\xc2-\xdf][\x80-\xbf]|(?!\xe0[\x80-\x9f]|\xed[\xa0-\xbf])[\xe0-\xef][\x80-\xbf]{2}|[\x80-\xff]/g,
-    (part) => part[1] === "'" ? '' : part.length === 1 ? '?' : part,
+  const valid = ("'" + raw + "'").replace(/[\xe0-\xef]'$/, '').replace(
+    /[\xc2-\xdf][\x80-\xbf]|(?!\xe0[\x80-\x9f]|\xed[\xa0-\xbf])[\xe0-\xef][\x80-\xbf]{2}|[\x80-\xff]/g,
+    (part) => part.length === 1 ? '?' : part,
   )
   return fromUtf8(Uint8Array.from(valid, (char) => char.charCodeAt(0)))
 }
