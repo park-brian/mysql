@@ -253,6 +253,8 @@ test('ORDER BY index hints leave JOIN covering reads eligible', async () => {
   const byId = DATA.slice(-6).reverse()
   const byAb = DATA.slice().sort((left, right) => left.a - right.a || left.b - right.b || left.id - right.id)
   const first = byA.slice(0, 6).map(({ id, a }) => [id, a])
+  const wide = (rows: typeof DATA) => rows.map(({ id, payload }) => [id, payload])
+  const wideFields = [ID_FIELD, ['payload', 253, 80, 0, 0, 224]]
   const coverA = 'Covering index scan on t using by_a'
   const sortedA = `Limit\n    Sort\n        ${coverA}`
   try {
@@ -278,6 +280,21 @@ test('ORDER BY index hints leave JOIN covering reads eligible', async () => {
       [ID_FIELD, ["CAST('bad' AS SIGNED)", 8, 21, 129, 0, 63]], sortedA, Array.from({ length: 6 }, () => ['Warning', 1292, "Truncated incorrect INTEGER value: 'bad'"]))
     await conn.query("SET optimizer_switch='prefer_ordering_index=off'")
     await read('SELECT id,a FROM t IGNORE INDEX FOR ORDER BY (by_a,by_ab) ORDER BY a,id LIMIT 6', first, [ID_FIELD, aField], sortedA)
+    for (const preference of ['off', 'on']) {
+      await conn.query(`SET optimizer_switch='prefer_ordering_index=${preference}'`)
+      await read('SELECT id,payload FROM t FORCE INDEX FOR ORDER BY (by_a) ORDER BY a',
+        wide(byA), wideFields, 'Index scan on t using by_a')
+      await read('SELECT id,payload FROM t FORCE INDEX FOR ORDER BY (by_a) ORDER BY a DESC',
+        wide(byA.slice().reverse()), wideFields, 'Index scan on t using by_a')
+      await read('SELECT id,payload FROM t FORCE INDEX (by_ab) ORDER BY a,b',
+        wide(byAb), wideFields, 'Index scan on t using by_ab')
+      await read('SELECT id,a AS g FROM t FORCE INDEX FOR ORDER BY (by_ab) ORDER BY g',
+        byAb.map(({ id, a }) => [id, a]), [ID_FIELD, ['g', ...aField.slice(1)]], 'Covering index scan on t using by_ab')
+      await read('SELECT id,payload FROM t FORCE INDEX FOR ORDER BY (by_a) IGNORE INDEX FOR JOIN (by_a) ORDER BY a',
+        wide(byA), wideFields, 'Index scan on t using by_a')
+      await read('SELECT id,a FROM t FORCE INDEX FOR JOIN (by_b) FORCE INDEX FOR ORDER BY (by_a) ORDER BY a',
+        byA.map(({ id, a }) => [id, a]), [ID_FIELD, aField], 'Index scan on t using by_a')
+    }
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()

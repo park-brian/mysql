@@ -156,9 +156,12 @@ export function result(units: readonly string[] | string, binary: boolean, colla
 
 /** The collation a string function's first argument gives its result: NULL's is binary. */
 function firstCollation(t: ResultType, conn: number): { readonly binary: boolean; readonly collation: number; readonly coercibility: number } {
-  if (t.kind === 'bytes' || t.kind === 'null') return { binary: true, collation: CHARSET_BINARY, coercibility: coercibilityOf(t) }
-  if (t.kind === 'string') return { binary: false, collation: t.collationId, coercibility: coercibilityOf(t) }
-  return { binary: false, collation: conn, coercibility: COERCIBILITY.NUMERIC }
+  const binary = t.kind === 'bytes' || t.kind === 'null'
+  return {
+    binary,
+    collation: binary ? CHARSET_BINARY : t.kind === 'string' ? t.collationId : conn,
+    coercibility: binary || t.kind === 'string' ? coercibilityOf(t) : COERCIBILITY.NUMERIC,
+  }
 }
 
 /** An argument's width in characters, or in bytes for a binary result; a TEXT's is its byte capacity, as a field's `max_char_length` is. */
@@ -230,7 +233,7 @@ function byteLength(units: readonly string[], binary: boolean, collation: number
 /** The first slice: the names `libraryFunction` compiles. */
 const LIBRARY: ReadonlySet<string> = new Set([
   'SUBSTRING', 'SUBSTR', 'MID', 'LEFT', 'RIGHT', 'LPAD', 'RPAD', 'REPEAT', 'REVERSE', 'LOCATE', 'INSTR', 'POSITION', 'TRIM', 'LTRIM', 'RTRIM',
-  'REPLACE', 'CONCAT_WS', 'SPACE', 'ASCII', 'ROUND', 'FLOOR', 'CEIL', 'CEILING', 'TRUNCATE', 'SIGN', 'GREATEST', 'LEAST',
+  'REPLACE', 'CONCAT_WS', 'SPACE', 'ASCII',
 ])
 
 /** What a library function's compiler asks of its call: its arguments read as numbers where it reads numbers (warning as they go, 1292), its count checked, the first argument's collation. */
@@ -787,11 +790,6 @@ function myDoubleRound(value: number, places: bigint, truncate: boolean): number
 // `tools/capture-more-functions.mjs`'s corpus. They keep the rules above (a
 // result in its first argument's collation, or the aggregate of the strings
 // it chooses among); the digests are `@myjs/types`' (`digest.ts`).
-
-const MORE_STRING_FUNCTIONS: ReadonlySet<string> = new Set([
-  'CHAR', 'FIELD', 'ELT', 'MAKE_SET', 'EXPORT_SET', 'FIND_IN_SET', 'INSERT', 'SUBSTRING_INDEX', 'QUOTE', 'SOUNDEX', 'FORMAT', 'BIT_LENGTH',
-  'CONV', 'TO_BASE64', 'FROM_BASE64', 'ORD', 'MD5', 'SHA1', 'SHA', 'CRC32', 'SHA2',
-])
 
 type Row = Parameters<Compiled['eval']>[0]
 
@@ -1526,9 +1524,6 @@ function hashFunction(name: string, xs: readonly Compiled[], callName: string, l
   }
 }
 
-/** The library's number functions, which `numberFunction` compiles. */
-const NUMBER_FUNCTIONS: ReadonlySet<string> = new Set(['FLOOR', 'CEIL', 'CEILING', 'ROUND', 'TRUNCATE', 'SIGN', 'GREATEST', 'LEAST'])
-
 /** Lists and sets, which `listFunction` compiles. */
 const LIST_FUNCTIONS: ReadonlySet<string> = new Set(['FIELD', 'ELT', 'MAKE_SET', 'EXPORT_SET', 'FIND_IN_SET'])
 
@@ -1539,18 +1534,29 @@ const CONVERSION_FUNCTIONS: ReadonlySet<string> = new Set(['CHAR', 'FORMAT', 'BI
 const HASH_FUNCTIONS: ReadonlySet<string> = new Set(['MD5', 'SHA1', 'SHA', 'CRC32', 'SHA2'])
 
 /** Every function this file compiles. */
-export const STRING_FUNCTIONS: ReadonlySet<string> = new Set([...LIBRARY, ...MORE_STRING_FUNCTIONS])
+export const STRING_FUNCTIONS: ReadonlySet<string> = new Set([
+  ...LIBRARY, ...READS_DOUBLE, ...LIST_FUNCTIONS, ...CONVERSION_FUNCTIONS, ...HASH_FUNCTIONS,
+  'GREATEST', 'LEAST', 'INSERT', 'SUBSTRING_INDEX', 'QUOTE', 'SOUNDEX',
+])
 
 export function stringFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
   const constant = e.args.map((a) => constantNode(a))
-  if (LIBRARY.has(name)) {
-    // TRIM's side is a keyword argument, carried as such.
-    const xs = e.args.map((a): Compiled => (a.kind === NODE.KEYWORD ? Object.assign({ eval: () => null, type: NULL_TYPE }, { keyword: a.word }) : compile(a, ctx)))
-    if (NUMBER_FUNCTIONS.has(name)) return numberFunction(name, xs, e.name, constant, ctx, e.args)
+  const numeric = READS_DOUBLE.has(name) || name === 'GREATEST' || name === 'LEAST'
+  const library = numeric || LIBRARY.has(name)
+  // TRIM's side is a keyword argument, carried as such.
+  const xs = e.args.map((a): Compiled => {
+    if (library && a.kind === NODE.KEYWORD) {
+      const keyword = { eval: () => null, type: NULL_TYPE, keyword: a.word }
+      return keyword
+    }
+    return compile(a, ctx)
+  })
+  if (numeric) return numberFunction(name, xs, e.name, constant, ctx, e.args)
+  if (library) {
     // These scalar string constructors own their DECIMAL prefix diagnostics.
     // Their integral results bypass text conversion in asNumber.
     return { ...libraryFunction(name, xs, e, constant, ctx), decimalPrefix: true }
   }
   const family = HASH_FUNCTIONS.has(name) ? hashFunction : LIST_FUNCTIONS.has(name) ? listFunction : CONVERSION_FUNCTIONS.has(name) ? conversionFunction : moreStringFunction
-  return { ...family(name, e.args.map((a) => compile(a, ctx)), e.name, deparse(e), e.using, constant, ctx, e.args.map((a) => printedArgument(a, ctx))), decimalPrefix: true }
+  return { ...family(name, xs, e.name, deparse(e), e.using, constant, ctx, e.args.map((a) => printedArgument(a, ctx))), decimalPrefix: true }
 }

@@ -135,7 +135,7 @@ export interface FromPlan {
   /** The one base table, when the FROM is exactly that. */
   readonly single?: { readonly alias: string; readonly def: TableDef; readonly table: Table } | undefined
   /** Legacy eligibility for the supported scopes of a single physical source. */
-  readonly eligibleIndexes?: Partial<Record<NonNullable<IndexHint['for']>, readonly IndexDef[]>> | undefined
+  readonly eligibleIndexes?: HintEligibility | undefined
   /** Eligible ordering keys after the covering scan has been selected. */
   orderingIndexes(scope: 'ORDER BY' | 'GROUP BY'): readonly IndexDef[] | undefined
   /**
@@ -190,7 +190,7 @@ export interface FromPlan {
   /** Right primary-key access for a preserved LEFT JOIN whose text key needs conversion. */
   rounded?: { readonly condition: Expression; readonly access: Access; readonly constAccess: Access | undefined }
   /** Read the one base table whole in an index's order, for an ORDER BY or a grouping it gives; `force` drops a range on another index for it, and `reverse` reads it descending. */
-  readInOrder(index: string, force: boolean, reverse?: boolean, alias?: string): void
+  readInOrder(index: string, force: boolean, reverse: boolean, alias?: string): void
   /** The FROM as 8.4.11's iterators (M5.44): the tree `rows` runs, as EXPLAIN shows it. */
   explain(env: Env): PlanNode
   /** How the one base table of a single-table FROM is read: what `rows` and `explain` read it by. */
@@ -239,26 +239,32 @@ function foldIndexName(name: string): string {
   return name.replace(/[A-Z]/g, (letter) => letter.toLowerCase())
 }
 
-type HintEligibility = NonNullable<FromPlan['eligibleIndexes']> & { readonly forceRange: boolean }
+type HintEligibility = Partial<Record<NonNullable<IndexHint['for']>, readonly IndexDef[]>> & { readonly force?: 'JOIN' | 'ORDER BY' | undefined }
 
-function indexHintEligibility(def: TableDef, alias: string, hints: readonly IndexHint[], env: Env | undefined, validate: boolean, scope: IndexHint['for']): HintEligibility | undefined {
-  const fulltext = fulltextOf(def)
-  const keys = [...def.indexes, ...fulltext].map((key) => ({ key, folded: foldIndexName(key.name) }))
+function hintApplies(hint: IndexHint, scope: IndexHint['for']): boolean {
+  return hint.for === undefined || hint.for === scope
+}
+
+function indexHintEligibility(def: TableDef, alias: string, hints: readonly IndexHint[], env: Env | undefined, validate: boolean, scope: IndexHint['for'], unbounded: boolean): HintEligibility | undefined {
+  const keys = [...def.indexes, ...fulltextOf(def)].map((key) => ({ key, folded: foldIndexName(key.name) }))
   type HintKey = (typeof keys)[number]['key']
+  type Mask = { readonly scope: NonNullable<IndexHint['for']>; used?: Set<HintKey>; readonly ignored: Set<HintKey> }
   // Ordering and grouping have their own eligibility, separate from the scan.
-  const scopes = scope === undefined ? [] : scope === 'JOIN' ? [scope] : ['JOIN', scope] as const
+  const join = scope === 'JOIN'
+  const scopes = scope === undefined ? [] : join ? [scope] : ['JOIN', scope] as const
   const visible = !keys.some(({ key }) => key.invisible)
   const force = hints.some((hint) => hint.type === 'FORCE')
   // Any FORCE scope affects the range cost, even when its name mask is inactive.
-  const forceRange = visible && force && scope === 'JOIN' && fulltext.length === 0
-  const masks = !visible || (force && !forceRange) ? [] : scopes
-    .filter((scope) => hints.some((hint) => hint.for === undefined || hint.for === scope))
-    .map((scope) => ({ scope, used: undefined as Set<HintKey> | undefined, ignored: new Set<HintKey>() }))
-  const enabled = forceRange || masks.length > 0
+  const forceScope = visible && force && keys.length === def.indexes.length && (join || (scope === 'ORDER BY' && unbounded &&
+    hints.some((hint) => hint.type === 'FORCE' && hintApplies(hint, scope)))) ? scope : undefined
+  const masks = !visible || (force && forceScope === undefined) ? [] : scopes
+    .filter((scope) => hints.some((hint) => hintApplies(hint, scope)))
+    .map((scope): Mask => ({ scope, ignored: new Set() }))
+  const enabled = forceScope !== undefined || masks.length > 0
   if (!enabled && !validate) return undefined
   // MySQL visits the parsed hint list in reverse, including names in one clause.
   for (const hint of hints.slice().reverse()) {
-    const selected = masks.filter((mask) => hint.for === undefined || hint.for === mask.scope).map((mask) => {
+    const selected = masks.filter((mask) => hintApplies(hint, mask.scope)).map((mask) => {
       if (hint.type === 'IGNORE') return mask.ignored
       if (mask.used === undefined || hint.indexes.length === 0) mask.used = new Set()
       return mask.used
@@ -275,7 +281,7 @@ function indexHintEligibility(def: TableDef, alias: string, hints: readonly Inde
   }
   if (validate && force && hints.some((hint) => hint.type === 'USE')) throw wrongUsage('USE INDEX', 'FORCE INDEX')
   if (!enabled) return undefined
-  const eligible: HintEligibility = { forceRange }
+  const eligible: HintEligibility = { force: forceScope }
   for (const { scope, used, ignored } of masks) {
     eligible[scope] = def.indexes.filter((key) => (used === undefined || used.has(key)) && !ignored.has(key))
   }
@@ -368,7 +374,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     const validate = hints.previous !== tableIds
     if (validate || hintScope !== undefined) {
       for (const p of pending) {
-        if (p.indexHints !== undefined) eligibleIndexes = indexHintEligibility(p.def!, p.alias, p.indexHints, ctx.env, validate, hintScope)
+        if (p.indexHints !== undefined) eligibleIndexes = indexHintEligibility(p.def!, p.alias, p.indexHints, ctx.env, validate, hintScope, hints.query.limit === undefined)
       }
     }
     hints.checked = tableIds
@@ -775,7 +781,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     sortedBy(alias, limit) {
       sort = alias === undefined ? undefined : { alias, limit }
     },
-    readInOrder(index, force, reverse = false, alias) {
+    readInOrder(index, force, reverse, alias) {
       const indexes = joinIndexes ?? eligibleIndexes?.[force ? 'GROUP BY' : 'ORDER BY']
       const covering = single && indexes?.some(
         (key) => key.name === index && holdsRead(single.def, key, settings.read.get(single.alias) ?? 'all'),
@@ -1032,7 +1038,10 @@ function leafAccess(t: FromTable, settings: LeafSettings, env: Env): Access {
 }
 
 /** The order asked of `t`'s reads, if any. */
-const orderFor = (t: FromTable, settings: LeafSettings): LeafSettings['ordered'] => (settings.ordered?.alias === undefined || settings.ordered.alias === t.alias ? settings.ordered : undefined)
+function orderFor(t: FromTable, settings: LeafSettings): LeafSettings['ordered'] {
+  const order = settings.ordered
+  return order?.alias === undefined || order.alias === t.alias ? order : undefined
+}
 
 /** The access `chooseAccess` picks for a table under the WHERE, once per statement's environment: a range is weighed by counting its rows. */
 function chosenAccess(t: FromTable, settings: LeafSettings, env: Env, quote = false): Access {
@@ -1062,7 +1071,7 @@ function rangeCosting(t: FromTable, settings: LeafSettings, env: Env, quote = fa
       return (stats ??= statistics(def, table))
     },
     quote,
-    forceRange: settings.eligibleIndexes?.forceRange,
+    forceRange: settings.eligibleIndexes?.force === 'JOIN',
     shape: (i) => ({ clustered: i === clustered, covering: holdsRead(def, i, read), recordBytes: indexBytes(def, i) + indexBytes(def, clustered), minRecordBytes }),
     coveringScan: cover === undefined ? undefined : def.indexes.find((i) => i.name === cover),
     count(index, range, limit) {
@@ -2148,13 +2157,16 @@ export function holdsRead(def: TableDef, index: IndexDef, read: ReadonlySet<stri
  * 8.4.11 shows as a covering index scan of PRIMARY.
  */
 function coveringIndex(def: TableDef, read: ReadonlySet<string> | 'all', indexes = def.indexes): string | undefined {
-  let best: { name: string; bytes: number } | undefined
+  let best: string | undefined
+  let size = Infinity
   const clustered = clusteredIndex(def)
   for (const index of indexes) {
-    if (index === clustered || !holdsRead(def, index, read)) continue
-    const bytes = indexBytes(def, index)
-    if (best === undefined || bytes < best.bytes) best = { name: index.name, bytes }
+    if (!holdsRead(def, index, read)) continue
+    const bytes = index === clustered ? Infinity : indexBytes(def, index)
+    if (best === undefined || bytes < size) {
+      best = index.name
+      size = bytes
+    }
   }
-  if (best === undefined && clustered !== undefined && indexes.includes(clustered) && holdsRead(def, clustered, read)) return clustered.name
-  return best?.name
+  return best
 }
