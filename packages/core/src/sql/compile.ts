@@ -164,10 +164,10 @@ export interface Env {
 /** Keep original wire bindings with their execution, outside decoded values. */
 export const parameterBindings = new WeakMap<readonly Value[], readonly Parameter[]>()
 
-function readNonNull(read: Compiled['eval'], convert: (value: Exclude<Value, null>) => Value): Compiled['eval'] {
+function readNonNull(read: Compiled['eval'], convert: (value: Exclude<Value, null>, env: Env) => Value): Compiled['eval'] {
   return (r, env) => {
     const value = read(r, env)
-    return value === null ? null : convert(value)
+    return value === null ? null : convert(value, env)
   }
 }
 
@@ -424,7 +424,7 @@ export function invalidString(env: Env, text: string, fn: string): null {
 export const constantEnv = (ctx: CompileContext): Env => ({ params: ctx.params ?? [], now: ctx.state.clock?.() ?? new Date(), session: ctx.session, state: ctx.state })
 
 /** The session byte limit used by string result sizing and packet checks. */
-export function maxPacket(env: Env): number {
+export function maxPacket(env: Pick<Env, 'state' | 'session'>): number {
   const v = env.state.systemVariable('max_allowed_packet', undefined, env.session)
   return v === undefined || v === null ? 67_108_864 : Number(toInteger(v))
 }
@@ -2350,21 +2350,6 @@ function mergeTypeOf(t: ResultType): MergeType {
 // NULL and JSON are selected from the value kind above.
 const MERGE_NAME: Readonly<Partial<Record<number, MergeType>>> = Object.fromEntries(MERGE_TYPES.filter((name) => name !== 'NULL' && name !== 'JSON').map((name) => [FIELD_TYPE[name], name]))
 
-/**
- * A branch's value as the merged type holds it: a DATE or a TIME where the
- * merge made a DATETIME is one, a TIME on today's date (8.4.11).
- */
-export function asMerged(v: Value, result: ResultType, env: Env): Value {
-  if (v === null || result.kind !== 'datetime' || result.field === FIELD_TYPE.DATE) return v
-  if (v.kind === 'time') {
-    if (result.field === FIELD_TYPE.TIME) return v
-    const d = onToday(v.v, env)
-    return d === undefined ? null : { kind: 'datetime', v: d, type: 'DATETIME', fsp: v.fsp }
-  }
-  if (v.kind === 'datetime' && v.type === 'DATE' && result.field !== FIELD_TYPE.TIME) return { ...v, type: 'DATETIME' }
-  return v
-}
-
 function holderOf(types: readonly ResultType[], live: readonly ResultType[], nullable: boolean, connectionCollation: number, operation: string | undefined, compare: boolean): ResultType {
   // JSON with JSON is JSON; JSON with anything else is its text, in JSON's
   // collation, utf8mb4_bin (8.4.11, M5.21).
@@ -2478,34 +2463,42 @@ export function textOf(v: Exclude<Value, null>, t: ResultType): string {
   return toText(v)
 }
 
-/** Numeric source formats survive when a string or binary holder takes the branch. */
-export const ownText = (t: ResultType): boolean => (t.field === FIELD_TYPE.YEAR && t.column !== undefined) || t.kind === 'double'
-
-/**
- * A branch's value as a binary result holds it: text in its own charset's
- * bytes (8.4.11: a latin1 'café' is 63 61 66 E9), a YEAR or FLOAT as its text.
- */
-export function asBinary(v: Exclude<Value, null>, from: ResultType): Value {
-  const bytes = binaryStringBytes(v, from)
-  if (bytes !== undefined) return bytesValue(bytes)
-  if (ownText(from)) return bytesValue(utf8(textOf(v, from)))
-  return v.kind === 'string' ? bytesValue(encodeCollation(v.v, v.collationId)) : v
+/** Text, binary and temporal conversions shared by the choice readers. */
+export function choiceBranch(from: ResultType, result: ResultType): ((value: Exclude<Value, null>, env: Env) => Value) | undefined {
+  const formatted = (from.field === FIELD_TYPE.YEAR && from.column !== undefined) || from.kind === 'double'
+  if (result.kind === 'string' && formatted) {
+    return (value) => stringValue(textOf(value, from), result.collationId)
+  }
+  if (result.kind === 'bytes' && (formatted || from.kind === 'string')) {
+    // A binary result uses the source charset and the formatted text of YEAR and REAL values.
+    return (value) => {
+      const bytes = binaryStringBytes(value, from)
+      if (bytes !== undefined) return bytesValue(bytes)
+      if (formatted) return bytesValue(utf8(textOf(value, from)))
+      return value.kind === 'string' ? bytesValue(encodeCollation(value.v, value.collationId)) : value
+    }
+  }
+  if (result.kind === 'datetime' && result.field !== FIELD_TYPE.DATE && result.field !== FIELD_TYPE.TIME &&
+      (from.kind === 'datetime' || from.kind === 'time') && from.field !== result.field) {
+    // A TIME merged into a DATETIME takes the statement's date.
+    return (value, env) => {
+      if (value.kind === 'time') {
+        const d = onToday(value.v, env)
+        return d === undefined ? null : { kind: 'datetime', v: d, type: 'DATETIME', fsp: value.fsp }
+      }
+      return value.kind === 'datetime' && value.type === 'DATE' ? { ...value, type: 'DATETIME' } : value
+    }
+  }
+  return undefined
 }
 
 /**
- * A branch of IF or CASE, as its result reads it: a BIT branch under a
- * DECIMAL, binary or BIT result is its own bytes, as wide as it is, which
- * is what `val_str` passes through (8.4.11: `IF(1, b, 0)` sends 0x05 as the
- * DECIMAL's text, and `IF(1, b8, b12)` one byte).
+ * IF and CASE pass the original BIT bytes through a DECIMAL, binary or BIT
+ * result (8.4.11: `IF(1, b, 0)` sends 0x05 as DECIMAL text).
  */
-export function branchOf(x: Compiled, result: ResultType): Compiled['eval'] {
-  if (ownText(x.type) && result.kind === 'string') {
-    return readNonNull(x.eval, (v) => stringValue(textOf(v, x.type), result.collationId))
-  }
-  if (result.kind === 'bytes' && (ownText(x.type) || x.type.kind === 'string')) {
-    return readNonNull(x.eval, (v) => asBinary(v, x.type))
-  }
-  if (result.kind === 'datetime' && (x.type.kind === 'datetime' || x.type.kind === 'time') && x.type.field !== result.field) return (r, env) => asMerged(x.eval(r, env), result, env)
+function branchOf(x: Compiled, result: ResultType): Compiled['eval'] {
+  const convert = choiceBranch(x.type, result)
+  if (convert !== undefined) return readNonNull(x.eval, convert)
   if (result.kind === 'double') return (r, env) => {
     const v = x.eval(r, env)
     if (v === null) return null

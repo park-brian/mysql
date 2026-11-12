@@ -4,7 +4,7 @@
 // LAST_INSERT_ID), and the statement's clock (NOW, CURDATE, SYSDATE).
 // `registry.ts` routes a call here by name, so nothing here returns
 // "not mine".
-import { CHARSET_BINARY, FIELD_TYPE, hex, type MysqlDateTime } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE, concatBytes, hex, type MysqlDateTime } from '@myjs/bytes'
 import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { NODE, deparse, type CallNode, type Expression, type LiteralNode } from '@myjs/parser'
 import { dateToMysql, messages, sqlError, utf8, webCryptoRandom } from '@myjs/protocol'
@@ -42,6 +42,7 @@ import {
   asNumber,
   stringReal,
   realInteger,
+  choiceBranch,
   choiceCollation,
   choiceOf,
   byteWidth,
@@ -64,10 +65,7 @@ import {
   readSlot,
   type CompileContext,
   type Compiled,
-  asBinary,
-  asMerged,
   dateConverter,
-  ownText,
   textOf,
   temporalOperands,
   textVersusNumber,
@@ -78,6 +76,7 @@ import {
   type Row,
 } from './compile.ts'
 import { dateAdd, isInterval } from './interval.ts'
+import { nativeCallName } from './ast.ts'
 import {
   CHARSET_UTF8MB3_GENERAL_CI,
   CHARSET_UTF8MB4_BIN,
@@ -211,6 +210,10 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
       // its own bytes, a string in its own charset, and the width is counted
       // in bytes too (8.4.11).
       const width = types.reduce((n, t) => n + charWidth(t) * (binary && t.kind === 'string' ? requireCollationInfo(t.collationId).mbmaxlen : 1), 0)
+      const tooWide = width * (binary ? 1 : requireCollationInfo(id).mbmaxlen) > maxPacket(ctx)
+      // A result descriptor can retain a literal's text even when a wrapper returns NULL.
+      const known = !binary && !tooWide && e.args.every((arg, i) => types[i]?.literalText !== undefined &&
+        (arg.kind === NODE.LITERAL || (arg.kind === NODE.CALL && nativeCallName(arg) === 'CONCAT')))
       return {
         eval: (r, env) => {
           const parts: Exclude<Value, null>[] = []
@@ -222,18 +225,13 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
           if (!binary) return stringValue(parts.map(toText).join(''), id, coercibility)
           // A BIT is its bytes in a string, as on the wire (8.4.11).
           const chunks = parts.map((v, i) => v.kind === 'int' && (v.str !== undefined || isBits((xs[i] as Compiled).type)) ? v.str ?? bitBytes(v.v, (xs[i] as Compiled).type.length) : valueBytes(v))
-          const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0))
-          let at = 0
-          for (const c of chunks) {
-            out.set(c, at)
-            at += c.length
-          }
-          return bytesValue(out)
+          return bytesValue(concatBytes(chunks))
         },
         // String functions can also return NULL for ill-formed results in strict mode.
         type: {
           ...stringResultType(width, binary, id, coercibility, true), coercibility,
-          nullable: modeOf(ctx.preparedSqlMode ?? ctx.session.sqlMode).strict || types.some((t) => t.nullable) || width * (binary ? 1 : requireCollationInfo(id).mbmaxlen) > maxPacket(constantEnv(ctx)),
+          nullable: modeOf(ctx.preparedSqlMode ?? ctx.session.sqlMode).strict || types.some((t) => t.nullable) || tooWide,
+          ...(known ? { literalText: types.map((t) => t.literalText).join('') } : {}),
         },
         decimalPrefix: true,
       }
@@ -789,9 +787,8 @@ function nullifTemporalConstant(x: Compiled, y: Compiled, written: Expression, c
 
 /** COALESCE and IFNULL render a BIT among text as bytes and BIT-only choices as digits. */
 function chosenOf(x: Compiled, result: ResultType): (v: Exclude<Value, null>, env: Env) => Value {
-  if (result.kind === 'datetime' && (x.type.kind === 'datetime' || x.type.kind === 'time') && x.type.field !== result.field) return (v, env) => asMerged(v, result, env)
-  if (ownText(x.type) && result.kind === 'string') return (v) => stringValue(textOf(v, x.type), result.collationId)
-  if (result.kind === 'bytes' && (ownText(x.type) || x.type.kind === 'string')) return (v) => asBinary(v, x.type)
+  const convert = choiceBranch(x.type, result)
+  if (convert !== undefined) return convert
   if (!isBits(x.type) || !(result.kind === 'bytes' || isBits(result))) return (v) => convertTo(v, result)
   const bits = x.type.length
   if (result.kind === 'bytes') return (v) => (v.kind === 'int' ? bytesValue(bitBytes(v.v, bits)) : convertTo(v, result))

@@ -196,22 +196,29 @@ test('M5.10: collations are checked and aggregated as 8.4.11 does', async () => 
   }
 })
 
-test('M5.10: text choices use their resolved collation for grouping and bytes', async () => {
+async function collationConnection() {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = await mysql.createConnection(db === undefined
     ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
     : { stream: db.createStream(), user: 'root' })
-  const schema = 'choice_collation'
-  const read = async (sql: string, rows: unknown[][], fields: unknown[][]) => {
-    for (const method of ['query', 'execute'] as const) {
-      const options = { sql, rowsAsArray: true }
-      const [actual, metadata] = method === 'query' ? await conn.query(options) : await conn.execute(options)
-      assert.deepEqual(actual, rows, `${method}: ${sql}`)
-      assert.deepEqual(metadata.map((field) => [field.name, field.columnType, field.columnLength, field.flags, field.decimals, field.characterSet]), fields, `${method}: ${sql}`)
-      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], `${method}: ${sql}`)
-    }
+  return { db, conn }
+}
+
+async function readCollationRows(conn: mysql.Connection, sql: string, rows: unknown[][], fields: unknown[][]) {
+  for (const method of ['query', 'execute'] as const) {
+    const options = { sql, rowsAsArray: true }
+    const [actual, metadata] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+    assert.deepEqual(actual, rows, `${method}: ${sql}`)
+    assert.deepEqual(metadata.map((field) => [field.name, field.columnType, field.columnLength, field.flags, field.decimals, field.characterSet]), fields, `${method}: ${sql}`)
+    assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], `${method}: ${sql}`)
   }
+}
+
+test('M5.10: text choices use their resolved collation for grouping and bytes', async () => {
+  const { db, conn } = await collationConnection()
+  const schema = 'choice_collation'
+  const read = readCollationRows.bind(undefined, conn)
   const choices = [
     { sql: (column: string, fallback: string) => `COALESCE(${column},${fallback})`, required: true },
     { sql: (column: string, fallback: string) => `IFNULL(${column},${fallback})`, required: true },
@@ -243,6 +250,42 @@ test('M5.10: text choices use their resolved collation for grouping and bytes', 
       await read(`SELECT id,HEX(${latin}) AS bytes,HEX(CAST(${latin} AS BINARY)) AS cast_bytes FROM t ORDER BY id`,
         hex.map((bytes, i) => [i + 1, bytes, bytes]), hexFields)
     }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
+test('M5.10: literal CONCAT text is checked during collation resolution', async () => {
+  const { db, conn } = await collationConnection()
+  const schema = 'concat_collation'
+  const read = readCollationRows.bind(undefined, conn)
+  const fields = [['id', 3, 11, 20483, 0, 63], ['result', 253, 48, 0, 31, 45]]
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_general_ci')
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,g VARCHAR(12) CHARACTER SET latin1)')
+    await conn.query("INSERT INTO t VALUES (1,NULL),(2,'éx'),(3,NULL),(4,'ab')")
+    for (const [expr, operation, collation] of [
+      ["IF(1,g,CONCAT('😀','x'))", 'if', 'utf8mb4_general_ci'],
+      ["COALESCE(g,CONCAT('a',CONCAT('😀','b')))", 'coalesce', 'utf8mb4_general_ci'],
+      ["g=CONCAT(_utf8mb4'😀',_latin1'ñ')", '=', 'utf8mb4_0900_ai_ci'],
+      ["g LIKE CONCAT('😀','x')", 'like', 'utf8mb4_general_ci'],
+    ] as const) {
+      const sql = `SELECT id,${expr} AS result FROM t ORDER BY id`
+      const message = `Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (${collation},COERCIBLE) for operation '${operation}'`
+      for (const method of ['query', 'execute'] as const) {
+        await assert.rejects(() => method === 'query' ? conn.query(sql) : conn.execute(sql),
+          { errno: 1267, sqlState: 'HY000', sqlMessage: message }, `${method}: ${sql}`)
+        assert.deepEqual((await conn.query({ sql: 'SHOW WARNINGS', rowsAsArray: true }))[0], [['Error', 1267, message]])
+      }
+    }
+    await read("SELECT id,COALESCE(g,CONCAT('é','x')) AS result FROM t ORDER BY id",
+      [[1, 'éx'], [2, 'éx'], [3, 'éx'], [4, 'ab']], fields)
+    await read("SELECT id,IFNULL(g,CONCAT(NULLIF('😀','😀'),'x')) AS result FROM t ORDER BY id",
+      [[1, null], [2, 'éx'], [3, null], [4, 'ab']], fields)
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()
