@@ -1944,7 +1944,13 @@ forced ordering key can supply a whole-table ORDER BY through the existing
 forward or reverse index scan. JOIN eligibility and covering competition
 remain separate. Two MySQL 8.4.11 audits improve from 192 to 368 complete
 matches of 892. Ordered ranges, LIMIT, multiple eligible ordering keys,
-grouped and multi-table FORCE, and broader range costing remain open.
+multi-table FORCE, and broader range costing remain open.
+
+**M5.49 FORCE INDEX on simple grouped reads, verified.** A whole
+single-table GROUP BY uses separate JOIN and GROUP BY eligibility for
+forced hints. Temporary aggregation keeps the selected scan and its
+first-seen group order. Four MySQL 8.4.11 audits improve from 544 to 1,236
+complete matches of 1,440, preserving all 56,064 matching facts.
 
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.
@@ -8385,8 +8391,8 @@ bindings after writes and the physical index used for a const lookup.
 
 Three audits gain 268 complete matches across 1,084 responses, preserving
 earlier matching facts. Parser, core and facade are 45,611, 334,347 and
-334,261 B gzipped within the existing caps. The next section covers
-simple ordered FORCE. Grouped FORCE, LIMIT/OFFSET, invisible and full-text
+334,261 B gzipped within the existing caps. The following sections cover
+simple ordered and grouped FORCE. LIMIT/OFFSET, invisible and full-text
 index combinations, multiple-table plans and broader point-range
 estimates remain open. M5.49 stays partial.
 
@@ -8408,8 +8414,29 @@ Two audits gain 176 complete matches across 892 responses and retain all
 previously exact responses. Some sorts with tied ORDER BY keys still
 place tied rows differently from MySQL. Parser, core and facade are
 45,611, 334,355 and 334,259 B gzipped within the existing caps. Ordered
-ranges, LIMIT/OFFSET, competing forced ordering keys, grouped and
-multi-table queries, and invisible and full-text combinations remain open.
+ranges, LIMIT/OFFSET, competing forced ordering keys, multi-table
+queries, and invisible and full-text combinations remain open.
+M5.49 stays partial.
+
+### Verified FORCE INDEX on simple grouped reads (M5.49)
+
+On a direct single-table GROUP BY without WHERE, ORDER BY or LIMIT,
+unscoped FORCE restricts the JOIN and GROUP BY masks. JOIN and GROUP BY
+FORCE restrict their respective masks. The existing grouping strategy
+can use a compatible index for streaming or fall back to temporary aggregation
+over the selected JOIN scan. When the forced grouping key is outside
+the JOIN mask and no covering read has been selected, the compatible
+key can supply a noncovering scan. Temporary aggregation retains
+first-seen group order and copied field metadata.
+[MySQL 8.4.11 grouping reconsideration](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_optimizer.cc#L2312)
+
+Four audits with both wire APIs and `prefer_ordering_index` on and off
+gain 692 complete matches across 1,440 responses. All 56,064 previously
+matching facts hold, including integer groups and text groups with
+NULLs, accent and case equivalents, and DECIMAL sums. Parser, core and
+facade are 45,611, 334,351 and 334,262 B gzipped within the existing
+caps. Grouped ranges, ORDER BY and LIMIT, competing grouping keys,
+unhinted covering choices and broader multi-table paths remain open.
 M5.49 stays partial.
 
 ### Verified collation of selected text values (M5.10)
@@ -11771,7 +11798,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,355 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 334,259 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
+| Core bundle, gzipped | 334,351 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 334,262 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

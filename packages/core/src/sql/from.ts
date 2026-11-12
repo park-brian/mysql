@@ -239,7 +239,7 @@ function foldIndexName(name: string): string {
   return name.replace(/[A-Z]/g, (letter) => letter.toLowerCase())
 }
 
-type HintEligibility = Partial<Record<NonNullable<IndexHint['for']>, readonly IndexDef[]>> & { readonly force?: 'JOIN' | 'ORDER BY' | undefined }
+type HintEligibility = Partial<Record<NonNullable<IndexHint['for']>, readonly IndexDef[]>> & { readonly force?: IndexHint['for'] }
 
 function hintApplies(hint: IndexHint, scope: IndexHint['for']): boolean {
   return hint.for === undefined || hint.for === scope
@@ -255,8 +255,8 @@ function indexHintEligibility(def: TableDef, alias: string, hints: readonly Inde
   const visible = !keys.some(({ key }) => key.invisible)
   const force = hints.some((hint) => hint.type === 'FORCE')
   // Any FORCE scope affects the range cost, even when its name mask is inactive.
-  const forceScope = visible && force && keys.length === def.indexes.length && (join || (scope === 'ORDER BY' && unbounded &&
-    hints.some((hint) => hint.type === 'FORCE' && hintApplies(hint, scope)))) ? scope : undefined
+  const forceScope = visible && force && keys.length === def.indexes.length && scope !== undefined &&
+    (scope !== 'ORDER BY' || unbounded && hints.some((hint) => hint.type === 'FORCE' && hintApplies(hint, scope))) ? scope : undefined
   const masks = !visible || (force && forceScope === undefined) ? [] : scopes
     .filter((scope) => hints.some((hint) => hintApplies(hint, scope)))
     .map((scope): Mask => ({ scope, ignored: new Set() }))

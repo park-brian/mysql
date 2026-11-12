@@ -478,7 +478,9 @@ test('mixed JOIN and GROUP BY hints retain the eligible scan when grouping needs
   const read = checkIndexRead.bind(undefined, conn)
   const firstSeen = GROUP_DATA.slice(0, 8).map(({ a }) => [a, 8] as const)
   const sorted = firstSeen.slice().sort((left, right) => left[0] - right[0])
+  const byB = Array.from({ length: 17 }, (_, b) => [b, GROUP_DATA.filter((row) => row.b === b).length])
   const byA = GROUP_DATA.slice().sort((left, right) => left.a - right.a || left.id - right.id)
+  const aField = ['a', 3, 11, 20489, 0, 63]
   const copiedA = ['a', 3, 11, 4097, 0, 63]
   const copiedCount = ['COUNT(*)', 8, 21, 1, 0, 63]
   const count = ['COUNT(*)', 8, 21, 129, 0, 63]
@@ -493,7 +495,7 @@ test('mixed JOIN and GROUP BY hints retain the eligible scan when grouping needs
     await read('SELECT a,COUNT(*) FROM t USE INDEX () USE INDEX FOR GROUP BY (by_a) GROUP BY a',
       firstSeen, [copiedA, copiedCount], temporary('Table scan on t'))
     await read('SELECT a,COUNT(*) FROM t USE INDEX FOR GROUP BY (by_a) USE INDEX () GROUP BY a',
-      sorted, [['a', 3, 11, 20489, 0, 63], count], 'Group aggregate\n    Index scan on t using by_a')
+      sorted, [aField, count], 'Group aggregate\n    Index scan on t using by_a')
     await read('SELECT a,COUNT(*) FROM t IGNORE INDEX FOR JOIN (by_a) USE INDEX FOR GROUP BY (by_a) GROUP BY a',
       sorted, [copiedA, copiedCount], temporary('Covering index scan on t using by_ab'))
     await read('SELECT id,COUNT(*) FROM t USE INDEX FOR JOIN (by_a) USE INDEX FOR GROUP BY (PRIMARY) GROUP BY id',
@@ -501,12 +503,32 @@ test('mixed JOIN and GROUP BY hints retain the eligible scan when grouping needs
     await read('SELECT id,COUNT(*) FROM t USE INDEX FOR JOIN () USE INDEX FOR GROUP BY (PRIMARY) GROUP BY id',
       GROUP_DATA.map(({ id }) => [id, 1]), [ID_FIELD, count], 'Group aggregate\n    Index scan on t using PRIMARY')
 
+    for (const preference of ['off', 'on']) {
+      await conn.query(`SET optimizer_switch='prefer_ordering_index=${preference}'`)
+      await read('SELECT a,COUNT(*) FROM t FORCE INDEX (by_b) GROUP BY a',
+        firstSeen, [copiedA, copiedCount], temporary('Table scan on t'))
+      await read('SELECT a,COUNT(*) FROM t FORCE INDEX (by_ab) GROUP BY a',
+        sorted, [aField, count], 'Group aggregate\n    Covering index scan on t using by_ab')
+      await read('SELECT a,COUNT(*) FROM t FORCE INDEX FOR GROUP BY (by_b) GROUP BY a',
+        sorted, [copiedA, copiedCount], temporary(coverA))
+      await read('SELECT a,COUNT(*) FROM t FORCE INDEX FOR GROUP BY (by_a) IGNORE INDEX FOR JOIN (by_a) GROUP BY a',
+        sorted, [copiedA, copiedCount], temporary('Covering index scan on t using by_ab'))
+      await read('SELECT a,COUNT(*) FROM t FORCE INDEX FOR JOIN (by_b) FORCE INDEX FOR GROUP BY (by_a) GROUP BY a',
+        sorted, [aField, count], 'Group aggregate\n    Index scan on t using by_a')
+      await read('SELECT b,COUNT(*) FROM t FORCE INDEX FOR JOIN (by_a) GROUP BY b',
+        byB, [['b', ...aField.slice(1)], count], 'Group aggregate\n    Index scan on t using by_b')
+    }
+
     await createTypedHintTable(conn)
     const sums = [[null, '1.30'], ['Ä', '3.70'], ['a ', '3.20'], ['É', '5.60'], ['x', '1.30'], ['z', '3.20']]
     await read('SELECT g,SUM(d) FROM typed_keys IGNORE INDEX FOR JOIN (by_g) USE INDEX FOR GROUP BY (by_g) GROUP BY g',
       sums, [['g', 253, 48, 32768, 0, 224], ['SUM(d)', 246, 32, 0, 2, 63]], temporary('Covering index scan on typed_keys using by_gd'))
     await read('SELECT g,SUM(d) FROM typed_keys USE INDEX FOR JOIN (by_g) USE INDEX FOR GROUP BY (by_gd) GROUP BY g',
       sums, [['g', 253, 48, 16392, 0, 224], ['SUM(d)', 246, 32, 128, 2, 63]], 'Group aggregate\n    Index scan on typed_keys using by_gd')
+    await read('SELECT g,SUM(d) FROM typed_keys FORCE INDEX FOR GROUP BY (by_g) GROUP BY g',
+      sums, [['g', 253, 48, 32768, 0, 224], ['SUM(d)', 246, 32, 0, 2, 63]], temporary('Covering index scan on typed_keys using by_gd'))
+    await read('SELECT g,SUM(d) FROM typed_keys FORCE INDEX (by_gd) GROUP BY g',
+      sums, [['g', 253, 48, 16392, 0, 224], ['SUM(d)', 246, 32, 128, 2, 63]], 'Group aggregate\n    Covering index scan on typed_keys using by_gd')
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()
