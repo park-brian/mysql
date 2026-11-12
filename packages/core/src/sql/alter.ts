@@ -22,7 +22,7 @@ import type { ColumnDef, FieldBytes, IndexDef, TableDef } from '@myjs/engine'
 import { KEY, NODE, STATEMENT, deparse, type AlterAction, type AlterTableNode, type ColumnDefinition, type Expression } from '@myjs/parser'
 import { decodeField, encodeField, type StoreContext, type Value } from '@myjs/types'
 import { raise, type Compiled } from './compile.ts'
-import { column as columnDef, columnDeprecations, DEFAULT_COLLATION, duplicateKeys, duplicateKeyText, keyExtras, visiblePrimary } from './ddl.ts'
+import { column as columnDef, columnDeprecations, DEFAULT_COLLATION, duplicateKeys, duplicateKeyText, fulltextIndex, indexNamer, tableIndex, visiblePrimary } from './ddl.ts'
 import { checker, checkForeignKeyActions, checksOf, checkViolated, columnChecks, columnsOf, withChecks, type CheckDef } from './checks.ts'
 import { checkDefaults, defaultOf, generatorOf, implicitDefault, rowDependent, zeroRules } from './dml.ts'
 import { requireCollationInfo } from '@myjs/charsets'
@@ -282,17 +282,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
 
   // --- indexes ---
   const names = new Set([...indexes, ...fulltext].map((i) => i.name.toLowerCase()))
-  const nameFor = (wanted: string | undefined, first: string): string => {
-    if (wanted !== undefined) {
-      if (names.has(wanted.toLowerCase())) throw sqlError('ER_DUP_KEYNAME', `Duplicate key name '${wanted}'`)
-      names.add(wanted.toLowerCase())
-      return wanted
-    }
-    let name = first
-    for (let i = 2; names.has(name.toLowerCase()) || name.toUpperCase() === 'PRIMARY'; i++) name = `${first}_${i}`
-    names.add(name.toLowerCase())
-    return name
-  }
+  const nameFor = indexNamer(names)
   const known = (name: string): string => {
     const c = columns[indexOfColumn(columns, name)]
     if (c === undefined) throw missingKeyColumn(name)
@@ -307,17 +297,10 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
       continue
     }
     if (k.type === KEY.FULLTEXT) {
-      const parts = k.columns.map((p) => known(p.name ?? ''))
-      checkFulltext(def.engine, columns, parts, k.columns.some((p) => p.desc === true || p.asc === true))
-      if (k.parser !== undefined) throw notSupported('WITH PARSER')
-      fulltext.push({ name: nameFor(k.name ?? k.constraint, parts[0] as string), columns: parts, ...keyExtras(k) })
+      fulltext.push(fulltextIndex(k, def.engine, columns, known, nameFor))
       continue
     }
-    const parts = k.columns.map((p) => {
-      if (p.name === undefined) throw notSupported('Functional key parts')
-      return { column: known(p.name), ...(p.length === undefined ? {} : { prefix: p.length }), ...(p.desc === true ? { descending: true } : {}) }
-    })
-    indexes.push({ name: nameFor(k.name ?? k.constraint, (parts[0] as { column: string }).column), kind: k.type === KEY.UNIQUE ? 'unique' : 'index', parts, ...keyExtras(k) })
+    indexes.push(tableIndex(k, known, nameFor))
   }
 
   visiblePrimary(columns, indexes)

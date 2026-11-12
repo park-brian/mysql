@@ -302,16 +302,7 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number, 
 
   const indexes: IndexDef[] = []
   const names = new Set<string>()
-  const nameFor = (wanted: string | undefined, first: string): string => {
-    let name = wanted ?? first
-    if (wanted === undefined) {
-      for (let i = 2; names.has(name.toLowerCase()) || name.toUpperCase() === 'PRIMARY'; i++) name = `${first}_${i}`
-    }
-    const lower = name.toLowerCase()
-    if (names.has(lower)) throw sqlError('ER_DUP_KEYNAME', `Duplicate key name '${name}'`)
-    names.add(lower)
-    return name
-  }
+  const nameFor = indexNamer(names)
   const known = (name: string): string => {
     const c = declared.get(name.toLowerCase())
     if (c === undefined) throw missingKeyColumn(name)
@@ -330,20 +321,14 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number, 
     if (k.type === KEY.SPATIAL) throw notSupported('SPATIAL indexes')
     if (k.type === KEY.FULLTEXT) {
       // Kept in the definition and not built: MATCH reads the table (M5.26).
-      const names = k.columns.map((p) => known(p.name ?? ''))
-      checkFulltext(engine, columns, names, k.columns.some((p) => p.desc === true || p.asc === true))
-      if (k.parser !== undefined) throw notSupported('WITH PARSER')
-      fulltext.push({ name: nameFor(k.name ?? k.constraint, names[0] as string), columns: names, ...keyExtras(k) })
+      fulltext.push(fulltextIndex(k, engine, columns, known, nameFor))
       continue
     }
-    const parts = k.columns.map((p) => {
-      if (p.name === undefined) throw notSupported('Functional key parts')
-      return { column: known(p.name), ...(p.length === undefined ? {} : { prefix: p.length }), ...(p.desc === true ? { descending: true } : {}) }
-    })
-    if (k.type === KEY.PRIMARY) {
+    const index = tableIndex(k, known, nameFor)
+    if (index.kind === 'primary') {
       names.add('primary')
-      indexes.unshift({ name: 'PRIMARY', kind: 'primary', parts, ...keyExtras(k) })
-    } else indexes.push({ name: nameFor(k.name ?? k.constraint, (parts[0] as { column: string }).column), kind: k.type === KEY.UNIQUE ? 'unique' : 'index', parts, ...keyExtras(k) })
+      indexes.unshift(index)
+    } else indexes.push(index)
   }
   for (const c of node.columns) {
     if (c.unique === true || c.type.serial === true) indexes.push({ name: nameFor(undefined, c.name), kind: 'unique', parts: [{ column: c.name }] })
@@ -362,8 +347,43 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number, 
   return { name: node.table.name, engine, columns, indexes, options }
 }
 
+type IndexName = (name: string | undefined, first: string) => string
+
+/** Reserve an explicit index name, or derive a free name from the first column. */
+export function indexNamer(names: Set<string>): IndexName {
+  return (wanted, first) => {
+    let name = wanted ?? first
+    if (wanted === undefined) {
+      for (let i = 2; names.has(name.toLowerCase()) || name.toUpperCase() === 'PRIMARY'; i++) name = `${first}_${i}`
+    }
+    const lower = name.toLowerCase()
+    if (names.has(lower)) throw sqlError('ER_DUP_KEYNAME', `Duplicate key name '${name}'`)
+    names.add(lower)
+    return name
+  }
+}
+
+/** Resolve a FULLTEXT definition before its name is reserved. */
+export function fulltextIndex(k: KeyDefinition, engine: EngineName, columns: readonly ColumnDef[], known: (name: string) => string, nameFor: IndexName): FulltextDef {
+  const names = k.columns.map((p) => known(p.name ?? ''))
+  checkFulltext(engine, columns, names, k.columns.some((p) => p.desc === true || p.asc === true))
+  if (k.parser !== undefined) throw notSupported('WITH PARSER')
+  return { name: nameFor(k.name ?? k.constraint, names[0] as string), columns: names, ...keyExtras(k) }
+}
+
+/** Resolve column names, prefixes and directions for CREATE or ALTER. */
+export function tableIndex(k: KeyDefinition, known: (name: string) => string, nameFor: IndexName): IndexDef {
+  const parts = k.columns.map((p) => {
+    if (p.name === undefined) throw notSupported('Functional key parts')
+    return { column: known(p.name), ...(p.length === undefined ? {} : { prefix: p.length }), ...(p.desc === true ? { descending: true } : {}) }
+  })
+  const kind = k.type === KEY.PRIMARY ? 'primary' : k.type === KEY.UNIQUE ? 'unique' : 'index'
+  const name = kind === 'primary' ? 'PRIMARY' : nameFor(k.name ?? k.constraint, parts[0]!.column)
+  return { name, kind, parts, ...keyExtras(k) }
+}
+
 /** A key's COMMENT and INVISIBLE, as a definition keeps them. */
-export function keyExtras(k: KeyDefinition): { comment?: string; invisible?: true } {
+function keyExtras(k: KeyDefinition): { comment?: string; invisible?: true } {
   return { ...(k.comment === undefined ? {} : { comment: k.comment }), ...(k.invisible === true ? { invisible: true as const } : {}) }
 }
 

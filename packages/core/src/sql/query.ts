@@ -12,7 +12,7 @@
 import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, PreparedStatement, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
-import { MAX_UNSIGNED, MIN_SIGNED, intValue, integerRange, numericPrefix, parseDecimal, rescale, storageWidth, terminalIntegerValue, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
+import { MAX_UNSIGNED, MIN_SIGNED, intValue, integerRange, numericPrefix, roundedIntegerText, storageWidth, terminalIntegerValue, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
 import { appendConditions, compile, constantNode, isComparison, literalPredicate, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, textBesideColumn, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
@@ -2793,14 +2793,13 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     const source = literal.value as string
     const { text, fractional } = numericPrefix(source)
     const value = Number(text)
-    const [mantissa, exponent] = text.split(/[eE]/) as [string, string?]
     const safe = Number.isSafeInteger(Math.trunc(value))
-    let key = fractional && !exponent ? terminalIntegerValue(source.trimStart()) : undefined
+    let key = fractional ? terminalIntegerValue(source.trimStart()) : undefined
     if (key === undefined && (safe || (wide && Math.abs(value) <= Number(MAX_UNSIGNED)))) {
       // Adjacent BIGINT keys can have the same DOUBLE representation.
       if (!fractional) key = BigInt(text)
       // Rescaling the mantissa shifts its coefficient before half-away rounding.
-      else key = value ? rescale(parseDecimal(mantissa), Number(exponent ?? 0)).v : 0n
+      else key = value ? roundedIntegerText(text) : 0n
     }
     const access = pointFor(key)
     // An out-of-range key's warning depends on finding the clamped endpoint.

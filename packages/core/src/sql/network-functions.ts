@@ -98,9 +98,11 @@ function ipv6Text(b: Uint8Array): string {
 function uuidBytes(text: string): Uint8Array | undefined {
   let hex: string
   if (/^[0-9a-fA-F]{32}$/.test(text)) hex = text
-  else if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(text)) hex = text.replace(/-/g, '')
-  else if (/^\{[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\}$/.test(text)) hex = text.slice(1, -1).replace(/-/g, '')
-  else return undefined
+  else {
+    const dashed = text[0] === '{' && text.endsWith('}') ? text.slice(1, -1) : text
+    if (!/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(dashed)) return undefined
+    hex = dashed.replace(/-/g, '')
+  }
   return Uint8Array.from({ length: 16 }, (_, i) => parseInt(hex.slice(i * 2, i * 2 + 2), 16))
 }
 
@@ -230,39 +232,26 @@ export function networkFunction(name: string, e: CallNode, ctx: CompileContext):
         type: intType(1, true),
       }
     }
-    case 'UUID_TO_BIN': {
-      arity(1, 2)
-      const s = xs[0] as Compiled
-      const swap = xs[1] === undefined ? undefined : intReader(xs[1])
-      return {
-        eval: (r, env) => {
-          const v = s.eval(r, env)
-          if (v === null) return null
-          const text = toText(v)
-          const b = uuidBytes(text)
-          if (b === undefined) throw wrongValue(text, 'uuid_to_bin')
-          const sw = swap === undefined ? 0n : swap(r, env)
-          return bytesValue(sw !== null && sw !== 0n ? swapped(b) : b)
-        },
-        type: stringType(16, CHARSET_BINARY, true),
-      }
-    }
+    case 'UUID_TO_BIN':
     case 'BIN_TO_UUID': {
       arity(1, 2)
+      const encode = name === 'UUID_TO_BIN'
       const s = xs[0] as Compiled
       const swap = xs[1] === undefined ? undefined : intReader(xs[1])
       return {
         eval: (r, env) => {
           const v = s.eval(r, env)
           if (v === null) return null
-          const b = valueBytes(v)
-          if (b.length !== 16) throw wrongValue(v.kind === 'bytes' ? hexOf(b) : toText(v), 'bin_to_uuid')
-          const sw = swap === undefined ? 0n : swap(r, env)
-          const u = sw !== null && sw !== 0n ? unswapped(b) : b
+          const text = encode ? toText(v) : undefined
+          const b = text === undefined ? valueBytes(v) : uuidBytes(text)
+          if (b?.length !== 16) throw wrongValue(text ?? (v.kind === 'bytes' ? hexOf(v.v) : toText(v)), name.toLowerCase())
+          const sw = swap?.(r, env) ?? 0n
+          if (encode) return bytesValue(sw === 0n ? b : swapped(b))
+          const u = sw === 0n ? b : unswapped(b)
           const h = hex(u)
           return conv(`${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`)
         },
-        type: hexText(36, true),
+        type: encode ? stringType(16, CHARSET_BINARY, true) : hexText(36, true),
       }
     }
   }

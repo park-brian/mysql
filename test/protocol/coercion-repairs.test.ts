@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
 import { MySQL } from '@myjs/core'
 
-test('integer writes retain the coefficient when an exponent sign ends the text', async () => {
+async function integerWriteConnection() {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = await mysql.createConnection({
@@ -12,6 +12,11 @@ test('integer writes retain the coefficient when an exponent sign ends the text'
       password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' } : { stream: db.createStream() }),
     user: 'root', rowsAsArray: true, supportBigNumbers: true, bigNumberStrings: true,
   })
+  return { db, conn }
+}
+
+test('integer writes retain the coefficient when an exponent sign ends the text', async () => {
+  const { db, conn } = await integerWriteConnection()
   const schema = 'terminal_integer_writes'
   try {
     await conn.query(`CREATE DATABASE ${schema}`)
@@ -33,6 +38,37 @@ test('integer writes retain the coefficient when an exponent sign ends the text'
       assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [['Warning', 1264, "Out of range value for column 'i' at row 1"]])
       assert.deepEqual((await conn.query('SELECT i FROM t'))[0], [[127]])
     }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
+test('integer writes round complete exponent text before converting to a number', async () => {
+  const { db, conn } = await integerWriteConnection()
+  const schema = 'complete_integer_exponent_writes'
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query("SET sql_mode='STRICT_TRANS_TABLES'")
+    await conn.query('CREATE TABLE t(i TINYINT, b BIGINT UNSIGNED, src VARCHAR(30))')
+    for (const method of ['query', 'execute'] as const) {
+      const write = (sql: string) => method === 'query' ? conn.query(sql) : conn.execute(sql)
+      await conn.query('DELETE FROM t')
+      await write("INSERT INTO t VALUES ('1.4999999999999999e0','9.007199254740993e15','-2.4999999999999999e0')")
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      assert.deepEqual((await conn.query('SELECT i,b FROM t'))[0], [[1, '9007199254740993']])
+      await write('UPDATE t SET i=src')
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      assert.deepEqual((await conn.query('SELECT i FROM t'))[0], [[-2]])
+      await write("UPDATE IGNORE t SET i='1.275e2'")
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [['Warning', 1264, "Out of range value for column 'i' at row 1"]])
+      assert.deepEqual((await conn.query('SELECT i FROM t'))[0], [[127]])
+    }
+    await conn.execute('UPDATE t SET b=?', ['2.5e1'])
+    assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+    assert.deepEqual((await conn.query('SELECT b FROM t'))[0], [['25']])
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()

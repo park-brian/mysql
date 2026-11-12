@@ -198,33 +198,36 @@ function nameOfType(t: ColumnType): string {
  * DOUBLE or FLOAT calls anything left over "Data truncated" (1265), even
  * `'abc'`; a DECIMAL calls it an incorrect value (1366), even `'1x'`; an
  * integer type says 1366 when there is no number at all and 1265 when one is
- * followed by more (`'1.5x'`).
+ * followed by more (`'1.5x'`). Integer fields pass whether the source is a
+ * direct prepared parameter, which has its own conversion rules.
  */
-function numericSource(v: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext, integerField = false): Exclude<Value, null> {
+function numericSource(v: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext, directIntegerParameter?: boolean): Exclude<Value, null> {
   if (v.kind !== 'string' && v.kind !== 'bytes') return v
   if (v.kind === 'string' && v.ordinal !== undefined) return int(v.ordinal, true)
   if (v.kind === 'bytes' && v.hex === true) return int(hexNumber(v.v), true)
   const text = toText(v)
   const p = numericPrefix(text)
-  if (p.complete) return v
-  if (integerField) {
-    const terminal = terminalIntegerValue(text)
-    if (terminal !== undefined) return int(terminal)
+  if (directIntegerParameter !== undefined) {
+    let integer: bigint | undefined
+    if (!p.complete) integer = terminalIntegerValue(text)
+    else if (!directIntegerParameter && p.fractional && !/^[ \t]*[\r\n]/.test(text)) integer = roundedIntegerText(p.text, true)
+    if (integer !== undefined) return int(integer)
   }
+  if (p.complete) return v
   const kind = nameOfType(column.type)
   const truncation = kind === 'double' || (kind === 'integer' && p.valid)
   return adjust(ctx, () => (truncation ? truncated(column.name, ctx.row) : wrongValueForColumn(kind, text, column.name, ctx.row)), v)
 }
 
 /** A value into a column's field bytes, or `null` for SQL NULL. */
-export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext): Uint8Array | null {
+export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext, directParameter = false): Uint8Array | null {
   const t = column.type
   if (value === null) {
     if (!column.nullable) throw columnCannotBeNull(column.name)
     return null
   }
   const width = integerBytes(t.type)
-  if (width !== undefined) return encodeIntField(numericSource(value, column, ctx, true), width, column, ctx)
+  if (width !== undefined) return encodeIntField(numericSource(value, column, ctx, directParameter), width, column, ctx)
 
   switch (t.type) {
     case FIELD_TYPE.DECIMAL:
@@ -404,6 +407,16 @@ export function terminalIntegerValue(text: string): bigint | undefined {
   // Discarded whole digits require a left shift past the unsigned range.
   if (digits.length > retained + fraction.length) magnitude = MAX_UNSIGNED + 1n
   return match[1] === '-' ? -magnitude : magnitude
+}
+
+/** Shift a numeric prefix's coefficient before rounding, optionally within the integer field reader's bounds. */
+export function roundedIntegerText(text: string, bounded = false): bigint | undefined {
+  const [mantissa, exponent] = text.split(/[eE]/) as [string, string?]
+  if (bounded && (exponent === undefined || mantissa.length > 22)) return undefined
+  const decimal = parseDecimal(mantissa)
+  const scale = Number(exponent ?? 0)
+  if (bounded && (Math.abs(scale - decimal.scale) > 20 || decimal.v < -MAX_UNSIGNED || decimal.v > MAX_UNSIGNED)) return undefined
+  return rescale(decimal, scale).v
 }
 
 function encodeIntField(v: Exclude<Value, null>, width: number, column: FieldColumn, ctx: StoreContext): Uint8Array {

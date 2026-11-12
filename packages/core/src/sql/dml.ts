@@ -272,15 +272,20 @@ export const zeroRules = (run: Run): { noZeroDate: boolean; noZeroInDate: boolea
 /** The statement's diagnostics area, for a StoreContext to record its conditions in. */
 const sink = (run: Run): { conditions?: Condition[] } => (run.env.conditions === undefined ? {} : { conditions: run.env.conditions })
 
+function writeContext(run: Run, table: string, ignore: boolean) {
+  const strictMode = modeOf(run.env.session.sqlMode).strict
+  return { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table, ...sink(run) }
+}
+
 /** An error IGNORE turns into a warning: its code and its text, at warning level. */
 function warnError(store: StoreContext, e: unknown): void {
   if (e instanceof MyjsError) warn(store, e.errno ?? 0, e.message)
   else store.warnings++
 }
 
-function storeField(v: Value, column: ColumnDef, store: StoreContext, nulls: NullPolicy, warned?: Set<ColumnDef>): FieldBytes {
+function storeField(v: Value, column: ColumnDef, store: StoreContext, nulls: NullPolicy, warned?: Set<ColumnDef>, directParameter?: boolean): FieldBytes {
   try {
-    return encodeField(v, column, store)
+    return encodeField(v, column, store, directParameter)
   } catch (e) {
     if (nulls === 'error' || !(e instanceof MyjsError) || e.code !== 'ER_BAD_NULL_ERROR') throw e
     if (warned === undefined || !warned.has(column)) warn(store, e.errno ?? 1048, e.message)
@@ -610,12 +615,11 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
 
   const ignore = node.ignore === true
   const mode = node.replace === true ? 'replace' : node.onDuplicate !== undefined ? 'upsert' : 'insert'
-  const strictMode = modeOf(run.env.session.sqlMode).strict
-  const store: StoreContext = { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...sink(run) }
+  const store = writeContext(run, def.name, ignore)
   // A NULL for a NOT NULL column is refused by a strict mode and by a
   // one-row INSERT, and stored as the type's zero by IGNORE or a multi-row
   // INSERT; an upsert's own assignment is refused unless IGNORE (8.4.11).
-  const nulls: NullPolicy = ignore || (!strictMode && (rows.length > 1 || selected !== undefined)) ? 'warn' : 'error'
+  const nulls: NullPolicy = ignore || (!store.strictMode && (rows.length > 1 || selected !== undefined)) ? 'warn' : 'error'
   const warnedNull = new Set<ColumnDef>()
   const upsertNulls: NullPolicy = ignore ? 'warn' : 'error'
 
@@ -658,7 +662,7 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
       const d = defaults[i] as Compiled | 'none'
       return d === 'none' ? implicitDefault(column) : deferred.has(i) ? null : d.eval([], run.env)
     })
-    const given = new Set<number>()
+    const given = new Map<number, boolean>()
     row.forEach((c, i) => {
       const target = targets[i] as number
       if (c === undefined) {
@@ -667,12 +671,12 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
         // with `y DEFAULT (x + 1)` is NULL (8.4.11).
         if (deferred.has(target)) {
           values[target] = (defaults[target] as Compiled).eval(values, run.env)
-          given.add(target)
+          given.set(target, false)
         } else given.delete(target)
         return
       }
       values[target] = c.eval(values, run.env)
-      given.add(target)
+      given.set(target, c.parameter !== undefined)
     })
     for (const i of deferred) if (!given.has(i)) values[i] = (defaults[i] as Compiled).eval(values, run.env)
     def.columns.forEach((column, i) => {
@@ -691,7 +695,7 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
       if (i === autoAt && values[i] === null) return null
       if (generate !== undefined && generationOf(c) !== undefined) return null
       try {
-        return storeField(values[i] ?? null, c, store, nulls, warnedNull)
+        return storeField(values[i] ?? null, c, store, nulls, warnedNull, given.get(i))
       } catch (e) {
         if (fieldCopies.has(i) && e instanceof MyjsError && e.errno === 1406) throw sqlError('WARN_DATA_TRUNCATED', `Data truncated for column '${c.name}' at row ${store.row}`)
         throw e
@@ -944,9 +948,9 @@ function assignAll(
 ): { after: FieldBytes[]; values: Value[]; changed: boolean } {
   const after = [...before]
   const values: Value[] = [...current]
-  const assign = (i: number, v: Value): void => {
+  const assign = (i: number, v: Value, directParameter?: boolean): void => {
     const column = def.columns[i] as ColumnDef
-    const field = storeField(v, column, store, nulls)
+    const field = storeField(v, column, store, nulls, undefined, directParameter)
     after[i] = field
     values[i] = decodeField(field, column.type)
   }
@@ -966,7 +970,7 @@ function assignAll(
         warn(store, 1364, messages.noDefaultForField(column.name))
       }
       assign(a.index, d === 'none' ? implicitDefault(column) : d.eval(values as Row, run.env))
-    } else assign(a.index, a.value.eval(extra.length === 0 ? (values as Row) : [...values, ...extra], run.env))
+    } else assign(a.index, a.value.eval(extra.length === 0 ? (values as Row) : [...values, ...extra], run.env), a.value.parameter !== undefined)
   }
   if (sameRow(before, after)) return { after, values, changed: false }
   onUpdate.forEach((u, i) => {
@@ -1080,8 +1084,7 @@ export function* update(run: Run, node: UpdateNode, trx: Trx): Generator<void, O
   // a row that would duplicate a key, fail a CHECK or break a foreign key,
   // undoing whatever its cascades had done (8.4.11).
   const ignore = node.ignore === true
-  const strictMode = modeOf(run.env.session.sqlMode).strict
-  const store: StoreContext = { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...sink(run) }
+  const store = writeContext(run, def.name, ignore)
   const write = updateWriter(def, table, check, ignore, store, trx)
   run.state.insertIdSet = false
 
@@ -1228,8 +1231,7 @@ function updateMulti(run: Run, node: UpdateNode, trx: Trx): OkResult {
   const { from, rows } = joinedRows(run, node, trx)
   const scope = from.scope
   const ignore = node.ignore === true
-  const strictMode = modeOf(run.env.session.sqlMode).strict
-  const store: StoreContext = { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table: '', ...sink(run) }
+  const store = writeContext(run, '', ignore)
   // The SET list by table, each value compiled over the joined row.
   let joined: Row = []
   const byTable = new Map<FromTable, { target: Target; assignments: Assigned[] }>()

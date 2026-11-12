@@ -110,27 +110,32 @@ function statusFor(options: ResultsetOptions): number {
   return options.moreResults === true ? base | SERVER_STATUS.MORE_RESULTS_EXISTS : base
 }
 
+function definitionPackets(caps: Capabilities, columns: readonly ColumnDefinition[]): Uint8Array[] {
+  const packets = [columnCountPacket(caps, columns.length)]
+  for (const c of columns) packets.push(columnDefinitionPacket(c))
+  return packets
+}
+
+function terminatorPacket(caps: Capabilities, statusFlags: number = SERVER_STATUS.AUTOCOMMIT, warnings = 0): Uint8Array {
+  const w = new Writer(16)
+  writeTerminator(w, caps, { statusFlags, warnings })
+  return w.toBytes()
+}
+
 /** A resultset's packets before its rows: the count, the definitions and, without CLIENT_DEPRECATE_EOF, an EOF. */
 export function resultsetHeadPackets(
   caps: Capabilities,
   columns: readonly ColumnDefinition[],
   options: ResultsetOptions = {},
 ): Uint8Array[] {
-  const packets: Uint8Array[] = [columnCountPacket(caps, columns.length)]
-  for (const c of columns) packets.push(columnDefinitionPacket(c))
-  if (!hasCap(caps, CLIENT.DEPRECATE_EOF)) {
-    const w = new Writer(8)
-    writeTerminator(w, caps, { statusFlags: statusFor(options) })
-    packets.push(w.toBytes())
-  }
+  const packets = definitionPackets(caps, columns)
+  if (!hasCap(caps, CLIENT.DEPRECATE_EOF)) packets.push(terminatorPacket(caps, statusFor(options)))
   return packets
 }
 
 /** The terminator after a resultset's rows. */
 export function resultsetEndPacket(caps: Capabilities, warnings: number | undefined, options: ResultsetOptions = {}): Uint8Array {
-  const w = new Writer(16)
-  writeTerminator(w, caps, { statusFlags: statusFor(options), warnings: warnings ?? options.warnings ?? 0 })
-  return w.toBytes()
+  return terminatorPacket(caps, statusFor(options), warnings ?? options.warnings)
 }
 
 /** The packets of one text resultset, in order. */
@@ -209,9 +214,7 @@ export function fieldListPackets(
   options: ResultsetOptions = {},
 ): Uint8Array[] {
   const packets = columns.map((c) => columnDefinitionPacket(c, true))
-  const w = new Writer(16)
-  writeTerminator(w, caps, { statusFlags: statusFor(options), warnings: options.warnings ?? 0 })
-  packets.push(w.toBytes())
+  packets.push(terminatorPacket(caps, statusFor(options), options.warnings))
   return packets
 }
 
@@ -258,14 +261,8 @@ export function cursorOpenedPackets(
   columns: readonly ColumnDefinition[],
   options: ResultsetOptions = {},
 ): Uint8Array[] {
-  const packets: Uint8Array[] = [columnCountPacket(caps, columns.length)]
-  for (const c of columns) packets.push(columnDefinitionPacket(c))
-  const w = new Writer(16)
-  writeTerminator(w, caps, {
-    statusFlags: statusFor(options) | SERVER_STATUS.CURSOR_EXISTS,
-    warnings: options.warnings ?? 0,
-  })
-  packets.push(w.toBytes())
+  const packets = definitionPackets(caps, columns)
+  packets.push(terminatorPacket(caps, statusFor(options) | SERVER_STATUS.CURSOR_EXISTS, options.warnings))
   return packets
 }
 
@@ -278,11 +275,9 @@ export function fetchPackets(
   options: ResultsetOptions = {},
 ): Uint8Array[] {
   const packets = rows.map((row) => binaryRowPacket(columns, row))
-  const w = new Writer(16)
   const status =
     statusFor(options) | (exhausted ? SERVER_STATUS.LAST_ROW_SENT : SERVER_STATUS.CURSOR_EXISTS)
-  writeTerminator(w, caps, { statusFlags: status, warnings: options.warnings ?? 0 })
-  packets.push(w.toBytes())
+  packets.push(terminatorPacket(caps, status, options.warnings))
   return packets
 }
 
@@ -309,17 +304,9 @@ export function preparePackets(
   // All alike, so one packet stands for each.
   const placeholder = paramCount > 0 ? columnDefinitionPacket(placeholderParameter()) : undefined
   for (let i = 0; i < paramCount; i++) packets.push(placeholder as Uint8Array)
-  if (paramCount > 0 && !hasCap(caps, CLIENT.DEPRECATE_EOF)) {
-    const w = new Writer(8)
-    writeTerminator(w, caps)
-    packets.push(w.toBytes())
-  }
+  if (paramCount > 0 && !hasCap(caps, CLIENT.DEPRECATE_EOF)) packets.push(terminatorPacket(caps))
   for (const c of columns) packets.push(columnDefinitionPacket(c))
-  if (columns.length > 0 && !hasCap(caps, CLIENT.DEPRECATE_EOF)) {
-    const w = new Writer(8)
-    writeTerminator(w, caps)
-    packets.push(w.toBytes())
-  }
+  if (columns.length > 0 && !hasCap(caps, CLIENT.DEPRECATE_EOF)) packets.push(terminatorPacket(caps))
   return packets
 }
 

@@ -114,9 +114,7 @@ export function encodeDatetime2(v: MysqlDateTime, dec: number): Uint8Array {
   if (v.month < 0 || v.month > 12) throw outOfRange('month', v.month)
   if (v.day < 0 || v.day > 31) throw outOfRange('day', v.day)
   if (v.hour < 0 || v.hour > 23) throw outOfRange('hour', v.hour)
-  if (v.minute < 0 || v.minute > 59) throw outOfRange('minute', v.minute)
-  if (v.second < 0 || v.second > 59) throw outOfRange('second', v.second)
-  if (v.microsecond < 0 || v.microsecond > 999999) throw outOfRange('microsecond', v.microsecond)
+  checkMinutesAndSeconds(v)
 
   // `(year * 13 + month) << 5 | day`, then `<< 17` over hour/minute/second.
   const ymd = BigInt((v.year * 13 + v.month) * 32 + v.day)
@@ -127,6 +125,12 @@ export function encodeDatetime2(v: MysqlDateTime, dec: number): Uint8Array {
   putBE(out, 0, 5, withOfs)
   writeFraction(out, 5, v.microsecond, dec)
   return out
+}
+
+function checkMinutesAndSeconds(v: Pick<MysqlTime, 'minute' | 'second' | 'microsecond'>): void {
+  if (v.minute < 0 || v.minute > 59) throw outOfRange('minute', v.minute)
+  if (v.second < 0 || v.second > 59) throw outOfRange('second', v.second)
+  if (v.microsecond < 0 || v.microsecond > 999999) throw outOfRange('microsecond', v.microsecond)
 }
 
 export function decodeDatetime2(bytes: Uint8Array, dec: number): MysqlDateTime {
@@ -202,9 +206,7 @@ export function timeBinSize(dec: number): number {
 export function encodeTime2(v: MysqlTime, dec: number): Uint8Array {
   const hours = v.days * 24 + v.hour
   if (hours < 0 || hours > 838) throw outOfRange('time hours', hours)
-  if (v.minute < 0 || v.minute > 59) throw outOfRange('minute', v.minute)
-  if (v.second < 0 || v.second > 59) throw outOfRange('second', v.second)
-  if (v.microsecond < 0 || v.microsecond > 999999) throw outOfRange('microsecond', v.microsecond)
+  checkMinutesAndSeconds(v)
 
   const fracBytes = fractionalBytes(dec)
   const fracValue = dec >= 5 ? v.microsecond : dec >= 3 ? Math.floor(v.microsecond / 100) : dec >= 1 ? Math.floor(v.microsecond / 10000) : 0
