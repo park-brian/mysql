@@ -105,18 +105,19 @@ test('LooseScan follows the leading key order and filters before deduplication',
   const loose = 'Nested loop inner join\n    Remove duplicates from input sorted on by_parent\n        Filter\n            Covering index scan on c using by_parent\n    Single-row index lookup on p using PRIMARY'
   const sorted = 'Sort\n    Stream results\n        ' + loose.replaceAll('\n', '\n        ')
   const ascending = [[1, 'b'], [3, 'c']]
-  async function read(sql: string, method: 'query' | 'execute', expected: unknown[][], plan?: string, idFlags = 20483) {
+  async function read(sql: string, method: 'query' | 'execute', expected: unknown[][], plan?: string, idFlags = 20483, values?: number[]) {
     const options = { sql, rowsAsArray: true }
-    const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+    const [rows, fields] = method === 'query' ? await conn.query(options, values) : await conn.execute(options, values)
     assert.deepEqual(rows, expected)
     assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
       ['id', 3, 11, idFlags, 0, 63, schema, 'p', 'p', 'id'], ['label', 253, 64, 4097, 0, 224, schema, 'p', 'p', 'label'],
     ])
     assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
-    const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
+    const explainSql = `EXPLAIN FORMAT=TREE ${sql}`
+    const [explain] = values === undefined ? await conn.query<mysql.RowDataPacket[]>(explainSql) : await conn.execute<mysql.RowDataPacket[]>(explainSql, values)
     const actual = planSkeleton(explain[0]?.EXPLAIN)
     if (plan === undefined) assert.doesNotMatch(actual, /Remove duplicates from input sorted/)
-    else assert.equal(actual, plan)
+    else assert.equal(actual, plan, `${method} ${sql}`)
   }
   try {
     await conn.query(`CREATE DATABASE ${schema}`)
@@ -158,6 +159,29 @@ test('LooseScan follows the leading key order and filters before deduplication',
       await read(sql, 'execute', ascending)
       conn.unprepare(options)
       await conn.query("SET optimizer_switch='loosescan=on'")
+      if (descending) {
+        await conn.query("SET optimizer_switch='firstmatch=off'")
+        const limitedSort = sorted.replaceAll('\n', '\n    ')
+        const limit = `Limit\n    ${limitedSort}`
+        for (const method of ['query', 'execute'] as const) {
+          await read(`${base}) ORDER BY id LIMIT 1`, method, ascending.slice(0, 1), limit, 4097)
+        }
+        if (!filtered) {
+          const bounded = `${sql} ORDER BY label DESC LIMIT ? OFFSET ?`
+          const offset = `Limit/Offset\n    ${limitedSort}`
+          await read(bounded, 'execute', inKeyOrder.slice(0, 1), limit, 4097, [1, 0])
+          await read(bounded, 'execute', inKeyOrder.slice(1), offset, 4097, [1, 1])
+          await read(bounded, 'execute', inKeyOrder, limit, 4097, [2, 0])
+          await read(bounded, 'execute', [], 'Zero rows', 20483, [0, 0])
+          await read(bounded, 'execute', [], offset, 4097, [1, 5])
+          await conn.query("SET optimizer_switch='loosescan=off'")
+          await read(bounded, 'execute', inKeyOrder.slice(0, 1), undefined, 20483, [1, 0])
+          await conn.query("SET optimizer_switch='loosescan=on'")
+          await conn.query('UPDATE c SET pid=8 WHERE id=3')
+          await read(bounded, 'execute', ascending.slice(0, 1), limit, 4097, [1, 0])
+        }
+        await conn.query("SET optimizer_switch='firstmatch=on'")
+      }
       await conn.query('DROP TABLE c')
     }
   } finally {

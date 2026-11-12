@@ -93,9 +93,10 @@ M5.10 remains partial, with M5.47, M5.49 and M5.50 work before browser work.
 
 **M5.47 LooseScan leading keys.** A lone covering composite index with a full
 ascending leading integer key can drive the existing adjacent-key reader.
-A lone descending-leading index can also drive it for a query without
-`LIMIT` or with an unordered `LIMIT` or `LIMIT ... OFFSET`. Explicitly ordered
-descending-key `LIMIT` costs and competition among several indexes remain open.
+A lone descending-leading index can also drive it without a limit or under
+unordered `LIMIT` and `OFFSET`. With FirstMatch disabled, the existing cost
+search can choose it under explicit `ORDER BY` and a limit. Ordered FirstMatch
+competition, residual predicate costs and competing keys remain open.
 
 **0.3 is staged**, with exact workspace versions and installed-package smoke
 checks. Publication still requires claiming the npm scope/name and publishing
@@ -1868,8 +1869,22 @@ in physical scan order. Across both protocols, the 672-response MySQL 8.4.11
 audit improves from 330 to 390 complete matches. The 126-response prepared
 audit covers changed bounds, exhaustion, zero and intervening writes, and
 improves from 42 to 90. Together they preserve all 12,220 previously matching
-facts. Explicitly ordered descending-key `LIMIT` and competing keys retain
-their separate costing gaps.
+facts.
+
+**M5.47 ordered bounds on descending LooseScan, verified with FirstMatch
+disabled.** The existing cost search can consider a lone descending-leading
+key before sorting and applying `LIMIT` and `OFFSET`. MySQL 8.4.11 optimizer
+traces show why ordered FirstMatch competition needs its own cost proof. On a
+five-row case the LooseScan costs 2.3011 before sorting one row, while the
+outer-first FirstMatch costs 2.62534 and can read in primary-key order. The
+three pinned audits improve from 390 to 422 of 672, 328 to 506 of 864 and 58
+to 84 of 168 complete matches, preserving all 28,468 previously matching
+facts. Both protocols cover simple and composite keys. A retained execution
+checks changing bounds, zero, exhaustion, optimizer switches and writes.
+The older 672-response direction audit gains 24 exact matches and retains
+every previously matching fact. Ordered FirstMatch competition, some
+residual-filter costs and multiple leading-key candidates remain open.
+[MySQL sort costing](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_planner.cc#L2507)
 
 **M5.49 legacy index hint admission, verified.** Simple outer SELECTs over
 physical tables, including temporary tables, check index names after opening
@@ -11908,7 +11923,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,356 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 334,266 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
+| Core bundle, gzipped | 334,355 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-12. The facade is 334,266 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

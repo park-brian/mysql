@@ -1174,9 +1174,11 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     if (def === undefined) return undefined
     let candidates = def.indexes.filter((i) => i.kind === 'index' && i.invisible !== true && indexPartMatchesColumn(i.parts[0], innerColumn))
     // Either direction keeps equal leading keys adjacent in a forward scan.
-    // Competing keys and explicit ordering with a limit need separate costing.
-    if (candidates.length > 1 || (q.orderBy !== undefined && q.limit !== undefined)) candidates = candidates.filter((i) => !i.parts[0]!.descending)
-    const index = candidates.length === 1 ? candidates[0] : candidates.find((i) => i.parts.length === 1)
+    // Competing keys and ordered limits with FirstMatch still need separate costing.
+    if (candidates.length > 1 || (q.orderBy !== undefined && q.limit !== undefined && optimizerEnabled(run.env, 'firstmatch'))) {
+      candidates = candidates.filter((i) => !i.parts[0]!.descending)
+    }
+    const index = candidates.find((i) => candidates.length === 1 || i.parts.length === 1)
     if (index === undefined) return undefined
     const qualify = (e: Extract<Expression, { kind: typeof NODE.COLUMN }>, alias: string): Expression => ({ ...e, parts: [alias, e.parts.at(-1) as string] })
     innerKey = qualify(innerKey, innerAlias)
@@ -1195,7 +1197,8 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     alternative.reads(read)
     alternative.sortedBy(sortBy, keep)
     if (!holdsRead(def, index, innerRead)) return undefined
-    const innerFirst = alternative.integerSemijoin(innerAlias, index, key, extra, node.groupBy === undefined && !someNode([node.items, q.orderBy], (n) => (n as { kind?: string }).kind === NODE.SUBQUERY ? true : undefined))
+    const innerFirst = alternative.integerSemijoin(innerAlias, index, key, extra,
+      node.groupBy === undefined && !someNode([node.items, q.orderBy], (n) => (n as Expression).kind === NODE.SUBQUERY || undefined))
     return innerFirst === undefined ? undefined : { from: alternative, where: predicate, innerFirst }
   } catch (error) {
     expectTyped(error)
