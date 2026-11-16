@@ -1254,7 +1254,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     if (extra.kind !== NODE.BINARY || !isComparison(extra.op) || extra.right.kind !== NODE.LITERAL) return undefined
     const field = qualify(extra.left, innerAlias)
     if (field === undefined) return undefined
-    text = !exists && (extra.op === '<' || extra.op === '<=') && textBesideColumn(field, extra.right)
+    text = !exists && isOrderedComparison(extra.op) && textBesideColumn(field, extra.right)
     if (!text && !numberLiteral(extra.right)) return undefined
     residual = { ...extra, left: field }
   }

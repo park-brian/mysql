@@ -121,19 +121,22 @@ test('ordered IN with a noncovering text residual costs indexed weedout or mater
                             Filter
                                 Table scan on c
             Single-row index lookup on p using PRIMARY`
-  const read = async (atMost: string[][], less: string[][], plan: string) => {
-    for (const [residual, expected] of [["<= 'b'", atMost], ["< 'dee'", less]] as const) {
+  const residuals = ["<= 'b'", "< 'dee'", "> 'b'", ">= 'dee'"] as const
+  type Rows = readonly (readonly string[])[]
+  const empty = [[], [], [], []] as const
+  const read = async (plan: string, expected: readonly [Rows, Rows, Rows, Rows]) => {
+    for (const [i, residual] of residuals.entries()) {
       const sql = `SELECT label FROM p WHERE id IN (SELECT c.parent_id FROM c WHERE c.word ${residual}) ORDER BY 1`
       const options = { sql, rowsAsArray: true }
       const explain = `EXPLAIN FORMAT=TREE ${sql}`
       for (const api of ['query', 'execute'] as const) {
         const [rows, fields] = api === 'query' ? await conn.query(options) : await conn.execute(options)
-        assert.deepEqual(rows, expected, api)
+        assert.deepEqual(rows, expected[i], `${residual}/${api}`)
         assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]),
           [['label', 253, 64, 4097, 0, 255, schema, 'p', 'p', 'label']], api)
         assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], api)
         const [[result]] = api === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
-        assert.equal(planSkeleton(result?.EXPLAIN), plan, api)
+        assert.equal(planSkeleton(result?.EXPLAIN), plan, `${residual}/${api}`)
       }
     }
   }
@@ -145,25 +148,27 @@ test('ordered IN with a noncovering text residual costs indexed weedout or mater
     await conn.query('CREATE TABLE c(id INT PRIMARY KEY,parent_id INT,word VARCHAR(10),KEY by_parent(parent_id)) STATS_AUTO_RECALC=0')
     await conn.query("INSERT INTO p VALUES (1,'D'),(2,'A'),(3,'Z'),(4,'B'),(5,'Q')")
     await conn.query('ANALYZE TABLE p,c')
-    await read([], [], weedout)
+    await read(weedout, empty)
     await conn.query("SET optimizer_switch='duplicateweedout=off'")
-    await read([], [], scan)
+    await read(scan, empty)
     await conn.query("SET optimizer_switch='default'")
     await conn.query("INSERT INTO c VALUES(1,1,'b')")
     await conn.query('ANALYZE TABLE p,c')
-    await read([['D']], [['D']], weedout)
+    await read(weedout, [[['D']], [['D']], [], []])
 
     await conn.query("INSERT INTO c VALUES(2,1,'B'),(3,2,'b '),(4,2,'a'),(5,3,'dée'),(6,NULL,'a'),(7,6,'A'),(8,4,NULL)")
     await conn.query('ANALYZE TABLE p,c')
-    await read([['A'], ['D']], [['A'], ['D']], scan)
+    await read(scan, [[['A'], ['D']], [['A'], ['D']], [['A'], ['Z']], [['Z']]])
     // Keep the same prepared statements across a rekey and a collation-sensitive edit.
     await conn.query('UPDATE c SET parent_id=3 WHERE id=1')
     await conn.query("UPDATE c SET word='dée' WHERE id=4")
-    await read([['D'], ['Z']], [['A'], ['D'], ['Z']], scan)
+    const updated = [[['D'], ['Z']], [['A'], ['D'], ['Z']], [['A'], ['Z']], [['A'], ['Z']]] as const
+    await read(scan, updated)
+    await conn.query("SET optimizer_switch='duplicateweedout=off'")
+    await read(scan, updated)
     await conn.query('DELETE FROM c')
     await conn.query('ANALYZE TABLE p,c')
-    await conn.query("SET optimizer_switch='duplicateweedout=off'")
-    await read([], [], scan)
+    await read(scan, empty)
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()
