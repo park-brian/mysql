@@ -15,13 +15,13 @@ async function looseScanConnection() {
   return { db, conn }
 }
 
-test('an ordered EXISTS materializes a noncovering inner filter before primary probes', async () => {
+test('an ordered EXISTS costs a noncovering materialized scan and indexed weedout', async () => {
   const { db, conn } = await looseScanConnection()
   const schema = 'filtered_semijoin356'
   const sql = 'SELECT label FROM p WHERE EXISTS (SELECT 1 FROM c WHERE c.parent_id = p.id AND c.qty > 3) ORDER BY 1'
   const options = { sql, rowsAsArray: true }
   const explain = `EXPLAIN FORMAT=TREE ${sql}`
-  const expectedPlan = `Sort
+  const scan = `Sort
     Stream results
         Nested loop inner join
             Filter
@@ -31,7 +31,14 @@ test('an ordered EXISTS materializes a noncovering inner filter before primary p
                             Filter
                                 Table scan on c
             Single-row index lookup on p using PRIMARY`
-  const read = async (expected: string[][], materializes?: boolean) => {
+  const weedout = `Sort
+    Stream results
+        Remove duplicate p rows using temporary table
+            Nested loop inner join
+                Filter
+                    Table scan on c
+                Single-row index lookup on p using PRIMARY`
+  const read = async (expected: string[][], shape?: string | false) => {
     for (const api of ['query', 'execute'] as const) {
       const [rows, fields] = api === 'query' ? await conn.query(options) : await conn.execute(options)
       assert.deepEqual(rows, expected, api)
@@ -40,8 +47,8 @@ test('an ordered EXISTS materializes a noncovering inner filter before primary p
       assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], api)
       const [plan] = api === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
       const skeleton = planSkeleton(plan[0]?.EXPLAIN)
-      if (materializes === true) assert.equal(skeleton, expectedPlan, api)
-      if (materializes === false) assert.doesNotMatch(skeleton, /Materialize with deduplication/, api)
+      if (shape === false) assert.doesNotMatch(skeleton, /Materialize with deduplication/, api)
+      else if (shape !== undefined) assert.equal(skeleton, shape, api)
     }
   }
   try {
@@ -52,17 +59,33 @@ test('an ordered EXISTS materializes a noncovering inner filter before primary p
     await conn.query("INSERT INTO p VALUES (1,'D'),(2,'A'),(3,'Z'),(4,'B')")
     await conn.query('INSERT INTO c VALUES (1,1,4),(2,1,8),(3,2,3),(4,3,7),(5,3,1),(6,NULL,9),(7,5,6),(8,4,2)')
     await conn.query('ANALYZE TABLE p,c')
-    await read([['D'], ['Z']], true)
+    await read([['D'], ['Z']], scan)
     await conn.query('UPDATE c SET qty=4 WHERE id=3')
-    await read([['A'], ['D'], ['Z']], true)
+    await read([['A'], ['D'], ['Z']], scan)
     await conn.query('UPDATE c SET parent_id=NULL WHERE parent_id=1')
-    await read([['A'], ['Z']], true)
+    await read([['A'], ['Z']], scan)
     await conn.query("SET optimizer_switch='materialization=off'")
     await read([['A'], ['Z']], false)
     await conn.query("SET optimizer_switch='materialization=on,firstmatch=off,duplicateweedout=off'")
-    await read([['A'], ['Z']], true)
+    await read([['A'], ['Z']], scan)
     await conn.query('DELETE FROM c')
     await read([])
+
+    await conn.query("SET optimizer_switch='default'")
+    await conn.query("INSERT INTO p VALUES (5,'Q')")
+    await conn.query('INSERT INTO c VALUES (1,1,5)')
+    await conn.query('ANALYZE TABLE p,c')
+    await read([['D']], weedout)
+    await conn.query('UPDATE c SET parent_id=NULL WHERE id=1')
+    await read([], weedout)
+
+    // Duplicate keys survive the filter and probe the same outer identities.
+    await conn.query('DELETE FROM c')
+    await conn.query('INSERT INTO c VALUES (1,2,6),(2,5,2),(3,1,7),(4,NULL,3),(5,7,8),(6,3,4),(7,6,0),(8,2,5),(9,5,1),(10,1,6),(11,NULL,2),(12,7,7)')
+    await conn.query('ANALYZE TABLE p,c')
+    await read([['A'], ['D'], ['Z']], weedout)
+    await conn.query("SET optimizer_switch='duplicateweedout=off'")
+    await read([['A'], ['D'], ['Z']], scan)
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()

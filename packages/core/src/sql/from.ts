@@ -656,10 +656,9 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     },
     integerSemijoin(alias, index, key, residual, materializationEligible) {
       const filteredScan = index === undefined
-      const looseScan = optimizerEnabled(ctx.env, 'loosescan')
       const firstMatch = { alias, enabled: optimizerEnabled(ctx.env, 'firstmatch'), filteredScan }
       let selected = false
-      if (index && looseScan) settings.loose = { alias, index, key }
+      if (index && optimizerEnabled(ctx.env, 'loosescan')) settings.loose = { alias, index, key }
       try {
         if (residual !== undefined && materializationEligible && index) {
           joinPlan()
@@ -677,22 +676,21 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         const outer = node.outer.table
         const inner = node.inner.table
         const materialized = settings.materialized
-        if (index === undefined) {
-          selected = materialized === 'scan' && node.lookup?.unique === true && node.lookup.index.kind === 'primary'
-          return selected || undefined
-        }
-        // Indexed LooseScan retains PRIMARY identity; weedout retains physical outer identity.
         const innerFirst = outer.alias === alias
-        const loose = !materialized && innerFirst && looseScan && (node.lookup ? node.lookup.unique && node.lookup.index.kind === 'primary' : settings.buffered)
+        const primary = node.lookup?.unique === true && node.lookup.index.kind === 'primary'
+        // The noncovering build can feed an indexed materialized scan or indexed weedout.
+        if (filteredScan && (!primary || !innerFirst || (materialized && materialized !== 'scan'))) return undefined
+        // Indexed LooseScan retains PRIMARY identity; weedout retains physical outer identity.
+        const loose = !materialized && innerFirst && settings.loose && (node.lookup ? primary : settings.buffered)
         if (!loose) delete settings.loose
-        if (!materialized && !loose && innerFirst && residual === undefined) settings.weedout = inner
+        if (!materialized && !loose && innerFirst && (filteredScan ? optimizerEnabled(ctx.env, 'duplicateweedout') : residual === undefined)) settings.weedout = inner
         if (materialized || loose || settings.weedout) {
-          delete settings.firstMatch
-          this.readInOrder(index.name, true, false, alias)
+          if (!filteredScan || settings.weedout) delete settings.firstMatch
+          if (index) this.readInOrder(index.name, true, false, alias)
           selected = true
           return materialized !== 'lookup'
         }
-        if (inner.alias !== alias || !plan.lookups.has(alias)) return undefined
+        if (filteredScan || inner.alias !== alias || !plan.lookups.has(alias)) return undefined
         // Empty residual ranges retain their materialization boundary.
         if (residual !== undefined && ctx.env !== undefined && inner.table !== undefined && inner.def !== undefined) {
           const access = chooseAccess(inner.def, alias, residual, ctx.env, settings.outer, rangeCosting(inner, settings, ctx.env))
