@@ -744,12 +744,12 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
     },
     explain() {
       // An empty result the optimizer proves is no plan at all.
-      if (facts?.impossible === true || provedEmpty(run, from, node, keep)) return noRowsPlan()
+      if (facts?.impossible === true || provedEmpty(run, from, node, keep)) return NO_ROWS_PLAN
       // A constant table is read while planning: its row, if the WHERE holds of it, is all there is to fetch.
       // An uncorrelated scalar subquery a unique key equals is evaluated while planning too, so it pins the key (8.4.11).
       if (from !== undefined && constant) {
         for (const _ of from.rows(undefined, run.env, { locking: false })) return [planNode('Rows fetched before execution')]
-        return noRowsPlan()
+        return NO_ROWS_PLAN
       }
       const where = node.where
       const costOuter = where?.kind === NODE.BINARY && where.op === 'NOT IN' && !q.limit && plainProjection(q, node) && from && joinOuter(run, q, node, from) ? base : undefined
@@ -926,7 +926,7 @@ function subqueryNodes(run: Run, clause: string, outer?: FromPlan['single']): Pl
     if (s.clause !== clause || !firstKey(seen, s.query)) continue
     const roots = s.plan.explain?.()
     const how = s.quantified
-    const rewritten = how === undefined ? undefined : quantifiedPlan(run, s, how, topLevel(run.clauses?.[clause], s.query), roots, outer)
+    const rewritten = how && quantifiedPlan(run, s, how, topLevel(run.clauses?.[clause], s.query), roots, outer)
     out.push(planNode(`Select #${selectNumber(run, s.query)}`, rewritten ?? roots))
   }
   return out
@@ -939,8 +939,9 @@ function subqueryNodes(run: Run, clause: string, outer?: FromPlan['single']): Pl
  */
 function topLevel(root: Expression | undefined, query: QueryExpression): boolean {
   if (root?.kind !== NODE.BINARY) return false
-  if (logicalShortCircuit(root.op.toUpperCase()) !== undefined) return topLevel(root.left, query) || topLevel(root.right, query)
-  return root.right.kind === NODE.SUBQUERY && root.right.query === query
+  return logicalShortCircuit(root.op) !== undefined
+    ? topLevel(root.left, query) || topLevel(root.right, query)
+    : root.right.kind === NODE.SUBQUERY && root.right.query === query
 }
 
 /**
@@ -967,14 +968,17 @@ function quantifiedPlan(run: Run, bound: BoundSubquery, how: QuantifiedSubquery,
   const { def, alias } = inner
   const column = tableColumn(body.items[0]!.expr, def, alias)
   if (column === undefined) return undefined
-  const read = keyReads(column.name, body.where)
+  const predicate = body.where
+  const dependentNotIn = how.kind === 'keyed-int-not-in' && top && (column.nullable || how.nullable)
+  // Keep the bound query's proof for a direct IS NULL on a required field.
+  if (dependentNotIn && roots === NO_ROWS_PLAN && predicate?.kind === NODE.UNARY && predicate.op === 'IS NULL') return undefined
+  const read = keyReads(column.name, predicate)
   const index = leadingIndex(def, column, true)
-  const where = body.where !== undefined ? 1 : 0
   let access: PlanNode
   let filters: number
   if (how.kind !== 'scan') {
     const nulls = !top || how.kind !== 'in'
-    if (index === undefined || (how.kind === 'keyed-int-not-in' && top && where === 0 && (column.nullable || how.nullable) && run.env.memo !== undefined &&
+    if (index === undefined || (dependentNotIn && predicate === undefined && run.env.memo !== undefined &&
       optimizerEnabled(run.env, 'materialization') && (!optimizerEnabled(run.env, 'subquery_materialization_cost_based') ||
         (plainBase(query, body) && costedNotIn(run, inner, outer, index, column.nullable))))) {
       return planNode('Filter', planNode('Limit', lookupMaterialized(materialize(roots), true)))
@@ -983,13 +987,13 @@ function quantifiedPlan(run: Run, bound: BoundSubquery, how: QuantifiedSubquery,
     const covering = holdsRead(def, index, read)
     access = indexLookup(alias, index.name, unique, covering)
     if (nulls && how.nullable) access = planNode('Alternative plans for IN subquery', [access, planNode(`Table scan on ${alias}`)])
-    filters = Math.max(nulls ? (column.nullable ? 2 : how.nullable ? 1 : 0) : 0, where)
+    filters = nulls && column.nullable ? 2 : Number(predicate !== undefined || (nulls && how.nullable))
   } else {
     const cover = def.indexes.find((i) => holdsRead(def, i, read) && i.kind !== 'primary')
     access = planNode(cover === undefined ? `Table scan on ${alias}` : `Covering index scan on ${alias} using ${cover.name}`)
     filters = column.nullable ? 2 : 1
   }
-  for (let i = 0; i < filters; i++) access = planNode('Filter', access)
+  while (filters-- > 0) access = planNode('Filter', access)
   return planNode('Limit', access)
 }
 
@@ -2045,7 +2049,7 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan, holder?: 
     locking: plan.locking,
     ...(plan.leaves === undefined ? {} : { leaves: plan.leaves }),
     explain() {
-      if (limitCount === 0) return noRowsPlan()
+      if (limitCount === 0) return NO_ROWS_PLAN
       // Read from a table, for the sort or the limit: a UNION ALL is no longer streamed.
       const [root, ...rest] = plan.explain?.(true) ?? []
       const n = root === undefined ? undefined : describeStages(root, stages)
@@ -2528,7 +2532,7 @@ function planGrouped(
       // LIMIT around it; its one row is not sorted, and its list's subqueries
       // are not run (8.4.11).
       if (limitCount !== 0 && provedEmpty(run, from, node, limitCount)) {
-        if (strategy !== 'implicit') return noRowsPlan()
+        if (strategy !== 'implicit') return NO_ROWS_PLAN
         let n = planNode('Zero input rows')
         if (having !== undefined) n = withSubqueries(run, planNode('Filter', n), 'having clause')
         if (q.limit) n = limitStage(offset, limitCount).describe(n) ?? n
@@ -2538,7 +2542,7 @@ function planGrouped(
       let fetched = false
       if (constTable && from !== undefined) {
         for (const _ of from.rows(undefined, run.env, { locking: false })) fetched = true
-        if (!fetched && strategy !== 'implicit') return noRowsPlan()
+        if (!fetched && strategy !== 'implicit') return NO_ROWS_PLAN
       }
       return describeSelect(run, fetched ? undefined : from, stages, copiedAverage)
     },
@@ -2551,7 +2555,7 @@ function planGrouped(
   }
 }
 
-const noRowsPlan = (): readonly PlanNode[] => [planNode('Zero rows')]
+const NO_ROWS_PLAN: readonly PlanNode[] = [planNode('Zero rows')]
 
 /** Both SELECT forms describe the stages over the chosen source. */
 function describeSelect(run: Run, from: FromPlan | undefined, stages: readonly Stage[], copied: boolean, outer?: FromPlan['single']): readonly PlanNode[] | undefined {

@@ -115,8 +115,13 @@ scan choices, including the two with FirstMatch disabled.
 **M5.47 noncovering text residuals.** The bounded ordered `IN` reader uses
 the same materialized scan and indexed weedout for a `VARCHAR` field compared
 with a plain literal in the connection collation. The audit resolves case
-102, statement 12 and case 106, statement 10. Next, isolate the captured
-dependent `NOT IN` reads that need a scan or a zero-row proof. Outer-first
+102, statement 12 and case 106, statement 10.
+
+**M5.47 dependent `NOT IN` over a proved empty input.** The bound zero-row
+child survives planning when an exact integer `NOT IN` with a nullable
+operand tests a required inner column for `NULL`. Case 263, statement 12
+now matches. Next, cost the dependent scans in case 204, statement 11 and
+case 259, statement 14 against their indexed alternatives. Outer-first
 weedout and materialized lookup profiles remain open.
 
 **0.3 is staged**, with exact workspace versions and installed-package smoke
@@ -2025,6 +2030,17 @@ and a collation-sensitive update. Two captured plans bring the relational
 score to 2,134 of 2,248 with the 2,118 floor. Parser, core and facade are
 45,611, 334,338 and 334,266 B gzipped within the existing caps. Other cost
 profiles, lookup strategies and mixed-collation residuals remain open.
+
+**M5.47 proved empty dependent `NOT IN`, verified.** The quantified plan
+keeps the existing bound zero-row child for an impossible `IS NULL` on a
+required field. The ordinary membership reader includes NULL outer values
+when the inner input is empty. A pinned audit improves from 52 to 79 of
+288 complete matches, preserving all 6,006 previously matching facts and
+261 unchanged outcomes. Both protocols return the same rows, metadata,
+warnings and plans across writes and a switch change. Case 263, statement
+12 brings the relational score to 2,135 of 2,248 with the 2,118 floor.
+Parser, core and facade are 45,611, 334,333 and 334,263 B gzipped within
+the existing caps. Dependent scan versus index selection remains open.
 
 **M5.49 legacy index hint admission, verified.** Simple outer SELECTs over
 physical tables, including temporary tables, check index names after opening
@@ -12063,11 +12079,11 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,347 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-16. The facade is 334,263 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
+| Core bundle, gzipped | 334,333 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-16. The facade is 334,263 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |
-| Plans agreeing with a real MySQL 8.4 (`EXPLAIN FORMAT=TREE`, costs stripped) | 2,134 / 2,248 relational SELECTs observed, with a required floor of 2,118 skeletons in `relational-vectors.test.ts`. A plan that agrees also has its rows compared in order. `npm run plans` lists the remaining differences, including join order, `ref` access, semijoins and constant tables | every corpus SELECT |
+| Plans agreeing with a real MySQL 8.4 (`EXPLAIN FORMAT=TREE`, costs stripped) | 2,135 / 2,248 relational SELECTs observed, with a required floor of 2,118 skeletons in `relational-vectors.test.ts`. A plan that agrees also has its rows compared in order. `npm run plans` lists the remaining differences, including join order, `ref` access, semijoins and constant tables | every corpus SELECT |
 | Cold start, browser | — | published, tracked |
 
 ---

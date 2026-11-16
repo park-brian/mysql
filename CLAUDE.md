@@ -490,10 +490,10 @@ copied-field/parameter metadata, invalid-dimension admission and CAST warning la
 broader multiplication precision and supplementary identifier-alias admission
 remain open. Broader
 strategy and measured field-copy gaps stay open.
-The cost-based planner (M5.7, M5.42–M5.46) is done:
-`EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,126 of the relational
-corpus's 2,248 plans agree with 8.4.11's; M5.47 is in progress, M5.48 is done,
-M5.49 and M5.50 are in progress.
+The cost-based planner milestones M5.7 and M5.42–M5.46 are complete. The
+[roadmap scoreboard](docs/44-roadmap.md#scoreboard) tracks current
+`EXPLAIN FORMAT=TREE` agreement with MySQL 8.4.11. M5.48 is complete.
+M5.47, M5.49 and M5.50 are in progress.
 `db.stream()` (M5.40) streams with backpressure at every hop (D-85). Then the
 browser (M6).
 The package an application installs is `myjs`, a facade over `@myjs/core`.

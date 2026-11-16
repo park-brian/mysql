@@ -52,6 +52,62 @@ test('quantified subquery coverage distinguishes complete and prefix index parts
   }
 })
 
+test('dependent NOT IN retains a proved empty input across writes', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection(db === undefined
+    ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+    : { stream: db.createStream(), user: 'root', password: '' })
+  const schema = 'quantified_empty_input'
+  const all = [['a'], ['b'], ['c'], ['d']]
+  const read = async (key: 'id' | 'k', residual: 'IS NULL' | 'IS NOT NULL', rowsExpected: string[][], lookup = false) => {
+    const sql = `SELECT label FROM p WHERE ${key} NOT IN (SELECT parent_id FROM c WHERE qty ${residual}) ORDER BY 1`
+    const options = { sql, rowsAsArray: true }
+    const explain = `EXPLAIN FORMAT=TREE ${sql}`
+    const empty = key === 'id' ? 'Filter\n    Covering index scan on p using label\n    Select #2\n        Zero rows'
+      : 'Sort\n    Filter\n        Table scan on p\n        Select #2\n            Zero rows'
+    for (const api of ['query', 'execute'] as const) {
+      const [rows, fields] = api === 'query' ? await conn.query(options) : await conn.execute(options)
+      assert.deepEqual(rows, rowsExpected, api)
+      assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]),
+        [['label', 253, 48, 20485, 0, 255, schema, 'p', 'p', 'label']], api)
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], api)
+      const [[result]] = api === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
+      const plan = planSkeleton(result?.EXPLAIN)
+      if (residual === 'IS NULL') assert.equal(plan, empty, api)
+      else {
+        assert.doesNotMatch(plan, /Zero rows/, api)
+        if (lookup) assert.match(plan, /Index lookup on c using by_parent/, api)
+      }
+    }
+  }
+  try {
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,k INT,label VARCHAR(12) NOT NULL,UNIQUE KEY(label)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE c(id INT PRIMARY KEY,parent_id INT,qty INT NOT NULL,KEY by_parent(parent_id)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO p VALUES (1,1,'c'),(2,8,'a'),(3,NULL,'b'),(4,8,'d')")
+    await conn.query('INSERT INTO c VALUES ' + Array.from({ length: 12 }, (_, i) => `(${i + 1},${i % 3 === 1 ? 'NULL' : i + 1},${i + 1})`).join(','))
+    await conn.query('ANALYZE TABLE p,c')
+    await read('id', 'IS NULL', all)
+    await read('k', 'IS NULL', all)
+    await read('k', 'IS NOT NULL', [], true)
+    // Retain the prepared readers while the inner keys and table cardinality change.
+    await conn.query('UPDATE c SET parent_id=99 WHERE parent_id IS NULL')
+    await read('k', 'IS NULL', all)
+    await conn.query('DELETE FROM c')
+    await conn.query("SET optimizer_switch='semijoin=off,materialization=off'")
+    await read('id', 'IS NULL', all)
+    await read('k', 'IS NULL', all)
+    await read('k', 'IS NOT NULL', all)
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
 test('nullable integer NOT IN describes forced and costed membership builds across retained executions', async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
