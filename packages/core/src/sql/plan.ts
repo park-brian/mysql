@@ -7,9 +7,9 @@
 // already enforce it; cost estimates alone are insufficient.
 // A range can therefore only ever lose rows
 // by being too narrow, never add wrong ones, and the planner's one job is to
-// never be too narrow. It narrows only when a constant converts to the
-// column's type *exactly*, so the bound it encodes is the value the
-// comparison would have used:
+// never be too narrow. It uses exact key conversions or, for decimal
+// comparisons with an integer column, the integer endpoints admitted by
+// the original comparison. Exact conversions include:
 //
 //   - an integer column against an integer constant in its range;
 //   - a DECIMAL column against an exact constant with no more scale than it;
@@ -26,10 +26,9 @@
 //
 // Row order matters as much as the rows: a query without ORDER BY returns
 // rows in the order of its access path, and MySQL's choice of path decides
-// that. So a secondary index is used only for equality (and IN lists), where
-// its order within one key is the primary key's — the same as a full scan
-// filtered. A *range* on a secondary is left to a full scan until the cost
-// model of M5.7 can say what MySQL would pick.
+// that. Costed readers compare primary and secondary ranges with the scan.
+// Without range costing, the fallback allows points on either key type and
+// inequalities on the primary key only.
 import { CHARSET_BINARY, FIELD_TYPE, equalBytes } from '@myjs/bytes'
 import type { ColumnDef, IndexDef, KeyBound, KeyRange, TableDef } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
@@ -96,7 +95,7 @@ export const FULL_SCAN: Access = {}
 type Op = '=' | '<=>' | '<' | '<=' | '>' | '>=' | 'IN' | 'IS NULL'
 
 interface Condition {
-  readonly column: string
+  readonly column: ColumnDef
   readonly op: Op
   readonly constants: readonly Expression[]
 }
@@ -152,19 +151,19 @@ export function tableColumn(e: Expression, def: TableDef, alias: string): Column
 function conditionOf(e: Expression, def: TableDef, alias: string, outer: OuterColumn | undefined, env: Env): Condition | undefined {
   const constant = (x: Expression): boolean => isConstant(x) || outer?.(x) !== undefined
   if (e.kind === NODE.UNARY && e.op === 'IS NULL') {
-    const column = tableColumn(e.operand, def, alias)?.name
+    const column = tableColumn(e.operand, def, alias)
     return column === undefined ? undefined : { column, op: 'IS NULL', constants: [] }
   }
   if (e.kind !== NODE.BINARY) return undefined
   const left = tableColumn(e.left, def, alias)
   if (e.op === 'IN' && e.right.kind === NODE.ROW && e.right.items.every(constant)) {
-    return left === undefined ? undefined : { column: left.name, op: 'IN', constants: e.right.items }
+    return left === undefined ? undefined : { column: left, op: 'IN', constants: e.right.items }
   }
-  if (e.op === 'BETWEEN' && left !== undefined && equalBounds(e, env, left)) return { column: left.name, op: '=', constants: [e.right] }
+  if (e.op === 'BETWEEN' && left !== undefined && equalBounds(e, env, left)) return { column: left, op: '=', constants: [e.right] }
   const op = e.op === '<>' || e.op === '!=' ? undefined : REVERSE_COMPARISON[e.op] as Op | undefined
   if (op === undefined) return undefined
-  if (left !== undefined && constant(e.right)) return { column: left.name, op: e.op as Op, constants: [e.right] }
-  const right = tableColumn(e.right, def, alias)?.name
+  if (left !== undefined && constant(e.right)) return { column: left, op: e.op as Op, constants: [e.right] }
+  const right = tableColumn(e.right, def, alias)
   if (right !== undefined && constant(e.left)) return { column: right, op, constants: [e.left] }
   return undefined
 }
@@ -176,13 +175,7 @@ function conditionOf(e: Expression, def: TableDef, alias: string, outer: OuterCo
 function exact(v: Value, c: ColumnDef): boolean {
   if (v === null) return false
   const t = c.type
-  if (integerBytes(t.type) !== undefined) return v.kind === 'int'
   switch (t.type) {
-    case FIELD_TYPE.DECIMAL:
-    case FIELD_TYPE.NEWDECIMAL:
-      return v.kind === 'int' || (v.kind === 'decimal' && v.scale <= (t.scale ?? 0) && v.display === undefined)
-    case FIELD_TYPE.DOUBLE:
-      return v.kind === 'int' || v.kind === 'decimal' || v.kind === 'double'
     case FIELD_TYPE.DATE:
     case FIELD_TYPE.DATETIME:
     case FIELD_TYPE.TIMESTAMP: {
@@ -207,7 +200,7 @@ function exact(v: Value, c: ColumnDef): boolean {
       return [...v.v].length <= (t.length ?? 1)
     }
     default:
-      return false
+      return exactNumber(v, c)
   }
 }
 
@@ -234,7 +227,7 @@ function scoredAccess(def: TableDef, conditions: readonly Condition[], env: Env,
   for (const index of indexes.slice().sort((a, b) => (a.kind === 'primary' ? -1 : 0) - (b.kind === 'primary' ? -1 : 0))) {
     const column = forwardKeyColumn(def, index)
     if (column === undefined) continue
-    const access = accessFor(index, column, conditions.filter((c) => c.column === column.name), env, outer)
+    const access = accessFor(index, column, conditions.filter((c) => c.column === column), env, outer)
     if (access === undefined || access.score < minimum) continue
     const score = access.score + (index.kind === 'primary' || def.clustered === index.name ? 0.5 : 0)
     if (best === undefined || score > best.score) best = { access: access.access, score }
@@ -437,13 +430,19 @@ function bound(v: Value, column: ColumnDef, inclusive: boolean): KeyBound | unde
  * reads the same index.
  */
 function exactType(t: Compiled['type'], c: ColumnDef): boolean {
-  if (integerBytes(c.type.type) !== undefined) return t.kind === 'int' && t.literalInt === undefined
-  switch (c.type.type) {
+  return !(t.kind === 'int' && t.literalInt !== undefined) && exactNumber(t, c)
+}
+
+/** Numeric key compatibility for a known value or an outer column's type. */
+function exactNumber(t: Exclude<Value, null> | Compiled['type'], c: ColumnDef): boolean {
+  const col = c.type
+  if (integerBytes(col.type) !== undefined) return t.kind === 'int'
+  switch (col.type) {
     case FIELD_TYPE.DECIMAL:
     case FIELD_TYPE.NEWDECIMAL:
-      return (t.kind === 'int' && t.literalInt === undefined) || (t.kind === 'decimal' && t.scale <= (c.type.scale ?? 0))
+      return t.kind === 'int' || (t.kind === 'decimal' && t.scale <= (col.scale ?? 0) && !('display' in t && t.display !== undefined))
     case FIELD_TYPE.DOUBLE:
-      return (t.kind === 'int' && t.literalInt === undefined) || t.kind === 'decimal' || t.kind === 'double'
+      return t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double'
     default:
       return false
   }
@@ -503,9 +502,8 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
     const v = evaluate(c.constants[0] as Expression)
     if (v === undefined || !exact(v, column)) continue
     const b = bound(v, column, c.op === '<=' || c.op === '>=')
-    if (b === undefined) continue
-    if ((c.op === '>' || c.op === '>=') && from === undefined) from = b
-    if ((c.op === '<' || c.op === '<=') && to === undefined) to = b
+    if (c.op === '>' || c.op === '>=') from ??= b
+    else to ??= b
   }
   if (from === undefined && to === undefined) return undefined
   // A lower bound alone still skips the NULLs a clustered key cannot hold anyway.

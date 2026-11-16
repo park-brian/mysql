@@ -2422,6 +2422,17 @@ preserve all 2,758 outcomes. Parser/core/facade measure
 whose stored endpoints exclude the only key and the choice of nested
 semijoin strategy remain open.
 
+**M5.49 range-planner consolidation, verified.** The planner retains the
+resolved column in each condition and shares the numeric key compatibility
+rules between known values and outer-column types. The clustered fallback
+keeps the first encodable bound on each side. The standalone and nested
+audits preserve all 2,758 outcomes, and the relational ledger stays at
+2,140 of 2,248 plans. Parser/core/facade measure 45,614/334,313/334,219 B
+gzipped within the existing caps. Continue with fractional `BETWEEN`
+endpoints that MySQL rounds to an excluded key. The existing adjacent and
+out-of-domain endpoint plans and nested strategy selection still need their
+own checks.
+
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.
 Grouping, DISTINCT and byte readers now see the same result collation.
