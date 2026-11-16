@@ -86,6 +86,14 @@ test('an ordered EXISTS costs a noncovering materialized scan and indexed weedou
     await read([['A'], ['D'], ['Z']], weedout)
     await conn.query("SET optimizer_switch='duplicateweedout=off'")
     await read([['A'], ['D'], ['Z']], scan)
+
+    // The earlier parent read supplies its full prefix estimate to weedout.
+    await conn.query("SET optimizer_switch='default,firstmatch=off'")
+    await conn.query('DELETE FROM p WHERE id>3')
+    await conn.query('DELETE FROM c')
+    await conn.query('INSERT INTO c VALUES (1,2,6),(2,5,2),(3,3,7),(4,NULL,3),(5,4,8),(6,2,4),(7,5,0),(8,3,5),(9,1,1)')
+    await conn.query('ANALYZE TABLE p,c')
+    await read([['A'], ['Z']], scan)
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()

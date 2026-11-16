@@ -109,10 +109,10 @@ dependent reader and broader cost profiles remain open.
 
 **M5.47 noncovering `EXISTS` residual.** The two captured integer cases now
 use either a materialized scan or indexed duplicate weedout before sorting
-the matching parents. The next audit can isolate the two remaining small
-materialized scan choices with FirstMatch disabled and the noncovering text
-residuals in case 102, statement 12 and case 106, statement 10. Outer-first
-weedout and lookup plans remain open.
+the matching parents. The bounded audit now matches all 213 materialized
+scan choices, including the two with FirstMatch disabled. Next, isolate the
+noncovering text residuals in case 102, statement 12 and case 106, statement
+10. Outer-first weedout execution and lookup plans remain open.
 
 **0.3 is staged**, with exact workspace versions and installed-package smoke
 checks. Publication still requires claiming the npm scope/name and publishing
@@ -1975,11 +1975,11 @@ materialized scans without choosing one for a competing native strategy.
 The two audits preserve all 6,888 and 9,808 previously matching facts. The
 208 earlier protocol profiles retain 27,469 complete matches and all
 886,912 previously matching protocol facts.
-Two small-table choices with FirstMatch disabled and other strategies for
-the noncovering residual remain open. The plan corpus reaches 2,131 of 2,248
-with the 2,118 floor. Parser, core and facade are 45,611, 334,344 and
-334,263 B gzipped within the existing caps.
-[MySQL temporary-table strategy costing](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_planner.cc#L3829)
+That audit left two small-table materialized scan choices with FirstMatch
+disabled for the outer-first costing update below. The plan corpus reaches
+2,131 of 2,248 with the 2,118 floor. Parser, core and facade are 45,611,
+334,344 and 334,263 B gzipped within the existing caps.
+[MySQL temporary-table strategy costing](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_planner.cc#L3570-L3576)
 
 **M5.47 indexed weedout with a noncovering `EXISTS` residual, verified.**
 When the optimizer chooses inner-first duplicate weedout, the noncovering
@@ -1992,8 +1992,21 @@ to 206 of 320, from 211 to 347 of 480, and from 60 to 182 of 600 complete
 matches, preserving all 29,287 previously matching facts. The captured query
 in case 139, statement 17 brings the relational corpus to 2,132 of 2,248
 with the 2,118 floor. Parser, core and facade are 45,611, 334,338 and
-334,252 B gzipped within the existing caps. The 16 other weedout choices in
-the 480-response audit and the two materialized scan choices remain open.
+334,252 B gzipped within the existing caps. The outer-first costing update
+below continues the audit.
+
+**M5.47 outer-first weedout costing for a noncovering residual, verified.**
+The existing cost search uses the parent's prefix rows for temporary writes
+and estimated output when the parent is read before the filtered semijoin
+inner. This selects the same materialized scan as MySQL for the two
+FirstMatch-off cases. The pinned audits improve from 347 to 353 of 480 and
+from 182 to 206 of 600 complete matches, preserving the 206 of 320 covering
+and noncovering controls and all 29,563 previously matching facts. The
+retained regression checks both protocols after writes and a switch change.
+Twelve weedout choices remain open in the 480-response audit. The relational
+score is 2,132 of 2,248 with the 2,118 floor. Parser, core and facade are
+45,611, 334,347 and 334,263 B gzipped within the existing caps.
+[MySQL weedout fanout and temporary costs](https://raw.githubusercontent.com/mysql/mysql-server/mysql-8.4.11/sql/sql_planner.cc#L3639)
 
 **M5.49 legacy index hint admission, verified.** Simple outer SELECTs over
 physical tables, including temporary tables, check index names after opening
@@ -12032,7 +12045,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,338 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-16. The facade is 334,252 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
+| Core bundle, gzipped | 334,347 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-16. The facade is 334,263 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

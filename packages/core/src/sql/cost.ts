@@ -320,6 +320,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
   const consider = (): void => {
     const first = plan[0] as Step
     const last = plan.at(-1) as Step
+    const innerFirst = first.alias === semijoin
     // An inner-first semijoin needs a temporary deduplication strategy.
     let rows = loose === undefined ? last.rows : first.alias === loose.alias ? last.fetched * last.filter : first.rows
     // A semijoin emits outer rows, independent of inner duplicate fanout.
@@ -327,8 +328,10 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     let cost = last.cost
     // Either order can need weedout when an enabled alternative is available.
     // Default memory temporary costs: creation 1, each write/lookup 0.1.
-    if (semijoin !== undefined && (first.alias === semijoin ? loose === undefined : firstMatch?.enabled !== true)) {
-      rows = Math.min(rows, (candidates[0] as Candidate).rows * last.filter)
+    if (semijoin !== undefined && (innerFirst ? loose === undefined : firstMatch?.enabled !== true)) {
+      // An outer-first filtered weedout starts at the semijoin inner table.
+      // Its prefix already supplies the output rows and temporary writes.
+      if (innerFirst || !firstMatch?.filteredScan) rows = Math.min(rows, (candidates[0] as Candidate).rows * last.filter)
       cost = extendedCost(first, last)
       // Native charges creation before row operations; the grouping decides exact ties.
       cost += weedout || lastResort ? MEMORY_CREATE : Infinity
@@ -337,7 +340,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     const alternative = materialPlan(cost)
     cost += sortCost(rows)
     // An inner-first materialized scan wins its native equal-cost weedout tie.
-    const chosen = alternative !== undefined && (alternative.cost < cost || (alternative.cost === cost && loose === undefined && first.alias === semijoin))
+    const chosen = alternative !== undefined && (alternative.cost < cost || (alternative.cost === cost && loose === undefined && innerFirst))
       ? alternative : { cost, plan: plan.slice() }
     // When revisiting a complete filtered semijoin plan, MySQL's best_read
     // already excludes the optimizer's 0.001 adjustment.
