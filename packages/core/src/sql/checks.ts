@@ -19,7 +19,7 @@
 //     a duplicate first and costs no AUTO_INCREMENT value. IGNORE skips the
 //     row with a warning, and it is not counted among the "Records".
 //   - NOT ENFORCED keeps a constraint as documentation.
-import { expectTyped } from '@myjs/bytes'
+import { proof } from './errors.ts'
 import { requireCollationInfo } from '@myjs/charsets'
 import { sqlError } from '@myjs/protocol'
 import { REVERSE_COMPARISON, columnRefs, logicalShortCircuit, nativeCallName, someNode, visitPostorder } from './ast.ts'
@@ -155,13 +155,8 @@ export function withChecks(catalog: CatalogApi, schema: string, spec: TableSpec,
 
 /** Resolved CHECK text, escaped for INFORMATION_SCHEMA unless SHOW requests the plain expression. */
 export function checkClause(check: CheckDef, information = true): string | null {
-  let printed: string
-  try {
-    printed = printTableExpression(parseExpression(check.text), check.charset, check.text)
-  } catch (e) {
-    expectTyped(e)
-    return check.text
-  }
+  const printed = proof(() => printTableExpression(parseExpression(check.text), check.charset, check.text))
+  if (printed === undefined) return check.text
   return information ? escapePrinted(printed, check.charset) : printed
 }
 

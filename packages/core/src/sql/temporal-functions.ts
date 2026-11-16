@@ -23,8 +23,8 @@
 //     constant string's as written, a decimal's scale, six for other text.
 //   - The session's time zone is UTC (`clock` in `compile.ts`): UNIX_TIMESTAMP
 //     and FROM_UNIXTIME count from 1970-01-01 00:00:00 there.
-import { wrongArgumentsError } from './errors.ts'
-import { FIELD_TYPE, type MysqlDateTime, type MysqlTime, expectTyped } from '@myjs/bytes'
+import { proof, wrongArgumentsError } from './errors.ts'
+import { FIELD_TYPE, type MysqlDateTime, type MysqlTime } from '@myjs/bytes'
 import { NODE, type CallNode, type Expression } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import {
@@ -89,6 +89,10 @@ const US_PER_DAY = 86_400_000_000n
 const NO_ZERO: DateFlags = { noZeroDate: true, noZeroInDate: true }
 const FUZZY: DateFlags = {}
 
+function midnight(year: number, month: number, day: number): MysqlDateTime {
+  return { year, month, day, hour: 0, minute: 0, second: 0, microsecond: 0 }
+}
+
 /** The names `temporalFunction` compiles. */
 export const TEMPORAL_FUNCTIONS: ReadonlySet<string> = new Set(['DATE', 'TIME', 'TIMESTAMP', 'YEAR', 'MONTH', 'DAY', 'DAYOFMONTH', 'QUARTER', 'DAYOFYEAR', 'DAYOFWEEK', 'WEEKDAY', 'TO_DAYS', 'TO_SECONDS', 'WEEK', 'YEARWEEK', 'DAYNAME', 'MONTHNAME', 'LAST_DAY', 'HOUR', 'MINUTE', 'SECOND', 'MICROSECOND', 'TIME_TO_SEC', 'EXTRACT'])
 
@@ -100,7 +104,7 @@ export const TEMPORAL_ARITHMETIC: ReadonlySet<string> = new Set(['DATEDIFF', 'TI
 
 /** The statement's date, in UTC: where a TIME read as a date lands. */
 export function today(env: Env): () => MysqlDateTime {
-  return () => ({ year: env.now.getUTCFullYear(), month: env.now.getUTCMonth() + 1, day: env.now.getUTCDate(), hour: 0, minute: 0, second: 0, microsecond: 0 })
+  return () => midnight(env.now.getUTCFullYear(), env.now.getUTCMonth() + 1, env.now.getUTCDate())
 }
 
 /** A reading's value, its deprecation and its warning raised. */
@@ -137,6 +141,7 @@ const extremeTime = (negative: boolean): MysqlTime => timeFromSeconds(negative, 
 /** A datetime as microseconds from day 0. */
 const datetimeMicros = (v: MysqlDateTime): bigint =>
   BigInt(dayNumber(v.year, v.month, v.day)) * US_PER_DAY + BigInt(((v.hour * 60 + v.minute) * 60 + v.second) * 1_000_000 + v.microsecond)
+const UNIX_EPOCH = datetimeMicros(midnight(1970, 1, 1))
 
 /** Microseconds from day 0 as a datetime, or undefined outside 0000-01-01 … 9999-12-31. */
 function microsToDatetime(us: bigint): MysqlDateTime | undefined {
@@ -152,9 +157,8 @@ function datetimeValue(v: MysqlDateTime, fsp: number, type: 'DATE' | 'DATETIME' 
   return { kind: 'datetime', v, type, fsp }
 }
 
-function dateValue(v: Pick<MysqlDateTime, 'year' | 'month' | 'day'>, type: 'DATE' | 'DATETIME' = 'DATE'): Value {
-  const { year, month, day } = v
-  return datetimeValue({ year, month, day, hour: 0, minute: 0, second: 0, microsecond: 0 }, 0, type)
+export function dateValue(v: Pick<MysqlDateTime, 'year' | 'month' | 'day'>, type: 'DATE' | 'DATETIME' = 'DATE'): Value {
+  return datetimeValue(midnight(v.year, v.month, v.day), 0, type)
 }
 
 /** The zero temporal carried by a DATE or DATETIME result. */
@@ -178,13 +182,7 @@ function roundDatetime(v: MysqlDateTime, fsp: number): MysqlDateTime | undefined
 
 /** A constant argument's value, evaluated once at compile time; undefined when it is not constant. */
 function constantOf(e: Expression, c: Compiled, ctx: CompileContext): Value | undefined {
-  if (!constantNode(e)) return undefined
-  try {
-    return c.eval([], constantEnv(ctx))
-  } catch (e) {
-    expectTyped(e)
-    return undefined
-  }
+  return constantNode(e) ? proof(() => c.eval([], constantEnv(ctx))) : undefined
 }
 
 /** Native temporal precision inference keeps the time/date scanners distinct. */
@@ -237,7 +235,7 @@ function ofTime(x: Compiled, width: number, f: (t: MysqlTime) => number | bigint
 /** UNIX_TIMESTAMP's seconds for a UTC datetime; 0 outside 1970-01-01 00:00:00 … 3001-01-18 23:59:59. */
 function epochSeconds(v: MysqlDateTime): { readonly seconds: bigint; readonly microsecond: number } {
   if (v.month === 0 || v.day === 0) return { seconds: 0n, microsecond: 0 }
-  const seconds = (datetimeMicros({ ...v, microsecond: 0 }) - datetimeMicros({ year: 1970, month: 1, day: 1, hour: 0, minute: 0, second: 0, microsecond: 0 })) / 1_000_000n
+  const seconds = (datetimeMicros({ ...v, microsecond: 0 }) - UNIX_EPOCH) / 1_000_000n
   if (seconds < 0n || seconds > MYTIME_MAX_VALUE) return { seconds: 0n, microsecond: 0 }
   return { seconds, microsecond: v.microsecond }
 }
@@ -534,7 +532,7 @@ export function temporalTextFunction(name: string, e: CallNode, ctx: CompileCont
         const seconds = d.v / unit
         if (seconds > MYTIME_MAX_VALUE) return null
         const us = fsp === 0 ? 0n : ((d.v % unit) * 1_000_000n + unit / 2n) / unit
-        const out = microsToDatetime(datetimeMicros({ year: 1970, month: 1, day: 1, hour: 0, minute: 0, second: 0, microsecond: 0 }) + seconds * 1_000_000n + us)
+        const out = microsToDatetime(UNIX_EPOCH + seconds * 1_000_000n + us)
         if (out === undefined) return null
         return roundDatetime(out, fsp) ?? null
       }
@@ -595,9 +593,8 @@ export function temporalTextFunction(name: string, e: CallNode, ctx: CompileCont
           const d = read(r, env)
           if (d === null) return null
           const utc = datetimeMicros(d) - BigInt(a) * 1_000_000n
-          const epoch = datetimeMicros({ year: 1970, month: 1, day: 1, hour: 0, minute: 0, second: 0, microsecond: 0 })
           // Outside TIMESTAMP's range the value is returned as it was.
-          if (utc < epoch + 1_000_000n || utc > epoch + MYTIME_MAX_VALUE * 1_000_000n) return datetimeValue(roundDatetime(d, fsp) ?? d, fsp)
+          if (utc < UNIX_EPOCH + 1_000_000n || utc > UNIX_EPOCH + MYTIME_MAX_VALUE * 1_000_000n) return datetimeValue(roundDatetime(d, fsp) ?? d, fsp)
           const out = microsToDatetime(utc + BigInt(b) * 1_000_000n)
           return out === undefined ? null : datetimeValue(roundDatetime(out, fsp) ?? out, fsp)
         },

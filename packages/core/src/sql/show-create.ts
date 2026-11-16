@@ -19,11 +19,11 @@
 //   - The table's COLLATE appears unless it is its character set's primary
 //     collation, and always for utf8mb4_0900_ai_ci. AUTO_INCREMENT appears
 //     when the table has such a column and its counter is past 1.
-import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { CHARSET_UTF8MB4_0900_AI_CI } from '@myjs/protocol'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, Table, TableDef } from '@myjs/engine'
-import { NODE, parseExpression, type Expression, quoteName } from '@myjs/parser'
+import { NODE, parseExpression, quoteName } from '@myjs/parser'
 import { checkClause, checksOf } from './checks.ts'
 import { foreignKeysOf, referenceText } from './foreign-keys.ts'
 import { fulltextOf } from './fulltext.ts'
@@ -31,6 +31,7 @@ import { isTemporary } from './temporary.ts'
 import { generationOf, printGeneration } from './generated.ts'
 import { columnDefault, generatedDefault, tableCollation, typeFacts } from './information-schema.ts'
 import { printTableExpression } from './print.ts'
+import { proof } from './errors.ts'
 import type { Run } from './query.ts'
 
 /** sql_show.cc's append_unescaped: NUL, newline, CR and backslash escaped, a quote doubled. */
@@ -53,13 +54,8 @@ function defaultClause(run: Run, c: ColumnDef): string {
   }
   const generated = generatedDefault(text)
   if (generated !== undefined) return ` DEFAULT ${generated}`
-  let e: Expression
-  try {
-    e = parseExpression(text)
-  } catch (e) {
-    expectTyped(e)
-    return ` DEFAULT ${quoted(text)}`
-  }
+  const e = proof(() => parseExpression(text))
+  if (e === undefined) return ` DEFAULT ${quoted(text)}`
   const literal = e.kind === NODE.LITERAL || (e.kind === NODE.UNARY && e.op === '-' && e.operand.kind === NODE.LITERAL)
   if (literal && c.attributes?.['defaultExpression'] !== true) {
     if (e.kind === NODE.LITERAL && e.type === 'null') return ' DEFAULT NULL'
@@ -69,12 +65,7 @@ function defaultClause(run: Run, c: ColumnDef): string {
     return ` DEFAULT ${quoted(stored)}`
   }
   const charset = requireCollationInfo(run.env.session.characterSet).charset
-  try {
-    return ` DEFAULT (${printTableExpression(e, charset, text)})`
-  } catch (e) {
-    expectTyped(e)
-    return ` DEFAULT (${text})`
-  }
+  return ` DEFAULT (${proof(() => printTableExpression(e, charset, text)) ?? text})`
 }
 
 export function columnLine(run: Run, def: TableDef, c: ColumnDef): string {

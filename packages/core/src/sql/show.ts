@@ -11,7 +11,7 @@
 // server's cache of them (`cardinalities` in stats.ts, M5.45).
 import { requireSchema } from './scope.ts'
 import { and } from './ast.ts'
-import { expectTyped } from '@myjs/bytes'
+import { proof } from './errors.ts'
 import { parseStatement, type Expression, type QueryExpression, type ShowNode, type TableName, quoteName } from '@myjs/parser'
 import type { ColumnDefinition } from '@myjs/protocol'
 import type { TableDef, ViewDef } from '@myjs/engine'
@@ -145,29 +145,27 @@ export function shownColumns(node: ShowNode, names: readonly string[], resultsCo
  * view's columns as a table's would be (8.4.11 prints `select v.id AS id …
  * from v` for a view over a view).
  */
-export function printableSources(catalog: CatalogApi): (schema: string, name: string) => TableDef | undefined {
+function printableSources(catalog: CatalogApi): (schema: string, name: string) => TableDef | undefined {
   return (schema, name) => {
     const view = catalog.view(schema, name)
     if (view !== undefined) return { schema, name, columns: (view.columns ?? []).map((c) => ({ name: c })) } as unknown as TableDef
-    try {
-      return catalog.definition(schema, name)
-    } catch (e) {
-      expectTyped(e)
-      return undefined
-    }
+    return proof(() => catalog.definition(schema, name))
   }
+}
+
+/** Bind the original view and render its select list for either catalog view. */
+export function printedView(run: Run, view: ViewDef, catalog = run.catalog, current?: string | null) {
+  return proof(() => {
+    const { query, plan } = planViewQuery(run, view)
+    const tables = catalog === undefined ? () => undefined : printableSources(catalog)
+    return { query, text: viewDefinition(query, plan.columns.map((c) => c.name), view.database ?? view.schema, tables, view.query, current) }
+  })
 }
 
 /** SHOW CREATE VIEW's statement: the view as 8.4.11 writes it back, names in the current database unqualified. */
 export function showCreateView(run: Run, catalog: CatalogApi, view: ViewDef): string {
   const current = run.env.session.database
-  let text: string | undefined
-  try {
-    const { query, plan } = planViewQuery(run, view)
-    text = viewDefinition(query, plan.columns.map((c) => c.name), view.database ?? view.schema, printableSources(catalog), view.query, current)
-  } catch (e) {
-    expectTyped(e)
-  }
+  const text = printedView(run, view, catalog, current)?.text
   const q = quoteName
   const [user, host] = (view.definer ?? 'root@%').split('@') as [string, string | undefined]
   const name = view.schema === current ? q(view.name) : `${q(view.schema)}.${q(view.name)}`

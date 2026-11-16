@@ -21,8 +21,8 @@
 // text, a default as the column stores it (`'0.00'` for DECIMAL(10,2)),
 // EXTRA's `DEFAULT_GENERATED on update CURRENT_TIMESTAMP(3)`, COLUMN_KEY from
 // the same key flags a column's metadata carries.
-import { notSupported } from './errors.ts'
-import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
+import { notSupported, proof } from './errors.ts'
+import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { collationInfoByName, requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, TableDef, ViewDef } from '@myjs/engine'
 import { parseExpression, type TableName } from '@myjs/parser'
@@ -30,7 +30,7 @@ import { dateToMysql, sqlError } from '@myjs/protocol'
 import { COERCIBILITY, decodeField, encodeField, intValue, stringValue, toText, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE } from './compile.ts'
 import type { DerivedSource } from './from.ts'
-import { printableSources } from './show.ts'
+import { printedView } from './show.ts'
 import { cardinalities } from './stats.ts'
 import { fulltextOf } from './fulltext.ts'
 import { checkClause, checksOf } from './checks.ts'
@@ -38,7 +38,7 @@ import { foreignKeysOf } from './foreign-keys.ts'
 import { INFORMATION_SCHEMA, type InformationSchemaColumn } from './information-schema-defs.ts'
 import { datetimeType, intType, keyFlags, NULL_TYPE, stringType, type ResultType } from './meta.ts'
 import { planViewQuery, type Run } from './query.ts'
-import { viewDefinition, viewUpdatable } from './view-text.ts'
+import { viewUpdatable } from './view-text.ts'
 import { generationOf, printGeneration } from './generated.ts'
 
 const COLUMN_FLAG = { PRI_KEY: 2, UNIQUE_KEY: 4, MULTIPLE_KEY: 8 } as const
@@ -246,16 +246,14 @@ export function columnDefault(run: Run, column: ColumnDef): string | null {
   if (typeof text !== 'string') return null
   const generated = generatedDefault(text)
   if (generated !== undefined) return generated
-  try {
+  const rendered = proof(() => {
     const v = compile(parseExpression(text), { scope: EMPTY_SCOPE, clause: 'default', connectionCollation: run.env.session.characterSet, session: run.env.session, state: run.state, serverVersion: run.serverVersion }).eval([], run.env)
     if (v === null) return null
     const field = encodeField(v, column, { strict: false, row: 1, warnings: 0 })
     const stored = decodeField(field, column.type)
     return stored === null ? null : toText(stored)
-  } catch (e) {
-    expectTyped(e)
-    return text
-  }
+  })
+  return rendered === undefined ? text : rendered
 }
 
 function extraOf(column: ColumnDef): string {
@@ -404,13 +402,8 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
         objects.push({
           name: v.name,
           rows: function* () {
-            let planned
-            try {
-              planned = planViewQuery(run, v).plan
-            } catch (e) {
-              expectTyped(e)
-              return
-            }
+            const planned = proof(() => planViewQuery(run, v).plan)
+            if (planned === undefined) return
             const rows = planned.columns.map((c, i) => {
               const base = baseColumn(run, c.type)
               const column: ColumnDef = { ...(base ?? synthesized(c.type)), name: v.columns?.[i] ?? c.name, nullable: c.type.nullable }
@@ -492,18 +485,10 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
   *VIEWS(run) {
     for (const schema of schemaNames(run)) {
       for (const v of viewsOf(run, schema)) {
-        let text: string | undefined
-        let updatable = false
-        try {
-          const { query, plan } = planViewQuery(run, v)
-          // The select list keeps its own names: a column list renames the view's columns, not them (8.4.11).
-          text = viewDefinition(query, plan.columns.map((c) => c.name), v.database ?? v.schema, run.catalog === undefined ? () => undefined : printableSources(run.catalog), v.query)
-          updatable = viewUpdatable(query)
-        } catch (e) {
-          expectTyped(e)
-        }
+        const printed = printedView(run, v)
+        const updatable = printed !== undefined && viewUpdatable(printed.query)
         const collation = v.collationConnection ?? 255
-        yield [s('def'), s(schema), s(v.name), s(text ?? v.query), s(v.checkOption ?? 'NONE'), s(updatable ? 'YES' : 'NO'), s(v.definer ?? 'root@%'), s(v.security ?? 'DEFINER'), s(charsetName(collation)), s(collationName(collation))]
+        yield [s('def'), s(schema), s(v.name), s(printed?.text ?? v.query), s(v.checkOption ?? 'NONE'), s(updatable ? 'YES' : 'NO'), s(v.definer ?? 'root@%'), s(v.security ?? 'DEFINER'), s(charsetName(collation)), s(collationName(collation))]
       }
     }
   },

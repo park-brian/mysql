@@ -9,13 +9,25 @@
 import { deparse, type CallNode } from '@myjs/parser'
 import { doubleValue, intValue, toDouble, valueOutOfRange } from '@myjs/types'
 import { asNumber, compile, raise, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
-import { doubleType, intType, type ResultType } from './meta.ts'
+import { doubleType, intType } from './meta.ts'
 import { nativeArity, unregistered } from './registry.ts'
 import { intReader } from './string-functions.ts'
 
+const UNARY = {
+  SQRT: (x: number) => x < 0 ? null : Math.sqrt(x),
+  EXP: Math.exp,
+  SIN: Math.sin,
+  COS: Math.cos,
+  TAN: Math.tan,
+  ASIN: (x: number) => x < -1 || x > 1 ? null : Math.asin(x),
+  ACOS: (x: number) => x < -1 || x > 1 ? null : Math.acos(x),
+  COT: (x: number) => 1 / Math.tan(x),
+}
+const LOGARITHMS = { LN: Math.log, LOG2: Math.log2, LOG10: Math.log10 }
+
 export const MATH_FUNCTIONS: ReadonlySet<string> = new Set([
-  'PI', 'BIT_COUNT', 'SQRT', 'EXP', 'LN', 'LOG2', 'LOG10', 'LOG', 'SIN', 'COS', 'TAN', 'ASIN',
-  'ACOS', 'COT', 'DEGREES', 'RADIANS', 'ATAN', 'ATAN2', 'POW', 'POWER',
+  ...Object.keys(UNARY), ...Object.keys(LOGARITHMS),
+  'PI', 'BIT_COUNT', 'LOG', 'DEGREES', 'RADIANS', 'ATAN', 'ATAN2', 'POW', 'POWER',
 ])
 
 /** A double argument read with its 1292. */
@@ -27,11 +39,15 @@ function doubleReader(c: Compiled): (r: Row, env: Env) => number | null {
   }
 }
 
+function invalidLogarithm(env: Env): null {
+  raise(env, 3020, 'Invalid argument for logarithm')
+  return null
+}
+
 export function mathFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
   const xs = e.args.map((a) => compile(a, ctx))
   const label = deparse(e)
   const arity = nativeArity(e.name, xs.length)
-  const dbl = (nullable = true): ResultType => doubleType(nullable, 23)
   switch (name) {
     case 'PI':
       arity(0)
@@ -56,54 +72,30 @@ export function mathFunction(name: string, e: CallNode, ctx: CompileContext): Co
     }
   }
 
-  // The numeric functions of doubles.
-  const one = (f: (x: number) => number | null, nullable = true): Compiled => {
+  const checkedDouble = (out: number) => {
+    if (!Number.isFinite(out)) throw valueOutOfRange('DOUBLE', label)
+    return doubleValue(out)
+  }
+  // The numeric functions of doubles. Logarithms own their domain diagnostics.
+  const one = (f: (x: number, env: Env) => number | null, nullable = true, checked = true): Compiled => {
     arity(1)
     const x = doubleReader(xs[0] as Compiled)
     return {
       eval: (r, env) => {
         const v = x(r, env)
         if (v === null) return null
-        const out = f(v)
+        const out = f(v, env)
         if (out === null) return null
-        if (!Number.isFinite(out)) throw valueOutOfRange('DOUBLE', label)
-        return doubleValue(out)
+        return checked ? checkedDouble(out) : doubleValue(out)
       },
-      type: dbl(nullable),
+      type: doubleType(nullable),
     }
   }
-  const logOf = (f: (x: number) => number) => (env: Env, x: number): number | null => {
-    if (x <= 0) {
-      raise(env, 3020, 'Invalid argument for logarithm')
-      return null
-    }
-    return f(x)
-  }
-  const logged = (f: (x: number) => number): Compiled => {
-    arity(1)
-    const x = doubleReader(xs[0] as Compiled)
-    const g = logOf(f)
-    return {
-      eval: (r, env) => {
-        const v = x(r, env)
-        if (v === null) return null
-        const out = g(env, v)
-        return out === null ? null : doubleValue(out)
-      },
-      type: dbl(),
-    }
-  }
+  const logged = (f: (x: number) => number): Compiled =>
+    one((x, env) => x <= 0 ? invalidLogarithm(env) : f(x), true, false)
+  if (Object.hasOwn(UNARY, name)) return one(UNARY[name as keyof typeof UNARY])
+  if (Object.hasOwn(LOGARITHMS, name)) return logged(LOGARITHMS[name as keyof typeof LOGARITHMS])
   switch (name) {
-    case 'SQRT':
-      return one((x) => (x < 0 ? null : Math.sqrt(x)))
-    case 'EXP':
-      return one(Math.exp)
-    case 'LN':
-      return logged(Math.log)
-    case 'LOG2':
-      return logged(Math.log2)
-    case 'LOG10':
-      return logged(Math.log10)
     case 'LOG': {
       if (xs.length === 1) return logged(Math.log)
       arity(2)
@@ -114,33 +106,15 @@ export function mathFunction(name: string, e: CallNode, ctx: CompileContext): Co
           // The base is read and judged before the value is read (`Item_func_log::val_real`).
           const base = b(r, env)
           if (base === null) return null
-          if (base <= 0) {
-            raise(env, 3020, 'Invalid argument for logarithm')
-            return null
-          }
+          if (base <= 0) return invalidLogarithm(env)
           const v = x(r, env)
           if (v === null) return null
-          if (v <= 0 || base === 1) {
-            raise(env, 3020, 'Invalid argument for logarithm')
-            return null
-          }
+          if (v <= 0 || base === 1) return invalidLogarithm(env)
           return doubleValue(Math.log(v) / Math.log(base))
         },
-        type: dbl(),
+        type: doubleType(true),
       }
     }
-    case 'SIN':
-      return one(Math.sin)
-    case 'COS':
-      return one(Math.cos)
-    case 'TAN':
-      return one(Math.tan)
-    case 'ASIN':
-      return one((x) => (x < -1 || x > 1 ? null : Math.asin(x)))
-    case 'ACOS':
-      return one((x) => (x < -1 || x > 1 ? null : Math.acos(x)))
-    case 'COT':
-      return one((x) => 1 / Math.tan(x))
     case 'DEGREES':
       return one((x) => (x * 180) / Math.PI, (xs[0] as Compiled).type.nullable)
     case 'RADIANS':
@@ -162,11 +136,9 @@ export function mathFunction(name: string, e: CallNode, ctx: CompileContext): Co
           if (x === null && !pow) return null
           const y = b(r, env)
           if (x === null || y === null) return null
-          const out = pow ? Math.pow(x, y) : Math.atan2(x, y)
-          if (!Number.isFinite(out)) throw valueOutOfRange('DOUBLE', label)
-          return doubleValue(out)
+          return checkedDouble(pow ? Math.pow(x, y) : Math.atan2(x, y))
         },
-        type: dbl(),
+        type: doubleType(true),
       }
     }
   }

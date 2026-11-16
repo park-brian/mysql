@@ -20,7 +20,8 @@
 // that is not an array treats it as a one-element array (`$[0]` of a scalar
 // is the scalar), where `[*]` matches nothing; `**` is the value and every
 // value below it, each match reported once, in document order.
-import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
+import { FIELD_TYPE } from '@myjs/bytes'
+import { proof } from './errors.ts'
 import { sqlError, utf8 } from '@myjs/protocol'
 import { utf8StrictDecoder } from '../transcoder.ts'
 import {
@@ -96,13 +97,8 @@ function jsonString(bytes: Uint8Array): string | undefined {
   } catch {
     return undefined
   }
-  try {
-    const doc = parseJson(text)
-    return doc.t === 'string' ? doc.v : undefined
-  } catch (e) {
-    expectTyped(e)
-    return undefined
-  }
+  const doc = proof(() => parseJson(text))
+  return doc?.t === 'string' ? doc.v : undefined
 }
 
 /** A path, or ER_INVALID_JSON_PATH naming where it went wrong. */

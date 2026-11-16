@@ -12,7 +12,7 @@
 import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type IndexHint, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, PreparedStatement, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
-import { MAX_UNSIGNED, MIN_SIGNED, intValue, integerRange, numericPrefix, roundedIntegerText, storageWidth, terminalIntegerValue, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
+import { MAX_UNSIGNED, MIN_SIGNED, extremeAccumulator, intValue, integerRange, numericPrefix, roundedIntegerText, storageWidth, terminalIntegerValue, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
 import { appendConditions, compile, constantNode, isComparison, literalPredicate, membershipReader, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, textBesideColumn, withOuterRow, writtenFalse, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
@@ -31,7 +31,7 @@ import { dependentMembershipAccess } from './cost.ts'
 import { firstKey, rowKey, valueKey } from './keys.ts'
 import { coveringScan, filterNode, filterPlan, indexLookup, lookupMaterialized, materialize, planNode, tableScan, tableScanLabel, wrap, type PlanNode } from './explain.ts'
 import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts'
-import { convert as convertSetValue, checkSetWidth, nestedNullability, setOperation, setOperationType } from './setop.ts'
+import { checkSetWidth, convertSetRow, nestedNullability, setOperation, setOperationType } from './setop.ts'
 import { constTablesHaveRows, neverEqual, optimizerFacts, plannedTruth, rejectsNullExtension, uniqueKey, type OptimizerFacts } from './optimize.ts'
 import { informationSchemaTable } from './information-schema.ts'
 import { performanceSchemaTable } from './performance-schema.ts'
@@ -401,9 +401,9 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   // The parser normalizes unquoted DUAL; every retained reference names a table.
   const refs = node.from ?? []
   const on = !grouped && (pending || run.preparing === 'wire') ? joinConditions(q, node, pending) : undefined
-  const only = refs.length === 1 ? refs[0] : undefined
+  const only = singleTableRef(node)
   let hintScope: IndexHint['for']
-  if (hints !== undefined && only?.kind === REF.TABLE && only.indexHints !== undefined && !node.distinct && !node.having &&
+  if (hints !== undefined && only?.indexHints !== undefined && !node.distinct && !node.having &&
       q.locking === undefined && !containsWindow(node.items) &&
       !someNode([node.items, node.where, q.orderBy], (n) => (n as Expression).kind === NODE.MATCH || undefined)) {
     if (q.orderBy !== undefined) {
@@ -459,7 +459,9 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   const [limitCount, offset] = queryLimit(run, q)
   const checkedOutput = anti?.kind === 'correlated' && checkedCorrelatedOutput(node, q, source, items, boundedSubquery(anti.query))
   let checkedWhere = false
-  let whereCtx = compileContext(run, lookup, 'where clause', undefined, semijoin ? undefined : (bound) => {
+  let whereCtx = compileContext(run, lookup, 'where clause', undefined, (bound) => {
+    if (!bound.correlated) return orderedAny(source, node.where, bound)
+    if (semijoin) return bound
     const finalized = dependentReader(run, q, node, from, items, bound)
     if (finalized !== bound) checkedWhere = bound.checkRead !== undefined
     return finalized
@@ -1012,10 +1014,14 @@ function filteredNotIn(run: Run, { def, alias }: NonNullable<FromPlan['single']>
   if (predicate.kind !== NODE.BINARY) return undefined
   const disjunction = logicalShortCircuit(predicate.op) === true
   const residual = disjunction ? predicate.left : predicate
-  if (disjunction && (predicate.right.kind !== NODE.UNARY || predicate.right.op !== 'IS NOT NULL' || tableColumn(predicate.right.operand, def, alias) !== key)) return undefined
+  if (disjunction && !checksNotNull(predicate.right, def, alias, key)) return undefined
   if (residual.kind !== NODE.BINARY || !isOrderedComparison(residual.op) || !textBesideColumn(residual.left, residual.right) ||
     !sessionVarchar(tableColumn(residual.left, def, alias), run)) return undefined
   return disjunction
+}
+
+function checksNotNull(e: Expression, def: TableDef, alias: string, key: ColumnDef): boolean {
+  return e.kind === NODE.UNARY && e.op === 'IS NOT NULL' && tableColumn(e.operand, def, alias) === key
 }
 
 /** The single-table NOT IN alternatives measured against the native cost trace. */
@@ -1072,10 +1078,39 @@ function boundedSubquery(q: QueryExpression): BaseSubquery | undefined {
   return q.limit === undefined && q.orderBy === undefined && body.kind === QUERY.SELECT && body.items.length === 1 && plainBase(q, body) ? body as BaseSubquery : undefined
 }
 
+/** The whole WHERE predicate can use MIN/MAX because neither FALSE nor UNKNOWN passes it. */
+function orderedAny(outer: FromPlan['single'], where: Expression | undefined, bound: BoundSubquery): BoundSubquery {
+  if (outer === undefined || where?.kind !== NODE.BINARY || !isOrderedComparison(where.op) ||
+    where.right.kind !== NODE.SUBQUERY || where.right.quantifier !== 'ANY' || where.right.query !== bound.query ||
+    tableColumn(where.left, outer.def, outer.alias)?.type.type !== FIELD_TYPE.LONG) return bound
+  const inner = bound.plan.source
+  const body = boundedSubquery(bound.query)
+  if (inner === undefined || body === undefined) return bound
+  const column = tableColumn(body.items[0].expr, inner.def, inner.alias)
+  if (column?.type.type !== FIELD_TYPE.LONG) return bound
+  const name = column.name.toLowerCase()
+  if (inner.def.indexes.some((i) => indexPartMatchesColumn(i.parts[0], name))) return bound
+  const predicate = body.where
+  if (predicate && !checksNotNull(predicate, inner.def, inner.alias, column)) return bound
+
+  const original = bound.plan
+  const max = where.op[0] === '<'
+  return wrapBoundReader(bound, 'Aggregate', (trx, env, ready) => {
+    const accumulator = extremeAccumulator(max)
+    for (const [v] of original.rows(trx, env, ready)) if (v != null) accumulator.add(v)
+    return [[accumulator.result()]]
+  })
+}
+
+function singleTableRef(node: SelectNode) {
+  const table = node.from?.[0]
+  return node.from?.length === 1 && table?.kind === REF.TABLE ? table : undefined
+}
+
 /** The unhinted single base-table shape shared by outer and inner join proofs. */
 function unhintedBase(q: QueryExpression, node: SelectNode) {
-  const table = node.from?.[0]
-  return node.from?.length === 1 && table?.kind === REF.TABLE && table.indexHints === undefined && unhintedSelect(q, node) ? table : undefined
+  const table = singleTableRef(node)
+  return table && table.indexHints === undefined && unhintedSelect(q, node) ? table : undefined
 }
 
 function unhintedSelect(q: QueryExpression, node: SelectNode): boolean {
@@ -1106,7 +1141,7 @@ function checkedCorrelatedOutput(node: SelectNode, q: QueryExpression, source: F
 
 /** A closed dependent cohort keeps its original binding and filters before the outer sort. */
 function dependentReader(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan | undefined, items: readonly { readonly expr: Expression; readonly alias?: string; readonly compiled: Compiled }[], bound: BoundSubquery): BoundSubquery {
-  if (from?.single === undefined || !bound.correlated || run.preparing || q.locking !== undefined || node.distinct === true || node.having !== undefined) return bound
+  if (from?.single === undefined || run.preparing || q.locking !== undefined || node.distinct === true || node.having !== undefined) return bound
   const outer = joinOuter(run, q, node, from)
   const where = node.where
   const query = existsSubquery(where) ?? negativeExistsSubquery(where)
@@ -1125,7 +1160,7 @@ function dependentReader(run: Run, q: QueryExpression, node: SelectNode, from: F
   if (column === undefined || !exactInteger(key) || !exactInteger({ type: columnResultType(inner.def, column, inner.alias) })) return bound
   if (column.name !== column.name.toLowerCase() || !inner.def.indexes.some((index) => singleRefIndex(index) && forwardKeyPart(index)?.column === column.name)) return bound
   const original = bound.plan
-  const rows: SelectPlan['rows'] = (trx, given, ready) => {
+  return wrapBoundReader(bound, 'Limit: 1 row(s)', (trx, given, ready) => {
     const env = executionEnv(run, trx, given)
     const outer = env.outer?.[0]
     if (bound.checkRead !== undefined && outer !== undefined && key.eval(outer, env) === null) {
@@ -1134,16 +1169,7 @@ function dependentReader(run: Run, q: QueryExpression, node: SelectNode, from: F
       return []
     }
     return limit(original.rows(trx, env, ready), 0, 1)
-  }
-  const plan: SelectPlan = {
-    ...original,
-    rows,
-    explain() {
-      const roots = original.explain?.()
-      return roots === undefined ? undefined : [planNode('Limit: 1 row(s)', roots)]
-    },
-  }
-  return { ...bound, get correlated() { return bound.correlated }, plan, rows: (env) => plan.rows(env.trx, env) }
+  })
 }
 
 type QualifiedColumn = Extract<Expression, { kind: typeof NODE.COLUMN }> & { readonly parts: readonly [string, string] }
@@ -1442,8 +1468,8 @@ function semijoinEmpty(run: Run, where: Expression | undefined): boolean {
 function emptySubquery(run: Run, query: QueryExpression): boolean {
   const body = query.body
   if (body.kind !== QUERY.SELECT || body.where === undefined || body.groupBy !== undefined || body.having !== undefined || query.limit !== undefined) return false
-  const ref = body.from?.length === 1 ? body.from[0] : undefined
-  if (ref?.kind !== REF.TABLE) return false
+  const ref = singleTableRef(body)
+  if (ref === undefined) return false
   const alias = tableAlias(ref)
   const def = definitionForProof(run, ref.table)
   if (def === undefined) return false
@@ -1547,10 +1573,10 @@ function nestedLoopSemijoin(where: Expression | undefined, scope: TableScope): b
   if (subqueries.length === 0 || (where?.kind === NODE.BINARY && where.op === 'IN')) return false
   return subqueries.every((q) => {
     const body = q.body
-    if (body.kind !== QUERY.SELECT || (body.from ?? []).length !== 1) return false
-    const ref = body.from?.[0]
+    if (body.kind !== QUERY.SELECT) return false
+    const ref = singleTableRef(body)
     const w = body.where
-    if (ref === undefined || ref.kind !== REF.TABLE || w === undefined || w.kind !== NODE.BINARY || w.op !== '=') return false
+    if (ref === undefined || w?.kind !== NODE.BINARY || w.op !== '=') return false
     const innerAlias = tableAlias(ref)
     return operandPairs(w).some(([inner, outer]) => {
       if (inner.kind !== NODE.COLUMN || inner.parts.at(-2) !== innerAlias || outer.kind !== NODE.COLUMN) return false
@@ -1693,6 +1719,16 @@ interface BoundSubquery extends SubqueryPlan {
   readonly clause: string
   readonly query: QueryExpression
   readonly plan: SelectPlan
+}
+
+/** Keep the original binding while both access and EXPLAIN add the same iterator. */
+function wrapBoundReader(bound: BoundSubquery, label: string, rows: SelectPlan['rows']): BoundSubquery {
+  const original = bound.plan
+  const plan: SelectPlan = { ...original, rows, explain() {
+    const roots = original.explain?.()
+    return roots && [planNode(label, roots)]
+  } }
+  return { ...bound, get correlated() { return bound.correlated }, plan, rows: (env) => plan.rows(env.trx, env) }
 }
 
 /**
@@ -1956,7 +1992,7 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
         const out: Value[][] = []
         for (const r of rows) {
           if (all.length + out.length >= enough) break
-          const row = r.map((v, i) => convertSetValue(v, types[i] as ResultType))
+          const row = convertSetRow(r, types)
           if (distinctRows) {
             const k = rowKey(row)
             if (!firstKey(seen, k)) continue
@@ -2029,7 +2065,7 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: { readonly 
       const rows = op.rows(() => left.rows(trx, env), () => right.rows(trx, env), types)
       if (parent !== undefined) return rows
       return (function* () {
-        for (const r of rows) yield r.map((v, i) => convertSetValue(v, types[i] as ResultType))
+        for (const r of rows) yield convertSetRow(r, types)
       })()
     },
   }
@@ -2097,7 +2133,7 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan, holder?: 
       // A nested set sorts the enclosing holder's stored values, not raw items.
       const stored = holder === undefined ? rows : (function* () {
         const types = holder()
-        for (const row of rows) yield row.map((v, i) => convertSetValue(v, types[i] as ResultType))
+        for (const row of rows) yield convertSetRow(row, types)
       })()
       return values(runStages(rowed(stored), stages, env))
     },

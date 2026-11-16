@@ -9,7 +9,7 @@
 // them by the column's field type, so a value is first brought to that type.
 import { FIELD_TYPE } from '@myjs/bytes'
 import type { RowValue, Session } from '@myjs/protocol'
-import { renderDateTime, renderDecimal, renderDouble, renderFloat, renderTime, toDecimal, toDouble, toInteger, toText, type Value } from '@myjs/types'
+import { renderDecimal, renderDouble, renderFloat, toDecimal, toDouble, toInteger, toText, type Value } from '@myjs/types'
 import type { ResultType } from './meta.ts'
 
 /** latin1_swedish_ci, `my_charset_numeric`'s collation: the charset a number's text is in. */
@@ -29,18 +29,9 @@ function textOf(v: Exclude<Value, null>, t: ResultType): string {
   }
   // A YEAR column is four digits, zero too; YEAR()'s result is a number (8.4.11: `0000`, and `YEAR('0000-00-00')` is 0).
   if (t.field === FIELD_TYPE.YEAR && t.column !== undefined && v.kind === 'int') return v.v.toString().padStart(4, '0')
-  switch (v.kind) {
-    case 'double':
-      return t.field === FIELD_TYPE.FLOAT ? renderFloat(Math.fround(v.v)) : renderDouble(v.v)
-    case 'decimal':
-      return renderDecimal(v)
-    case 'datetime':
-      return renderDateTime(v.v, v.type, t.kind === 'datetime' ? t.scale : v.fsp)
-    case 'time':
-      return renderTime(v.v, t.kind === 'time' ? t.scale : v.fsp)
-    default:
-      return toText(v)
-  }
+  if (v.kind === 'double') return t.field === FIELD_TYPE.FLOAT ? renderFloat(Math.fround(v.v)) : renderDouble(v.v)
+  if ((v.kind === 'time' || v.kind === 'datetime') && t.kind === v.kind && t.scale !== v.fsp) return toText({ ...v, fsp: t.scale })
+  return toText(v)
 }
 
 /** One value for one column, ready for `textRowPacket` or `binaryRowPacket`. */

@@ -28,7 +28,7 @@
 //     `Item_func_int_val` give it; anything else is a DOUBLE. A double rounds
 //     half to even, as `rint` does; an integer or a decimal half away from zero.
 //   - GREATEST and LEAST take the type CASE would, and compare in it.
-import { notSupported } from './errors.ts'
+import { notSupported, proof } from './errors.ts'
 import { CHARSET_BINARY, expectTyped, equalBytes } from '@myjs/bytes'
 import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
@@ -98,7 +98,7 @@ const INT_MIN32 = -2147483648n
 /** A constant argument's integer value: `null` for a constant NULL, `undefined` for an argument that is not constant. */
 function constantInt(c: Compiled | undefined, constant: boolean, ctx: CompileContext, warn = true): bigint | null | undefined {
   if (c === undefined || !constant) return undefined
-  try {
+  return proof(() => {
     // Resolving reads the constant once, and warns once for it, as
     // `resolve_type`'s `val_int` does: `LEFT('abc', 'z')` warns twice (8.4.11).
     // Without the parameters, as before (a bound `?` reads NULL here); the session
@@ -106,10 +106,7 @@ function constantInt(c: Compiled | undefined, constant: boolean, ctx: CompileCon
     const env = { ...constantEnv(ctx), params: [] }
     const v = c.eval([], warn && ctx.conditions !== undefined ? { ...env, conditions: ctx.conditions } : env)
     return v === null ? null : valInt(v)
-  } catch (e) {
-    expectTyped(e)
-    return undefined
-  }
+  })
 }
 
 /** Read code points, or one Latin-1 code unit per byte for a binary result. */
@@ -689,12 +686,11 @@ function temporalPrecision(xs: readonly Compiled[], constant: readonly boolean[]
     if (x.type.literalInt !== undefined) precision = 0
     else if (textual && x.type.column !== undefined) precision = 6
     if (constant[i] === true && textual) {
-      try {
+      const inferred = proof(() => {
         const v = x.eval([], constantEnv(ctx))
-        if (v !== null) precision = (kind === 'TIME' ? parseTime(toText(v)) : toDateTime(v, 'DATETIME'))?.fsp ?? precision
-      } catch (e) {
-        expectTyped(e)
-      }
+        if (v !== null) return (kind === 'TIME' ? parseTime(toText(v)) : toDateTime(v, 'DATETIME'))?.fsp
+      })
+      precision = inferred ?? precision
     }
     fsp = Math.max(fsp, precision)
   }
@@ -1020,13 +1016,11 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
       // A constant number inserted is as wide as its text, sign and all (8.4.11: INSERT('', 1, 1, 123) is 3 wide, -4.5 is 4).
       let insertedWidth = widthOf(sub.type, binary)
       if (!binary && (sub.type.kind === 'int' || sub.type.kind === 'decimal') && constant[3] === true) {
-        try {
+        // A constant that cannot be read now is read when the row is.
+        insertedWidth = proof(() => {
           const v = sub.eval([], constantEnv(ctx))
-          if (v !== null) insertedWidth = toText(v).length
-        } catch (e) {
-          expectTyped(e)
-          // A constant that cannot be read now is read when the row is.
-        }
+          if (v !== null) return toText(v).length
+        }) ?? insertedWidth
       }
       const pos = intReader(posC)
       const len = intReader(lenC)

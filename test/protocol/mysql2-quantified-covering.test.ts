@@ -20,6 +20,56 @@ async function readDependentNotIn(conn: mysql.Connection, schema: string, field:
   }
 }
 
+test('ordered ANY and SOME reuse their bound aggregate across writes', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection(db === undefined
+    ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+    : { stream: db.createStream(), user: 'root' })
+  const schema = 'quantified_extrema'
+  const outer = 'Filter\n    Index scan on outer_t using PRIMARY\n    Select #2\n        Aggregate'
+  async function read(max: number[][], min: number[][]) {
+    for (const [predicate, expected, child] of [
+      ['qty < SOME (SELECT n FROM inner_t)', max, '\n            Table scan on inner_t'],
+      ['n > ANY (SELECT n FROM inner_t WHERE n IS NOT NULL)', min, '\n            Filter\n                Table scan on inner_t'],
+    ] as const) {
+      const sql = `SELECT id FROM outer_t WHERE ${predicate} ORDER BY id`
+      const options = { sql, rowsAsArray: true }
+      const explain = `EXPLAIN FORMAT=TREE ${sql}`
+      for (const api of ['query', 'execute'] as const) {
+        const [rows, fields] = api === 'query' ? await conn.query(options) : await conn.execute(options)
+        assert.deepEqual(rows, expected, `${predicate}/${api}`)
+        assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]),
+          [['id', 3, 11, 20483, 0, 63, schema, 'outer_t', 'outer_t', 'id']], api)
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], api)
+        const [[result]] = api === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
+        assert.equal(planSkeleton(result?.EXPLAIN), outer + child, `${predicate}/${api}`)
+      }
+    }
+  }
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE outer_t(id INT PRIMARY KEY, n INT, qty INT NOT NULL)')
+    await conn.query('CREATE TABLE inner_t(id INT PRIMARY KEY, n INT)')
+    await conn.query('INSERT INTO outer_t VALUES (1,NULL,-1),(2,0,0),(3,4,4),(4,9,10)')
+    await read([], [])
+    await conn.query('INSERT INTO inner_t VALUES (1,NULL),(2,NULL)')
+    await read([], [])
+    await conn.query('INSERT INTO inner_t VALUES (3,2),(4,8),(5,3),(6,8)')
+    await read([[1], [2], [3]], [[3], [4]])
+    await conn.query('UPDATE inner_t SET n=IF(n=2,-2,12) WHERE n IN (2,8)')
+    await conn.query("SET optimizer_switch='semijoin=off,materialization=off'")
+    await read([[1], [2], [3], [4]], [[2], [3], [4]])
+    await conn.query('DELETE FROM inner_t')
+    await read([], [])
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
 test('quantified subquery coverage distinguishes complete and prefix index parts', async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined

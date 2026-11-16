@@ -11,7 +11,7 @@
 // What is not here yet is refused by name rather than approximated: an
 // unknown function in a selected schema is ER_SP_DOES_NOT_EXIST; a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
-import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes, type MysqlTime } from '@myjs/bytes'
+import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, equalBytes, type MysqlTime } from '@myjs/bytes'
 import { logicalShortCircuit, nativeCallName, queryBody, signedOperand, someNode } from './ast.ts'
 import { notSupported, proof } from './errors.ts'
 import { resolveCollation } from './collation.ts'
@@ -131,7 +131,7 @@ import { modeOf } from './mode.ts'
 import { NOT_YET, VARIES_PER_EVALUATION, functionCompiler, invalidGroupFunction } from './registry.ts'
 import { clock, escapedBytes, hexOf } from './builtins.ts'
 import { convertTextCharset } from './string-functions.ts'
-import { settle, timeValue, zeroDateTime } from './temporal-functions.ts'
+import { dateValue, settle, timeValue, zeroDateTime } from './temporal-functions.ts'
 import { systemVariableInfo } from './variables.ts'
 
 /** One row as operators pass it: a value per column of the scope. */
@@ -236,10 +236,7 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
     eval: (r, env) => {
       const v = c.eval(r, env)
       if (v === null) return v
-      if (once !== false) {
-        if (env.memo?.has(key)) return v
-        env.memo?.set(key, true)
-      }
+      if (once !== false && !firstWarning(env, key)) return v
       const integer = integerPrefix(v)
       if (integer !== undefined) checkNumber(v, env, integer)
       return v
@@ -570,6 +567,13 @@ function byZero(at: Compiled['eval'], bt: Compiled['eval'], op: (x: Value, y: Va
 /** Records a condition in the statement's diagnostics area, for SHOW WARNINGS. */
 export function raise(env: Pick<Env, 'conditions'>, code: number, message: string, level: Condition['level'] = 'Warning'): void {
   env.conditions?.push({ level, code, message })
+}
+
+/** Claim the once-per-statement diagnostic before performing the conversion. */
+function firstWarning({ memo }: Env, key: object): boolean {
+  if (memo?.has(key)) return false
+  memo?.set(key, true)
+  return true
 }
 
 export function appendConditions(target: Condition[] | undefined, conditions: readonly Condition[]): void {
@@ -1760,7 +1764,8 @@ export function temporalOperands(left: Expression, right: Expression, a: Compile
       const v = c.eval(r, env)
       if (v === null) return null
       const year = Number(toInteger(v))
-      return { kind: 'datetime', type: 'DATE', fsp: 0, v: { year, month: year === 0 ? 0 : 1, day: year === 0 ? 0 : 1, hour: 0, minute: 0, second: 0, microsecond: 0 } }
+      const first = year === 0 ? 0 : 1
+      return dateValue({ year, month: first, day: first })
     },
   })
   if (a.type.field === FIELD_TYPE.YEAR && bk === 'datetime') return [yearDate(a), b]
@@ -1776,8 +1781,7 @@ export function temporalOperands(left: Expression, right: Expression, a: Compile
 
 function asTimeOfDay(c: Compiled, column: readonly string[], list: boolean, ctx: CompileContext): Compiled {
   const report = (v: Exclude<Value, null>, env: Env, level?: Condition['level']): void => {
-    if (env.memo?.has(self) === true) return
-    env.memo?.set(self, true)
+    if (!firstWarning(env, self)) return
     raise(env, 1292, `Incorrect time value: '${toText(v)}' for column '${column.at(-1) as string}' at row 1`, level)
   }
   const self: Compiled = {
@@ -1846,7 +1850,7 @@ export function dateConverter(c: Compiled, written: Expression, other: Compiled,
   const flags = modeOf(ctx.session.sqlMode)
   const constant = strict && constantNode(written)
   let notedAtCompile = false
-  const what = other.type.field === FIELD_TYPE.DATE || other.type.field === FIELD_TYPE.NEWDATE ? 'date' : 'datetime'
+  const what = dateKind(other.type.field)
   function invalid(v: Exclude<Value, null>, area?: Pick<Env, 'conditions'>): never {
     const text = warnedText(v)
     if (area !== undefined) truncated(area, what, text)
@@ -1888,6 +1892,9 @@ export function dateConverter(c: Compiled, written: Expression, other: Compiled,
 
 const ZERO_DATETIME = zeroDateTime()
 
+const dateKind = (field: number): 'date' | 'datetime' =>
+  field === FIELD_TYPE.DATE || field === FIELD_TYPE.NEWDATE ? 'date' : 'datetime'
+
 /**
  * `c`, a number constant compared with a DATE, DATETIME or TIMESTAMP column:
  * converted into the column's type to compare, and when it is no such value,
@@ -1897,14 +1904,13 @@ const ZERO_DATETIME = zeroDateTime()
  */
 function numberBesideDate(c: Compiled, written: Expression, other: Compiled, otherWritten: Expression, ctx: CompileContext): Compiled {
   if (other.type.kind !== 'datetime' || otherWritten.kind !== NODE.COLUMN || !isNumber(c.type) || !constantNode(written)) return c
-  const what = other.type.field === FIELD_TYPE.DATE || other.type.field === FIELD_TYPE.NEWDATE ? 'date' : 'datetime'
+  const what = dateKind(other.type.field)
   const column = otherWritten.parts[otherWritten.parts.length - 1] as string
   return resolveConstant({
     type: c.type,
     eval: (r, env) => {
       const v = c.eval(r, env)
-      if (v !== null && env.memo?.has(written) !== true) {
-        env.memo?.set(written, true)
+      if (v !== null && firstWarning(env, written)) {
         const whole = v.kind === 'double' ? (Number.isInteger(v.v) && Math.abs(v.v) < 1e15 ? BigInt(v.v) : undefined) : v.kind === 'int' ? v.v : v.kind === 'decimal' ? toInteger(v) : undefined
         if (whole === undefined || numberToDateTime(whole) === undefined) raise(env, 1292, `Incorrect ${what} value: '${toText(v)}' for column '${column}' at row 1`)
         else if (what === 'date') {
@@ -2083,13 +2089,10 @@ function searchItems(list: SortedItems, v: Exclude<Value, null>): boolean | null
     // key looked up, rather than a sort and a search that re-encode both
     // sides at every comparison (Prisma's chunks are 32,766 long).
     const index = memoValue(list.byCollation, id, () => {
-      try {
-        return new Set(list.sorted.map((x) => equalityKey((x as StringValue).v, id)))
-      } catch (e) {
-        expectTyped(e)
-        const as = (x: Exclude<Value, null>): Value => ({ ...(x as StringValue), collationId: id })
-        return [...list.sorted].sort((x, y) => compareValues(as(x), as(y)) ?? 0)
-      }
+      const set = proof(() => new Set(list.sorted.map((x) => equalityKey((x as StringValue).v, id))))
+      if (set !== undefined) return set
+      const as = (x: Exclude<Value, null>): Value => ({ ...(x as StringValue), collationId: id })
+      return [...list.sorted].sort((x, y) => compareValues(as(x), as(y)) ?? 0)
     })
     if (index instanceof Set) return index.has(equalityKey(v.v, id)) || missing
     sorted = index

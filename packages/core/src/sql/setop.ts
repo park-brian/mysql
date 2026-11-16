@@ -150,6 +150,11 @@ export function convert(v: Value, t: ResultType): Value {
   return fieldValue(v, t)
 }
 
+/** Deliver the branch's row in the enclosing operation's field types. */
+export function convertSetRow(row: readonly Value[], types: readonly ResultType[]): Value[] {
+  return row.map((value, i) => convert(value, types[i]!))
+}
+
 /**
  * A set operation over two branches' columns. Its types are folded, pairwise
  * and in order, over every SELECT beneath it, `leaves` — not over a nested
@@ -178,7 +183,7 @@ export function setOperation(node: SetOperationNode, left: Columns, right: Colum
         if (v.kind === 'int' && from.field === FIELD_TYPE.BIT && from.column !== undefined) return bytesValue(bitBytes(v.v, from.length))
         return convert(v.kind === 'int' ? plainValue(v) : v, to)
       })
-      const keyOf = (r: readonly Value[]): string => rowKey(r.map((v, i) => convert(v, types[i] as ResultType)))
+      const keyOf = (r: readonly Value[]): string => rowKey(convertSetRow(r, types))
       if (node.op === 'UNION') {
         const seen = new Set<string>()
         for (const [side, source] of [[leftRows, left], [rightRows, right]] as const) {

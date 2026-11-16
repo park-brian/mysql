@@ -14,7 +14,8 @@
 // temporal (`create_tmp_field`). The rows are then the INSERT … SELECT of
 // them, IGNORE and REPLACE included, and a statement that fails leaves no
 // table behind.
-import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
+import { proof } from './errors.ts'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { TableDef, TableSpec } from '@myjs/engine'
 import { parseStatement, type ColumnDefinition, type CreateTableNode, quoteName } from '@myjs/parser'
@@ -104,14 +105,9 @@ export function selectColumns(
   const collations = new Map<string, Collation>()
   const lines = columns.map(({ name, type }, i) => {
     const source = type.column
-    if (source !== undefined && source.orgTable !== '' && run.catalog !== undefined) {
-      let def: TableDef | undefined
-      try {
-        def = run.catalog.definition(source.schema, source.orgTable)
-      } catch (e) {
-        expectTyped(e)
-        def = undefined
-      }
+    const catalog = run.catalog
+    if (source !== undefined && source.orgTable !== '' && catalog !== undefined) {
+      const def = proof(() => catalog.definition(source.schema, source.orgTable))
       const column = def?.columns.find((c) => c.name === source.orgName)
       if (def !== undefined && column !== undefined) {
         if (column.type.collationId !== undefined) collations.set(name.toLowerCase(), { collationId: column.type.collationId, explicit: column.attributes?.['explicitCollation'] === true })

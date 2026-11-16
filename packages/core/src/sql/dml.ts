@@ -221,15 +221,16 @@ const isDuplicate = (e: unknown): boolean => e instanceof EngineError && e.code 
  */
 function uniqueKeys(def: TableDef): IndexDef[] {
   const nullable = new Map(def.columns.map((c) => [c.name.toLowerCase(), c.nullable]))
-  const rank = (i: IndexDef): number[] => [
-    i.parts.some((p) => nullable.get(p.column.toLowerCase()) === true) ? 1 : 0,
-    i.kind === 'primary' ? 0 : 1,
-    i.parts.some((p) => p.prefix !== undefined) ? 1 : 0,
-  ]
+  const rank = (index: IndexDef): number => {
+    let order = index.kind === 'primary' ? 0 : 2
+    if (index.parts.some((p) => nullable.get(p.column.toLowerCase()) === true)) order += 4
+    if (index.parts.some((p) => p.prefix !== undefined)) order += 1
+    return order
+  }
   return def.indexes
-    .map((index, at) => ({ index, at, r: rank(index) }))
-    .filter((x) => x.index.kind !== 'index')
-    .sort((a, b) => (a.r[0] as number) - (b.r[0] as number) || (a.r[1] as number) - (b.r[1] as number) || (a.r[2] as number) - (b.r[2] as number) || a.at - b.at)
+    .filter((index) => index.kind !== 'index')
+    .map((index) => ({ index, order: rank(index) }))
+    .sort((a, b) => a.order - b.order)
     .map((x) => x.index)
 }
 
@@ -282,6 +283,20 @@ function writeContext(run: Run, table: string, ignore: boolean) {
 function warnError(store: StoreContext, e: unknown): void {
   if (e instanceof MyjsError) warn(store, e.errno ?? 0, e.message)
   else store.warnings++
+}
+
+function missingDefault(column: ColumnDef, store: StoreContext): void {
+  const message = messages.noDefaultForField(column.name)
+  if (store.strict) throw sqlError('ER_NO_DEFAULT_FOR_FIELD', message)
+  warn(store, 1364, message)
+}
+
+function permitsCheck(violation: string | undefined, ignore: boolean, store: StoreContext): boolean {
+  if (violation === undefined) return true
+  const error = checkViolated(violation)
+  if (!ignore) throw error
+  warnError(store, error)
+  return false
 }
 
 function storeField(v: Value, column: ColumnDef, store: StoreContext, nulls: NullPolicy, warned?: Set<ColumnDef>, directParameter?: boolean): FieldBytes {
@@ -683,10 +698,7 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
     def.columns.forEach((column, i) => {
       if (given.has(i) || generationOf(column) !== undefined) return
       if (column.autoIncrement === true) values[i] = null
-      else if (defaults[i] === 'none') {
-        if (store.strict) throw sqlError('ER_NO_DEFAULT_FOR_FIELD', messages.noDefaultForField(column.name))
-        warn(store, 1364, messages.noDefaultForField(column.name))
-      }
+      else if (defaults[i] === 'none') missingDefault(column, store)
     })
     // Every value is converted, in column order, before AUTO_INCREMENT takes
     // one, as `write_row` takes it after `fill_record`: a row refused for an
@@ -707,10 +719,7 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
     // CHECK constraints, before the row is written: a violation is not a
     // duplicate first and costs no AUTO_INCREMENT value. IGNORE skips the
     // row, and it is not one of the "Records" (8.4.11).
-    const violated = check?.(fields)
-    if (violated !== undefined) {
-      if (!ignore) throw checkViolated(violated)
-      warnError(store, checkViolated(violated))
+    if (!permitsCheck(check?.(fields), ignore, store)) {
       stats.records--
       return
     }
@@ -813,31 +822,27 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
     const current = decodeRow(def.columns, before)
     const triedValues = decodeRow(def.columns, tried)
     const extra = [...u.aliased.map((t) => triedValues[t] ?? null), ...triedValues, ...selectExtras]
-    const result = assignAll(run, def, before, current, extra, u.assignments, u.onUpdate, defaults, store, upsertNulls, generate)
+    const changed = assignAll(run, def, before, current, extra, u.assignments, u.onUpdate, defaults, store, upsertNulls, generate)
+    const after = changed ?? before
     // An upsert that sets the AUTO_INCREMENT column to a value the statement
     // has promised another row is ER_AUTO_INCREMENT_CONFLICT; to this row's
     // own generated value, it keeps it.
     let consumed = false
     if (generated > 0n && autoAt >= 0 && u.assignments.some((a) => a.index === autoAt)) {
-      const v = autoOf(def, autoAt, result.after)
+      const v = autoOf(def, autoAt, after)
       if (v === generated) consumed = true
       else if (v !== 0n && auto.reserved(v)) throw sqlError('ER_AUTO_INCREMENT_CONFLICT', 'Auto-increment value in UPDATE conflicts with internally generated values')
     }
     if (!consumed) auto.restore(prev)
     stats.touched++
-    if (autoAt >= 0) lastAuto = autoOf(def, autoAt, result.after)
-    if (!result.changed) return
-    const violated = check?.(result.after)
-    if (violated !== undefined) {
-      if (!ignore) throw checkViolated(violated)
-      warnError(store, checkViolated(violated))
-      return
-    }
+    if (autoAt >= 0) lastAuto = autoOf(def, autoAt, after)
+    if (changed === undefined) return
+    if (!permitsCheck(check?.(changed), ignore, store)) return
     try {
-      table.update(id, result.after, trx)
+      table.update(id, changed, trx)
     } catch (e) {
-      if (!isDuplicate(e) || !ignore) throw duplicateError(e, def, table, keys, result.after, trx, id)
-      warnError(store, duplicateError(e, def, table, keys, result.after, trx, id))
+      if (!isDuplicate(e) || !ignore) throw duplicateError(e, def, table, keys, changed, trx, id)
+      warnError(store, duplicateError(e, def, table, keys, changed, trx, id))
       return
     }
     stats.updated++
@@ -953,7 +958,7 @@ function assignAll(
   store: StoreContext,
   nulls: NullPolicy,
   generate?: ColumnGenerator,
-): { after: FieldBytes[]; values: Value[]; changed: boolean } {
+): FieldBytes[] | undefined {
   const after = [...before]
   const values: Value[] = [...current]
   const assign = (i: number, v: Value, directParameter?: boolean): void => {
@@ -973,19 +978,16 @@ function assignAll(
       // value is (8.4.11).
       const d = defaults[a.index] as Compiled | 'none'
       const column = def.columns[a.index] as ColumnDef
-      if (d === 'none') {
-        if (store.strict) throw sqlError('ER_NO_DEFAULT_FOR_FIELD', messages.noDefaultForField(column.name))
-        warn(store, 1364, messages.noDefaultForField(column.name))
-      }
+      if (d === 'none') missingDefault(column, store)
       assign(a.index, d === 'none' ? implicitDefault(column) : d.eval(values as Row, run.env))
     } else assign(a.index, a.value.eval(extra.length === 0 ? (values as Row) : [...values, ...extra], run.env), a.value.parameter !== undefined)
   }
-  if (sameRow(before, after)) return { after, values, changed: false }
+  if (sameRow(before, after)) return undefined
   onUpdate.forEach((u, i) => {
     if (u !== undefined && !assigned.has(i)) assign(i, u.eval([], run.env))
   })
   generate?.(after, values, store, nulls)
-  return { after, values, changed: true }
+  return after
 }
 
 const isDefaultKeyword = (e: Expression): boolean => e.kind === NODE.KEYWORD && e.word.toUpperCase() === 'DEFAULT'
@@ -1115,15 +1117,9 @@ function updateWriter(run: Run, def: TableDef, table: Table, assignments: readon
   const keys = uniqueKeys(def)
   return (id: RowId, before: readonly FieldBytes[], row: readonly Value[]): boolean => {
     // A NULL into a NOT NULL column is the type's zero and a warning outside a strict mode.
-    const { changed, after } = assignAll(run, def, before, row, [], assignments, onUpdate, defaults, store, store.strict ? 'error' : 'warn', generate)
-    if (!changed) return false
-    const violated = check?.(after)
-    if (violated !== undefined) {
-      const error = checkViolated(violated)
-      if (!ignore) throw error
-      warnError(store, error)
-      return false
-    }
+    const after = assignAll(run, def, before, row, [], assignments, onUpdate, defaults, store, store.strict ? 'error' : 'warn', generate)
+    if (after === undefined) return false
+    if (!permitsCheck(check?.(after), ignore, store)) return false
     const at = ignore ? trx.savepoint() : 0
     try {
       table.update(id, after, trx)
