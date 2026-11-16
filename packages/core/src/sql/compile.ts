@@ -2882,8 +2882,8 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
 
 /** An uncorrelated scalar `[NOT] IN`, `= ALL` or `<> ANY` subquery as compiled. */
 export interface QuantifiedSubquery {
-  /** A plain integer NOT IN whose execution has a keyed membership reader. */
-  readonly kind: 'in' | 'not-in' | 'keyed-int-not-in' | 'scan' | 'dependent-not-in'
+  /** The comparison and, when chosen during binding, its membership reader. */
+  readonly kind: 'in' | 'not-in' | 'keyed-int-not-in' | 'scan' | 'dependent-not-in' | 'materialized-not-in'
   /** Whether the expression it is compared with can be NULL. */
   readonly nullable: boolean
 }
@@ -3020,7 +3020,7 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
   const single = as.length === 1 && !plan.correlated
   const membership = all ? op === '<>' : op === '='
   const keyed = single && membership && compatibleEqualityKeys(a0.type, sub)
-  if (!dependent && single && (op === '=' || op === '<>')) {
+  if (plan.quantified === undefined && single && (op === '=' || op === '<>')) {
     const plainNotIn = keyed && all && right.quantifier === undefined && left.kind === NODE.COLUMN && ctx.clause === 'where clause' &&
       a0.type.field === FIELD_TYPE.LONG && sub.field === FIELD_TYPE.LONG && a0.type.unsigned === sub.unsigned
     const kind = !membership ? 'scan' : !all ? 'in' : plainNotIn ? 'keyed-int-not-in' : 'not-in'
@@ -3055,6 +3055,17 @@ export function membershipReader(left: Compiled['eval'], rows: SubqueryPlan['row
     if (value !== null && keys.has(valueKey(value))) return bool(!negated)
     return value === null || keys.has(NULL_VALUE_KEY) ? unknown : absent
   }
+}
+
+/** Read arguments in order, stopping at the first NULL. */
+export function readArguments(xs: readonly Compiled[], r: Row, env: Env): Exclude<Value, null>[] | undefined {
+  const out: Exclude<Value, null>[] = []
+  for (const x of xs) {
+    const v = x.eval(r, env)
+    if (v === null) return undefined
+    out.push(v)
+  }
+  return out
 }
 
 /** A result's byte bound: REAL items keep their declared bound; strings use their charset's widest encoding. */

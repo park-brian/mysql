@@ -65,6 +65,7 @@ import {
 } from '@myjs/types'
 import { escapedBytes, hexOf } from './builtins.ts'
 import {
+  readArguments,
   aggregate,
   aggregateCollations,
   aggregateTypes,
@@ -183,17 +184,6 @@ function stringChoice(parts: readonly Compiled[], name: string, conn: number) {
     : { binary: true, collation: CHARSET_BINARY, coercibility: COERCIBILITY.IGNORABLE }
 }
 
-/** Every argument evaluated; `undefined` when one is NULL. */
-export function all(xs: readonly Compiled[], r: Parameters<Compiled['eval']>[0], env: Parameters<Compiled['eval']>[1]): V[] | undefined {
-  const out: V[] = []
-  for (const x of xs) {
-    const v = x.eval(r, env)
-    if (v === null) return undefined
-    out.push(v)
-  }
-  return out
-}
-
 /** A word the index of a substring search compares by: folded as the collation folds. */
 export function folder(collation: number, binary: boolean): (s: string) => string {
   if (binary) return (s) => s
@@ -280,7 +270,7 @@ function libraryFunction(name: string, args: readonly Compiled[], e: CallNode, c
       }
       return {
         eval: (r, env) => {
-          const v = all(xs, r, env)
+          const v = readArguments(xs, r, env)
           if (v === undefined) return null
           const s = stringUnits(v[0] as V, binary, collation)
           const empty = result([], binary, collation, coercibility)
@@ -304,7 +294,7 @@ function libraryFunction(name: string, args: readonly Compiled[], e: CallNode, c
       if (n !== undefined && n !== null) width = n < 0n ? 0 : n <= INT_MAX32 ? Math.min(width, Number(n)) : width
       return {
         eval: (r, env) => {
-          const v = all(xs, r, env)
+          const v = readArguments(xs, r, env)
           if (v === undefined) return null
           const s = stringUnits(v[0] as V, binary, collation)
           const count = valInt(v[1] as V)
@@ -324,7 +314,7 @@ function libraryFunction(name: string, args: readonly Compiled[], e: CallNode, c
       const width = n === undefined || n === null ? undefined : Number(n > INT_MAX32 || n < 0n ? INT_MAX32 : n)
       return {
         eval: (r, env) => {
-          const v = all(xs, r, env)
+          const v = readArguments(xs, r, env)
           if (v === undefined) return null
           const s = stringUnits(v[0] as V, binary, collation)
           const count = valInt(v[1] as V)
@@ -350,7 +340,7 @@ function libraryFunction(name: string, args: readonly Compiled[], e: CallNode, c
       const width = n === undefined || n === null ? undefined : n === 0n ? 0 : widthOf((xs[0] as Compiled).type, binary) * Number(n > INT_MAX32 || n < 0n ? INT_MAX32 : n)
       return {
         eval: (r, env) => {
-          const v = all(xs, r, env)
+          const v = readArguments(xs, r, env)
           if (v === undefined) return null
           const s = stringUnits(v[0] as V, binary, collation)
           const count = valInt(v[1] as V)
@@ -408,7 +398,7 @@ function libraryFunction(name: string, args: readonly Compiled[], e: CallNode, c
       const replacement = widthOf((xs[2] as Compiled).type, binary)
       return {
         eval: (r, env) => {
-          const v = all(xs, r, env)
+          const v = readArguments(xs, r, env)
           if (v === undefined) return null
           const s = stringUnits(v[0] as V, binary, collation)
           const from = stringUnits(v[1] as V, binary, collation)
@@ -491,7 +481,7 @@ function libraryFunction(name: string, args: readonly Compiled[], e: CallNode, c
       const fold = folder(collation, binary)
       return {
         eval: (r, env) => {
-          const v = all(xs, r, env)
+          const v = readArguments(xs, r, env)
           if (v === undefined) return null
           const [n, h] = name === 'INSTR' ? [v[1] as V, v[0] as V] : [v[0] as V, v[1] as V]
           const start = v[2] === undefined ? 0n : valInt(v[2]) - 1n
@@ -653,7 +643,7 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
         : (x: V): V => convertTo(x, type) as V
       return {
         eval: (r, env) => {
-          const v = all(xs, r, env)
+          const v = readArguments(xs, r, env)
           if (v === undefined) return null
           let best = as(v[0] as V)
           for (let i = 1; i < v.length; i++) {
@@ -1206,7 +1196,7 @@ function listFunction(name: string, xs: readonly Compiled[], callName: string, c
             }
             return result(out.join(','), binary, collation, coercibility)
           }
-          const vs = all(parts, r, env)
+          const vs = readArguments(parts, r, env)
           if (vs === undefined) return null
           const [on, off, sep = ','] = vs.map((v) => stringText(v, binary, collation))
           let n = 64

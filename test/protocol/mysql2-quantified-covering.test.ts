@@ -272,6 +272,14 @@ test('dependent NOT IN costs a text residual as scan, ref-or-null, or materializ
       await readDependentNotIn(conn, schema, 'name', sql, expected, (plan, api) => assert.equal(plan, expectedPlan, api))
     }
   }
+  async function readWildcards(contains: string[][], single: string[][], expectedPlan: string) {
+    for (const op of ['NOT IN', '<> ALL']) {
+      for (const [pattern, expected] of [['%e%', contains], ['_', single]] as const) {
+        const sql = `SELECT name FROM p WHERE id ${op} (SELECT parent_id FROM c WHERE c.label LIKE '${pattern}') ORDER BY 1`
+        await readDependentNotIn(conn, schema, 'name', sql, expected, (plan, api) => assert.equal(plan, expectedPlan, api))
+      }
+    }
+  }
   try {
     await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
     await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
@@ -295,6 +303,19 @@ test('dependent NOT IN costs a text residual as scan, ref-or-null, or materializ
     await conn.query('DELETE FROM c')
     await conn.query('ANALYZE TABLE p,c')
     await read(all, all, scan)
+
+    await conn.query("SET optimizer_switch='default'")
+    await conn.query("INSERT INTO c VALUES(1,1,'eel'),(2,2,'x'),(3,4,'e'),(4,NULL,'two')")
+    await conn.query('ANALYZE TABLE p,c')
+    await readWildcards([['a'], ['z']], [['d'], ['z']], scan)
+    await conn.query("SET optimizer_switch='subquery_materialization_cost_based=off'")
+    await readWildcards([['a'], ['z']], [['d'], ['z']], materialized)
+    await conn.query("UPDATE c SET label='e' WHERE parent_id IS NULL")
+    await readWildcards([], [], materialized)
+    await conn.query("SET optimizer_switch='materialization=off'")
+    await readWildcards([], [], scan)
+    await conn.query('DELETE FROM c')
+    await readWildcards(all, all, scan)
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()

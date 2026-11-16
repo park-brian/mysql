@@ -30,6 +30,7 @@ import {
   compareJson,
   invalidJsonArgument,
   invalidJsonCharset,
+  intValue,
   jsonValue,
   parseJson,
   renderJson,
@@ -39,7 +40,7 @@ import {
   type JsonDoc,
   type Value,
 } from '@myjs/types'
-import type { Compiled } from './compile.ts'
+import { readArguments, type Compiled } from './compile.ts'
 import { CHARSET_UTF8MB4_BIN, charWidth, intType, jsonType, stringType, type ResultType } from './meta.ts'
 import { nativeArity, unregistered } from './registry.ts'
 
@@ -392,18 +393,7 @@ function depthOf(d: JsonDoc): number {
 
 const lengthOf = (d: JsonDoc): number => (d.t === 'array' || d.t === 'object' ? d.v.length : 1)
 
-const int = (n: number | boolean): Value => ({ kind: 'int', v: BigInt(typeof n === 'boolean' ? (n ? 1 : 0) : n), unsigned: false })
-
-/** The arguments evaluated, or `undefined` when one is NULL: every one of these functions is NULL then. */
-function present(args: readonly Compiled[], r: Parameters<Compiled['eval']>[0], env: Parameters<Compiled['eval']>[1]): Exclude<Value, null>[] | undefined {
-  const out: Exclude<Value, null>[] = []
-  for (const a of args) {
-    const v = a.eval(r, env)
-    if (v === null) return undefined
-    out.push(v)
-  }
-  return out
-}
+const int = (n: number | boolean): Value => intValue(BigInt(n))
 
 /** `JSON_EXTRACT`'s answer for one document and its paths. */
 function extract(doc: JsonDoc, paths: readonly JsonPath[]): Value {
@@ -415,7 +405,6 @@ function extract(doc: JsonDoc, paths: readonly JsonPath[]): Value {
   return hits.length === 0 ? null : jsonValue({ t: 'array', v: hits })
 }
 
-/** A JSON function over paths, or `undefined` for another name. */
 /** The functions over a JSON document and a path. */
 export const JSON_PATH_FUNCTIONS: ReadonlySet<string> = new Set(['JSON_EXTRACT', 'JSON_UNQUOTE', 'JSON_CONTAINS', 'JSON_CONTAINS_PATH', 'JSON_TYPE', 'JSON_LENGTH', 'JSON_DEPTH', 'JSON_KEYS', 'JSON_VALID', 'JSON_OVERLAPS'])
 
@@ -423,28 +412,29 @@ export function jsonPathFunction(name: string, args: readonly Compiled[], callNa
   const fn = name.toLowerCase()
   const arity = nativeArity(callName, args.length)
   const path = pathReader()
+  const firstDocument = (values: readonly Exclude<Value, null>[]) => docOf(values[0]!, 1, fn)
   switch (name) {
     case 'JSON_EXTRACT':
       arity(2, Infinity)
       return {
         eval: (r, env) => {
-          const vs = present(args, r, env)
+          const vs = readArguments(args, r, env)
           if (vs === undefined) return null
-          const doc = docOf(vs[0] as Exclude<Value, null>, 1, fn)
+          const doc = firstDocument(vs)
           return extract(doc, vs.slice(1).map(path))
         },
         type: jsonType(true),
       }
     case 'JSON_UNQUOTE':
-      arity(1, 1)
+      arity(1)
       return unquote(args[0] as Compiled)
     case 'JSON_CONTAINS':
       arity(2, 3)
       return {
         eval: (r, env) => {
-          const vs = present(args, r, env)
+          const vs = readArguments(args, r, env)
           if (vs === undefined) return null
-          let target = docOf(vs[0] as Exclude<Value, null>, 1, fn)
+          let target = firstDocument(vs)
           const candidate = docOf(vs[1] as Exclude<Value, null>, 2, fn)
           if (vs.length === 3) {
             const p = path(vs[2] as Exclude<Value, null>)
@@ -463,9 +453,9 @@ export function jsonPathFunction(name: string, args: readonly Compiled[], callNa
         // The paths are taken in order and the answer stops at the first that
         // decides it: a NULL or a malformed path after that is never read (8.4.11).
         eval: (r, env) => {
-          const vs = present(args.slice(0, 2), r, env)
+          const vs = readArguments(args.slice(0, 2), r, env)
           if (vs === undefined) return null
-          const doc = docOf(vs[0] as Exclude<Value, null>, 1, fn)
+          const doc = firstDocument(vs)
           const mode = toText(vs[1] as Exclude<Value, null>).toLowerCase()
           if (mode !== 'one' && mode !== 'all') throw sqlError('ER_JSON_BAD_ONE_OR_ALL_ARG', `The oneOrAll argument to ${fn} may take these values: 'one' or 'all'.`)
           for (const a of args.slice(2)) {
@@ -480,17 +470,17 @@ export function jsonPathFunction(name: string, args: readonly Compiled[], callNa
         type: intType(21, true),
       }
     case 'JSON_OVERLAPS':
-      arity(2, 2)
+      arity(2)
       return {
         eval: (r, env) => {
-          const vs = present(args, r, env)
+          const vs = readArguments(args, r, env)
           if (vs === undefined) return null
-          return int(overlaps(docOf(vs[0] as Exclude<Value, null>, 1, fn), docOf(vs[1] as Exclude<Value, null>, 2, fn)))
+          return int(overlaps(firstDocument(vs), docOf(vs[1] as Exclude<Value, null>, 2, fn)))
         },
         type: intType(1, true),
       }
     case 'JSON_TYPE':
-      arity(1, 1)
+      arity(1)
       return {
         eval: (r, env) => {
           const v = (args[0] as Compiled).eval(r, env)
@@ -501,13 +491,13 @@ export function jsonPathFunction(name: string, args: readonly Compiled[], callNa
     case 'JSON_LENGTH':
     case 'JSON_DEPTH':
     case 'JSON_KEYS': {
-      if (name === 'JSON_DEPTH') arity(1, 1)
+      if (name === 'JSON_DEPTH') arity(1)
       else arity(1, 2)
       return {
         eval: (r, env) => {
-          const vs = present(args, r, env)
+          const vs = readArguments(args, r, env)
           if (vs === undefined) return null
-          let doc = docOf(vs[0] as Exclude<Value, null>, 1, fn)
+          let doc = firstDocument(vs)
           if (vs.length === 2) {
             const p = path(vs[1] as Exclude<Value, null>)
             if (p.many && name === 'JSON_KEYS') throw wildcardNotAllowed()
@@ -526,7 +516,7 @@ export function jsonPathFunction(name: string, args: readonly Compiled[], callNa
       }
     }
     case 'JSON_VALID':
-      arity(1, 1)
+      arity(1)
       return {
         eval: (r, env) => {
           const v = (args[0] as Compiled).eval(r, env)

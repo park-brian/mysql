@@ -460,7 +460,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   const checkedOutput = anti?.kind === 'correlated' && checkedCorrelatedOutput(node, q, source, items, boundedSubquery(anti.query))
   let checkedWhere = false
   let whereCtx = compileContext(run, lookup, 'where clause', undefined, (bound) => {
-    if (!bound.correlated) return unindexedMembership(run, q, node, from, bound) ?? orderedAny(source, node.where, bound)
+    if (!bound.correlated) return boundMembership(run, q, node, from, bound) ?? orderedAny(source, node.where, bound)
     if (semijoin) return bound
     const finalized = dependentReader(run, q, node, from, items, bound)
     if (finalized !== bound) checkedWhere = bound.checkRead !== undefined
@@ -752,9 +752,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
         for (const _ of from.rows(undefined, run.env, { locking: false })) return [planNode('Rows fetched before execution')]
         return NO_ROWS_PLAN
       }
-      const where = node.where
-      const costOuter = where?.kind === NODE.BINARY && where.op === 'NOT IN' && !q.limit && plainProjection(q, node) && from && joinOuter(run, q, node, from) ? base : undefined
-      return describeSelect(run, from, stages, false, costOuter)
+      return describeSelect(run, from, stages, false)
     },
     rows(trx, given, ready) {
       // A zero count with no offset has no iterator to initialize, including its sort.
@@ -919,7 +917,7 @@ function* values(rows: Iterable<Rowed>): Generator<Value[]> {
  * the subquery's own plan, `n` the query block's number, which the server
  * gives each SELECT in the order the statement's text has them.
  */
-function subqueryNodes(run: Run, clause: string, outer?: FromPlan['single']): PlanNode[] {
+function subqueryNodes(run: Run, clause: string): PlanNode[] {
   const out: PlanNode[] = []
   // A clause may be compiled more than once (its metadata, then its rows): each subquery is one block.
   const seen = new Set<QueryExpression>()
@@ -927,7 +925,7 @@ function subqueryNodes(run: Run, clause: string, outer?: FromPlan['single']): Pl
     if (s.clause !== clause || !firstKey(seen, s.query)) continue
     const roots = s.plan.explain?.()
     const how = s.quantified
-    const rewritten = how && quantifiedPlan(run, s, how, topLevel(run.clauses?.[clause], s.query), roots, outer)
+    const rewritten = how && quantifiedPlan(run, s, how, topLevel(run.clauses?.[clause], s.query), roots)
     out.push(planNode(`Select #${selectNumber(run, s.query)}`, rewritten ?? roots))
   }
   return out
@@ -960,7 +958,7 @@ function topLevel(root: Expression | undefined, query: QueryExpression): boolean
  * and each count of Filters, as 8.4.11 printed it for every combination of
  * nullable and indexed (M5.47's probes).
  */
-function quantifiedPlan(run: Run, bound: BoundSubquery, how: QuantifiedSubquery, top: boolean, roots: readonly PlanNode[] | undefined, outer?: FromPlan['single']): PlanNode | undefined {
+function quantifiedPlan(run: Run, bound: BoundSubquery, how: QuantifiedSubquery, top: boolean, roots: readonly PlanNode[] | undefined): PlanNode | undefined {
   const { query } = bound
   const body = query.body
   if (body.kind !== QUERY.SELECT || query.with !== undefined || query.orderBy !== undefined || body.groupBy !== undefined || body.having !== undefined || body.windows !== undefined) return undefined
@@ -974,27 +972,18 @@ function quantifiedPlan(run: Run, bound: BoundSubquery, how: QuantifiedSubquery,
   // Keep the bound query's proof for a direct IS NULL on a required field.
   if (dependentNotIn && roots === NO_ROWS_PLAN && predicate?.kind === NODE.UNARY && predicate.op === 'IS NULL') return undefined
   const read = keyReads(column.name, predicate)
-  if (how.kind === 'scan' || how.kind === 'dependent-not-in') {
-    const cover = how.kind === 'scan' ? def.indexes.find((i) => holdsRead(def, i, read) && i.kind !== 'primary') : undefined
+  if (how.kind === 'dependent-not-in') {
+    // The bound reader already applies any written residual below the probe's Filter.
+    return planNode('Limit', filterNode(filterPlan(column.nullable && !predicate, roots?.[0] ?? tableScan(alias))))
+  }
+  if (how.kind === 'scan') {
+    const cover = def.indexes.find((i) => holdsRead(def, i, read) && i.kind !== 'primary')
     const access = cover === undefined ? tableScan(alias) : coveringScan(alias, cover.name)
     return planNode('Limit', filterNode(filterPlan(column.nullable, access)))
   }
-  const index = leadingIndex(def, column, true)
+  const index = how.kind === 'materialized-not-in' ? undefined : leadingIndex(def, column, true)
   if (index === undefined) return materializedQuantified(roots)
-  if (dependentNotIn && run.env.memo !== undefined) {
-    const materialize = membershipMaterialization(run.env)
-    if (materialize && predicate === undefined) return materializedQuantified(roots)
-    if (plainBase(query, body) && singleRefIndex(index)) {
-      const scan = roots?.[0]
-      const includeNonNull = predicate !== undefined && !how.nullable && scan?.label === 'Filter' && scan.children[0]?.label === tableScanLabel(alias)
-        ? filteredNotIn(run, inner, column, predicate) : undefined
-      if (includeNonNull !== undefined || (materialize !== undefined && predicate === undefined)) {
-        const choice = costedNotIn(run, inner, outer, index, column.nullable, materialize, includeNonNull)
-        if (choice === 'materialize') return materializedQuantified(roots)
-        if (choice === 'scan' && scan !== undefined) return planNode('Limit', filterNode(scan))
-      }
-    }
-  }
+  if (dependentNotIn && predicate === undefined && run.env.memo !== undefined && membershipMaterialization(run.env)) return materializedQuantified(roots)
   const nulls = !top || how.kind !== 'in'
   const unique = index.parts.length === 1 && index.kind !== 'index'
   let access = indexLookup(alias, index.name, unique, holdsRead(def, index, read))
@@ -1028,8 +1017,12 @@ function membershipMaterialization(env: Env): boolean | undefined {
   return optimizerEnabled(env, 'materialization') ? !optimizerEnabled(env, 'subquery_materialization_cost_based') : undefined
 }
 
-/** Cost the scan with the original live subquery, so its reader and EXPLAIN share the choice. */
-function unindexedMembership(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan | undefined, bound: BoundSubquery): BoundSubquery | undefined {
+function wildcardLike(e: Expression | undefined): e is Extract<Expression, { kind: typeof NODE.BINARY }> {
+  return e?.kind === NODE.BINARY && e.op === 'LIKE' && !e.extra && e.right.kind === NODE.LITERAL && /^[%_]/.test(e.right.value as string)
+}
+
+/** Cost membership on the original bound input, before choosing its reader and EXPLAIN. */
+function boundMembership(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan | undefined, bound: BoundSubquery): BoundSubquery | undefined {
   const where = node.where
   if (where?.kind !== NODE.BINARY || where.right.kind !== NODE.SUBQUERY || where.right.query !== bound.query ||
       !(where.op === 'NOT IN' || (where.op === '<>' && where.right.quantifier === 'ALL'))) return undefined
@@ -1042,19 +1035,44 @@ function unindexedMembership(run: Run, q: QueryExpression, node: SelectNode, fro
   const key = tableColumn(body.items[0].expr, inner.def, inner.alias)
   if (left?.type.type !== FIELD_TYPE.LONG || key?.type.type !== FIELD_TYPE.LONG ||
       (left.type.unsigned === true) !== (key.type.unsigned === true) ||
-      (!left.nullable && !key.nullable && optimizerEnabled(run.env, 'semijoin')) ||
-      hasLeadingKey(outer.def, left.name) || indexedColumn(inner.def, key.name) || hasGenerated(outer.def, inner.def)) return undefined
+      (!left.nullable && !key.nullable && optimizerEnabled(run.env, 'semijoin'))) return undefined
   const predicate = body.where
-  if (predicate !== undefined && !checksNotNull(predicate, inner.def, inner.alias, key)) return undefined
-  if (from.access(run.env).index !== undefined) return undefined
-  const includeNonNull = predicate === undefined ? undefined : true
-  if (costedNotIn(run, inner, outer, undefined, key.nullable, membershipMaterialization(run.env), includeNonNull) !== 'scan') return undefined
-  bound.quantified = { kind: 'dependent-not-in', nullable: left.nullable }
+  const { def, alias } = inner
+  const index = leadingIndex(def, key, true)
+  let includeNonNull: boolean | undefined
+  let textSelectivity: number | undefined
+  if (index) {
+    if (!singleRefIndex(index) || (!left.nullable && !key.nullable)) return undefined
+    if (wildcardLike(predicate)) {
+      if (left.nullable || !key.nullable || hasGenerated(outer.def, def) || !textBesideColumn(predicate.left, predicate.right)) return undefined
+      const word = tableColumn(predicate.left, def, alias)
+      if (!sessionVarchar(word, run) || indexedColumn(def, word.name)) return undefined
+      includeNonNull = false
+      textSelectivity = 0.1111
+    } else {
+      if (where.op !== 'NOT IN') return undefined
+      if (predicate !== undefined) {
+        if (left.nullable) return undefined
+        includeNonNull = filteredNotIn(run, inner, key, predicate)
+        if (includeNonNull === undefined) return undefined
+        // An ordered comparison may already have selected a range or a covering scan.
+        const scan = bound.plan.explain?.()?.[0]
+        if (scan?.label !== 'Filter' || scan.children[0]?.label !== tableScanLabel(alias)) return undefined
+      }
+    }
+  } else {
+    if (hasGenerated(outer.def, def) || hasLeadingKey(outer.def, left.name) || indexedColumn(def, key.name) ||
+        from.access(run.env).index !== undefined || (predicate !== undefined && !checksNotNull(predicate, def, alias, key))) return undefined
+    includeNonNull = predicate && true
+  }
+  const choice = costedNotIn(run, inner, outer, index, key.nullable, membershipMaterialization(run.env), includeNonNull, textSelectivity)
+  if (choice === undefined || (choice === 'materialize' && !index)) return undefined
+  bound.quantified = { kind: choice === 'scan' ? 'dependent-not-in' : 'materialized-not-in', nullable: left.nullable }
   return bound
 }
 
 /** The single-table NOT IN alternatives measured against the native cost trace. */
-function costedNotIn(run: Run, inner: NonNullable<FromPlan['single']>, outer: FromPlan['single'], index: IndexDef | undefined, nullable: boolean, materialize: boolean | undefined, includeNonNull: boolean | undefined): 'scan' | 'materialize' | undefined {
+function costedNotIn(run: Run, inner: NonNullable<FromPlan['single']>, outer: FromPlan['single'], index: IndexDef | undefined, nullable: boolean, materialize: boolean | undefined, includeNonNull: boolean | undefined, textSelectivity = 0.3333): 'scan' | 'materialize' | undefined {
   const store = run.catalog?.store
   if (outer === undefined || store === undefined || isTemporary(inner.def)) return undefined
   const stats = statisticsOf(inner.def, inner.table, store)
@@ -1068,8 +1086,8 @@ function costedNotIn(run: Run, inner: NonNullable<FromPlan['single']>, outer: Fr
     const floor = Math.fround(1 / rows)
     const notNull = 1 - Math.max(floor, 0.1)
     if (index) {
-      const ordered = Math.max(floor, Math.fround(0.3333))
-      kept = Math.trunc(rows * (includeNonNull ? ordered + notNull - ordered * notNull : ordered))
+      const text = Math.max(floor, Math.fround(textSelectivity))
+      kept = Math.trunc(rows * (includeNonNull ? text + notNull - text * notNull : text)) || 1
     } else if (nullable) {
       // The materialized range cannot be estimated below one row.
       kept = Math.trunc(rows * Math.fround(notNull)) || 1
@@ -1111,7 +1129,7 @@ function hasGenerated(...defs: TableDef[]): boolean {
   return defs.some((def) => def.columns.some((c) => c.attributes?.['generated'] !== undefined))
 }
 
-function sessionVarchar(column: ColumnDef | undefined, run: Run): boolean {
+function sessionVarchar(column: ColumnDef | undefined, run: Run): column is ColumnDef {
   const type = column?.type
   return type?.type === FIELD_TYPE.VAR_STRING && type.collationId !== CHARSET_BINARY && type.collationId === run.env.session.characterSet
 }
@@ -1304,8 +1322,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     const field = qualify(extra.left, innerAlias)
     if (field === undefined) return undefined
     text = !exists && textBesideColumn(field, extra.right) && (isOrderedComparison(extra.op) ||
-      (extra.op === 'LIKE' && !extra.extra && /^[%_]/.test(extra.right.value as string) &&
-        optimizerEnabled(run.env, 'condition_fanout_filter')))
+      (wildcardLike(extra) && optimizerEnabled(run.env, 'condition_fanout_filter')))
     if (!text && (!isComparison(extra.op) || !numberLiteral(extra.right))) return undefined
     residual = { ...extra, left: field }
   }
@@ -1443,8 +1460,8 @@ function semijoinNode(run: Run, e: Expression, explicitLimit = false): PlanNode 
 }
 
 /** A Filter with a clause's subqueries beside its input, as the server lists them; anything else as it is. */
-function withSubqueries(run: Run, n: PlanNode, clause: string, outer?: FromPlan['single']): PlanNode {
-  const subs = subqueryNodes(run, clause, outer)
+function withSubqueries(run: Run, n: PlanNode, clause: string): PlanNode {
+  const subs = subqueryNodes(run, clause)
   return subs.length === 0 || n.label !== 'Filter' ? n : { ...n, children: [...n.children, ...subs] }
 }
 
@@ -2695,8 +2712,8 @@ function planGrouped(
 const NO_ROWS_PLAN: readonly PlanNode[] = [planNode('Zero rows')]
 
 /** Both SELECT forms describe the stages over the chosen source. */
-function describeSelect(run: Run, from: FromPlan | undefined, stages: readonly Stage[], copied: boolean, outer?: FromPlan['single']): readonly PlanNode[] | undefined {
-  const source = from === undefined ? planNode('Rows fetched before execution') : withSubqueries(run, from.explain(run.env), 'where clause', outer)
+function describeSelect(run: Run, from: FromPlan | undefined, stages: readonly Stage[], copied: boolean): readonly PlanNode[] | undefined {
+  const source = from === undefined ? planNode('Rows fetched before execution') : withSubqueries(run, from.explain(run.env), 'where clause')
   const n = describeStages(source, stages)
   return n === undefined ? undefined : [n, ...(copied ? [] : subqueryNodes(run, 'field list'))]
 }

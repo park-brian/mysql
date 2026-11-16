@@ -36,6 +36,7 @@ import {
   valueOutOfRange,
 } from '@myjs/types'
 import {
+  readArguments,
   aggregate,
   aggregateCollations,
   aggregateTypes,
@@ -207,12 +208,8 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
       const literalText = binary || tooWide ? undefined : literalConcat(e.args, types)
       return {
         eval: (r, env) => {
-          const parts: Exclude<Value, null>[] = []
-          for (const x of xs) {
-            const v = x.eval(r, env)
-            if (v === null) return null
-            parts.push(v)
-          }
+          const parts = readArguments(xs, r, env)
+          if (parts === undefined) return null
           if (!binary) return stringValue(parts.map(toText).join(''), id, coercibility)
           // A BIT is its bytes in a string, as on the wire (8.4.11).
           const chunks = parts.map((v, i) => v.kind === 'int' && (v.str !== undefined || isBits((xs[i] as Compiled).type)) ? v.str ?? bitBytes(v.v, (xs[i] as Compiled).type.length) : valueBytes(v))
