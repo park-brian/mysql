@@ -101,6 +101,59 @@ test('an ordered EXISTS costs a noncovering materialized scan and indexed weedou
   }
 })
 
+test('a noncovering EXISTS retains buffered FirstMatch and the covering parent read', async () => {
+  const { db, conn } = await looseScanConnection()
+  const schema = 'filtered_hash_exists'
+  const select = 'SELECT label,id FROM p WHERE EXISTS (SELECT 1 FROM c WHERE c.parent_id=p.id AND c.qty>1)'
+  const hash = `Hash semijoin
+    Covering index scan on p using by_label
+    Hash
+        Filter
+            Table scan on c`
+  const sorted = `Sort\n    Stream results\n${hash.split('\n').map((line) => `        ${line}`).join('\n')}`
+  async function read(expected: readonly (readonly [string, number])[]) {
+    for (const ordered of [false, true]) {
+      const sql = ordered ? `${select} ORDER BY 1` : select
+      const options = { sql, rowsAsArray: true }
+      const explain = `EXPLAIN FORMAT=TREE ${sql}`
+      for (const api of ['query', 'execute'] as const) {
+        const label = `${api}: ${sql}`
+        const [rows, fields] = api === 'query' ? await conn.query(options) : await conn.execute(options)
+        assert.deepEqual(rows, expected, label)
+        assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
+          ['label', 253, 64, ordered ? 4097 : 20485, 0, 255, schema, 'p', 'p', 'label'],
+          ['id', 3, 11, ordered ? 4097 : 20483, 0, 63, schema, 'p', 'p', 'id'],
+        ], label)
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], label)
+        const [[plan]] = api === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
+        assert.equal(planSkeleton(plan?.EXPLAIN), ordered ? sorted : hash, label)
+      }
+    }
+  }
+  try {
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,label VARCHAR(16) NOT NULL,UNIQUE KEY by_label(label)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE c(id INT PRIMARY KEY,parent_id INT,qty INT NOT NULL,KEY by_parent(parent_id)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO p VALUES (1,'Z'),(2,'A')")
+    await conn.query('INSERT INTO c VALUES (1,NULL,9),(2,2,3),(3,2,6),(4,4,4),(5,3,2),(6,4,4),(7,NULL,4),(8,3,1)')
+    await conn.query('ANALYZE TABLE p,c')
+    await read([['A', 2]])
+    await conn.query('UPDATE c SET parent_id=1 WHERE id IN (3,5)')
+    await read([['A', 2], ['Z', 1]])
+    await conn.query("SET optimizer_switch='materialization=off'")
+    await conn.query('UPDATE c SET parent_id=NULL WHERE parent_id=1')
+    await read([['A', 2]])
+    await conn.query('UPDATE c SET qty=1')
+    await read([])
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
 test('ordered IN with a noncovering text residual costs indexed weedout or materialization', async () => {
   const { db, conn } = await looseScanConnection()
   const schema = 'text_residual_scan'

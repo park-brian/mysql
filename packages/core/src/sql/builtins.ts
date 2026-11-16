@@ -115,20 +115,12 @@ export const REGEXP_FUNCTIONS: ReadonlySet<string> = new Set(['REGEXP_INSTR', 'R
 /** The names `clockFunction` compiles. */
 export const CLOCK_FUNCTIONS: ReadonlySet<string> = new Set(['NOW', 'CURRENT_TIMESTAMP', 'LOCALTIME', 'LOCALTIMESTAMP', 'UTC_TIMESTAMP', 'SYSDATE', 'DATE_ADD', 'DATE_SUB', 'ADDDATE', 'SUBDATE', 'CURDATE', 'CURRENT_DATE', 'UTC_DATE', 'CURTIME', 'CURRENT_TIME', 'UTC_TIME'])
 
-/** What each family's compiler asks of a call: its arguments compiled, its arity checked, the connection's collation, and a string of the session's (`SYSCONST`). */
+/** A call's argument binding, arity check and connection collation. */
 function callOf(e: CallNode, ctx: CompileContext) {
-  const conn = ctx.connectionCollation
   return {
     args: (): Compiled[] => e.args.map((a) => compile(a, ctx)),
     arity: nativeArity(e.name, e.args.length),
-    conn,
-    text: (value: (env: Env) => string | null, chars: number): Compiled => ({
-      eval: (_r, env) => {
-        const v = value(env)
-        return v === null ? null : stringValue(v, conn, COERCIBILITY.SYSCONST)
-      },
-      type: stringType(chars, conn, false),
-    }),
+    conn: ctx.connectionCollation,
   }
 }
 
@@ -496,7 +488,14 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
 
 /** What a statement can ask of its session and its values: the user and the database, the version, the connection's counters, a value's collation and charset. */
 export function informationFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
-  const { args, arity, conn, text } = callOf(e, ctx)
+  const { args, arity, conn } = callOf(e, ctx)
+  const text = (read: (env: Env) => string | null, chars: number, nullable = false): Compiled => ({
+    eval: (_r, env) => {
+      const v = read(env)
+      return v === null ? null : stringValue(v, conn, COERCIBILITY.SYSCONST)
+    },
+    type: stringType(chars, conn, nullable),
+  })
   switch (name) {
     case 'COLLATION':
     case 'CHARSET': {
@@ -531,7 +530,7 @@ export function informationFunction(name: string, e: CallNode, ctx: CompileConte
     case 'DATABASE':
     case 'SCHEMA':
       arity(0)
-      return { ...text((env) => env.session.database, 34), type: stringType(34, conn, true) }
+      return text((env) => env.session.database, 34, true)
     case 'USER':
     case 'CURRENT_USER':
     case 'SESSION_USER':

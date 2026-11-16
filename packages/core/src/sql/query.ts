@@ -1334,9 +1334,10 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     if (!any && index === undefined) return undefined
     const innerRead = keyReads(innerColumn, residual)
     const scanOnly = index !== undefined && !holdsRead(def, index, innerRead)
+    const ordersOuter = sortBy === outerAlias
     if ((any || scanOnly) && hasGenerated(def, outerDef)) return undefined
     if (scanOnly) {
-      if (sortBy !== outerAlias || q.limit !== undefined || q.locking !== undefined || !singleRefIndex(index) ||
+      if ((!ordersOuter && (!exists || q.orderBy !== undefined)) || q.limit !== undefined || q.locking !== undefined || !singleRefIndex(index) ||
         def.indexes.some((i) => holdsRead(def, i, innerRead))) return undefined
       if (!text && (!exists || residual?.op !== '>' || !integerLiteral(residual.right))) return undefined
     }
@@ -1351,13 +1352,13 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     alternative.reads(read)
     alternative.sortedBy(sortBy, keep)
     const innerFirst = alternative.integerSemijoin(innerAlias, scanOnly ? undefined : index, key, residual,
-      !someNode([node.items, q.orderBy], (n) => (n as Expression).kind === NODE.SUBQUERY || undefined))
-    if (innerFirst === undefined) return undefined
+      !someNode([node.items, q.orderBy], (n) => (n as Expression).kind === NODE.SUBQUERY || undefined), exists)
+    if (innerFirst === undefined || (scanOnly && innerFirst && !ordersOuter)) return undefined
     // MySQL substitutes the first field of an equality class after join ordering.
     const outerType = !innerFirst && nullTest ? tableColumn(outerField, outerDef, outerAlias)?.type : undefined
     const preserve = nullTest && outerType?.type === key.type.field && (outerType.unsigned === true) === key.type.unsigned
       ? { ...nullTest, operand: outerField } : undefined
-    return { from: alternative, where: preserve ? and(equality, preserve) : predicate, outerLoop: !any && !innerFirst, preserve }
+    return { from: alternative, where: preserve ? and(equality, preserve) : predicate, outerLoop: !any && !innerFirst && !scanOnly, preserve }
   })
 }
 
