@@ -3,12 +3,17 @@ import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
 import { MySQL } from '@myjs/core'
 
-test('matching integer equality infers an outer range without losing exact bounds or fresh data', async () => {
+async function rangeConnection() {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = await mysql.createConnection(db === undefined
     ? { host: host ?? 'reference', user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root', supportBigNumbers: true, bigNumberStrings: true }
     : { stream: db.createStream(), user: 'root', supportBigNumbers: true, bigNumberStrings: true })
+  return { db, conn }
+}
+
+test('matching integer equality infers an outer range without losing exact bounds or fresh data', async () => {
+  const { db, conn } = await rangeConnection()
   const schema = 'inferred_range111'
   try {
     await conn.query(`CREATE DATABASE ${schema}`)
@@ -81,6 +86,54 @@ test('matching integer equality infers an outer range without losing exact bound
         assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
       } finally { conn.unprepare(sql) }
       await conn.query('DROP TABLE pa,ch')
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
+
+test('nullable INT with a fractional NOT IN list skips NULL keys when the range is cheaper', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'null_list_range373'
+  const whole = /Covering index scan on c using by_g/
+  const range = /Covering index range scan on c using by_g over \(NULL < g\)/
+  const cases = [
+    ['g NOT IN (NULL,2.5)', [], range],
+    ['g NOT IN (2.5,NULL)', [], range],
+    ['g NOT IN (NULL,-2.5)', [], range],
+    ['g NOT IN (NULL,2147483647.49)', [], range],
+    ['g NOT IN (NULL,2147483647.5)', [], whole],
+    ['g NOT IN (-2147483648.49,NULL)', [], range],
+    ['g NOT IN (-2147483648.5,NULL)', [], whole],
+    ['g NOT IN (NULL,NULL)', [], whole],
+    ['g NOT IN (NULL,2.5) OR g=2', [[2], [2]], range],
+  ] as const
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE c(id INT PRIMARY KEY,g INT,KEY by_g(g)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO c VALUES (1,0),(2,1),(3,2),(4,3),(5,0),(6,1),(7,2),(8,3)')
+    for (const withNulls of [false, true, false]) {
+      await conn.query(`UPDATE c SET g=${withNulls ? 'NULL' : '1'} WHERE id IN(2,6)`)
+      await conn.query('ANALYZE TABLE c')
+      for (const [predicate, expected, nullAccess] of cases) {
+        const sql = `SELECT g FROM c WHERE ${predicate}`
+        const explain = `EXPLAIN FORMAT=TREE ${sql}`
+        const options = { sql, rowsAsArray: true }
+        for (const method of ['query', 'execute'] as const) {
+          const [plans] = method === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
+          const plan = String(plans[0]?.EXPLAIN)
+          assert.match(plan, /-> Filter\b/)
+          assert.match(plan, withNulls ? nullAccess : whole, predicate)
+          const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+          assert.deepEqual(rows, expected, predicate)
+          assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
+            ['g', 3, 11, 16392, 0, 63, schema, 'c', 'c', 'g'],
+          ])
+          assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+        }
+      }
     }
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)

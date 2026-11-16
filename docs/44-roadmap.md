@@ -147,9 +147,11 @@ cases and two correlated `EXISTS` cases with a noncovering integer
 residual also match. The `NOT IN` case with a noncovering wildcard-leading
 `LIKE` uses the dependent table scan. The optimizer-proved empty inner
 ranges and the covering build for a required-field `IS NOT NULL` also
-match. Next, compare the covering range and whole-index reads when an
-inner `NOT IN` list contains NULL. Compound predicates and other cost
-profiles remain open.
+match. The range optimizer now prices a NULL-skipping index read for a
+two-item `NOT IN` list containing a literal NULL and a fractional decimal
+that rounds within the nullable signed `INT` key's bounds. Next, use the
+selected covering access to cost the dependent membership build. Compound
+predicates and other cost profiles remain open.
 
 **0.3 is staged**, with exact workspace versions and installed-package smoke
 checks. Publication still requires claiming the npm scope/name and publishing
@@ -2379,6 +2381,20 @@ single-table GROUP BY uses separate JOIN and GROUP BY eligibility for
 forced hints. Temporary aggregation keeps the selected scan and its
 first-seen group order. Four MySQL 8.4.11 audits improve from 544 to 1,236
 complete matches of 1,440, preserving all 56,064 matching facts.
+
+**M5.49 NULL-skipping range for fractional `NOT IN`, verified.** A direct
+nullable signed `INT` `NOT IN` with a literal NULL and a fractional decimal
+literal admits a range starting after the NULL keys when rounding the literal
+stays within signed `INT` bounds. The existing range optimizer compares it
+with the full read. The original filter still runs,
+including when the predicate is part of an `OR`. Both protocols retain the
+plan and return the same rows, fields and warnings as MySQL 8.4.11 after
+adding and removing NULL keys. The pinned audit fixes 110 of 2,304 outcomes
+and preserves every other outcome. A separate 576-outcome literal audit
+fixes 160 more, and all 760 signed-boundary and magnitude outcomes agree.
+Parser/core/facade measure 45,611/334,360/334,265 B gzipped within the
+existing caps. Integral list items, inverted `BETWEEN` estimation, and the
+cost of building membership from a covering range remain open.
 
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.

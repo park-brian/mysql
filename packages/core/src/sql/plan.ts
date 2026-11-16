@@ -331,17 +331,18 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
 }
 
 const EMPTY = new Uint8Array(0)
+const NULL_KEY: KeyBound = { values: [null], inclusive: true }
+const pointRange = (bound: KeyBound): KeyRange => ({ from: bound, to: bound })
 
 /** Intervals as EXPLAIN writes a range: `(2 < grp <= 5) OR (grp = 7)`, `(NULL < grp)`, `(grp = NULL)`. */
 function describeIntervals(intervals: readonly Interval[], name: string): string {
   const text = (v: Exclude<Value, null>): string => {
     switch (v.kind) {
       case 'int':
+      case 'double':
         return String(v.v)
       case 'decimal':
         return renderDecimal(v)
-      case 'double':
-        return String(v.v)
       case 'string':
         return `'${textOf(v).replace(/'/g, "''")}'`
       default:
@@ -352,9 +353,9 @@ function describeIntervals(intervals: readonly Interval[], name: string): string
     .map((i) => {
       if (i === 'null') return `(${name} = NULL)`
       if (i.lo !== undefined && i.hi !== undefined && i.lo.inclusive && i.hi.inclusive && compareValues(i.lo.v, i.hi.v) === 0) return `(${name} = ${text(i.lo.v)})`
-      const lo = i.lo === undefined ? 'NULL < ' : `${text(i.lo.v)} ${i.lo.inclusive ? '<=' : '<'} `
+      const lo = i.lo === undefined ? i.hi === undefined ? 'NULL < ' : '' : `${text(i.lo.v)} ${i.lo.inclusive ? '<=' : '<'} `
       const hi = i.hi === undefined ? '' : ` ${i.hi.inclusive ? '<=' : '<'} ${text(i.hi.v)}`
-      return `(${i.lo === undefined && i.hi !== undefined ? '' : lo}${name}${hi})`
+      return `(${lo}${name}${hi})`
     })
     .join(' OR ')
 }
@@ -386,7 +387,6 @@ function mostRows(cost: (rows: number) => number, best: number): number {
  * after the NULLs. `point` marks a range of one non-NULL value.
  */
 function keyRanges(intervals: readonly Interval[], column: ColumnDef): { readonly range: KeyRange; readonly point: boolean }[] | undefined {
-  const nullKey: KeyBound = { values: [null], inclusive: true }
   const range = integerRange(column.type)
   const side = (b: { readonly v: Exclude<Value, null>; readonly inclusive: boolean }, lower: boolean): KeyBound | 'empty' | 'open' | undefined => {
     let { v, inclusive } = b
@@ -410,7 +410,7 @@ function keyRanges(intervals: readonly Interval[], column: ColumnDef): { readonl
   const out: { range: KeyRange; point: boolean }[] = []
   for (const i of intervals) {
     if (i === 'null') {
-      out.push({ range: { from: nullKey, to: nullKey }, point: false })
+      out.push({ range: pointRange(NULL_KEY), point: false })
       continue
     }
     const from = i.lo === undefined ? 'open' : side(i.lo, true)
@@ -441,7 +441,7 @@ export function keyOrder(def: TableDef, indexes = def.indexes): IndexDef[] {
 const ctx = (): StoreContext => ({ strict: true, row: 1, warnings: 0 })
 
 function bound(v: Value, column: ColumnDef, inclusive: boolean): KeyBound | undefined {
-  return proof(() => ({ values: [encodeField(v, column.nullable ? column : { ...column, nullable: true }, ctx())], inclusive }))
+  return proof(() => ({ values: [encodeField(v, column, ctx())], inclusive }))
 }
 
 /**
@@ -469,10 +469,11 @@ const UNBOUND: KeyBound = { values: [], inclusive: true }
 
 function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Condition[], env: Env, outer: OuterColumn | undefined): { access: Access; score: number } | undefined {
   const clustered = index.kind === 'primary'
+  const read = (ranges: readonly KeyRange[], score = 3) => ({ access: { index: index.name, ranges }, score })
   for (const c of conditions) {
     // An outer column with no outer row to read: a lookup by type, for EXPLAIN.
     const o = c.op === '=' && env.outer === undefined ? outer?.(c.constants[0] as Expression) : undefined
-    if (o !== undefined) return exactType(o.type, column) ? { access: { index: index.name, ranges: [{ from: UNBOUND, to: UNBOUND }] }, score: 3 } : undefined
+    if (o !== undefined) return exactType(o.type, column) ? read([pointRange(UNBOUND)]) : undefined
   }
   const evaluate = (e: Expression): Value | undefined => proof(() => {
     const o = outer?.(e)
@@ -482,9 +483,10 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
     if (c.op === 'IS NULL' || c.op === '<=>') {
       // NULL-safe: `= v` for a value, IS NULL for NULL — a key read either way.
       const v = c.op === 'IS NULL' ? null : evaluate(c.constants[0] as Expression)
-      if (v === null && column.nullable) return { access: { index: index.name, ranges: [{ from: { values: [null], inclusive: true }, to: { values: [null], inclusive: true } }] }, score: 3 }
+      // Separate bounds keep this a range in the plan description.
+      if (v === null && column.nullable) return read([{ from: NULL_KEY, to: { values: [null], inclusive: true } }])
       const b = v === undefined || v === null || !exact(v, column) ? undefined : bound(v, column, true)
-      if (b !== undefined) return { access: { index: index.name, ranges: [{ from: b, to: b }] }, score: 3 }
+      if (b !== undefined) return read([pointRange(b)])
       continue
     }
     if (c.op === '=' || c.op === 'IN') {
@@ -497,15 +499,14 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
       // insensitive column read the same key twice (found by review).
       // A byte a character: the strings order as the keys do.
       const part = keyPartOf(column.type, true)
-      const nullable = { ...column, nullable: true }
       const points = new Map<string, KeyBound>()
       for (const v of values as Value[]) {
-        const b = bound(v, nullable, true)
+        const b = bound(v, column, true)
         if (b === undefined) return undefined
         points.set(byteKey(encodeKey(b.values, [part])), b)
       }
-      const ranges = [...points.entries()].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)).map(([, b]) => ({ from: b, to: b }))
-      return { access: { index: index.name, ranges }, score: 3 }
+      const ranges = [...points.entries()].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)).map(([, b]) => pointRange(b))
+      return read(ranges)
     }
   }
   // A range, on the clustered index only (see the header).
@@ -523,7 +524,7 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
   }
   if (from === undefined && to === undefined) return undefined
   // A lower bound alone still skips the NULLs a clustered key cannot hold anyway.
-  return { access: { index: index.name, ranges: [{ ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }) }] }, score: from !== undefined && to !== undefined ? 2 : 1 }
+  return read([{ ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }) }], from !== undefined && to !== undefined ? 2 : 1)
 }
 
 /**
@@ -534,7 +535,7 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
 export function pointAccess(index: IndexDef, column: ColumnDef, v: Value): Access | undefined {
   if (!exact(v, column)) return undefined
   const b = bound(v, column, true)
-  return b === undefined ? undefined : { index: index.name, ranges: [{ from: b, to: b }] }
+  return b === undefined ? undefined : { index: index.name, ranges: [pointRange(b)] }
 }
 
 /** A literal, `-literal` or `?`, evaluated. */
