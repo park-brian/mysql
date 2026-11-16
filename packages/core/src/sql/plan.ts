@@ -156,18 +156,14 @@ function conditionOf(e: Expression, def: TableDef, alias: string, outer: OuterCo
     return column === undefined ? undefined : { column, op: 'IS NULL', constants: [] }
   }
   if (e.kind !== NODE.BINARY) return undefined
+  const left = tableColumn(e.left, def, alias)
   if (e.op === 'IN' && e.right.kind === NODE.ROW && e.right.items.every(constant)) {
-    const column = tableColumn(e.left, def, alias)?.name
-    return column === undefined ? undefined : { column, op: 'IN', constants: e.right.items }
+    return left === undefined ? undefined : { column: left.name, op: 'IN', constants: e.right.items }
   }
-  if (e.op === 'BETWEEN') {
-    const column = tableColumn(e.left, def, alias)
-    if (column !== undefined && equalBounds(e, env, column)) return { column: column.name, op: '=', constants: [e.right] }
-  }
+  if (e.op === 'BETWEEN' && left !== undefined && equalBounds(e, env, left)) return { column: left.name, op: '=', constants: [e.right] }
   const op = e.op === '<>' || e.op === '!=' ? undefined : REVERSE_COMPARISON[e.op] as Op | undefined
   if (op === undefined) return undefined
-  const left = tableColumn(e.left, def, alias)?.name
-  if (left !== undefined && constant(e.right)) return { column: left, op: e.op as Op, constants: [e.right] }
+  if (left !== undefined && constant(e.right)) return { column: left.name, op: e.op as Op, constants: [e.right] }
   const right = tableColumn(e.right, def, alias)?.name
   if (right !== undefined && constant(e.left)) return { column: right, op, constants: [e.left] }
   return undefined

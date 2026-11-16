@@ -2251,9 +2251,9 @@ outcome. Both protocols retain the choices across writes, NULL keys, an
 empty child and optimizer switches. Fresh case 104, statement 19 brings
 the seeds to 129 of 138. The committed ledger stays at 2,140 of 2,248 with
 the 2,118 floor. Parser/core/facade measure 45,611/334,316/334,242 B gzipped
-within the unchanged caps. Noncovering tests and NULL-bearing list ranges
-remain open. The range planner's existing estimation dive for inverted
-`BETWEEN` remains M5.49 work.
+within the unchanged caps. Noncovering tests and other list profiles
+remain open. M5.49 removes the estimation dive for inverted integer
+`BETWEEN` bounds and keeps fractional endpoint costing open.
 
 **M5.47 covering membership builds for fractional `NOT IN` lists, verified.**
 For a nullable signed `INT` in a one-page child, a direct NULL and
@@ -2408,8 +2408,19 @@ adding and removing NULL keys. The pinned audit fixes 110 of 2,304 outcomes
 and preserves every other outcome. A separate 576-outcome literal audit
 fixes 160 more, and all 760 signed-boundary and magnitude outcomes agree.
 Parser/core/facade measure 45,611/334,360/334,265 B gzipped within the
-existing caps. Integral list items, inverted `BETWEEN` estimation, and the
-cost of building membership from a covering range remain open.
+existing caps. The M5.47 covering membership repair above now uses this
+range's measured cost. Integral list items and fractional `BETWEEN` endpoint
+estimation remain open.
+
+**M5.49 inverted integer `BETWEEN` bounds, verified.** The range optimizer
+recognizes reversed integer endpoints before encoding keys or diving into
+the index. Both wire protocols retain matching plans, rows, fields and
+warnings after writes. A counted regression confirms that the inverted
+interval performs zero index reads. The standalone and nested audits
+preserve all 2,758 outcomes. Parser/core/facade measure
+45,614/334,360/334,253 B gzipped within the existing caps. Fractional bounds
+whose stored endpoints exclude the only key and the choice of nested
+semijoin strategy remain open.
 
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.

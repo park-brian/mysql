@@ -140,3 +140,65 @@ test('nullable INT with a fractional NOT IN list skips NULL keys when the range 
     await conn.end(); await db?.end()
   }
 })
+
+test('inverted integer BETWEEN bounds skip index dives in both protocols', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'inverted_between375'
+  const range = /Covering index range scan on c using by_g over/
+  const zero = /^-> Zero rows\b/
+  let reads = 0
+  let restore: (() => void) | undefined
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE c(id INT PRIMARY KEY,g INT,KEY by_g(g)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO c VALUES (1,0),(2,2),(3,5),(4,6),(5,7),(6,8),(7,-5),(8,NULL)')
+    await conn.query('ANALYZE TABLE c')
+    const catalog = db?.catalog
+    if (catalog !== undefined) {
+      const open = catalog.table.bind(catalog)
+      restore = () => { catalog.table = open }
+      catalog.table = (database, name, trx) => {
+        const table = open(database, name, trx)
+        if (database === schema && name === 'c') {
+          const scan = table.indexScan.bind(table)
+          table.indexScan = (...args) => {
+            reads++
+            return scan(...args)
+          }
+        }
+        return table
+      }
+    }
+    for (const hasSix of [true, false]) {
+      if (!hasSix) await conn.query('DELETE FROM c WHERE id=4')
+      const cases = [
+        ['g BETWEEN 3 AND 2', [], zero],
+        ['g BETWEEN -2 AND -3', [], zero],
+        ['g BETWEEN 2 AND 3', [[2]], range],
+        ['g BETWEEN 5.5 AND 6', hasSix ? [[6]] : [], range],
+      ] as const
+      for (const [predicate, expected, access] of cases) {
+        const sql = `SELECT g FROM c WHERE ${predicate}`
+        const options = { sql, rowsAsArray: true }
+        const explain = `EXPLAIN FORMAT=TREE ${sql}`
+        for (const method of ['query', 'execute'] as const) {
+          const before = reads
+          const [plans] = method === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
+          assert.match(String(plans[0]?.EXPLAIN), access, predicate)
+          const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+          assert.deepEqual(rows, expected, predicate)
+          assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
+            ['g', 3, 11, 16392, 0, 63, schema, 'c', 'c', 'g'],
+          ])
+          assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+          if (access === zero) assert.equal(reads, before, predicate)
+        }
+      }
+    }
+  } finally {
+    restore?.()
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})

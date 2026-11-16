@@ -52,7 +52,8 @@ export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, col
   if (disjunction !== undefined) {
     const left = rangeOf(e.left, isColumn, column, value)
     const right = rangeOf(e.right, isColumn, column, value)
-    return disjunction ? union(left, right) : intersect(left, right)
+    if (!disjunction) return intersect(left, right)
+    return left === 'all' || right === 'all' ? 'all' : [...left, ...right]
   }
   const point = (v: Exclude<Value, null>): Interval => ({ lo: { v, inclusive: true }, hi: { v, inclusive: true } })
   const onLeft = isColumn(e.left)
@@ -60,7 +61,7 @@ export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, col
     const a = constantFor(e.right, column, value)
     const b = constantFor(e.extra as Expression, column, value)
     if (a === undefined || b === undefined) return 'all'
-    if (a === null || b === null) return []
+    if (a === null || b === null || (a.kind === 'int' && b.kind === 'int' && compareValues(a, b) === 1)) return []
     return [{ lo: { v: a, inclusive: true }, hi: { v: b, inclusive: true } }]
   }
   if ((e.op === 'IN' || e.op === 'NOT IN') && onLeft && e.right.kind === NODE.ROW) {
@@ -106,11 +107,6 @@ export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, col
     default:
       return [{ hi: { v, inclusive: false } }, { lo: { v, inclusive: false } }]
   }
-}
-
-export function union(a: RangeSet, b: RangeSet): RangeSet {
-  if (a === 'all' || b === 'all') return 'all'
-  return [...a, ...b]
 }
 
 export function intersect(a: RangeSet, b: RangeSet): RangeSet {
