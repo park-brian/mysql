@@ -118,6 +118,23 @@ export function membershipCost(read: number, rows: number, probes: number): numb
 /** The most one lookup is costed at (`worst_seeks`): three scans' worth, never below two pages, nor below a tenth of the rows' pages. */
 const worstSeeks = (t: TableStatistics): number => Math.max(Math.min(PAGE_READ * (t.rows / 10), 3 * scanCost(t)), PAGE_READ * 2)
 
+const noncoveringRefRead = (t: TableStatistics, rows: number): number => Math.min(PAGE_READ * rows, worstSeeks(t))
+
+/** Quote a dependent read and its materialized alternative. A covering ref already wins its scan comparison. */
+export function dependentMembershipAccess(stats: TableStatistics, fanout: number, probes: number, kept: number, materialize: boolean | undefined, recordBytes?: number): 'scan' | 'materialize' | undefined {
+  if (materialize) return 'materialize'
+  const read = scanCost(stats)
+  const scan = accessCost(read, stats.rows)
+  const ref = accessCost(recordBytes === undefined ? noncoveringRefRead(stats, fanout) : indexScanCost(fanout, recordBytes), fanout)
+  const useScan = recordBytes === undefined && scan < ref
+  if (materialize === false) {
+    // Best_read already excludes the optimizer's adjustment on both completed plans.
+    const build = recordBytes === undefined ? scan - 0.001 + MEMORY_CREATE + ROW_EVALUATE * kept + ROW_EVALUATE * probes : membershipCost(read - 0.001, kept, probes)
+    if (build < ((useScan ? scan : ref) - 0.001) * probes) return 'materialize'
+  }
+  return useScan ? 'scan' : undefined
+}
+
 /** One lookup's read (`find_cost_for_ref`). */
 function lookupRead(t: TableStatistics, key: KeyChoice): number {
   if (key.covering) return indexScanCost(key.fanout, key.recordBytes)
@@ -125,7 +142,7 @@ function lookupRead(t: TableStatistics, key: KeyChoice): number {
     const rows = Math.trunc(key.fanout)
     return (rows <= 2 ? rows : t.rows < rows ? t.pages : 1 + (rows / t.rows) * t.pages) * PAGE_READ
   }
-  return Math.min(PAGE_READ * key.fanout, worstSeeks(t))
+  return noncoveringRefRead(t, key.fanout)
 }
 
 /** The access a table is read by after `prefix`: by `key`, or whole. */

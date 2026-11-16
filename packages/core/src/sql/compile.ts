@@ -131,7 +131,7 @@ import { modeOf } from './mode.ts'
 import { NOT_YET, VARIES_PER_EVALUATION, functionCompiler, invalidGroupFunction } from './registry.ts'
 import { clock, escapedBytes, hexOf } from './builtins.ts'
 import { convertTextCharset } from './string-functions.ts'
-import { settle, timeValue } from './temporal-functions.ts'
+import { settle, timeValue, zeroDateTime } from './temporal-functions.ts'
 import { systemVariableInfo } from './variables.ts'
 
 /** One row as operators pass it: a value per column of the scope. */
@@ -611,12 +611,17 @@ export interface Compiled {
 /** Computed REAL items check signed integer bounds; fields and literals own other readers. */
 export function realInteger(c: Compiled, label: () => string): Compiled {
   if (c.type.kind !== 'double') return c
-  return { ...c, integerOf: () => (r, env) => {
-    const value = c.eval(r, env)
-    if (value === null) return null
-    const n = toDouble(value)
+  return realIntegerReader(c, (n) => {
     if (!Number.isFinite(n) || n < Number(MIN_SIGNED) || n >= -Number(MIN_SIGNED)) throw valueOutOfRange(unsignedOf(c.type) ? 'BIGINT UNSIGNED' : 'BIGINT', label())
     return intValue(BigInt(roundHalfEven(n)), unsignedOf(c.type))
+  })
+}
+
+/** Read the source once and apply the INTEGER policy of this REAL producer. */
+function realIntegerReader(c: Compiled, read: (n: number, value: NonNullable<Value>, env: Env) => Value): Compiled {
+  return { ...c, integerOf: () => (row, env) => {
+    const value = c.eval(row, env)
+    return value === null ? null : read(toDouble(value), value, env)
   } }
 }
 
@@ -628,20 +633,14 @@ function uncheckedInteger(n: number): bigint {
 /** A REAL cache reads the stored value; aggregate arguments are not evaluated again. */
 export function cacheInteger(c: Compiled): Compiled {
   if (c.type.kind !== 'double') return c
-  return { ...c, integerOf: () => (r, env) => {
-    const value = c.eval(r, env)
-    return value === null ? null : intValue(uncheckedInteger(toDouble(value)))
-  } }
+  return realIntegerReader(c, (n) => intValue(uncheckedInteger(n)))
 }
 
 /** Physical REAL fields own INTEGER conversion; generated and aggregate slots keep their readers. */
 function fieldInteger(c: Compiled): Compiled {
   if (c.type.kind !== 'double' || (c.type.column === undefined && c.type.temporary !== 'stream')) return c
   const min = Number(MIN_SIGNED)
-  return { ...c, integerOf: () => (r, env) => {
-    const value = c.eval(r, env)
-    if (value === null) return null
-    const n = toDouble(value)
+  return realIntegerReader(c, (n, value, env) => {
     if (c.type.field === FIELD_TYPE.FLOAT) return intValue(uncheckedInteger(n))
     // DOUBLE fields warn inclusively; the largest double below 2^63 is 2^63 - 1024.
     if (n <= min || n >= -min - 1024) {
@@ -651,7 +650,7 @@ function fieldInteger(c: Compiled): Compiled {
       return intValue(n < 0 ? MIN_SIGNED : MAX_SIGNED)
     }
     return intValue(BigInt(roundHalfEven(n)))
-  } }
+  })
 }
 
 /** Read one immutable row slot with its declared metadata. */
@@ -1887,7 +1886,7 @@ export function dateConverter(c: Compiled, written: Expression, other: Compiled,
   }
 }
 
-const ZERO_DATETIME: Value = { kind: 'datetime', v: { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }, type: 'DATETIME', fsp: 0 }
+const ZERO_DATETIME = zeroDateTime()
 
 /**
  * `c`, a number constant compared with a DATE, DATETIME or TIMESTAMP column:
@@ -2119,6 +2118,17 @@ function sameComparisonKind(items: readonly Compiled[], classify: (type: ResultT
   return true
 }
 
+/** The first decisive comparison wins, otherwise a NULL comparison makes the result unknown. */
+function membershipResult<T>(items: readonly T[], negated: boolean, compare: (item: T, index: number) => number | null, decides?: (comparison: number) => boolean): Value {
+  let sawNull = false
+  for (let i = 0; i < items.length; i++) {
+    const c = compare(items[i]!, i)
+    if (c === null) sawNull = true
+    else if (decides?.(c) ?? c === 0) return bool(!negated)
+  }
+  return sawNull ? null : bool(negated)
+}
+
 function inList(negated: boolean, left: Expression, right: Expression, ctx: CompileContext): Compiled {
   if (right.kind === NODE.SUBQUERY) return quantified(negated ? '<>' : '=', negated ? 'ALL' : 'ANY', left, right, ctx)
   const list = right.kind === NODE.ROW ? right.items : [right]
@@ -2128,15 +2138,7 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
     const rows = list.map((i) => shapeOf(i, ctx))
     for (const r of rows) sameShape(lhs, r)
     return {
-      eval: (r, env) => {
-        let sawNull = false
-        for (const item of rows) {
-          const c = compareShapes(lhs, item, r, env, 'equality')
-          if (c === 0) return bool(!negated)
-          if (c === null) sawNull = true
-        }
-        return sawNull ? null : bool(negated)
-      },
+      eval: (r, env) => membershipResult(rows, negated, (item) => compareShapes(lhs, item, r, env, 'equality')),
       type: boolType(true),
     }
   }
@@ -2235,15 +2237,11 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
         if (v === null) return null
         if (values.includes(NO_TIME)) return values.includes(null) ? null : bool(negated)
       }
-      let sawNull = false
-      for (let i = 0; i < items.length; i++) {
-        const w = values === undefined ? (items[i] as Compiled).eval(r, env) : values[i] as Value
+      return membershipResult(items, negated, (item, i) => {
+        const w = values === undefined ? item.eval(r, env) : values[i] as Value
         if (v !== null) checkRight?.(w)
-        const c = compareItem(v, w, i)
-        if (c === 0) return bool(!negated)
-        if (c === null) sawNull = true
-      }
-      return sawNull ? null : bool(negated)
+        return compareItem(v, w, i)
+      })
     },
     type: boolType(a.type.nullable || items.some((i) => i.type.nullable)),
   }
@@ -2995,6 +2993,7 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
   if (plan.columns.length !== as.length) throw operandColumnsError(as.length)
   const test = COMPARISONS[op] as (c: number) => boolean
   const all = quantifier === 'ALL'
+  const decisive = (c: number): boolean => test(c) !== all
   const compareRow = (vs: readonly Value[], r: readonly Value[]): number | null => {
     let unknown = false
     for (let i = 0; i < vs.length; i++) {
@@ -3028,13 +3027,7 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
     const rows = rowsOf(plan, key, row, env)
     if (rows.length === 0) return bool(all)
     const v = as.map((a) => a.eval(row, env))
-    let sawNull = false
-    for (const r of rows) {
-      const c = compareRow(v, r)
-      if (c === null) sawNull = true
-      else if (test(c) !== all) return bool(!all)
-    }
-    return sawNull ? null : bool(all)
+    return membershipResult(rows, all, (r) => compareRow(v, r), decisive)
   }
 }
 

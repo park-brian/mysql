@@ -23,9 +23,10 @@ import { expectTyped } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { sqlError } from '@myjs/protocol'
 import { REVERSE_COMPARISON, columnRefs, logicalShortCircuit, nativeCallName, someNode, visitPostorder } from './ast.ts'
-import type { ColumnDef, FieldBytes, TableDef, TableSpec } from '@myjs/engine'
+import type { FieldBytes, TableDef, TableSpec } from '@myjs/engine'
 import { NODE, TOKEN, lex, parseExpression, type CheckConstraint, type CreateTableNode, type Expression, type Token, type SqlMode } from '@myjs/parser'
-import { decodeField, truth } from '@myjs/types'
+import { truth } from '@myjs/types'
+import { decodeRow } from './operators.ts'
 import { quotedFunctionName } from './value-generator.ts'
 import { compile, type Compiled } from './compile.ts'
 import { escapePrinted, printTableExpression } from './print.ts'
@@ -176,7 +177,7 @@ export function checker(run: Run, def: TableDef): ((fields: readonly FieldBytes[
   const ctx = compileContext(run, new TableScope([{ alias: def.name, def }]), 'check constraint')
   const compiled: [string, Compiled][] = enforced.map((c) => [c.name, compile(parseExpression(c.text), ctx)])
   return (fields) => {
-    const row = def.columns.map((c: ColumnDef, i) => decodeField(fields[i] ?? null, c.type))
+    const row = decodeRow(def.columns, fields)
     for (const [name, c] of compiled) if (truth(c.eval(row, run.env)) === false) return name
     return undefined
   }

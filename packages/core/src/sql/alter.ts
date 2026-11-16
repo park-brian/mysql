@@ -21,6 +21,7 @@ import { sqlError, type OkResult } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, TableDef } from '@myjs/engine'
 import { KEY, NODE, STATEMENT, deparse, type AlterAction, type AlterTableNode, type ColumnDefinition, type Expression } from '@myjs/parser'
 import { decodeField, encodeField, type StoreContext, type Value } from '@myjs/types'
+import { decodeRow } from './operators.ts'
 import { raise, type Compiled } from './compile.ts'
 import { column as columnDef, columnDeprecations, DEFAULT_COLLATION, duplicateKeys, duplicateKeyText, fulltextIndex, indexNamer, tableIndex, visiblePrimary } from './ddl.ts'
 import { checker, checkForeignKeyActions, checksOf, checkViolated, columnChecks, columnsOf, withChecks, type CheckDef } from './checks.ts'
@@ -413,7 +414,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
       return valueOf(s, d === undefined || d === 'none' ? implicitDefault(s) : d.eval([], run.env))
     })
     if (dependent.length > 0) {
-      const values: Value[] = out.map((f, i) => decodeField(f, (columns[i] as ColumnDef).type))
+      const values = decodeRow(columns, out)
       for (const i of dependent) {
         const s = columns[i] as ColumnDef
         out[i] = valueOf(s, (fill[i] as Compiled).eval(values, run.env))
@@ -421,7 +422,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
       }
     }
     // Every generated column again, over the row as copied (8.4.11: an added STORED one is filled).
-    generate?.(out, out.map((f, i) => (f === null ? null : decodeField(f, (columns[i] as ColumnDef).type))), strict, 'error')
+    generate?.(out, decodeRow(columns, out), strict, 'error')
     if (check !== undefined) {
       for (const fk of made) check(checked, fk, out)
     }

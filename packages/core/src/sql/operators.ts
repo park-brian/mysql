@@ -5,7 +5,7 @@
 // reads and decoding. The other operators are testable over a fixed array
 // and it is what lets a join (M5.4) or a sort that spills (M5.5) slot in
 // without the rest noticing.
-import type { RowId, Table, Trx } from '@myjs/engine'
+import type { ColumnDef, FieldBytes, RowId, Table, Trx } from '@myjs/engine'
 import type { Access } from './plan.ts'
 import { compareBytes } from '@myjs/bytes'
 import { collation, encodeCollation } from '@myjs/charsets'
@@ -19,6 +19,10 @@ export interface ScannedRow {
   readonly row: Row
 }
 
+/** Decode the stored fields in logical column order. */
+export const decodeRow = (columns: readonly ColumnDef[], fields: readonly FieldBytes[]): Value[] =>
+  columns.map((column, i) => decodeField(fields[i] ?? null, column.type))
+
 /** The rows an access path reads, in its order. */
 export function* accessRows(table: Table, access: Access, trx?: Trx, current?: boolean, ready?: () => void): Generator<ScannedRow> {
   const { columns } = table.def
@@ -30,7 +34,7 @@ export function* accessRows(table: Table, access: Access, trx?: Trx, current?: b
     const rows = index === undefined ? table.scan(range, trx, mode) : table.indexScan(index, range, trx, mode)
     // Construction precedes readiness; deferred visibility checks and decoding follow it.
     if (ranges === undefined) ready?.()
-    for (const [id, fields] of rows) yield { id, row: columns.map((column, i) => decodeField(fields[i] ?? null, column.type)) }
+    for (const [id, fields] of rows) yield { id, row: decodeRow(columns, fields) }
   }
 }
 
@@ -56,6 +60,15 @@ export function* project(source: Iterable<{ readonly row: Row }>, items: readonl
 export interface SortKey {
   readonly expr: Compiled
   readonly desc: boolean
+}
+
+/** Compare evaluated keys of the same ordering, including implicit ascending keys. */
+export function compareSortKeys(a: readonly Value[], b: readonly Value[], order?: readonly SortKey[]): number {
+  for (let i = 0; i < a.length; i++) {
+    const c = sortValues(a[i] ?? null, b[i] ?? null)
+    if (c !== 0) return order?.[i]?.desc ? -c : c
+  }
+  return 0
 }
 
 /**

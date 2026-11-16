@@ -6,6 +6,20 @@ import { MySQL } from '@myjs/core'
 // @ts-expect-error — the capture owns plan normalization.
 import { planSkeleton } from '../../tools/capture-relational.mjs'
 
+async function readDependentNotIn(conn: mysql.Connection, schema: string, field: string, sql: string, expected: string[][], checkPlan: (plan: string, api: string) => void) {
+  const options = { sql, rowsAsArray: true }
+  const explain = `EXPLAIN FORMAT=TREE ${sql}`
+  for (const api of ['query', 'execute'] as const) {
+    const [rows, fields] = api === 'query' ? await conn.query(options) : await conn.execute(options)
+    assert.deepEqual(rows, expected, api)
+    assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]),
+      [[field, 253, 48, 20485, 0, 255, schema, 'p', 'p', field]], api)
+    assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], api)
+    const [[result]] = api === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
+    checkPlan(planSkeleton(result?.EXPLAIN), api)
+  }
+}
+
 test('quantified subquery coverage distinguishes complete and prefix index parts', async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
@@ -60,26 +74,17 @@ test('dependent NOT IN retains a proved empty input across writes', async () => 
     : { stream: db.createStream(), user: 'root', password: '' })
   const schema = 'quantified_empty_input'
   const all = [['a'], ['b'], ['c'], ['d']]
-  const read = async (key: 'id' | 'k', residual: 'IS NULL' | 'IS NOT NULL', rowsExpected: string[][], lookup = false) => {
+  const read = (key: 'id' | 'k', residual: 'IS NULL' | 'IS NOT NULL', rowsExpected: string[][], lookup = false) => {
     const sql = `SELECT label FROM p WHERE ${key} NOT IN (SELECT parent_id FROM c WHERE qty ${residual}) ORDER BY 1`
-    const options = { sql, rowsAsArray: true }
-    const explain = `EXPLAIN FORMAT=TREE ${sql}`
     const empty = key === 'id' ? 'Filter\n    Covering index scan on p using label\n    Select #2\n        Zero rows'
       : 'Sort\n    Filter\n        Table scan on p\n        Select #2\n            Zero rows'
-    for (const api of ['query', 'execute'] as const) {
-      const [rows, fields] = api === 'query' ? await conn.query(options) : await conn.execute(options)
-      assert.deepEqual(rows, rowsExpected, api)
-      assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]),
-        [['label', 253, 48, 20485, 0, 255, schema, 'p', 'p', 'label']], api)
-      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], api)
-      const [[result]] = api === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
-      const plan = planSkeleton(result?.EXPLAIN)
+    return readDependentNotIn(conn, schema, 'label', sql, rowsExpected, (plan, api) => {
       if (residual === 'IS NULL') assert.equal(plan, empty, api)
       else {
         assert.doesNotMatch(plan, /Zero rows/, api)
         if (lookup) assert.match(plan, /Index lookup on c using by_parent/, api)
       }
-    }
+    })
   }
   try {
     await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
@@ -101,6 +106,61 @@ test('dependent NOT IN retains a proved empty input across writes', async () => 
     await read('id', 'IS NULL', all)
     await read('k', 'IS NULL', all)
     await read('k', 'IS NOT NULL', all)
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
+test('dependent NOT IN costs a text residual as scan, ref-or-null, or materialization', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection(db === undefined
+    ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+    : { stream: db.createStream(), user: 'root', password: '' })
+  const schema = 'quantified_text_cost'
+  const outer = 'Filter\n    Covering index scan on p using name\n    Select #2'
+  const dependent = `${outer}\n        Limit\n            Filter\n                Filter`
+  const scan = `${dependent}\n                    Table scan on c`
+  const lookup = `${dependent}\n                    Index lookup on c using by_parent`
+  const materialized = `${outer}
+        Filter
+            Limit
+                Index lookup on <materialized_subquery> using <auto_distinct_key>
+                    Materialize with deduplication
+                        Filter
+                            Table scan on c`
+  const all = [['a'], ['d'], ['z']]
+  const read = async (plain: string[][], disjunction: string[][], expectedPlan: string) => {
+    for (const [residual, expected] of [["c.label <= 'Mo'", plain], ["c.label >= 'ann' OR c.parent_id IS NOT NULL", disjunction]] as const) {
+      const sql = `SELECT name FROM p WHERE id NOT IN (SELECT parent_id FROM c WHERE ${residual}) ORDER BY 1`
+      await readDependentNotIn(conn, schema, 'name', sql, expected, (plan, api) => assert.equal(plan, expectedPlan, api))
+    }
+  }
+  try {
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE c(id INT PRIMARY KEY,parent_id INT,label VARCHAR(12),KEY by_parent(parent_id)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO p VALUES (1,'d'),(2,'a'),(3,'z')")
+    await conn.query('ANALYZE TABLE p,c')
+    await read(all, all, scan)
+    await conn.query("INSERT INTO c VALUES(1,1,'ann'),(2,3,'x')")
+    await conn.query('ANALYZE TABLE p,c')
+    await read([['a'], ['z']], [['a']], scan)
+    await conn.query("INSERT INTO c VALUES(3,2,'al'),(4,4,'éva'),(5,NULL,'red'),(6,6,'Mo')")
+    await conn.query('ANALYZE TABLE p,c')
+    await read([['z']], [], lookup)
+    await conn.query("SET optimizer_switch='subquery_materialization_cost_based=off'")
+    await read([['z']], [], materialized)
+    await conn.query("UPDATE c SET label='Mo' WHERE parent_id IS NULL")
+    await read([], [], materialized)
+    await conn.query("SET optimizer_switch='materialization=off'")
+    await conn.query('DELETE FROM c')
+    await conn.query('ANALYZE TABLE p,c')
+    await read(all, all, scan)
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()

@@ -33,7 +33,7 @@ import { equalBounds, pointAccess, splitAnd } from './plan.ts'
 import { accessRows } from './operators.ts'
 import { intersect, rangeOf, type RangeSet } from './ranges.ts'
 import { equalSlots, safeResolve } from './scope.ts'
-import { REVERSE_COMPARISON, isOrderedComparison, logicalShortCircuit, operandPairs, rewriteExpression } from './ast.ts'
+import { REVERSE_COMPARISON, isOrderedComparison, logicalShortCircuit, operandPairs, rewriteExpression, signedOperand } from './ast.ts'
 
 /** A schema key that identifies a row even when comparisons can see NULL. */
 export function uniqueKey(def: TableDef, index: IndexDef): boolean {
@@ -126,14 +126,16 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     const hit = scope.columnAt(index)
     const def = hit?.table.def
     if (hit === undefined || def === undefined || nullable.has(hit.table.alias)) return undefined
-    const column = def.columns.find((c) => c.name === hit.column.name)
+    const column = def.columns[index - hit.table.offset]
     return column === undefined ? undefined : { def, column, alias: hit.table.alias }
   }
 
   // Equality classes, and the constants they are held to.
   const { root: find, union } = equalSlots()
-  const isConstant = (e: Expression): boolean =>
-    (e.kind === NODE.LITERAL && e.type !== 'null') || (e.kind === NODE.PLACEHOLDER && ctx.params !== undefined) || (e.kind === NODE.UNARY && e.op === '-' && isConstant(e.operand))
+  const isConstant = (e: Expression): boolean => {
+    const item = signedOperand(e)
+    return item.kind === NODE.LITERAL ? item.type !== 'null' : item.kind === NODE.PLACEHOLDER && ctx.params !== undefined
+  }
   for (const c of pool) {
     if (c.kind === NODE.BINARY && c.op === '=') {
       const l = slot(c.left)
@@ -171,11 +173,11 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     }
     return false
   }
-  const isNull = (e: Expression | undefined): boolean => e !== undefined && e.kind === NODE.LITERAL && e.type === 'null'
+  const isNull = (e: Expression | undefined): boolean => e?.kind === NODE.LITERAL && e.type === 'null'
   const literalNumber = (e: Expression): number | undefined => {
     const neg = e.kind === NODE.UNARY && e.op === '-'
     const lit = neg ? e.operand : e
-    if (lit.kind !== NODE.LITERAL || (lit.type !== 'int' && lit.type !== 'decimal' && lit.type !== 'double')) return undefined
+    if (lit.kind !== NODE.LITERAL || !numberLiteral(lit)) return undefined
     return (neg ? -1 : 1) * Number(lit.value)
   }
 
@@ -194,30 +196,21 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     if (!inOn && c.kind === NODE.UNARY && c.op === 'IS NULL') {
       const i = slot(c.operand)
       const col = i === undefined ? undefined : columnAt(i)
-      if (col !== undefined && !col.column.nullable) return true
+      if (col?.column.nullable === false) return true
     }
     if (c.kind !== NODE.BINARY) return false
-    if (isComparison(c.op)) {
-      const l = slot(c.left)
-      const r = slot(c.right)
-      const i = l ?? r
-      const other = l !== undefined ? c.right : c.left
-      if (i !== undefined && columnAt(i) !== undefined && isNull(other) && indexedClass(i)) return true
-      if (c.op === '=' && i !== undefined && neverEqual(columnAt(i)?.column, other)) return true
-    }
-    if (c.op === '<=>') {
-      // `int_col <=> 2.5` folds as `=` does, index or none (8.4.11).
+    if (isComparison(c.op) || c.op === '<=>') {
       const l = slot(c.left)
       const i = l ?? slot(c.right)
-      if (i !== undefined && neverEqual(columnAt(i)?.column, l !== undefined ? c.right : c.left)) return true
-    }
-    if (isOrderedComparison(c.op)) {
-      const l = slot(c.left)
-      const r = slot(c.right)
+      if (i === undefined) return false
+      const other = l !== undefined ? c.right : c.left
+      const column = columnAt(i)?.column
+      if (c.op !== '<=>' && column !== undefined && isNull(other) && indexedClass(i)) return true
+      // `int_col <=> 2.5` folds as `=` does, index or none (8.4.11).
+      if (c.op === '=' || c.op === '<=>') return neverEqual(column, other)
       // With the column on the left; `5 < c` is `c > 5`.
-      const at = l ?? r
       const op = l !== undefined ? c.op : REVERSE_COMPARISON[c.op]!
-      if (at !== undefined && pastRange(columnAt(at)?.column, op, l !== undefined ? c.right : c.left)) return true
+      return isOrderedComparison(op) && pastRange(column, op, other)
     }
     if (c.op === 'BETWEEN') {
       const i = slot(c.left)
@@ -251,7 +244,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
         }
       }
       const col = first === i ? undefined : columnAt(first)
-      if (col !== undefined && !col.column.nullable) return { empty: true, constTables: [], straight }
+      if (col?.column.nullable === false) return { empty: true, constTables: [], straight }
     }
   }
 

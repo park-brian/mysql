@@ -42,7 +42,7 @@ import { LITERAL, NODE, QUERY, REF, type Expression, type IndexHint, type QueryE
 import { messages, sqlError } from '@myjs/protocol'
 import { integerBytes, truth, type ColumnType, type Value } from '@myjs/types'
 import { compatibleEqualityKeys, isComparison, type Compiled, type Env, type Row, type Scope } from './compile.ts'
-import { filterPlan, indexLookup, lookupMaterialized, materialize, planNode, scanMaterialized, wrap, type PlanNode } from './explain.ts'
+import { coveringScan, filterPlan, indexLookup, lookupMaterialized, materialize, planNode, scanMaterialized, tableScan, wrap, type PlanNode } from './explain.ts'
 import { FULL_SCAN, chooseAccess, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type InferredRange, type OuterColumn, type RangeCosting } from './plan.ts'
 import { ROW_EVALUATE, bestAccess, floorFilter, indexScanCost, joinOrder, materializedAntijoinWins, membershipCost, type Candidate, type FirstMatch, type KeyChoice, type Positioned, type RangeRead } from './cost.ts'
 import { rowKey, valueKey } from './keys.ts'
@@ -1774,7 +1774,7 @@ function tableOp(t: FromTable, settings: LeafSettings, held?: Access): Op {
       if (t.def === undefined) {
         const d = t.derived?.explain?.()
         if (d?.merged) return d.node
-        return planNode(`Table scan on ${t.alias}`, planNode(d?.materialize ?? 'Materialize', d?.children))
+        return tableScan(t.alias, planNode(d?.materialize ?? 'Materialize', d?.children))
       }
       const access = leafAccess(t, settings, env)
       const order = orderFor(t, settings)
@@ -1783,8 +1783,8 @@ function tableOp(t: FromTable, settings: LeafSettings, held?: Access): Op {
         const covers = order.covering || settings.covering.get(t.alias) === order.index
         return planNode(`${covers ? 'Covering index' : 'Index'} scan on ${t.alias} using ${order.index}${order.reverse ? ' (reverse)' : ''}`)
       }
-      if (access.index === undefined) return planNode(`Table scan on ${t.alias}`)
-      if (access.ranges === undefined) return planNode(`Covering index scan on ${t.alias} using ${access.index}`)
+      if (access.index === undefined) return tableScan(t.alias)
+      if (access.ranges === undefined) return coveringScan(t.alias, access.index)
       const index = t.def.indexes.find((i) => i.name === access.index)
       const points = access.ranges.every((r) => r.from !== undefined && r.from === r.to)
       // A secondary index that holds every column the query reads is read alone.

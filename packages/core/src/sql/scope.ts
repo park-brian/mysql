@@ -156,21 +156,21 @@ export class TableScope implements Scope {
   }
 
   /** The slots `*` or `t.*` expands to, in order. ER_BAD_TABLE_ERROR for a `t.*` naming no table. */
-  star(table: string | undefined): { readonly index: number; readonly name: string; readonly type: ResultType }[] {
-    const at = (index: number): { index: number; name: string; type: ResultType } => {
-      const c = this.columnAt(index)!.column
-      return { index, name: c.name, type: c.type }
+  *star(table: string | undefined): Iterable<ScopeColumn & { readonly index: number; readonly alias: string }> {
+    if (table === undefined && this.#visible !== undefined) {
+      for (const index of this.#visible) {
+        const { table, column } = this.columnAt(index)!
+        yield { ...column, index, alias: table.alias }
+      }
+      return
     }
-    if (table === undefined && this.#visible !== undefined) return this.#visible.map(at)
-    const out: { index: number; name: string; type: ResultType }[] = []
     let matched = false
     for (const t of this.tables) {
       if (table !== undefined && t.alias !== table) continue
       matched = true
-      t.columns.forEach((c, i) => out.push({ index: t.offset + i, name: c.name, type: c.type }))
+      for (const [i, column] of t.columns.entries()) yield { ...column, index: t.offset + i, alias: t.alias }
     }
     if (table !== undefined && !matched) throw unknownTableError(table)
-    return out
   }
 
   /** The table a slot belongs to, and its column there. */

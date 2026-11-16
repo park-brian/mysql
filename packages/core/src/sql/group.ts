@@ -46,7 +46,6 @@ import {
   intValue,
   jsonObject,
   jsonValue,
-  sortValues,
   stringValue,
   sumAccumulator,
   sumPrecision,
@@ -63,7 +62,7 @@ import { firstKey, rowKey, valueKey } from './keys.ts'
 import { canonicalFunctionName, wrongParameterCount } from './registry.ts'
 import { asJson } from './json.ts'
 import { decimalType, doubleType, floatLength, intType, jsonType, stringType, type ResultType } from './meta.ts'
-import type { SortKey } from './operators.ts'
+import { compareSortKeys, type SortKey } from './operators.ts'
 
 export const isAggregate = (e: Expression): boolean => e.kind === NODE.CALL && e.over === undefined && AGGREGATE_NAMES.has(nativeCallName(e))
 
@@ -250,9 +249,8 @@ export class AggregateSink {
                   n++
                   return
                 }
-                const vs = argumentValues(args, row, env)
-                if (vs === undefined) return
-                if (seen !== undefined && !firstKey(seen, rowKey(vs))) return
+                const values = argumentValues(args, row, env)
+                if (values === undefined || (seen !== undefined && !firstKey(seen, rowKey(values)))) return
                 n++
               },
               result: () => intValue(n),
@@ -291,8 +289,8 @@ export class AggregateSink {
 }
 
 /** Evaluate arguments in order, stopping at the first NULL. */
-function argumentValues(args: readonly Compiled[], row: Row, env: Env): Value[] | undefined {
-  const out: Value[] = []
+function argumentValues(args: readonly Compiled[], row: Row, env: Env): NonNullable<Value>[] | undefined {
+  const out: NonNullable<Value>[] = []
   for (const a of args) {
     const v = a.eval(row, env)
     if (v === null) return undefined
@@ -381,24 +379,14 @@ function groupConcat(e: CallNode, args: readonly Compiled[], type: ResultType, d
       const seen = distinct ? new Set<string>() : undefined
       return {
         add(row, env) {
-          const vs = argumentValues(args, row, env)
-          if (vs === undefined) return
-          if (seen !== undefined && !firstKey(seen, rowKey(vs))) return
+          const parts = argumentValues(args, row, env)
+          if (parts === undefined || (seen !== undefined && !firstKey(seen, rowKey(parts)))) return
           // A binary result joins bytes, which need not be text in any charset.
-          const parts = vs as Exclude<Value, null>[]
           entries.push({ text: binary ? '' : parts.map(toText).join(''), bytes: binary ? concatBytes(parts.map(valueBytes)) : undefined, keys: order.map((o) => o.expr.eval(row, env)) })
         },
         result() {
           if (entries.length === 0) return null
-          if (order.length > 0) {
-            entries.sort((a, b) => {
-              for (let i = 0; i < order.length; i++) {
-                const c = sortValues(a.keys[i] ?? null, b.keys[i] ?? null)
-                if (c !== 0) return (order[i] as SortKey).desc ? -c : c
-              }
-              return 0
-            })
-          }
+          if (order.length > 0) entries.sort((a, b) => compareSortKeys(a.keys, b.keys, order))
           if (binary) {
             const sep = utf8(separator)
             const all = concatBytes(entries.flatMap((x, i) => (i === 0 ? [x.bytes as Uint8Array] : [sep, x.bytes as Uint8Array])))
@@ -491,13 +479,7 @@ export function* groupRows(source: Iterable<{ readonly row: Row }>, plan: GroupP
   else {
     // Stable: rows of one group keep the order they came in.
     const all = [...source].map(({ row }) => ({ row, keys: keysOf(row) }))
-    all.sort((a, b) => {
-      for (let i = 0; i < K; i++) {
-        const c = sortValues(a.keys[i] ?? null, b.keys[i] ?? null)
-        if (c !== 0) return c
-      }
-      return 0
-    })
+    all.sort((a, b) => compareSortKeys(a.keys, b.keys))
     input = all
   }
   const levelCount = plan.rollup ? K + 1 : 1

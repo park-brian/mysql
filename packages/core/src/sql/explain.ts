@@ -19,9 +19,13 @@ export interface PlanNode {
 
 export const planNode = (label: string, input: PlanNode | readonly PlanNode[] = []): PlanNode => ({ label, children: 'label' in input ? [input] : input })
 
+export const tableScanLabel = (alias: string): string => `Table scan on ${alias}`
+export const tableScan = (alias: string, input?: PlanNode | readonly PlanNode[]): PlanNode => planNode(tableScanLabel(alias), input)
+export const coveringScan = (alias: string, key: string): PlanNode => planNode(`Covering index scan on ${alias} using ${key}`)
+
 /** A temporary set's build and its whole-table read are independent iterators. */
 export const materialize = (input?: PlanNode | readonly PlanNode[]): PlanNode => planNode('Materialize with deduplication', input)
-export const scanMaterialized = (build: PlanNode): PlanNode => planNode('Table scan on <subquery2>', build)
+export const scanMaterialized = (build: PlanNode): PlanNode => tableScan('<subquery2>', build)
 export const lookupMaterialized = (build: PlanNode, dependent = false): PlanNode =>
   indexLookup(dependent ? '<materialized_subquery>' : '<subquery2>', '<auto_distinct_key>', !dependent, false, build)
 
@@ -34,7 +38,8 @@ export function indexLookup(alias: string, index: string, unique: boolean, cover
 /** `node` under `label`, or `node` alone when `when` is false. */
 export const wrap = (when: boolean, label: string, node: PlanNode): PlanNode => (when ? planNode(label, node) : node)
 
-export const filterPlan = (when: boolean, input: PlanNode): PlanNode => wrap(when, 'Filter', input)
+export const filterNode = (input: PlanNode): PlanNode => planNode('Filter', input)
+export const filterPlan = (when: boolean, input: PlanNode): PlanNode => when ? filterNode(input) : input
 
 /** EXPLAIN FORMAT=TREE's text: each iterator on its own line as `-> name`, its inputs four spaces in. */
 export function renderTree(roots: readonly PlanNode[]): string {

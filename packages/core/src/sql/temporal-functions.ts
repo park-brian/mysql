@@ -148,8 +148,19 @@ function microsToDatetime(us: bigint): MysqlDateTime | undefined {
   return { ...date, hour: Math.floor(rest / 3_600_000_000), minute: Math.floor(rest / 60_000_000) % 60, second: Math.floor(rest / 1_000_000) % 60, microsecond: rest % 1_000_000 }
 }
 
-const datetimeValue = (v: MysqlDateTime, fsp: number): Value => ({ kind: 'datetime', v, type: 'DATETIME', fsp })
-const dateValue = (v: Pick<MysqlDateTime, 'year' | 'month' | 'day'>): Value => ({ kind: 'datetime', v: { year: v.year, month: v.month, day: v.day, hour: 0, minute: 0, second: 0, microsecond: 0 }, type: 'DATE', fsp: 0 })
+function datetimeValue(v: MysqlDateTime, fsp: number, type: 'DATE' | 'DATETIME' = 'DATETIME'): Value {
+  return { kind: 'datetime', v, type, fsp }
+}
+
+function dateValue(v: Pick<MysqlDateTime, 'year' | 'month' | 'day'>, type: 'DATE' | 'DATETIME' = 'DATE'): Value {
+  const { year, month, day } = v
+  return datetimeValue({ year, month, day, hour: 0, minute: 0, second: 0, microsecond: 0 }, 0, type)
+}
+
+/** The zero temporal carried by a DATE or DATETIME result. */
+export function zeroDateTime(type: 'DATE' | 'DATETIME' = 'DATETIME'): Value {
+  return dateValue({ year: 0, month: 0, day: 0 }, type)
+}
 /** A TIME result retains its declared precision and the native result range. */
 export function timeValue(v: MysqlTime, fsp: number, truncate = false): TimeValue {
   let rounded = roundTime(v, fsp, truncate)
@@ -706,7 +717,7 @@ export function temporalArithmetic(name: string, e: CallNode, ctx: CompileContex
         eval: (r, env) => {
           const d = n(r, env)
           if (d === null) return null
-          if (d <= 0n || d > BigInt(MAX_DAY_NUMBER)) return dateValue({ year: 0, month: 0, day: 0 })
+          if (d <= 0n || d > BigInt(MAX_DAY_NUMBER)) return zeroDateTime('DATE')
           return dateValue(dateOfDayNumber(Number(d)))
         },
         type: datetimeType(FIELD_TYPE.DATE, 0, x.type.nullable),

@@ -37,10 +37,10 @@ import { FIELD_TYPE } from '@myjs/bytes'
 import { nativeCallName } from './ast.ts'
 import type { CallNode, Expression, FrameBound, WindowSpec } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
-import { add, addInterval, compareValues, doubleValue, intValue, intervalOf, sortValues, timeOrdinal, toInteger, type Interval, type Value } from '@myjs/types'
+import { add, addInterval, compareValues, doubleValue, intValue, intervalOf, timeOrdinal, toInteger, type Interval, type Value } from '@myjs/types'
 import { AGGREGATE_NAMES, aggregate as resultTypeOf, compile, constantEnv, convertTo, fieldValue, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { AggregateSink, type AggregateSpec } from './group.ts'
-import { warnNonScalar } from './operators.ts'
+import { compareSortKeys, warnNonScalar } from './operators.ts'
 import { isInterval } from './interval.ts'
 import { microsToTime } from './temporal-functions.ts'
 import { copiedLength, doubleType, intType, type ResultType } from './meta.ts'
@@ -227,6 +227,8 @@ interface Keyed {
   readonly order: readonly Value[]
 }
 
+const sameKeys = (a: readonly Value[], b: readonly Value[]): boolean => compareSortKeys(a, b) === 0
+
 /**
  * The rows with every window's value written into its slot, in the order the
  * last window leaves them. `rows` are the query's rows after WHERE, each as wide
@@ -238,24 +240,13 @@ export function applyWindows(rows: Row[], windows: readonly WindowPlan[], env: E
     const keyed: Keyed[] = current.map((row) => ({ row, partition: w.partition.map((p) => p.eval(row, env)), order: w.order.map((o) => o.expr.eval(row, env)) }))
     warnNonScalar(keyed.map((k) => k.order), env)
     if (w.partition.length > 0 || w.order.length > 0) {
-      keyed.sort((a, b) => {
-        for (let i = 0; i < a.partition.length; i++) {
-          const c = sortValues(a.partition[i] ?? null, b.partition[i] ?? null)
-          if (c !== 0) return c
-        }
-        for (let i = 0; i < a.order.length; i++) {
-          const c = sortValues(a.order[i] ?? null, b.order[i] ?? null)
-          if (c !== 0) return (w.order[i] as { desc: boolean }).desc ? -c : c
-        }
-        // Array.prototype.sort is stable: ties keep the order they came in.
-        return 0
-      })
+      // Array.prototype.sort is stable: ties keep the order they came in.
+      keyed.sort((a, b) => compareSortKeys(a.partition, b.partition) || compareSortKeys(a.order, b.order, w.order))
     }
-    const same = (x: readonly Value[], y: readonly Value[]): boolean => x.every((v, i) => sortValues(v, y[i] ?? null) === 0)
     for (let ps = 0; ps < keyed.length; ) {
       let pe = ps + 1
-      while (pe < keyed.length && same((keyed[ps] as Keyed).partition, (keyed[pe] as Keyed).partition)) pe++
-      partitionValues(w, keyed.slice(ps, pe), env, same, base)
+      while (pe < keyed.length && sameKeys((keyed[ps] as Keyed).partition, (keyed[pe] as Keyed).partition)) pe++
+      partitionValues(w, keyed.slice(ps, pe), env, base)
       ps = pe
     }
     current = keyed.map((k) => k.row)
@@ -264,13 +255,13 @@ export function applyWindows(rows: Row[], windows: readonly WindowPlan[], env: E
 }
 
 /** One partition's values, written into each row's slot. */
-function partitionValues(w: WindowPlan, part: readonly Keyed[], env: Env, same: (x: readonly Value[], y: readonly Value[]) => boolean, base: number): void {
+function partitionValues(w: WindowPlan, part: readonly Keyed[], env: Env, base: number): void {
   const n = part.length
   // Each row's peers: the first and last index of the rows equal to it on the ORDER BY.
   const firstPeer: number[] = []
   const lastPeer: number[] = []
-  for (let i = 0; i < n; i++) firstPeer[i] = i > 0 && same((part[i - 1] as Keyed).order, (part[i] as Keyed).order) ? (firstPeer[i - 1] as number) : i
-  for (let i = n - 1; i >= 0; i--) lastPeer[i] = i < n - 1 && same((part[i + 1] as Keyed).order, (part[i] as Keyed).order) ? (lastPeer[i + 1] as number) : i
+  for (let i = 0; i < n; i++) firstPeer[i] = i > 0 && sameKeys((part[i - 1] as Keyed).order, (part[i] as Keyed).order) ? (firstPeer[i - 1] as number) : i
+  for (let i = n - 1; i >= 0; i--) lastPeer[i] = i < n - 1 && sameKeys((part[i + 1] as Keyed).order, (part[i] as Keyed).order) ? (lastPeer[i + 1] as number) : i
   const set = (i: number, v: Value) => (((part[i] as Keyed).row as Value[])[base + w.slot] = v)
   let dense = 0
   switch (w.fn) {

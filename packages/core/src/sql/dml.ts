@@ -19,6 +19,7 @@
 import { DISALLOWED_DEFAULT_FUNCTIONS } from './registry.ts'
 import { admitValueGenerator, DEFAULT_ADMISSION } from './value-generator.ts'
 import { notSupported, wrongUsage } from './errors.ts'
+import { zeroDateTime } from './temporal-functions.ts'
 import { CHARSET_BINARY, FIELD_TYPE, MyjsError, equalBytes } from '@myjs/bytes'
 import { nativeCallName, someNode, tableAlias } from './ast.ts'
 import { CLIENT, hasCap, messages, sqlError, symbolOf, type OkResult } from '@myjs/protocol'
@@ -27,11 +28,11 @@ import { EngineError } from '@myjs/engine'
 import { NODE, QUERY, REF, parseExpression, type Assignment, type ColumnNode, type DeleteNode, type Expression, type InsertNode, type SqlMode, type TableName, type UpdateNode } from '@myjs/parser'
 import { generationOf, type Generation } from './generated.ts'
 import { decodeField, encodeEnum, encodeField, integerRange, intValue, toInteger, toText, warn, type Condition, type StoreContext, type Value } from '@myjs/types'
-import { compile, EMPTY_SCOPE, type Compiled, type Row, type Scope } from './compile.ts'
+import { compile, EMPTY_SCOPE, type CompileContext, type Compiled, type Row, type Scope } from './compile.ts'
 import { checker, checkViolated } from './checks.ts'
 import { guarded, isReferenced } from './foreign-keys.ts'
 import { containsAggregate } from './group.ts'
-import { accessRows, filter, limit, sort, type ScannedRow } from './operators.ts'
+import { accessRows, decodeRow, filter, limit, sort, type ScannedRow } from './operators.ts'
 import { chooseAccess } from './plan.ts'
 import { checkTargetNotRead, compileContext, fromContext, limitValue, openTable, planQuery, withClause, type Run } from './query.ts'
 import { planFrom, type FromPlan, type FromTable, type JoinedRow } from './from.ts'
@@ -251,7 +252,7 @@ function duplicateError(e: unknown, def: TableDef, table: Table, keys: readonly 
   if (named === undefined) return e
   // Named by the values as stored: `VALUES (1.6)` colliding with id 2 is
   // "Duplicate entry '2'", not '1.6'.
-  return duplicateEntry(def, named, def.columns.map((c, i) => decodeField(fields[i] ?? null, c.type)))
+  return duplicateEntry(def, named, decodeRow(def.columns, fields))
 }
 
 /** How a NULL meets a NOT NULL column: refused (1048), or stored as the type's zero with a warning. */
@@ -484,8 +485,7 @@ function compileUpsert(run: Run, def: TableDef, node: InsertNode, targets: reado
   const assignments = (node.onDuplicate ?? []).map((a) => {
     // The target is the table's column, whatever the alias says.
     const index = own.resolve(a.column.parts, 'field list').index
-    if (!isDefaultKeyword(a.value)) notGenerated(def, index)
-    return { index, value: isDefaultKeyword(a.value) ? undefined : compile(a.value, ctx) }
+    return { index, value: assignmentValue(def, index, a.value, ctx) }
   })
   return { assignments, onUpdate: onUpdateOf(run, def), deprecated: insertValues.calls, aliased: alias === undefined ? [] : targets }
 }
@@ -610,7 +610,7 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
   const check = checker(run, def)
   // A VALUES or SET subquery reading the table being written is 1093, as an
   // UPDATE's is; INSERT … SELECT from it is legal, read in full first (8.4.11).
-  if (node.query === undefined) checkTargetNotRead({ schema: def.schema, name: def.name }, [...(node.values ?? []).flat(), ...(node.set ?? []).map((a) => a.value), ...(node.onDuplicate ?? []).map((a) => a.value)], run.env.session.database)
+  if (node.query === undefined) checkTargetNotRead(def, [...(node.values ?? []).flat(), ...(node.set ?? []).map((a) => a.value), ...(node.onDuplicate ?? []).map((a) => a.value)], run.env.session.database)
   const { targets, rows, selected, fieldCopies, selectRefs } = insertSource(run, node, def, trx)
   const generate = generatorOf(run, def)
 
@@ -703,7 +703,7 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
       }
     })
     // Then the generated columns, from the row as it will be stored.
-    generate?.(fields, fields.map((f, i) => (f === null ? null : decodeField(f, (def.columns[i] as ColumnDef).type))), store, nulls)
+    generate?.(fields, decodeRow(def.columns, fields), store, nulls)
     // CHECK constraints, before the row is written: a violation is not a
     // duplicate first and costs no AUTO_INCREMENT value. IGNORE skips the
     // row, and it is not one of the "Records" (8.4.11).
@@ -810,8 +810,8 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
   function upsertRow(id: RowId, tried: FieldBytes[], generated: bigint, prev: bigint): void {
     const u = upsert as Upsert
     const before = table.get(id, trx, 'current') as FieldBytes[]
-    const current = def.columns.map((c, i) => decodeField(before[i] ?? null, c.type))
-    const triedValues = def.columns.map((c, i) => decodeField(tried[i] ?? null, c.type))
+    const current = decodeRow(def.columns, before)
+    const triedValues = decodeRow(def.columns, tried)
     const extra = [...u.aliased.map((t) => triedValues[t] ?? null), ...triedValues, ...selectExtras]
     const result = assignAll(run, def, before, current, extra, u.assignments, u.onUpdate, defaults, store, upsertNulls, generate)
     // An upsert that sets the AUTO_INCREMENT column to a value the statement
@@ -923,7 +923,7 @@ export function generatorOf(run: Run, def: TableDef): ColumnGenerator | undefine
       store.warnings += raised.length
       const field = storeField(value, column, store, nulls)
       fields[i] = field
-      values[i] = field === null ? null : decodeField(field, column.type)
+      values[i] = decodeField(field, column.type)
     }
   }
 }
@@ -932,6 +932,13 @@ export function generatorOf(run: Run, def: TableDef): ColumnGenerator | undefine
 function notGenerated(def: TableDef, index: number): void {
   const column = def.columns[index] as ColumnDef
   if (generationOf(column) !== undefined) throw sqlError('ER_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN', `The value specified for generated column '${column.name}' in table '${def.name}' is not allowed.`)
+}
+
+/** DEFAULT delegates to the column's reader after assignment binding. */
+function assignmentValue(def: TableDef, index: number, e: Expression, ctx: CompileContext): Compiled | undefined {
+  if (isDefaultKeyword(e)) return undefined
+  notGenerated(def, index)
+  return compile(e, ctx)
 }
 
 function assignAll(
@@ -987,7 +994,7 @@ const isDefaultKeyword = (e: Expression): boolean => e.kind === NODE.KEYWORD && 
 export function implicitDefault(column: ColumnDef): Value {
   const t = column.type.type
   if (t === FIELD_TYPE.TIMESTAMP || t === FIELD_TYPE.DATE || t === FIELD_TYPE.DATETIME) {
-    return { kind: 'datetime', v: { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }, type: t === FIELD_TYPE.DATE ? 'DATE' : 'DATETIME', fsp: 0 }
+    return zeroDateTime(t === FIELD_TYPE.DATE ? 'DATE' : 'DATETIME')
   }
   if (t === FIELD_TYPE.TIME) return { kind: 'time', v: { negative: false, days: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }, fsp: 0 }
   // An ENUM's is its first member, JSON's the JSON null, a binary string's
@@ -1046,14 +1053,14 @@ function withCtes(run: Run, node: UpdateNode | DeleteNode, what: 'UPDATE' | 'DEL
  * first is changed. The read pauses as the writes do (D-77): the statement
  * holds the writer slot, so nothing else changes the tree it walks.
  */
-function* matching(run: Run, def: TableDef, table: Table, alias: string, node: UpdateNode | DeleteNode, trx: Trx): Generator<void, ScannedRow[]> {
-  const scope = new TableScope([{ alias, def }])
+function* matching(run: Run, def: TableDef, table: Table, alias: string, node: UpdateNode | DeleteNode, trx: Trx, scope = new TableScope([{ alias, def }])): Generator<void, ScannedRow[]> {
   const where = node.where === undefined ? undefined : compile(node.where, compileContext(run, scope, 'where clause'))
-  const keys = (node.orderBy ?? []).map((o) => ({ expr: compile(o.expr, compileContext(run, scope, 'order clause')), desc: o.desc === true }))
+  const order = compileContext(run, scope, 'order clause')
+  const keys = node.orderBy?.map((o) => ({ expr: compile(o.expr, order), desc: o.desc === true }))
   const count = node.limit === undefined ? undefined : limitValue(run, node.limit)
   const access = chooseAccess(def, alias, node.where, run.env)
   let rows: Iterable<ScannedRow> = filter(accessRows(table, access, trx, true), where, run.env)
-  if (keys.length > 0) rows = sort(rows, keys, run.env)
+  if (keys?.length) rows = sort(rows, keys, run.env)
   const out: ScannedRow[] = []
   for (const row of limit(rows, 0, count)) {
     out.push(row)
@@ -1070,33 +1077,27 @@ export function* update(run: Run, node: UpdateNode, trx: Trx): Generator<void, O
   const target = singleTable(run, node.tables, 'UPDATE')
   const { def, alias } = target
   const table = guarded(run, target.table, trx)
-  checkTargetNotRead({ schema: def.schema, name: def.name }, [node.where, ...node.set.map((a) => a.value)], run.env.session.database)
+  checkTargetNotRead(def, [node.where, ...node.set.map((a) => a.value)], run.env.session.database)
   const scope = new TableScope([{ alias, def }])
+  const ctx = compileContext(run, scope, 'field list')
   const assignments = node.set.map((a: Assignment) => {
     const { index } = scope.resolve(a.column.parts, 'field list')
-    if (!isDefaultKeyword(a.value)) notGenerated(def, index)
-    return { index, value: isDefaultKeyword(a.value) ? undefined : compile(a.value, compileContext(run, scope, 'field list')) }
+    return { index, value: assignmentValue(def, index, a.value, ctx) }
   })
-  const generate = generatorOf(run, def)
-  const onUpdate = onUpdateOf(run, def)
-  const defaults = def.columns.map((c) => defaultOf(run, c, def))
-  const check = checker(run, def)
   // IGNORE makes a strict mode's errors warnings, and skips, with a warning,
   // a row that would duplicate a key, fail a CHECK or break a foreign key,
   // undoing whatever its cascades had done (8.4.11).
   const ignore = node.ignore === true
   const store = writeContext(run, def.name, ignore)
-  const write = updateWriter(def, table, check, ignore, store, trx)
+  const write = updateWriter(run, def, table, assignments, ignore, store, trx)
   run.state.insertIdSet = false
 
-  const rows = yield* matching(run, def, table, alias, node, trx)
+  const rows = yield* matching(run, def, table, alias, node, trx, scope)
   let changed = 0
   const each = ({ id, row }: ScannedRow, n: number): void => {
     store.row = n + 1
     const before = encodeRow(def, row, { strict: false, row: n + 1, warnings: 0 })
-    // A NULL into a NOT NULL column is the type's zero and a warning outside a strict mode (8.4.11).
-    const result = assignAll(run, def, before, row, [], assignments, onUpdate, defaults, store, store.strict ? 'error' : 'warn', generate)
-    if (result.changed && write(id, result.after)) changed++
+    if (write(id, before, row)) changed++
   }
   // Without IGNORE, any error fails the statement whole: the rows go in batches.
   if (ignore) yield* paced(rows, each)
@@ -1105,10 +1106,17 @@ export function* update(run: Run, node: UpdateNode, trx: Trx): Generator<void, O
   return updateResult(run, store, rows.length, changed)
 }
 
-/** CHECK admission and IGNORE rollback for a changed row, shared by both UPDATE readers. */
-function updateWriter(def: TableDef, table: Table, check: ReturnType<typeof checker>, ignore: boolean, store: StoreContext, trx: Trx) {
+/** Assignments, CHECK admission and IGNORE rollback, shared by both UPDATE readers. */
+function updateWriter(run: Run, def: TableDef, table: Table, assignments: readonly Assigned[], ignore: boolean, store: StoreContext, trx: Trx) {
+  const generate = generatorOf(run, def)
+  const onUpdate = onUpdateOf(run, def)
+  const defaults = def.columns.map((c) => defaultOf(run, c, def))
+  const check = checker(run, def)
   const keys = uniqueKeys(def)
-  return (id: RowId, after: readonly FieldBytes[]): boolean => {
+  return (id: RowId, before: readonly FieldBytes[], row: readonly Value[]): boolean => {
+    // A NULL into a NOT NULL column is the type's zero and a warning outside a strict mode.
+    const { changed, after } = assignAll(run, def, before, row, [], assignments, onUpdate, defaults, store, store.strict ? 'error' : 'warn', generate)
+    if (!changed) return false
     const violated = check?.(after)
     if (violated !== undefined) {
       const error = checkViolated(violated)
@@ -1148,11 +1156,7 @@ function sameRow(a: readonly FieldBytes[], b: readonly FieldBytes[]): boolean {
   for (let i = 0; i < a.length; i++) {
     const x = a[i] ?? null
     const y = b[i] ?? null
-    if (x === null || y === null) {
-      if (x !== y) return false
-      continue
-    }
-    if (!equalBytes(x, y)) return false
+    if (x !== y && (x === null || y === null || !equalBytes(x, y))) return false
   }
   return true
 }
@@ -1165,31 +1169,35 @@ export function* remove(run: Run, node: DeleteNode, trx: Trx): Generator<void, O
   const target = singleTable(run, node.tables, 'DELETE')
   const { def, alias } = target
   const table = guarded(run, target.table, trx)
-  checkTargetNotRead({ schema: def.schema, name: def.name }, [node.where], run.env.session.database)
+  checkTargetNotRead(def, [node.where], run.env.session.database)
   const rows = yield* matching(run, def, table, alias, node, trx)
+  const ignore = node.ignore === true
+  const writer = deleteWriter(run, trx, ignore)
+  const each = ({ id }: ScannedRow) => writer.remove(table, id)
+  // Without IGNORE, any error fails the statement whole: the rows go in batches.
+  if (ignore) yield* paced(rows, each)
+  else yield* inBatches(trx, rows, each)
+  return writer.result()
+}
+
+/** DELETE IGNORE rolls back blocked cascades and keeps their warning (8.4.11). */
+function deleteWriter(run: Run, trx: Trx, ignore: boolean) {
   let deleted = 0
   let warnings = 0
-  // Without IGNORE, any error fails the statement whole: the rows go in batches.
-  if (node.ignore !== true) {
-    yield* inBatches(trx, rows, ({ id }) => {
-      if (table.delete(id, trx)) deleted++
-    })
-    return { affectedRows: deleted }
+  return {
+    remove(table: Table, id: RowId) {
+      const at = ignore ? trx.savepoint() : 0
+      try {
+        if (table.delete(id, trx)) deleted++
+      } catch (e) {
+        if (!ignore || !(e instanceof MyjsError) || e.errno !== 1451) throw e
+        trx.rollbackTo(at)
+        warnings++
+        run.env.conditions?.push({ level: 'Warning', code: 1451, message: e.message })
+      }
+    },
+    result: (): OkResult => warnings === 0 ? { affectedRows: deleted } : { affectedRows: deleted, warnings },
   }
-  yield* paced(rows, ({ id }) => {
-    // IGNORE keeps a row a child holds, with a warning, and undoes whatever
-    // its cascades had done (8.4.11).
-    const at = trx.savepoint()
-    try {
-      if (table.delete(id, trx)) deleted++
-    } catch (e) {
-      if (!(e instanceof MyjsError) || e.errno !== 1451) throw e
-      trx.rollbackTo(at)
-      warnings++
-      run.env.conditions?.push({ level: 'Warning', code: e.errno ?? 1451, message: e.message })
-    }
-  })
-  return warnings === 0 ? { affectedRows: deleted } : { affectedRows: deleted, warnings }
 }
 
 // --- the multi-table forms ---------------------------------------------------
@@ -1231,6 +1239,7 @@ function updateMulti(run: Run, node: UpdateNode, trx: Trx): OkResult {
   if (node.limit !== undefined) throw wrongUsage('UPDATE', 'LIMIT')
   const { from, rows } = joinedRows(run, node, trx)
   const scope = from.scope
+  const ctx = compileContext(run, scope, 'field list')
   const ignore = node.ignore === true
   const store = writeContext(run, '', ignore)
   // The SET list by table, each value compiled over the joined row.
@@ -1240,10 +1249,9 @@ function updateMulti(run: Run, node: UpdateNode, trx: Trx): OkResult {
     const { index } = scope.resolve(a.column.parts, 'field list')
     const target = targetAt(run, from, index, 'UPDATE', trx)
     const column = index - target.from.offset
-    if (!isDefaultKeyword(a.value)) notGenerated(target.def, column)
+    const compiled = assignmentValue(target.def, column, a.value, ctx)
     let entry = byTable.get(target.from)
     if (entry === undefined) byTable.set(target.from, (entry = { target, assignments: [] }))
-    const compiled = isDefaultKeyword(a.value) ? undefined : compile(a.value, compileContext(run, scope, 'field list'))
     entry.assignments.push({
       index: column,
       value:
@@ -1261,7 +1269,7 @@ function updateMulti(run: Run, node: UpdateNode, trx: Trx): OkResult {
   for (const t of from.tables) {
     if (t.def === undefined) continue
     try {
-      checkTargetNotRead({ schema: t.def.schema, name: t.def.name }, [node.where, ...node.set.map((a) => a.value)], run.env.session.database)
+      checkTargetNotRead(t.def, [node.where, ...node.set.map((a) => a.value)], run.env.session.database)
     } catch (e) {
       if (!(e instanceof MyjsError) || e.errno !== 1093 || first?.def === undefined) throw e
       throw sqlError('ER_UPDATE_TABLE_USED', `You can't specify target table '${first.alias}' for update in FROM clause`)
@@ -1273,10 +1281,7 @@ function updateMulti(run: Run, node: UpdateNode, trx: Trx): OkResult {
   for (const { target, assignments } of byTable.values()) {
     const { def, table } = target
     store.table = def.name
-    const generate = generatorOf(run, def)
-    const onUpdate = onUpdateOf(run, def)
-    const defaults = def.columns.map((c) => defaultOf(run, c, def))
-    const write = updateWriter(def, table, checker(run, def), ignore, store, trx)
+    const write = updateWriter(run, def, table, assignments, ignore, store, trx)
     // Each target row once, at the first joined row that reaches it.
     const seen = new Set<string>()
     for (const r of rows) {
@@ -1287,9 +1292,8 @@ function updateMulti(run: Run, node: UpdateNode, trx: Trx): OkResult {
       joined = r.row
       const current = table.get(id, trx, 'current')
       if (current === undefined) continue
-      const values = current.map((f, i) => (f === null ? null : decodeField(f, (def.columns[i] as ColumnDef).type)))
-      const result = assignAll(run, def, current, values, [], assignments, onUpdate, defaults, store, store.strict ? 'error' : 'warn', generate)
-      if (result.changed && write(id, result.after)) changed++
+      const values = decodeRow(def.columns, current)
+      if (write(id, current, values)) changed++
     }
   }
   return updateResult(run, store, matched, changed)
@@ -1308,24 +1312,15 @@ function removeMulti(run: Run, node: DeleteNode, trx: Trx): OkResult {
     if (found === undefined) throw sqlError('ER_UNKNOWN_TABLE', `Unknown table '${t.name}' in MULTI DELETE`)
     return targetAt(run, from, found.offset, 'DELETE', trx)
   })
-  for (const t of targets) checkTargetNotRead({ schema: t.def.schema, name: t.def.name }, [node.where], run.env.session.database)
-  let deleted = 0
-  let warnings = 0
+  for (const t of targets) checkTargetNotRead(t.def, [node.where], run.env.session.database)
+  const writer = deleteWriter(run, trx, node.ignore === true)
   for (const t of targets) {
     const seen = new Set<string>()
     for (const r of rows) {
       const id = r.ids?.[t.from.offset]
       if (id === undefined || !firstKey(seen, id.join())) continue
-      const at = node.ignore === true ? trx.savepoint() : 0
-      try {
-        if (t.table.delete(id, trx)) deleted++
-      } catch (e) {
-        if (node.ignore !== true || !(e instanceof MyjsError) || e.errno !== 1451) throw e
-        trx.rollbackTo(at)
-        warnings++
-        run.env.conditions?.push({ level: 'Warning', code: e.errno ?? 1451, message: e.message })
-      }
+      writer.remove(t.table, id)
     }
   }
-  return warnings === 0 ? { affectedRows: deleted } : { affectedRows: deleted, warnings }
+  return writer.result()
 }
