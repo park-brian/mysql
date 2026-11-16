@@ -1004,14 +1004,14 @@ function filteredNotIn(run: Run, { def, alias }: NonNullable<FromPlan['single']>
   if (predicate.kind !== NODE.BINARY) return undefined
   const disjunction = logicalShortCircuit(predicate.op) === true
   const residual = disjunction ? predicate.left : predicate
-  if (disjunction && !checksNotNull(predicate.right, def, alias, key)) return undefined
+  if (disjunction && notNullColumn(predicate.right, def, alias) !== key) return undefined
   if (residual.kind !== NODE.BINARY || !isOrderedComparison(residual.op) || !textBesideColumn(residual.left, residual.right) ||
     !sessionVarchar(tableColumn(residual.left, def, alias), run)) return undefined
   return disjunction
 }
 
-function checksNotNull(e: Expression, def: TableDef, alias: string, key: ColumnDef): boolean {
-  return e.kind === NODE.UNARY && e.op === 'IS NOT NULL' && tableColumn(e.operand, def, alias) === key
+function notNullColumn(e: Expression | undefined, def: TableDef, alias: string): ColumnDef | undefined {
+  return e?.kind === NODE.UNARY && e.op === 'IS NOT NULL' ? tableColumn(e.operand, def, alias) : undefined
 }
 
 function membershipMaterialization(env: Env): boolean | undefined {
@@ -1070,8 +1070,11 @@ function boundMembership(run: Run, q: QueryExpression, node: SelectNode, from: F
       includeNonNull = false
       textSelectivity = 0.1111
     } else {
-      if (where.op !== 'NOT IN') return undefined
-      if (predicate !== undefined) {
+      // A covered required-field test has the same costs as a bare key.
+      const required = key.nullable && notNullColumn(predicate, def, alias)?.nullable === false &&
+        holdsRead(def, index, keyReads(key.name, predicate))
+      if (where.op !== 'NOT IN' && !required) return undefined
+      if (predicate !== undefined && !required) {
         if (left.nullable) return undefined
         includeNonNull = filteredNotIn(run, inner, key, predicate)
         if (includeNonNull === undefined) return undefined
@@ -1082,7 +1085,7 @@ function boundMembership(run: Run, q: QueryExpression, node: SelectNode, from: F
     }
   } else if (!empty) {
     if (hasGenerated(outer.def, def) || hasLeadingKey(outer.def, left.name) || indexedColumn(def, key.name) ||
-        from.access(run.env).index !== undefined || (predicate !== undefined && !checksNotNull(predicate, def, alias, key))) return undefined
+        from.access(run.env).index !== undefined || (predicate !== undefined && notNullColumn(predicate, def, alias) !== key)) return undefined
     includeNonNull = predicate && true
   }
   const choice = costedNotIn(run, inner, outer, index, key.nullable, materialize, includeNonNull, textSelectivity, empty)
@@ -1179,7 +1182,7 @@ function orderedAny(outer: FromPlan['single'], where: Expression | undefined, bo
   if (column?.type.type !== FIELD_TYPE.LONG) return bound
   if (hasLeadingKey(inner.def, column.name)) return bound
   const predicate = body.where
-  if (predicate && !checksNotNull(predicate, inner.def, inner.alias, column)) return bound
+  if (predicate && notNullColumn(predicate, inner.def, inner.alias) !== column) return bound
 
   const original = bound.plan
   const max = where.op[0] === '<'

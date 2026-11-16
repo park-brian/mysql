@@ -352,7 +352,7 @@ test('dependent NOT IN costs a text residual as scan, ref-or-null, or materializ
   }
 })
 
-test('nullable integer NOT IN describes forced and costed membership builds across retained executions', async () => {
+test('indexed integer membership chooses covering builds across retained executions', async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = await mysql.createConnection(db === undefined
@@ -364,18 +364,24 @@ test('nullable integer NOT IN describes forced and costed membership builds acro
   const materialized = `${outer}\n        Filter\n            Limit\n                Index lookup on <materialized_subquery> using <auto_distinct_key>\n                    Materialize with deduplication\n                        Covering index scan on c using by_k`
   const dependent = `${outer}\n        Limit\n            Filter\n                Alternative plans for IN subquery\n                    Covering index lookup on c using by_k\n                    Table scan on c`
   const all = [[1, 'p0'], [2, 'p1'], [3, 'p2'], [4, 'p3'], [5, 'p4']]
-  async function read(expected: unknown[][], plan: string) {
+  async function read(expected: unknown[][], plan: string, statement = sql) {
     for (const method of ['query', 'execute'] as const) {
-      const options = { sql, rowsAsArray: true }
+      const options = { sql: statement, rowsAsArray: true }
       const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
       assert.deepEqual(rows, expected)
       assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
         ['id', 3, 11, 20483, 0, 63, schema, 'p', 'p', 'id'], ['label', 253, 64, 4097, 0, 224, schema, 'p', 'p', 'label'],
       ])
       assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
-      const explainSql = `EXPLAIN FORMAT=TREE ${sql}`
+      const explainSql = `EXPLAIN FORMAT=TREE ${statement}`
       const [explain] = method === 'query' ? await conn.query<mysql.RowDataPacket[]>(explainSql) : await conn.execute<mysql.RowDataPacket[]>(explainSql)
       assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan)
+    }
+  }
+  async function readRequired(expected: unknown[][], build: boolean) {
+    const lookup = `${outer}\n        Limit\n            Filter\n                Filter\n                    Alternative plans for IN subquery\n                        Covering index lookup on c using by_k\n                        Table scan on c`
+    for (const op of ['NOT IN', '<> ALL']) {
+      await read(expected, build ? materialized : lookup, `SELECT id,label FROM p WHERE p.k ${op} (SELECT k FROM c WHERE c.id IS NOT NULL)`)
     }
   }
   try {
@@ -406,6 +412,20 @@ test('nullable integer NOT IN describes forced and costed membership builds acro
     await read(grown.slice(4), dependent)
     await conn.query('DELETE FROM c')
     await read(grown, materialized)
+    await conn.query('ALTER TABLE c MODIFY k INT NULL')
+    await conn.query('INSERT INTO c VALUES (1,0)')
+    await conn.query('ANALYZE TABLE c')
+    await readRequired(grown.slice(2), true)
+    await conn.query('INSERT INTO c VALUES (2,NULL)')
+    await readRequired([], true)
+    await conn.query('DELETE FROM c')
+    await readRequired(grown, true)
+    await conn.query('DELETE FROM p WHERE id > 2')
+    await readRequired(all.slice(0, 2), false)
+    await conn.query("SET optimizer_switch='subquery_materialization_cost_based=off'")
+    await readRequired(all.slice(0, 2), true)
+    await conn.query("SET optimizer_switch='materialization=off'")
+    await readRequired(all.slice(0, 2), false)
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()

@@ -934,18 +934,6 @@ function toBase(n: bigint, radix: number): string {
   return v.toString(r).toUpperCase()
 }
 
-/** TO_BASE64 breaks its result after each 76 characters, without a trailing newline. */
-function toBase64(bytes: Uint8Array): string {
-  return btoa(byteKey(bytes)).replace(/.{76}(?=.)/g, '$&\n')
-}
-
-/** FROM_BASE64 requires complete groups and permits ASCII whitespace. */
-function fromBase64(bytes: Uint8Array): Uint8Array | undefined {
-  const text = byteKey(bytes).replace(/[ \t-\r]/g, '')
-  if (text.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(text)) return undefined
-  return Uint8Array.from(atob(text), (char) => char.charCodeAt(0))
-}
-
 /** What the other string functions' compilers ask of a call: its count checked, whether any argument may be NULL, a hex string's type, a string in the connection's collation, the name as the server prints it. */
 function stringCall(xs: readonly Compiled[], callName: string, ctx: CompileContext) {
   const conn = ctx.connectionCollation
@@ -1331,7 +1319,10 @@ function conversionFunction(name: string, xs: readonly Compiled[], callName: str
       return {
         eval: (r, env) => {
           const v = s.eval(r, env)
-          return v === null ? null : conv(toBase64(valueBytes(v)))
+          if (v === null) return null
+          const base64 = btoa(byteKey(valueBytes(v)))
+          // MySQL separates its 76-character lines with LF.
+          return conv(base64.replace(/.{76}(?=.)/g, '$&\n'))
         },
         type: hexText(len + Math.max(0, Math.ceil(len / 76) - 1)),
       }
@@ -1344,8 +1335,10 @@ function conversionFunction(name: string, xs: readonly Compiled[], callName: str
         eval: (r, env) => {
           const v = s.eval(r, env)
           if (v === null) return null
-          const out = fromBase64(valueBytes(v))
-          return out === undefined ? null : bytesValue(out)
+          const text = byteKey(valueBytes(v)).replace(/[ \t-\r]/g, '')
+          // MySQL requires complete groups, with padding only at the end.
+          if (text.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(text)) return null
+          return bytesValue(Uint8Array.from(atob(text), (char) => char.charCodeAt(0)))
         },
         type: stringType(Math.floor((bytes * 3) / 4), CHARSET_BINARY, true),
       }
