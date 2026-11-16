@@ -139,7 +139,7 @@ and 296 now match. Projected, negated, nullable `ALL` and indexed extrema
 have separate admission rules.
 
 **M5.47 fresh relational seeds.** Three MySQL 8.4.11 seeds of 300 scripts
-each now match 129 of 138 semijoin and quantified plans. The ordered
+each now match 130 of 138 semijoin and quantified plans. The ordered
 `IN` cases with `>` and a standalone wildcard-leading `LIKE` now match,
 as do the six unindexed integer `= ANY` and `= SOME` cases with a bare
 inner key or a direct `IS NOT NULL` test. Four unindexed integer `<> ALL`
@@ -147,11 +147,10 @@ cases and two correlated `EXISTS` cases with a noncovering integer
 residual also match. The `NOT IN` case with a noncovering wildcard-leading
 `LIKE` uses the dependent table scan. The optimizer-proved empty inner
 ranges and the covering build for a required-field `IS NOT NULL` also
-match. The range optimizer now prices a NULL-skipping index read for a
-two-item `NOT IN` list containing a literal NULL and a fractional decimal
-that rounds within the nullable signed `INT` key's bounds. Next, use the
-selected covering access to cost the dependent membership build. Compound
-predicates and other cost profiles remain open.
+match. A dependent build with a two-item `NOT IN` list containing NULL and a
+fractional decimal now uses the bound covering read's cost. Case 300,
+statement 13 matches. The covered fractional predicates that MySQL runs
+with LooseScan are among the remaining gaps.
 
 **0.3 is staged**, with exact workspace versions and installed-package smoke
 checks. Publication still requires claiming the npm scope/name and publishing
@@ -2255,6 +2254,22 @@ the 2,118 floor. Parser/core/facade measure 45,611/334,316/334,242 B gzipped
 within the unchanged caps. Noncovering tests and NULL-bearing list ranges
 remain open. The range planner's existing estimation dive for inverted
 `BETWEEN` remains M5.49 work.
+
+**M5.47 covering membership builds for fractional `NOT IN` lists, verified.**
+For a nullable signed `INT` in a one-page child, a direct NULL and
+fractional-decimal list shares the range optimizer's admission on a
+single-column covering key.
+The bound child uses its selected full covering scan or the row count and
+cost already measured for its covering range. `NOT IN` and `<> ALL` compare
+the build with the existing dependent lookup and retain the same child
+reader when materializing.
+
+The pinned audits fix 808 of 3,456 outcomes and preserve all 1,280 additional
+controls. Both protocols retain the plans across writes and optimizer
+switches. Fresh case 300, statement 13 brings the seeds to 130 of 138.
+Parser/core/facade measure 45,614/334,358/334,253 B gzipped within the
+existing caps. A physical dependent index probe and other residuals remain
+open.
 
 **M5.10 base64 line widths and ASCII whitespace, verified.** The byte
 conversion reuses the existing lossless byte-string mapping and the

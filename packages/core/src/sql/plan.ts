@@ -78,7 +78,7 @@ type ImpliedRange = Extract<InferredRange, { readonly column: ColumnDef }>
 
 /** How to read a table: an index and the ranges of it, in index order, or a full scan. */
 export interface Access {
-  /** Requested range estimate, from the same selection and index dives. */
+  /** Range estimate from the same selection, when the optimizer measured it. */
   readonly quote?: RangeRead | undefined
   readonly index?: string
   /** Disjoint, ascending. Absent for a full scan. */
@@ -222,13 +222,10 @@ function exact(v: Value, c: ColumnDef): boolean {
  */
 export function chooseAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, outer?: OuterColumn, costing?: RangeCosting, inferred?: InferredRange, indexes = def.indexes): Access {
   const conjuncts = splitAnd(inferred?.condition, splitAnd(where))
-  const conditions = conjuncts
-    .map((e) => conditionOf(e, def, alias, outer, env))
-    .filter((c): c is Condition => c !== undefined)
+  const conditions = conjuncts.flatMap((e) => conditionOf(e, def, alias, outer, env) ?? [])
   if (costing !== undefined) {
     // A key read by points stays one (`ref`); otherwise the range optimizer's choice.
-    const points = scoredAccess(def, conditions, env, outer, indexes, 3)
-    return points ?? rangeAccess(def, alias, conjuncts, env, costing, undefined, inferred, indexes) ?? FULL_SCAN
+    return scoredAccess(def, conditions, env, outer, indexes, 3) ?? rangeAccess(def, alias, conjuncts, env, costing, undefined, inferred, indexes) ?? FULL_SCAN
   }
   return scoredAccess(def, conditions, env, outer, indexes) ?? FULL_SCAN
 }
@@ -305,10 +302,10 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
   if (candidates.length === 0) return undefined
   const { stats: t, coveringScan, forceRange } = costing
   let best = rangeBaseline(t, coveringScan && costing.shape(coveringScan).recordBytes, forceRange)
-  const access = (c: (typeof candidates)[number], rows: number): Access => ({ index: c.index.name, ranges: c.keyed.map((k) => k.range), over: describeIntervals(c.intervals, c.column.name), implied: c.implied, quote: costing.quote ? { index: c.index.name, rows, cost: best } : undefined })
+  const access = (c: (typeof candidates)[number], rows?: number): Access => ({ index: c.index.name, ranges: c.keyed.map((k) => k.range), over: describeIntervals(c.intervals, c.column.name), implied: c.implied, quote: rows === undefined ? undefined : { index: c.index.name, rows, cost: best } })
   // One range that wins even reading every row needs no count: no other is weighed against it.
   const only = candidates.length === 1 ? candidates[0] : undefined
-  if (!costing.quote && only !== undefined && rangeCost(t, only.shape, only.keyed.length, t.rows) < best) return access(only, t.rows)
+  if (!costing.quote && only !== undefined && rangeCost(t, only.shape, only.keyed.length, t.rows) < best) return access(only)
   // MySQL skips index dives for one forced key. A nonpoint, non-NULL range estimates one row.
   const skipDive = forceRange && indexes.length === 1
   let chosen: Access | undefined
@@ -337,17 +334,9 @@ const pointRange = (bound: KeyBound): KeyRange => ({ from: bound, to: bound })
 /** Intervals as EXPLAIN writes a range: `(2 < grp <= 5) OR (grp = 7)`, `(NULL < grp)`, `(grp = NULL)`. */
 function describeIntervals(intervals: readonly Interval[], name: string): string {
   const text = (v: Exclude<Value, null>): string => {
-    switch (v.kind) {
-      case 'int':
-      case 'double':
-        return String(v.v)
-      case 'decimal':
-        return renderDecimal(v)
-      case 'string':
-        return `'${textOf(v).replace(/'/g, "''")}'`
-      default:
-        return '?'
-    }
+    if (v.kind === 'int' || v.kind === 'double') return String(v.v)
+    if (v.kind === 'decimal') return renderDecimal(v)
+    return v.kind === 'string' ? `'${textOf(v).replace(/'/g, "''")}'` : '?'
   }
   return intervals
     .map((i) => {
@@ -539,7 +528,7 @@ export function pointAccess(index: IndexDef, column: ColumnDef, v: Value): Acces
 }
 
 /** A literal, `-literal` or `?`, evaluated. */
-function constantValue(e: Expression, env: Env): Value | undefined {
+export function constantValue(e: Expression, env: Env): Value | undefined {
   switch (e.kind) {
     case NODE.PLACEHOLDER:
       return env.params[e.index] ?? null

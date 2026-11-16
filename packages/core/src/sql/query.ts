@@ -19,17 +19,18 @@ import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, copiedLength, intType, type ResultType } from './meta.ts'
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { accessRows, distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
-import { equalBounds, isConstant, optimizerEnabled, pointAccess, splitAnd, tableColumn, type Access } from './plan.ts'
-import { and, columnRefs, integerLiteral, isOrderedComparison, logicalShortCircuit, nativeCallName, operandPairs, queryBody, rewriteExpression, someNode, tableAlias, withoutUnaryPlus } from './ast.ts'
+import { constantValue, equalBounds, isConstant, optimizerEnabled, pointAccess, splitAnd, tableColumn, type Access } from './plan.ts'
+import { and, columnRefs, integerLiteral, isOrderedComparison, logicalShortCircuit, nativeCallName, nullLiteral, operandPairs, queryBody, rewriteExpression, someNode, tableAlias, withoutUnaryPlus } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, proof, wrongArgumentsError } from './errors.ts'
 import { clusteredIndex, forwardKeyPart, indexPartMatchesColumn, indexParts, leadingIndex, singleRefIndex } from './indexes.ts'
 import { collationInfoByName, encodeCollation } from '@myjs/charsets'
 import { ambiguousColumnError, unknownColumnError, requireSchema, safeIndex, safeResolve, TableScope, columnIndex as indexOfColumn } from './scope.ts'
 import { holdsRead, indexRecordBytes, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type HintAdmission, type JoinCondition } from './from.ts'
-import { dependentMembershipAccess, membershipCost, ROW_EVALUATE } from './cost.ts'
+import { dependentMembershipAccess, membershipCost, ROW_EVALUATE, type RangeRead } from './cost.ts'
+import { fractionalNullList } from './ranges.ts'
 import { firstKey, rowKey, valueKey } from './keys.ts'
-import { coveringScan, filterNode, filterPlan, indexLookup, lookupMaterialized, materialize, planNode, tableScan, tableScanLabel, wrap, type PlanNode } from './explain.ts'
+import { coveringScan, filterNode, filterPlan, indexLookup, lookupMaterialized, materialize, planNode, tableScan, wrap, type PlanNode } from './explain.ts'
 import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts'
 import { checkSetWidth, convertSetRow, nestedNullability, setOperation, setOperationType } from './setop.ts'
 import { constTablesHaveRows, neverEqual, optimizerFacts, plannedTruth, rejectsNullExtension, uniqueKey, type OptimizerFacts } from './optimize.ts'
@@ -309,6 +310,8 @@ export interface SelectPlan {
 
   /** An ordinary SELECT's bound single base source; opaque or grouped sources supply no such proof. */
   readonly source?: FromPlan['single']
+  /** Access selected for the single source before any ordering is applied. */
+  readonly read?: Access | undefined
   /** Validate the bound base source through this invocation's selected access. */
   checkRead?(env: Env): void
   /** Per-result optimization under the delivery transaction, before metadata or iterator initialization. */
@@ -719,6 +722,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
     constant,
     blockLimit: take && keep,
     source,
+    read,
     locking,
     ...(source?.table.checkRead === undefined ? {} : {
       checkRead(env: Env) { source.table.checkRead!(env.trx, locking ? 'current' : 'consistent', from!.access(env).index) },
@@ -1018,14 +1022,13 @@ function membershipMaterialization(env: Env): boolean | undefined {
   return optimizerEnabled(env, 'materialization') ? !optimizerEnabled(env, 'subquery_materialization_cost_based') : undefined
 }
 
-function wildcardLike(e: Expression | undefined): e is Extract<Expression, { kind: typeof NODE.BINARY }> {
+function wildcardLike(e: Expression | undefined): e is Extract<Expression, { kind: typeof NODE.BINARY }> & { readonly op: 'LIKE' } {
   return e?.kind === NODE.BINARY && e.op === 'LIKE' && !e.extra && e.right.kind === NODE.LITERAL && /^[%_]/.test(e.right.value as string)
 }
 
 /** Ranges MySQL can prove empty during index access selection, without evaluating a row. */
 function integerRangePredicate(e: Expression | undefined, def: TableDef, alias: string): boolean {
   if (e?.kind !== NODE.BINARY) return false
-  const nullLiteral = (item: Expression | undefined) => item?.kind === NODE.LITERAL && item.type === LITERAL.NULL
   let field = e.left
   if (isComparison(e.op)) {
     if (nullLiteral(field)) field = e.right
@@ -1061,6 +1064,7 @@ function boundMembership(run: Run, q: QueryExpression, node: SelectNode, from: F
   const index = leadingIndex(def, key, true)
   let includeNonNull: boolean | undefined
   let textSelectivity: number | undefined
+  let range: RangeRead | undefined
   if (!empty && index) {
     if (!singleRefIndex(index) || (!left.nullable && !key.nullable)) return undefined
     if (wildcardLike(predicate)) {
@@ -1073,14 +1077,20 @@ function boundMembership(run: Run, q: QueryExpression, node: SelectNode, from: F
       // A covered required-field test has the same costs as a bare key.
       const required = key.nullable && notNullColumn(predicate, def, alias)?.nullable === false &&
         holdsRead(def, index, keyReads(key.name, predicate))
-      if (where.op !== 'NOT IN' && !required) return undefined
-      if (predicate !== undefined && !required) {
+      const read = bound.plan.read
+      const fractional = read?.index === index.name && predicate?.kind === NODE.BINARY && predicate.op === 'NOT IN' &&
+        predicate.right.kind === NODE.ROW && tableColumn(predicate.left, def, alias) === key &&
+        fractionalNullList(predicate.right.items, key, (item) => constantValue(item, run.env))
+      if (where.op !== 'NOT IN' && !required && !fractional) return undefined
+      if (fractional) {
+        range = read.quote
+        if (read.ranges !== undefined && range === undefined) return undefined
+      } else if (predicate !== undefined && !required) {
         if (left.nullable) return undefined
         includeNonNull = filteredNotIn(run, inner, key, predicate)
         if (includeNonNull === undefined) return undefined
-        // An ordered comparison may already have selected a range or a covering scan.
-        const scan = bound.plan.explain?.()?.[0]
-        if (scan?.label !== 'Filter' || scan.children[0]?.label !== tableScanLabel(alias)) return undefined
+        // The quoted residual cost applies only to the table scan.
+        if (read?.index !== undefined || bound.plan.explain?.() === NO_ROWS_PLAN) return undefined
       }
     }
   } else if (!empty) {
@@ -1088,24 +1098,23 @@ function boundMembership(run: Run, q: QueryExpression, node: SelectNode, from: F
         from.access(run.env).index !== undefined || (predicate !== undefined && notNullColumn(predicate, def, alias) !== key)) return undefined
     includeNonNull = predicate && true
   }
-  const choice = costedNotIn(run, inner, outer, index, key.nullable, materialize, includeNonNull, textSelectivity, empty)
+  const choice = costedNotIn(run, inner, outer, index, key.nullable, materialize, includeNonNull, textSelectivity, empty, range)
   if (choice === undefined || (choice === 'materialize' && !index && !empty)) return undefined
   bound.quantified = { kind: choice === 'scan' ? 'dependent-not-in' : 'materialized-not-in', nullable: left.nullable }
   return empty ? { ...bound, rows: () => [] } : bound
 }
 
 /** The single-table NOT IN alternatives measured against the native cost trace. */
-function costedNotIn(run: Run, inner: NonNullable<FromPlan['single']>, outer: NonNullable<FromPlan['single']>, index: IndexDef | undefined, nullable: boolean, materialize: boolean | undefined, includeNonNull: boolean | undefined, textSelectivity: number | undefined, empty: boolean): 'scan' | 'materialize' | undefined {
+function costedNotIn(run: Run, inner: NonNullable<FromPlan['single']>, outer: NonNullable<FromPlan['single']>, index: IndexDef | undefined, nullable: boolean, materialize: boolean | undefined, includeNonNull: boolean | undefined, textSelectivity: number | undefined, empty: boolean, range: RangeRead | undefined): 'scan' | 'materialize' | undefined {
   const store = run.catalog?.store
   if (store === undefined || isTemporary(inner.def)) return undefined
-  if (empty) {
-    const probes = statisticsOf(outer.def, outer.table, store).rows
-    // The empty range costs one per dependent probe and one estimated row at build startup.
-    return materialize || (materialize === false && membershipCost(1 + ROW_EVALUATE, 0, probes) < probes) ? 'materialize' : 'scan'
-  }
-  const stats = statisticsOf(inner.def, inner.table, store)
-  if (stats.pages > 1) return undefined
+  const stats = empty ? undefined : statisticsOf(inner.def, inner.table, store)
+  if (stats && stats.pages > 1) return undefined
   const probes = statisticsOf(outer.def, outer.table, store)
+  if (stats === undefined) {
+    // The empty range costs one per dependent probe and one estimated row at build startup.
+    return materialize || (materialize === false && membershipCost(1 + ROW_EVALUATE, 0, probes.rows) < probes.rows) ? 'materialize' : 'scan'
+  }
   if (!index && probes.pages > 1) return undefined
   const { rows } = stats
   const fanout = index && stats.recordsPerKey(index, 1) * (nullable ? 2 : 1)
@@ -1121,7 +1130,7 @@ function costedNotIn(run: Run, inner: NonNullable<FromPlan['single']>, outer: No
       kept = Math.trunc(rows * Math.fround(notNull)) || 1
     }
   }
-  return dependentMembershipAccess(stats, fanout, probes.rows, kept, materialize, index && includeNonNull === undefined ? indexRecordBytes(inner.def, index) : undefined)
+  return dependentMembershipAccess(stats, fanout, probes.rows, kept, materialize, index && includeNonNull === undefined ? indexRecordBytes(inner.def, index) : undefined, range)
 }
 
 /** A lookup key and the columns its residual condition reads, by folded name. */

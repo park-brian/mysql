@@ -8,7 +8,7 @@ import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import type { ColumnDef } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
 import { compareValues, integerBytes, toInteger, type Value } from '@myjs/types'
-import { REVERSE_COMPARISON, logicalShortCircuit, signedOperand } from './ast.ts'
+import { REVERSE_COMPARISON, logicalShortCircuit, nullLiteral, signedOperand } from './ast.ts'
 
 /** A constant's value while planning — a literal, or a bound `?` — or `undefined` for anything else. */
 export type Constant = (e: Expression) => Value | undefined
@@ -29,6 +29,20 @@ function constantFor(e: Expression, column: ColumnDef, value: Constant): Value |
   const { type } = column.type
   if (integerBytes(type) || type === FIELD_TYPE.NEWDECIMAL || type === FIELD_TYPE.DECIMAL) return v.kind === 'int' || v.kind === 'decimal' ? v : undefined
   return undefined
+}
+
+/** A fractional NOT IN list that can exclude NULL keys during access selection. */
+export function fractionalNullList(items: readonly Expression[], column: ColumnDef, value: Constant): boolean {
+  if (items.length !== 2 || !column.nullable || column.type.type !== FIELD_TYPE.LONG || column.type.unsigned === true) return false
+  const [first, second] = items
+  const other = nullLiteral(first) ? second : nullLiteral(second) ? first : undefined
+  if (other === undefined || signedOperand(other).kind !== NODE.LITERAL) return false
+  const fraction = value(other)
+  if (fraction?.kind !== 'decimal' || fraction.v % 10n ** BigInt(fraction.scale) === 0n) return false
+  // MySQL tries storing the literal in the INT field first. A rounded
+  // value outside the field's range keeps the full read.
+  const rounded = toInteger(fraction)
+  return BigInt.asIntN(32, rounded) === rounded
 }
 
 export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, column: ColumnDef, value: Constant): RangeSet {
@@ -52,24 +66,12 @@ export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, col
   if ((e.op === 'IN' || e.op === 'NOT IN') && onLeft && e.right.kind === NODE.ROW) {
     const items = e.right.items
     const negated = e.op === 'NOT IN'
+    if (negated && fractionalNullList(items, column, value)) return [ALL_VALUES]
     const points: Interval[] = []
     for (const item of items) {
       const v = constantFor(item, column, value)
-      if (v === undefined) return 'all'
+      if (v === undefined || (v === null && negated)) return 'all'
       if (v !== null) points.push(point(v))
-      else if (negated) {
-        if (!column.nullable || column.type.type !== FIELD_TYPE.LONG || column.type.unsigned === true ||
-            items.length !== 2 || item.kind !== NODE.LITERAL) return 'all'
-        const other = items[item === items[0] ? 1 : 0]!
-        const literal = signedOperand(other)
-        if (literal.kind !== NODE.LITERAL) return 'all'
-        const fraction = value(other)
-        if (fraction?.kind !== 'decimal' || fraction.v % 10n ** BigInt(fraction.scale) === 0n) return 'all'
-        // MySQL tries storing the literal in the INT field first. A rounded
-        // value outside the field's range keeps the full read.
-        const rounded = toInteger(fraction)
-        return BigInt.asIntN(32, rounded) === rounded ? [ALL_VALUES] : 'all'
-      }
     }
     if (!negated) return points
     const out: Interval[] = []

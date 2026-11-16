@@ -6,10 +6,10 @@
 // 8.4.11 first. An address or a UUID that does not parse is NULL with a 1411
 // warning naming the function, except where the server refuses it outright.
 import { CHARSET_BINARY, hex } from '@myjs/bytes'
-import type { CallNode } from '@myjs/parser'
+import { hexBytes, type CallNode } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
 import { COERCIBILITY, bool, bytesValue, intValue, stringValue, toText, type Value, valueBytes } from '@myjs/types'
-import { hexDigits, hexOf } from './builtins.ts'
+import { hexOf } from './builtins.ts'
 import { compile, printedArgument, raise, invalidString, readNonNull, type CompileContext, type Compiled } from './compile.ts'
 import { intType, stringType, type ResultType } from './meta.ts'
 import { nativeArity, unregistered } from './registry.ts'
@@ -107,7 +107,7 @@ function uuidBytes(text: string): Uint8Array | undefined {
     if (!/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(dashed)) return undefined
     hex = dashed.replace(/-/g, '')
   }
-  return hexDigits(hex)
+  return hexBytes(hex)
 }
 
 /** UUID_TO_BIN's and BIN_TO_UUID's swap: the time-low and time-high fields exchanged. */

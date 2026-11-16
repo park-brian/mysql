@@ -116,28 +116,23 @@ function compiled(pattern: string, flags: IcuFlags): IcuPattern & { readonly re:
 const collationOf = (v: Exclude<Value, null>) => (v.kind === 'string' ? v.collationId : v.kind === 'bytes' ? CHARSET_BINARY : undefined)
 const nameOf = (id: number) => (id === CHARSET_BINARY ? 'binary' : requireCollationInfo(id).name)
 
-/** 3995 when one of a pair is a binary string and the other text, naming them in order. */
-function sameKind(a: Exclude<Value, null>, b: Exclude<Value, null>, fn: string): void {
+/** The first string collation, with 3995 for mixed binary and text operands. */
+function pairCollation(a: Exclude<Value, null>, b: Exclude<Value, null>, fn: string): number {
   const x = collationOf(a)
   const y = collationOf(b)
   if (x !== undefined && y !== undefined && (x === CHARSET_BINARY) !== (y === CHARSET_BINARY)) {
     throw sqlError('ER_CHARACTER_SET_MISMATCH', `Character set '${nameOf(x)}' cannot be used in conjunction with '${nameOf(y)}' in call to ${fn}.`)
   }
+  return x ?? y ?? CHARSET_BINARY
 }
 
 /** ICU reads a binary string through MySQL's latin1 map, independent of the host decoder. */
 const textOf = (v: Exclude<Value, null>): string => (v.kind === 'bytes' ? decodeCharset(v.v, 'latin1') : toText(v))
 
-/** The subject's and pattern's collation, as the comparison has it. */
-function collationFor(subject: Exclude<Value, null>, pattern: Exclude<Value, null>): number {
-  if (subject.kind === 'string' && pattern.kind === 'string') return aggregateCollation(subject, pattern)
-  return collationOf(subject) ?? collationOf(pattern) ?? CHARSET_BINARY
-}
-
 /** The engine's pattern for `pattern` over `subject`. */
 function regexpFor(subject: Exclude<Value, null>, pattern: Exclude<Value, null>, type: MatchType | undefined, fn: string): IcuPattern & { readonly re: RegExp } {
-  sameKind(subject, pattern, fn)
-  const collation = collationFor(subject, pattern)
+  const base = pairCollation(subject, pattern, fn)
+  const collation = subject.kind === 'string' && pattern.kind === 'string' ? aggregateCollation(subject, pattern) : base
   const text = textOf(pattern)
   if (text === '' || text.includes('[[:<:]]') || text.includes('[[:>:]]')) throw illegal()
   const shape = shapeOf(text)
@@ -301,7 +296,7 @@ function replacementOf(text: string, groups: number, names: ReadonlyMap<string, 
 }
 
 export function regexpReplace(s: Search, replacement: Exclude<Value, null>): string {
-  sameKind(s.subject, replacement, 'regexp_replace')
+  pairCollation(s.subject, replacement, 'regexp_replace')
   const { re, groups, names } = regexpFor(s.subject, s.pattern, s.type, 'regexp_replace')
   const text = textOf(s.subject)
   const start = offsetOf(text, s.position, s.subject.kind === 'bytes', 'regexp_replace')

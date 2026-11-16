@@ -453,11 +453,11 @@ function valueList(c: Cursor): (string | Uint8Array)[] {
   return out
 }
 
-/** `x'c3a6'` as bytes. An odd digit count is left-padded, as MySQL does. */
+/** Decode validated hexadecimal digits, left-padding an odd digit count. */
 export function hexBytes(digits: string): Uint8Array {
-  const even = digits.length % 2 === 0 ? digits : '0' + digits
-  const out = new Uint8Array(even.length / 2)
-  for (let i = 0; i < even.length; i += 2) out[i / 2] = Number.parseInt(even.slice(i, i + 2), 16)
+  if (digits.length & 1) digits = '0' + digits
+  const out = new Uint8Array(digits.length / 2)
+  for (let i = 0; i < digits.length; i += 2) out[i / 2] = parseInt(digits.slice(i, i + 2), 16)
   return out
 }
 

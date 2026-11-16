@@ -6,7 +6,7 @@
 // "not mine".
 import { CHARSET_BINARY, FIELD_TYPE, concatBytes, hex, type MysqlDateTime } from '@myjs/bytes'
 import { encodeCollation, hasCollation, requireCollationInfo } from '@myjs/charsets'
-import { LITERAL, NODE, deparse, type CallNode, type Expression, type LiteralNode } from '@myjs/parser'
+import { LITERAL, NODE, deparse, hexBytes, type CallNode, type Expression, type LiteralNode } from '@myjs/parser'
 import { dateToMysql, messages, sqlError, utf8, webCryptoRandom } from '@myjs/protocol'
 import {
   COERCIBILITY,
@@ -323,7 +323,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
           if (v === null) return null
           const text = toText(v)
           if (!/^[0-9a-fA-F]*$/.test(text)) return invalidString(env, printedArgument(e.args[0] as Expression, ctx), 'unhex')
-          return bytesValue(hexDigits(text))
+          return bytesValue(hexBytes(text))
         },
         type: stringType(Math.ceil(byteWidth(x.type) / 2), CHARSET_BINARY, true),
       }
@@ -806,14 +806,6 @@ function chosenOf(x: Compiled, result: ResultType): (v: Exclude<Value, null>, en
 /** Bytes as `HEX()` writes them: two upper-case digits each. */
 export function hexOf(b: Uint8Array): string {
   return hex(b).toUpperCase()
-}
-
-/** Decode validated hexadecimal digits, with an odd first digit in its own byte. */
-export function hexDigits(digits: string): Uint8Array {
-  const even = digits.length % 2 === 0 ? digits : `0${digits}`
-  const bytes = new Uint8Array(even.length / 2)
-  for (let i = 0; i < even.length; i += 2) bytes[i / 2] = parseInt(even.slice(i, i + 2), 16)
-  return bytes
 }
 
 /** Diagnostic bytes: printable ASCII retained, other bytes as upper-case escapes. */

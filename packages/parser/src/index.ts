@@ -43,7 +43,7 @@ export type {
 export { nativeFunctionWord, parseExpression } from './expression.ts'
 export type { ParseExpressionOptions } from './expression.ts'
 export { Cursor } from './cursor.ts'
-export { atDataType, parseDataType } from './data-type.ts'
+export { atDataType, hexBytes, parseDataType } from './data-type.ts'
 export type { DataType } from './data-type.ts'
 export { parseCreateTable, parseCreateView, parseDrop } from './ddl.ts'
 export { parseDelete, parseInsert, parseUpdate } from './dml.ts'

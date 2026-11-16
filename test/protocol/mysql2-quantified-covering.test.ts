@@ -433,6 +433,56 @@ test('indexed integer membership chooses covering builds across retained executi
   }
 })
 
+test('dependent membership costs the selected covering range for a fractional NOT IN list', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection(db === undefined
+    ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+    : { stream: db.createStream(), user: 'root' })
+  const schema = 'quantified_fractional_list374'
+  const outer = 'Filter\n    Covering index scan on p using by_name\n    Select #2'
+  const build = `${outer}\n        Filter\n            Limit\n                Index lookup on <materialized_subquery> using <auto_distinct_key>\n                    Materialize with deduplication\n                        Filter`
+  const whole = `${build}\n                            Covering index scan on c using by_g`
+  const range = `${build}\n                            Covering index range scan on c using by_g over`
+  const lookup = `${outer}\n        Limit\n            Filter\n                Filter\n                    Covering index lookup on c using by_g`
+  const parents = [['p1'], ['p2'], ['p3'], ['p4'], ['p5']]
+  async function read(plan: string) {
+    for (const op of ['NOT IN', '<> ALL']) for (const list of ['NULL,2.5', '2.5,NULL']) {
+      const sql = `SELECT name FROM p WHERE p.id ${op} (SELECT c.g FROM c WHERE c.g NOT IN (${list})) ORDER BY 1`
+      await readDependentNotIn(conn, schema, 'name', sql, parents, (actual, api) => assert.equal(actual, plan, `${op} (${list}) via ${api}`))
+    }
+  }
+  try {
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,UNIQUE KEY by_name(name)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE c(id INT PRIMARY KEY,g INT,KEY by_g(g)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO p VALUES(1,'p5'),(2,'p4'),(3,'p3'),(4,'p2'),(5,'p1')")
+    await conn.query('INSERT INTO c VALUES(1,2)')
+    await conn.query('ANALYZE TABLE p,c')
+    await read(whole)
+    await conn.query('INSERT INTO c VALUES(2,2),(3,2),(4,2),(5,NULL),(6,2),(7,2),(8,2)')
+    await conn.query('ANALYZE TABLE c')
+    await read(range)
+    await conn.query('UPDATE c SET g=1+MOD(id-1,6) WHERE g IS NOT NULL')
+    await conn.query('ANALYZE TABLE c')
+    await read(lookup)
+    await conn.query("SET optimizer_switch='subquery_materialization_cost_based=off'")
+    await read(range)
+    await conn.query("SET optimizer_switch='materialization=off'")
+    await read(lookup)
+    await conn.query("SET optimizer_switch='default'")
+    await conn.query('DELETE FROM c')
+    await conn.query('ANALYZE TABLE c')
+    await read(whole)
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
 test('unindexed integer NOT IN and <> ALL retain dependent scans and builds', async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined

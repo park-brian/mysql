@@ -111,6 +111,10 @@ export function integerLiteral(e: Expression): e is LiteralNode & { readonly typ
   return e.kind === NODE.LITERAL && e.type === LITERAL.INT
 }
 
+export function nullLiteral(e: Expression | undefined): boolean {
+  return e?.kind === NODE.LITERAL && e.type === LITERAL.NULL
+}
+
 /** Operand below permitted signs, for syntax proofs that keep the original reader. */
 export function signedOperand(e: Expression, plus?: '+'): Expression {
   while (e.kind === NODE.UNARY && (e.op === '-' || e.op === plus)) e = e.operand
