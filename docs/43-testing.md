@@ -268,6 +268,9 @@ CI runs `npm run verify:docker -- --reference` as the blocking `pinned MySQL
 8.4.11 reference` job on pushes, pull requests and manual runs. The advisory
 recapture jobs against `mysql:8.4` remain separate: a newer server's observations
 do not replace the pinned compatibility gate or its committed fixtures.
+Trace recapture copies the C client from its MySQL service to the runner's
+PATH. The runner uses it for account provisioning and sends the captured
+sessions through the local TCP proxy to that service.
 
 For a fresh ORM comparison, use `tools/orm-suites.mjs --ours` or `--server`
 with `--out /tmp/orm-census.json` to keep committed fixtures intact. Server

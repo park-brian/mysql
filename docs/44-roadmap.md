@@ -262,6 +262,14 @@ its exact SHA while resuming the measured source-to-text work below. The
 7bbb939 repair run passed all eleven blocking jobs; its optional ORM job was
 skipped. No denominator or threshold is changed.
 
+**M3.14 trace recapture runner, verified in Docker.** GitHub's client package
+install upgraded the runner's host MySQL server and failed before capture.
+The advisory trace job now uses the CLI from its own `mysql:8.4` service on
+the runner's PATH. A disposable copy reproduced provisioning and all 13
+captures with the same MySQL 8.4.13 image. Captured sessions traversed the
+runner's TCP proxy. The blocking 8.4.11 job replays the committed fixtures.
+[Runner setup failure](https://github.com/park-brian/mysql/actions/runs/43865570034/job/133293115033)
+
 Bounded function/coercion repairs are verified below. A fresh set-operation
 boundary audit reopens M5.19. All 400 integer-only and 84 YEAR/integer UNION
 outcomes now agree, including signedness, quiet clipping and nested final-type

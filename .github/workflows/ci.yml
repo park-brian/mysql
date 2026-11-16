@@ -201,7 +201,14 @@ jobs:
           node-version: '22.18'
           cache: npm
       - run: npm ci
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mysql-client
+      - name: use the MySQL service's client
+        env:
+          MYSQL_SERVICE_ID: ${{ job.services.mysql.id }}
+        run: |
+          client_bin="$RUNNER_TEMP/mysql-bin"
+          mkdir -p "$client_bin"
+          docker cp "$MYSQL_SERVICE_ID:/usr/bin/mysql" "$client_bin/mysql"
+          echo "$client_bin" >> "$GITHUB_PATH"
       # `capture-traces.mjs` requires a `nopw` and a `trace` account and refuses
       # to invent them — rightly, since "a tool that invented them would be
       # re-baselining the corpus rather than checking it". But nothing else
