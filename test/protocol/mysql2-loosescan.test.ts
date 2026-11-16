@@ -121,11 +121,13 @@ test('ordered IN with a noncovering text residual costs indexed weedout or mater
                             Filter
                                 Table scan on c
             Single-row index lookup on p using PRIMARY`
-  const residuals = ["<= 'b'", "< 'dee'", "> 'b'", ">= 'dee'"] as const
+  const like = ["LIKE '%e%'", "LIKE '_'"] as const
+  const residuals = ["<= 'b'", "< 'dee'", "> 'b'", ">= 'dee'", ...like] as const
   type Rows = readonly (readonly string[])[]
-  const empty = [[], [], [], []] as const
-  const read = async (plan: string, expected: readonly [Rows, Rows, Rows, Rows]) => {
-    for (const [i, residual] of residuals.entries()) {
+  const empty = [[], [], [], [], [], []] as const
+  const read = async (plan: string, expected: readonly Rows[], patterns: readonly string[] = residuals) => {
+    assert.equal(expected.length, patterns.length)
+    for (const [i, residual] of patterns.entries()) {
       const sql = `SELECT label FROM p WHERE id IN (SELECT c.parent_id FROM c WHERE c.word ${residual}) ORDER BY 1`
       const options = { sql, rowsAsArray: true }
       const explain = `EXPLAIN FORMAT=TREE ${sql}`
@@ -154,21 +156,27 @@ test('ordered IN with a noncovering text residual costs indexed weedout or mater
     await conn.query("SET optimizer_switch='default'")
     await conn.query("INSERT INTO c VALUES(1,1,'b')")
     await conn.query('ANALYZE TABLE p,c')
-    await read(weedout, [[['D']], [['D']], [], []])
+    await read(weedout, [[['D']], [['D']], [], [], [], [['D']]])
 
     await conn.query("INSERT INTO c VALUES(2,1,'B'),(3,2,'b '),(4,2,'a'),(5,3,'dée'),(6,NULL,'a'),(7,6,'A'),(8,4,NULL)")
     await conn.query('ANALYZE TABLE p,c')
-    await read(scan, [[['A'], ['D']], [['A'], ['D']], [['A'], ['Z']], [['Z']]])
+    await read(scan, [[['A'], ['D']], [['A'], ['D']], [['A'], ['Z']], [['Z']], [['Z']], [['A'], ['D']]])
     // Keep the same prepared statements across a rekey and a collation-sensitive edit.
     await conn.query('UPDATE c SET parent_id=3 WHERE id=1')
     await conn.query("UPDATE c SET word='dée' WHERE id=4")
-    const updated = [[['D'], ['Z']], [['A'], ['D'], ['Z']], [['A'], ['Z']], [['A'], ['Z']]] as const
+    const updated = [[['D'], ['Z']], [['A'], ['D'], ['Z']], [['A'], ['Z']], [['A'], ['Z']], [['A'], ['Z']], [['D'], ['Z']]] as const
     await read(scan, updated)
     await conn.query("SET optimizer_switch='duplicateweedout=off'")
     await read(scan, updated)
     await conn.query('DELETE FROM c')
     await conn.query('ANALYZE TABLE p,c')
     await read(scan, empty)
+
+    // At this cost tie, the native LIKE estimate chooses materialization over weedout.
+    await conn.query("SET optimizer_switch='default'")
+    await conn.query('INSERT INTO c VALUES ' + Array.from({ length: 32 }, (_, i) => `(${i + 1},1,'é')`).join(','))
+    await conn.query('ANALYZE TABLE p,c')
+    await read(scan, [[['D']], [['D']]], like)
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()

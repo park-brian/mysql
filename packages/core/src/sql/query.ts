@@ -1251,11 +1251,13 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   let residual: Extract<Expression, { kind: typeof NODE.BINARY }> | undefined
   let text = false
   if (extra !== undefined) {
-    if (extra.kind !== NODE.BINARY || !isComparison(extra.op) || extra.right.kind !== NODE.LITERAL) return undefined
+    if (extra.kind !== NODE.BINARY || extra.right.kind !== NODE.LITERAL) return undefined
     const field = qualify(extra.left, innerAlias)
     if (field === undefined) return undefined
-    text = !exists && isOrderedComparison(extra.op) && textBesideColumn(field, extra.right)
-    if (!text && !numberLiteral(extra.right)) return undefined
+    text = !exists && textBesideColumn(field, extra.right) && (isOrderedComparison(extra.op) ||
+      (extra.op === 'LIKE' && !extra.extra && /^[%_]/.test(extra.right.value as string) &&
+        optimizerEnabled(run.env, 'condition_fanout_filter')))
+    if (!text && (!isComparison(extra.op) || !numberLiteral(extra.right))) return undefined
     residual = { ...extra, left: field }
   }
   const equality: Expression = { kind: NODE.BINARY, op: '=', left: innerField, right: outerField, at: where.at }
@@ -1276,10 +1278,9 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     if (scanOnly) {
       if (sortBy !== outerAlias || q.limit !== undefined || q.locking !== undefined || !singleRefIndex(index) ||
         def.indexes.some((i) => holdsRead(def, i, innerRead)) || hasGenerated(def, from.single!.def)) return undefined
-      if (text) {
-        if (!sessionVarchar(tableColumn(residual!.left, def, innerAlias), run)) return undefined
-      } else if (!exists || residual?.op !== '>' || !integerLiteral(residual.right)) return undefined
-    } else if (text) return undefined
+      if (!text && (!exists || residual?.op !== '>' || !integerLiteral(residual.right))) return undefined
+    }
+    if (text && (!scanOnly || !sessionVarchar(tableColumn(residual!.left, def, innerAlias), run))) return undefined
     // Keep the outer table's slots first: its logical scope remains the SELECT's scope.
     const alternative = planFrom([outer, inner], fromContext(run), predicate)
     const ctx = compileContext(run, alternative.scope, 'where clause')

@@ -1728,7 +1728,10 @@ function filterEffect(t: FromTable, stats: TableStatistics, available: ReadonlyS
       const index = keyOrder(t.def!).find((i) => i.parts[0]?.column.toLowerCase() === pair.name.toLowerCase())
       if (index !== undefined) return Math.min(1, Math.fround(stats.recordsPerKey(index, 1) / stats.rows))
     }
-    const kept = atLeast(like ? 1 / 9 : isOrderedComparison(op) ? (filteredScan ? Math.fround(0.3333) : 1 / 3) : 0.1)
+    let estimate = 0.1
+    if (like) estimate = filteredScan ? Math.fround(0.1111) : 1 / 9
+    else if (isOrderedComparison(op)) estimate = filteredScan ? Math.fround(0.3333) : 1 / 3
+    const kept = atLeast(estimate)
     return op === '<>' || op === '!=' || op === 'NOT LIKE' ? negateFilter(kept) : kept
   }
 }
