@@ -296,61 +296,64 @@ const fixedScale = (t: ColumnDef['type']): { scale?: number } => (t.precision !=
 /** A table column's result type, as `SELECT c FROM t` reports it. */
 export function columnResultType(def: TableDef, column: ColumnDef, tableAlias: string): ResultType {
   const t = column.type
-  const nullable = column.nullable
-  const unsigned = t.unsigned === true
+  const unsigned = t.unsigned === true || t.type === FIELD_TYPE.YEAR || t.type === FIELD_TYPE.BIT
+  const result = columnRepresentation(column, unsigned)
   let flags = keyFlags(def, column.name)
   if (column.autoIncrement === true) flags |= COLUMN_FLAG.AUTO_INCREMENT
-  if (!nullable && column.autoIncrement !== true && column.attributes?.['default'] === undefined) flags |= COLUMN_FLAG.NO_DEFAULT_VALUE
+  if (!column.nullable && column.autoIncrement !== true && column.attributes?.['default'] === undefined) flags |= COLUMN_FLAG.NO_DEFAULT_VALUE
   if (t.type === FIELD_TYPE.YEAR || column.attributes?.['zerofill'] === true) flags |= COLUMN_FLAG.ZEROFILL
-  const source: SourceColumn = { schema: def.schema, table: tableAlias, orgTable: def.name, orgName: column.name, flags }
-  const base = { nullable, unsigned, column: source }
+  if (t.type === FIELD_TYPE.ENUM) flags |= COLUMN_FLAG.ENUM
+  if (t.type === FIELD_TYPE.SET) flags |= COLUMN_FLAG.SET
+  if (result.kind === 'json' || result.blobBytes !== undefined) flags |= COLUMN_FLAG.BLOB
+  return { ...result, unsigned, column: { schema: def.schema, table: tableAlias, orgTable: def.name, orgName: column.name, flags } }
+}
 
+/** The storage type's result representation before adding field identity and key flags. */
+function columnRepresentation({ type: t, nullable, attributes }: ColumnDef, unsigned: boolean): ResultType {
   const width = INT_WIDTH[t.type]
   // A declared display width is the field's length, deprecated or not: TINYINT(1)
   // reports 1, which is how a driver knows a boolean (8.4.11).
-  const declared = column.attributes?.['width']
-  if (width !== undefined) return { ...intType(typeof declared === 'number' ? declared : unsigned ? width[1] : width[0], nullable, unsigned), ...base, field: t.type }
+  const declared = attributes?.['width']
+  if (width !== undefined) return scalarType('int', t.type, typeof declared === 'number' ? declared : width[Number(unsigned)]!, 0, nullable)
   switch (t.type) {
     case FIELD_TYPE.DECIMAL:
     case FIELD_TYPE.NEWDECIMAL:
-      return { ...decimalType(t.precision ?? 10, t.scale ?? 0, nullable, unsigned), ...base }
+      return decimalType(t.precision ?? 10, t.scale ?? 0, nullable)
     // FLOAT(M,D) reports M as its length and D as its decimals (8.4.11).
     case FIELD_TYPE.FLOAT:
     case FIELD_TYPE.DOUBLE:
-      return { ...doubleType(nullable, t.precision ?? (t.type === FIELD_TYPE.FLOAT ? 12 : 22)), ...fixedScale(t), ...base, field: t.type }
+      return { ...doubleType(nullable, t.precision ?? (t.type === FIELD_TYPE.FLOAT ? 12 : 22)), ...fixedScale(t), field: t.type }
     case FIELD_TYPE.YEAR:
     case FIELD_TYPE.BIT:
-      return { ...intType(t.type === FIELD_TYPE.YEAR ? 4 : t.bits ?? 1, nullable, true), ...base, field: t.type, unsigned: true }
+      return scalarType('int', t.type, t.type === FIELD_TYPE.YEAR ? 4 : t.bits ?? 1, 0, nullable)
     case FIELD_TYPE.DATE:
     case FIELD_TYPE.NEWDATE:
-      return { ...datetimeType(FIELD_TYPE.DATE, 0, nullable), ...base }
+      return datetimeType(FIELD_TYPE.DATE, 0, nullable)
     case FIELD_TYPE.DATETIME:
     case FIELD_TYPE.DATETIME2:
-      return { ...datetimeType(FIELD_TYPE.DATETIME, t.decimals ?? 0, nullable), ...base }
+      return datetimeType(FIELD_TYPE.DATETIME, t.decimals ?? 0, nullable)
     case FIELD_TYPE.TIMESTAMP:
     case FIELD_TYPE.TIMESTAMP2:
-      return { ...datetimeType(FIELD_TYPE.TIMESTAMP, t.decimals ?? 0, nullable), ...base }
+      return datetimeType(FIELD_TYPE.TIMESTAMP, t.decimals ?? 0, nullable)
     case FIELD_TYPE.TIME:
     case FIELD_TYPE.TIME2:
-      return { ...datetimeType(FIELD_TYPE.TIME, t.decimals ?? 0, nullable), ...base }
+      return datetimeType(FIELD_TYPE.TIME, t.decimals ?? 0, nullable)
     case FIELD_TYPE.JSON:
-      return { ...jsonType(nullable), ...base, column: { ...source, flags: flags | COLUMN_FLAG.BLOB } }
+      return jsonType(nullable)
     case FIELD_TYPE.ENUM:
     case FIELD_TYPE.SET: {
       const lengths = (t.members ?? []).map((m) => [...m].length)
       const length = t.type === FIELD_TYPE.SET ? lengths.reduce((n, size) => n + size, 0) + Math.max(0, lengths.length - 1) : Math.max(0, ...lengths)
-      const kindFlag = t.type === FIELD_TYPE.ENUM ? COLUMN_FLAG.ENUM : COLUMN_FLAG.SET
-      return { ...stringType(length, t.collationId ?? 255, nullable), ...base, field: FIELD_TYPE.STRING, scale: 0, coercibility: 2, column: { ...source, flags: flags | kindFlag } }
+      return { ...stringType(length, t.collationId ?? 255, nullable), field: FIELD_TYPE.STRING, scale: 0, coercibility: 2 }
     }
     default: {
       const blob = blobByteLimit(t.type)
       return {
         ...stringType(blob ?? t.length ?? 1, t.collationId ?? CHARSET_BINARY, nullable),
-        ...base,
         field: blob !== undefined ? FIELD_TYPE.BLOB : t.type === FIELD_TYPE.STRING ? FIELD_TYPE.STRING : FIELD_TYPE.VAR_STRING,
         scale: 0,
         coercibility: 2,
-        ...(blob === undefined ? {} : { blobBytes: blob, column: { ...source, flags: flags | COLUMN_FLAG.BLOB } }),
+        ...(blob === undefined ? {} : { blobBytes: blob }),
       }
     }
   }

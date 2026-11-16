@@ -12,32 +12,37 @@
 
 /** One iterator: what it is, and what it reads from. */
 export interface PlanNode {
-  /** The iterator's name as 8.4.11 prints it, `Table scan on t`. */
+  /** The iterator's printed label, including any range or other detail. */
   readonly label: string
-  /** Printed after `: `, as MySQL prints a condition or a sort key. */
-  readonly detail?: string
   readonly children: readonly PlanNode[]
 }
 
-export const planNode = (label: string, children: readonly PlanNode[] = [], detail?: string): PlanNode => (detail === undefined ? { label, children } : { label, detail, children })
+export const planNode = (label: string, input: PlanNode | readonly PlanNode[] = []): PlanNode => ({ label, children: 'label' in input ? [input] : input })
+
+/** A temporary set's build and its whole-table read are independent iterators. */
+export const materialize = (input?: PlanNode | readonly PlanNode[]): PlanNode => planNode('Materialize with deduplication', input)
+export const scanMaterialized = (build: PlanNode): PlanNode => planNode('Table scan on <subquery2>', build)
 
 /** The same index-read facts name physical and dependent-subquery lookups. */
 export function indexLookup(alias: string, index: string, unique: boolean, covering: boolean, children: readonly PlanNode[] = []): PlanNode {
-  let label = unique ? 'Single-row index' : 'Index'
-  if (covering) label = unique ? 'Single-row covering index' : 'Covering index'
+  const label = unique ? (covering ? 'Single-row covering index' : 'Single-row index') : (covering ? 'Covering index' : 'Index')
   return planNode(`${label} lookup on ${alias} using ${index}`, children)
 }
 
 /** `node` under `label`, or `node` alone when `when` is false. */
-export const wrap = (when: boolean, label: string, node: PlanNode, detail?: string): PlanNode => (when ? planNode(label, [node], detail) : node)
+export const wrap = (when: boolean, label: string, node: PlanNode): PlanNode => (when ? planNode(label, node) : node)
+
+export const filterPlan = (when: boolean, input: PlanNode): PlanNode => wrap(when, 'Filter', input)
 
 /** EXPLAIN FORMAT=TREE's text: each iterator on its own line as `-> name`, its inputs four spaces in. */
 export function renderTree(roots: readonly PlanNode[]): string {
   const lines: string[] = []
-  const walk = (n: PlanNode, depth: number): void => {
-    lines.push(`${'    '.repeat(depth)}-> ${n.label}${n.detail === undefined ? '' : `: ${n.detail}`}`)
-    for (const c of n.children) walk(c, depth + 1)
+  const walk = (level: readonly PlanNode[], indent: string): void => {
+    for (const { label, children } of level) {
+      lines.push(`${indent}-> ${label}`)
+      if (children.length > 0) walk(children, `${indent}    `)
+    }
   }
-  for (const r of roots) walk(r, 0)
+  walk(roots, '')
   return `${lines.join('\n')}\n`
 }

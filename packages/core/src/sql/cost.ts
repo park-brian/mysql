@@ -33,6 +33,9 @@ export const ROW_EVALUATE = 0.1
 export const PAGE_READ = 0.25
 /** `memory_temptable_create_cost`. */
 export const MEMORY_CREATE = 1
+
+/** One access's read and evaluation cost before the join prefix is added. */
+const accessCost = (read: number, rows: number): number => read + ROW_EVALUATE * rows
 /** `join_buffer_size`'s default, in bytes. */
 const JOIN_BUFFER = 262_144
 /** InnoDB's page size, half of which an index's records are reckoned to fill. */
@@ -147,7 +150,7 @@ export function bestAccess(t: TableFacts, prefix: readonly Position[], key: KeyC
   const found = range?.rows ?? s.rows
   const scan = range?.cost ?? scanCost(s)
   const refills = buffered && range === undefined ? 1 + (rowBytes * before) / JOIN_BUFFER : before
-  const whole: Access = { lookup: false, fetched: kept, read: refills * (scan + ROW_EVALUATE * (found - kept)) }
+  const whole: Access = { lookup: false, fetched: kept, read: refills * accessCost(scan, found - kept) }
   if (key === undefined) return whole
   const fanout = key.kind === 'unique' ? 1 : key.fanout
   const read = key.kind === 'unique' ? distinctRows(prefix, key.keyFrom) * PAGE_READ : before * lookupRead(s, key)
@@ -179,14 +182,14 @@ export interface Positioned extends Position {
 export function materializedAntijoinWins(outer: Positioned, probe: Positioned, built: Positioned): boolean {
   const rows = outer.fetched * outer.filter
   const joined = rows * probe.fetched
-  const prefix = outer.read + outer.fetched * ROW_EVALUATE
+  const prefix = accessCost(outer.read, outer.fetched)
   // Inner prefix, creation and writes precede the outer lookup probes.
-  let materialized = built.read + built.fetched * ROW_EVALUATE
+  let materialized = accessCost(built.read, built.fetched)
   materialized += MEMORY_CREATE
   materialized += built.fetched * ROW_EVALUATE
-  materialized = prefix + (materialized + rows * ROW_EVALUATE)
+  materialized = prefix + accessCost(materialized, rows)
   // Weedout evaluates its join, then creates and uses its temporary table.
-  let weedout = prefix + (probe.read + joined * ROW_EVALUATE)
+  let weedout = prefix + accessCost(probe.read, joined)
   weedout += MEMORY_CREATE
   weedout += (rows + joined) * ROW_EVALUATE
   // Later weedout replaces materialization only for a strictly lower cost.
@@ -217,8 +220,11 @@ interface Step extends Positioned {
 /** One more table on a plan (`set_prefix_join_cost`): its rows evaluated once for each it fetches, its filter applied after. */
 function step(before: Step | undefined, placed: Positioned): Step {
   const fetched = (before?.rows ?? 1) * placed.fetched
-  return { ...placed, rows: fetched * placed.filter, cost: (before?.cost ?? 0) + placed.read + ROW_EVALUATE * fetched }
+  return { ...placed, rows: fetched * placed.filter, cost: accessCost((before?.cost ?? 0) + placed.read, fetched) }
 }
+
+/** The temporary-table strategy quotes group the next access before adding it. */
+const extendedCost = (before: Step, placed: Positioned): number => before.cost + accessCost(placed.read, before.rows * placed.fetched)
 
 const almostEqual = (a: number, b: number): boolean => a >= b * 0.9 && a <= b * 1.1
 
@@ -231,6 +237,7 @@ function overlaps(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
 export interface FirstMatch {
   readonly alias: string
   readonly enabled: boolean
+  readonly filteredScan?: boolean
 }
 
 /**
@@ -302,9 +309,10 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     const before = outerFirst ? first : step(undefined, material)
     const placed = outerFirst ? { ...material, lookup: 'materialized' as const, fetched: 1 } : (candidates[0] as Candidate).place([before])
     const last = step(before, placed)
+    const cost = extendedCost(before, placed)
     // Deferred indexed scans must win their strategy cost before the final sort.
-    if (!outerFirst && placed.lookup && last.cost > competitor) return undefined
-    return { plan: [before, last], cost: last.cost + sortCost(outerFirst ? before.rows : placed.fetched * placed.filter) }
+    if (!outerFirst && placed.lookup && cost > competitor) return undefined
+    return { plan: [before, last], cost: cost + sortCost(outerFirst ? before.rows : placed.fetched * placed.filter) }
   }
   // The bounded caller retains the logical inner even when FirstMatch is disabled.
   const semijoin = material?.alias ?? firstMatch?.alias
@@ -321,6 +329,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     // Default memory temporary costs: creation 1, each write/lookup 0.1.
     if (semijoin !== undefined && (first.alias === semijoin ? loose === undefined : firstMatch?.enabled !== true)) {
       rows = Math.min(rows, (candidates[0] as Candidate).rows * last.filter)
+      cost = extendedCost(first, last)
       // Native charges creation before row operations; the grouping decides exact ties.
       cost += weedout || lastResort ? MEMORY_CREATE : Infinity
       cost += 0.1 * (rows + last.rows)
@@ -330,7 +339,9 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     // An inner-first materialized scan wins its native equal-cost weedout tie.
     const chosen = alternative !== undefined && (alternative.cost < cost || (alternative.cost === cost && loose === undefined && first.alias === semijoin))
       ? alternative : { cost, plan: plan.slice() }
-    if (best === undefined || chosen.cost < best.cost) best = chosen
+    // When revisiting a complete filtered semijoin plan, MySQL's best_read
+    // already excludes the optimizer's 0.001 adjustment.
+    if (best === undefined || chosen.cost < best.cost - (firstMatch?.filteredScan ? 0.001 : 0)) best = chosen
   }
   // The unique-key tables after the one just placed, each joined in turn while it costs what the one before did (`eq_ref_extension_by_limited_search`).
   const extendByUniqueKeys = (remaining: Set<string>): Set<string> => {
@@ -406,7 +417,7 @@ export const indexScanCost = (rows: number, recordBytes: number): number => {
 export function rangeBaseline(t: TableStatistics, coveringRecordBytes: number | undefined, forceRange?: boolean): number {
   const scan = forceRange ? Infinity : PAGE_READ * t.pages + 1.1 + ROW_EVALUATE * t.rows + 1
   if (coveringRecordBytes === undefined) return scan
-  return Math.min(scan, indexScanCost(t.rows, coveringRecordBytes) + ROW_EVALUATE * t.rows)
+  return Math.min(scan, accessCost(indexScanCost(t.rows, coveringRecordBytes), t.rows))
 }
 
 /** How an index is read for a range: through the clustered key, alone because it covers, or a secondary index with a row fetched for each entry. */
@@ -428,11 +439,11 @@ export interface RangeShape {
  */
 export function rangeCost(t: TableStatistics, shape: RangeShape, ranges: number, rows: number): number {
   let pages: number
-  if (shape.covering) return indexScanCost(rows, shape.recordBytes) + ROW_EVALUATE * rows + 0.01
+  if (shape.covering) return accessCost(indexScanCost(rows, shape.recordBytes), rows) + 0.01
   else if (shape.clustered) {
     const upper = Math.trunc((2 * t.pages * PAGE_BYTES) / shape.minRecordBytes)
     const whole = Math.trunc(rows)
     pages = whole <= 2 ? whole : upper < whole ? t.pages : ranges + (whole / upper) * t.pages
   } else pages = ranges + rows
-  return pages * PAGE_READ + ROW_EVALUATE * rows + 0.01
+  return accessCost(pages * PAGE_READ, rows) + 0.01
 }

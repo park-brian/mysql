@@ -1,4 +1,15 @@
+import { expectTyped } from '@myjs/bytes'
 import { messages, sqlError, type SqlError } from '@myjs/protocol'
+
+/** A speculative read can decline a SQL error. Internal failures still escape. */
+export function proof<T>(read: () => T): T | undefined {
+  try {
+    return read()
+  } catch (error) {
+    expectTyped(error)
+    return undefined
+  }
+}
 
 /** A named refusal; each caller still decides which feature is unavailable and when. */
 export function notSupported(what: string): SqlError {

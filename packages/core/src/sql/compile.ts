@@ -13,7 +13,7 @@
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes, type MysqlTime } from '@myjs/bytes'
 import { logicalShortCircuit, nativeCallName, queryBody, signedOperand, someNode } from './ast.ts'
-import { notSupported } from './errors.ts'
+import { notSupported, proof } from './errors.ts'
 import { resolveCollation } from './collation.ts'
 import { decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { LITERAL, NODE, QUERY, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, type VariableNode, quoteName } from '@myjs/parser'
@@ -116,7 +116,6 @@ import {
   stringType,
   stringResultType,
   type ResultType,
-  type SourceColumn,
 } from './meta.ts'
 import { castAsJson } from './json.ts'
 import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
@@ -445,13 +444,8 @@ export function printedArgument(a: Expression, ctx: CompileContext): string {
     return printExpression(a, {
       diagnostic: true,
       column: (parts) => {
-        let c: SourceColumn | undefined
-        try {
-          c = compile({ kind: NODE.COLUMN, parts, at: a.at }, ctx).type.column
-        } catch (e) {
-          expectTyped(e)
-          // A column the clause cannot see by itself (an aggregate's, in HAVING) is named as written.
-        }
+        // A column the clause cannot see by itself (an aggregate's, in HAVING) is named as written.
+        const c = proof(() => compile({ kind: NODE.COLUMN, parts, at: a.at }, ctx).type.column)
         const q = quoteName
         return c === undefined ? parts.map(q).join('.') : `${q(c.schema)}.${q(c.table)}.${q(c.orgName === '' ? (parts[parts.length - 1] as string) : c.orgName)}`
       },
@@ -685,6 +679,8 @@ export interface SubqueryPlan {
   readonly cached?: boolean | undefined
   /** Check base-table read visibility under this invocation; not full plan initialization. */
   readonly checkRead?: ((env: Env) => void) | undefined
+  /** The enclosing comparison's reader, for the same bound subquery in EXPLAIN. */
+  quantified?: QuantifiedSubquery
   rows(env: Env): Iterable<readonly Value[]>
 }
 
@@ -731,8 +727,6 @@ export interface CompileContext {
   readonly groupKeys?: GroupKeys
   /** Plan a subquery whose enclosing scope is `outer` (M5.1); absent where none is allowed. */
   readonly subquery?: (q: QueryExpression, outer: Scope) => SubqueryPlan
-  /** A subquery compiled as `[NOT] IN`, `= ALL` and their like: how, for the plan EXPLAIN prints of it (M5.47). */
-  readonly quantified?: (q: QueryExpression, how: QuantifiedSubquery) => void
   /** A base table by name, for what reads one whole: MATCH's statistics (M5.26). */
   readonly table?: (schema: string, name: string) => Table | undefined
   /** The statement's diagnostics area, for what resolving a constant warns (1292 at a constant position, say). */
@@ -1860,12 +1854,7 @@ export function dateConverter(c: Compiled, written: Expression, other: Compiled,
     throw sqlError('ER_WRONG_VALUE', `Incorrect ${what.toUpperCase()} value: '${text}'`)
   }
   if (constant && (written.kind !== NODE.PLACEHOLDER || ctx.params !== undefined)) {
-    let v: Value = null
-    try {
-      v = c.eval([], constantEnv(ctx))
-    } catch (e) {
-      expectTyped(e)
-    }
+    const v = proof(() => c.eval([], constantEnv(ctx))) ?? null
     if (isTextValue(v)) {
       const p = parseDateTime(toText(v), flags)
       if (p === undefined) return invalid(v, ctx.rowNumberConditions === false && other.type.column === undefined && plainTextLiteral(written) != null ? ctx : undefined)
@@ -1947,13 +1936,7 @@ export function columnConstantDiagnostics(c: Compiled, written: Expression, othe
 function yearConstant(c: Compiled, written: Expression, other: Compiled, ctx: CompileContext): Compiled {
   if (other.type.field !== FIELD_TYPE.YEAR || other.type.column === undefined || !isText(c.type) || !constantNode(written)) return c
   if (written.kind === NODE.PLACEHOLDER && ctx.params === undefined) return c
-  let v: Value = null
-  try {
-    v = c.eval([], constantEnv(ctx))
-  } catch (e) {
-    expectTyped(e)
-    return c
-  }
+  const v = proof(() => c.eval([], constantEnv(ctx))) ?? null
   if (!isTextValue(v)) return c
   const text = toText(v)
   if (!/^\s*[+-]?(\d|\.\d)/.test(text)) return c
@@ -3036,7 +3019,7 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
     const plainNotIn = keyed && all && right.quantifier === undefined && left.kind === NODE.COLUMN && ctx.clause === 'where clause' &&
       a0.type.field === FIELD_TYPE.LONG && sub.field === FIELD_TYPE.LONG && a0.type.unsigned === sub.unsigned
     const kind = !membership ? 'scan' : !all ? 'in' : plainNotIn ? 'keyed-int-not-in' : 'not-in'
-    ctx.quantified?.(right.query, { kind, nullable: a0.type.nullable })
+    plan.quantified = { kind, nullable: a0.type.nullable }
   }
   return { eval: keyed ? membershipReader(a0.eval, plan.rows, all, null, compareAll) : compareAll, type: boolType(true) }
 

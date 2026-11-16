@@ -17,9 +17,8 @@
 //
 // An `ON` sees only the tables of its own join (`restrict`): in
 // `a, b JOIN c ON a.x = c.x` the comma binds last, so `a.x` is 1054 there.
-import { unknownTableError } from './errors.ts'
+import { proof, unknownTableError } from './errors.ts'
 import type { TableDef } from '@myjs/engine'
-import { expectTyped } from '@myjs/bytes'
 import { messages, sqlError, type SqlError } from '@myjs/protocol'
 import type { Scope } from './compile.ts'
 import { columnResultType, type ResultType } from './meta.ts'
@@ -48,11 +47,36 @@ export function requireSchema(schema: string | null | undefined): string {
 
 /** A planner proof may decline a typed name error; compilation still reports it. */
 export function safeResolve(scope: Scope, parts: readonly string[], clause: string): ReturnType<Scope['resolve']> | undefined {
-  try {
-    return scope.resolve(parts, clause)
-  } catch (e) {
-    expectTyped(e)
-    return undefined
+  return proof(() => scope.resolve(parts, clause))
+}
+
+/** The slot in this row, leaving correlated reads to the enclosing query. */
+export function safeIndex(scope: Scope, parts: readonly string[], clause = 'field list'): number | undefined {
+  const bound = safeResolve(scope, parts, clause)
+  return bound?.depth === undefined ? bound?.index : undefined
+}
+
+/** Equality groups by bound row slot. Unjoined slots keep their own identity. */
+export function equalSlots() {
+  const parent = new Map<number, number>()
+  const count = new Map<number, number>()
+  const size = (root: number): number => count.get(root) ?? 1
+  const root = (slot: number): number => {
+    let next: number | undefined
+    while ((next = parent.get(slot)) !== undefined) slot = next
+    return slot
+  }
+  return {
+    root,
+    size,
+    union(a: number, b: number): void {
+      a = root(a)
+      b = root(b)
+      if (a === b) return
+      if (size(a) > size(b)) [a, b] = [b, a]
+      parent.set(a, b)
+      count.set(b, size(a) + size(b))
+    },
   }
 }
 
@@ -87,6 +111,8 @@ export interface ScopeTableSpec {
 
 export class TableScope implements Scope {
   readonly tables: readonly ScopeTable[]
+  /** How many values a row of this scope holds. */
+  readonly width: number
   /** Slots a USING or NATURAL join merged, each group's first the one a bare name means. */
   readonly #coalesced: readonly (readonly number[])[]
   /** `*`'s columns, in order, where a join changed it from table order. */
@@ -108,6 +134,7 @@ export class TableScope implements Scope {
       offset += columns.length
     }
     this.tables = out
+    this.width = offset
     this.#coalesced = options.coalesced ?? []
     this.#visible = options.visible
     this.#parent = options.parent
@@ -122,11 +149,6 @@ export class TableScope implements Scope {
       // MATCH looks for its FULLTEXT index among them (8.4.11: `JOIN b ON MATCH(b.t) AGAINST(…)`).
       tables,
     } as Scope & { readonly tables: readonly ScopeTable[] }
-  }
-
-  /** How many values a row of this scope holds. */
-  get width(): number {
-    return this.tables.reduce((n, t) => n + t.columns.length, 0)
   }
 
   resolve(parts: readonly string[], clause: string): { readonly index: number; readonly type: ResultType; readonly depth?: number } {
@@ -165,8 +187,8 @@ function resolveIn(
   clause: string,
   parent: Scope | undefined,
 ): { readonly index: number; readonly type: ResultType; readonly depth?: number } {
-  const column = parts[parts.length - 1] as string
-  const tableName = parts.length >= 2 ? parts[parts.length - 2] : undefined
+  const column = parts.at(-1)!
+  const tableName = parts.at(-2)
   const schemaName = parts.length === 3 ? parts[0] : undefined
   const found: { index: number; type: ResultType }[] = []
   for (const t of tables) {

@@ -1,4 +1,4 @@
-import type { ColumnDef, IndexDef, TableDef } from '@myjs/engine'
+import type { ColumnDef, IndexDef, IndexPartDef, TableDef } from '@myjs/engine'
 
 /** The index a table's rows are stored in: its PRIMARY KEY, or the unique key InnoDB chose in its place; none for a hidden row id. */
 export function clusteredIndex(def: TableDef): IndexDef | undefined {
@@ -17,16 +17,26 @@ export function indexPartMatchesColumn(part: IndexDef['parts'][number] | undefin
   return part?.column.toLowerCase() === name && part.prefix === undefined
 }
 
-/** The canonical column a visible, complete ascending first key part can read. */
-export function forwardKeyColumn(def: TableDef, index: IndexDef): ColumnDef | undefined {
+/** The visible, complete ascending first key part. */
+export function forwardKeyPart(index: IndexDef): IndexPartDef | undefined {
   const part = index.parts[0]
-  if (index.invisible === true || part === undefined || part.prefix !== undefined || part.descending === true) return undefined
-  return def.columns.find((c) => c.name === part.column)
+  return index.invisible === true || part?.prefix !== undefined || part?.descending === true ? undefined : part
+}
+
+/** The canonical column that part reads. */
+export function forwardKeyColumn(def: TableDef, index: IndexDef): ColumnDef | undefined {
+  const part = forwardKeyPart(index)
+  return part && def.columns.find((c) => c.name === part.column)
 }
 
 /** A one-part ascending nonunique ref access. Callers prove column coverage. */
 export function singleRefIndex(index: IndexDef | undefined): index is IndexDef {
   return index?.kind === 'index' && index.parts.length === 1 && index.parts[0]?.descending !== true
+}
+
+/** A complete point on the leading column identifies at most one row. */
+export function uniquePoint(index: IndexDef, column: ColumnDef): boolean {
+  return index.parts.length === 1 && (index.kind === 'primary' || (index.kind === 'unique' && !column.nullable))
 }
 
 /** The first visible index leading on the canonical column. */

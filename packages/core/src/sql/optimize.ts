@@ -22,7 +22,7 @@
 //   - **Const tables**: a table whose PRIMARY or NOT NULL UNIQUE key is held
 //     to constants is read while planning; with no such row the result is
 //     empty, and with one its columns are constants.
-import { expectTyped } from '@myjs/bytes'
+import { proof } from './errors.ts'
 import type { ColumnDef, IndexDef, Table, TableDef, Trx } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
 import { compareValues, integerRange, numericPrefix, truth, type Value } from '@myjs/types'
@@ -32,7 +32,7 @@ import type { FromPlan } from './from.ts'
 import { equalBounds, pointAccess, splitAnd } from './plan.ts'
 import { accessRows } from './operators.ts'
 import { intersect, rangeOf, type RangeSet } from './ranges.ts'
-import { safeResolve } from './scope.ts'
+import { equalSlots, safeResolve } from './scope.ts'
 import { REVERSE_COMPARISON, isOrderedComparison, logicalShortCircuit, operandPairs, rewriteExpression } from './ast.ts'
 
 /** A schema key that identifies a row even when comparisons can see NULL. */
@@ -131,15 +131,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
   }
 
   // Equality classes, and the constants they are held to.
-  const parent = new Map<number, number>()
-  const find = (x: number): number => {
-    let r = x
-    while (parent.has(r) && parent.get(r) !== r) r = parent.get(r) as number
-    return r
-  }
-  const union = (a: number, b: number): void => {
-    parent.set(find(a), find(b))
-  }
+  const { root: find, union } = equalSlots()
   const isConstant = (e: Expression): boolean =>
     (e.kind === NODE.LITERAL && e.type !== 'null') || (e.kind === NODE.PLACEHOLDER && ctx.params !== undefined) || (e.kind === NODE.UNARY && e.op === '-' && isConstant(e.operand))
   for (const c of pool) {
@@ -544,12 +536,7 @@ function partialTruth(e: Expression, known: (column: Expression) => Expression |
 
 /** A fixed predicate's bound value in a scope with no row inputs. */
 export function plannedTruth(e: Expression, ctx: CompileContext, env: Env): boolean | null | undefined {
-  try {
-    return truth(compile(e, { ...ctx, scope: EMPTY_SCOPE }).eval([], env))
-  } catch (error) {
-    expectTyped(error)
-    return undefined
-  }
+  return proof(() => truth(compile(e, { ...ctx, scope: EMPTY_SCOPE }).eval([], env)))
 }
 
 /** A literal, or a bound `?`, evaluated while planning: what the range proofs may read. */
@@ -557,10 +544,5 @@ function plannedConstant(e: Expression, ctx: CompileContext, env: Env): Value | 
   const lit = e.kind === NODE.UNARY && e.op === '-' ? e.operand : e
   if (lit.kind !== NODE.LITERAL && lit.kind !== NODE.PLACEHOLDER) return undefined
   if (lit.kind === NODE.PLACEHOLDER && ctx.params === undefined) return undefined
-  try {
-    return compile(e, { ...ctx, scope: EMPTY_SCOPE }).eval([], env)
-  } catch (err) {
-    expectTyped(err)
-    return undefined
-  }
+  return proof(() => compile(e, { ...ctx, scope: EMPTY_SCOPE }).eval([], env))
 }

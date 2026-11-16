@@ -30,7 +30,7 @@
 // its order within one key is the primary key's — the same as a full scan
 // filtered. A *range* on a secondary is left to a full scan until the cost
 // model of M5.7 can say what MySQL would pick.
-import { CHARSET_BINARY, FIELD_TYPE, equalBytes, expectTyped } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE, equalBytes } from '@myjs/bytes'
 import type { ColumnDef, IndexDef, KeyBound, KeyRange, TableDef } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
 import {
@@ -56,10 +56,11 @@ import type { Compiled, Env } from './compile.ts'
 import { rangeBaseline, rangeCost, type RangeShape, type RangeRead } from './cost.ts'
 import { intersect, normalize, rangeOf, type Constant, type Interval, type RangeSet } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
-import { forwardKeyColumn } from './indexes.ts'
+import { forwardKeyColumn, uniquePoint } from './indexes.ts'
 import { columnIndex } from './scope.ts'
 import { REVERSE_COMPARISON, logicalShortCircuit, signedOperand } from './ast.ts'
 import { byteKey } from './keys.ts'
+import { proof } from './errors.ts'
 
 /** Whether a named transformation is enabled in the normalized session settings. */
 export function optimizerEnabled(env: Env | undefined, name: string): boolean {
@@ -315,7 +316,7 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
     const limit = mostRows((rows) => rangeCost(t, c.shape, c.keyed.length, rows), best)
     if (limit < c.keyed.length) continue
     // A unique key's point is one row without a dive; any other range, its rows, at least one.
-    const unique = c.index.parts.length === 1 && (c.index.kind === 'primary' || (c.index.kind === 'unique' && !c.column.nullable))
+    const unique = uniquePoint(c.index, c.column)
     let rows = 0
     for (const { range, point } of c.keyed) {
       const estimated = point ? unique : skipDive && range.to?.values[0] !== null
@@ -440,12 +441,7 @@ export function keyOrder(def: TableDef, indexes = def.indexes): IndexDef[] {
 const ctx = (): StoreContext => ({ strict: true, row: 1, warnings: 0 })
 
 function bound(v: Value, column: ColumnDef, inclusive: boolean): KeyBound | undefined {
-  try {
-    return { values: [encodeField(v, column.nullable ? column : { ...column, nullable: true }, ctx())], inclusive }
-  } catch (e) {
-    expectTyped(e)
-    return undefined
-  }
+  return proof(() => ({ values: [encodeField(v, column.nullable ? column : { ...column, nullable: true }, ctx())], inclusive }))
 }
 
 /**
@@ -478,15 +474,10 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
     const o = c.op === '=' && env.outer === undefined ? outer?.(c.constants[0] as Expression) : undefined
     if (o !== undefined) return exactType(o.type, column) ? { access: { index: index.name, ranges: [{ from: UNBOUND, to: UNBOUND }] }, score: 3 } : undefined
   }
-  const evaluate = (e: Expression): Value | undefined => {
-    try {
-      const o = outer?.(e)
-      return o === undefined ? constantValue(e, env) : o.eval([], env)
-    } catch (e) {
-      expectTyped(e)
-      return undefined
-    }
-  }
+  const evaluate = (e: Expression): Value | undefined => proof(() => {
+    const o = outer?.(e)
+    return o === undefined ? constantValue(e, env) : o.eval([], env)
+  })
   for (const c of conditions) {
     if (c.op === 'IS NULL' || c.op === '<=>') {
       // NULL-safe: `= v` for a value, IS NULL for NULL — a key read either way.

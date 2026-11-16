@@ -15,6 +15,61 @@ async function looseScanConnection() {
   return { db, conn }
 }
 
+test('an ordered EXISTS materializes a noncovering inner filter before primary probes', async () => {
+  const { db, conn } = await looseScanConnection()
+  const schema = 'filtered_semijoin356'
+  const sql = 'SELECT label FROM p WHERE EXISTS (SELECT 1 FROM c WHERE c.parent_id = p.id AND c.qty > 3) ORDER BY 1'
+  const options = { sql, rowsAsArray: true }
+  const explain = `EXPLAIN FORMAT=TREE ${sql}`
+  const expectedPlan = `Sort
+    Stream results
+        Nested loop inner join
+            Filter
+                Table scan on <subquery2>
+                    Materialize with deduplication
+                        Filter
+                            Filter
+                                Table scan on c
+            Single-row index lookup on p using PRIMARY`
+  const read = async (expected: string[][], materializes?: boolean) => {
+    for (const api of ['query', 'execute'] as const) {
+      const [rows, fields] = api === 'query' ? await conn.query(options) : await conn.execute(options)
+      assert.deepEqual(rows, expected, api)
+      assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]),
+        [['label', 253, 64, 4097, 0, 224, schema, 'p', 'p', 'label']], api)
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], api)
+      const [plan] = api === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
+      const skeleton = planSkeleton(plan[0]?.EXPLAIN)
+      if (materializes === true) assert.equal(skeleton, expectedPlan, api)
+      if (materializes === false) assert.doesNotMatch(skeleton, /Materialize with deduplication/, api)
+    }
+  }
+  try {
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_unicode_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,label VARCHAR(16) NOT NULL) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE c(id INT PRIMARY KEY,parent_id INT,qty INT NOT NULL,KEY by_parent(parent_id)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO p VALUES (1,'D'),(2,'A'),(3,'Z'),(4,'B')")
+    await conn.query('INSERT INTO c VALUES (1,1,4),(2,1,8),(3,2,3),(4,3,7),(5,3,1),(6,NULL,9),(7,5,6),(8,4,2)')
+    await conn.query('ANALYZE TABLE p,c')
+    await read([['D'], ['Z']], true)
+    await conn.query('UPDATE c SET qty=4 WHERE id=3')
+    await read([['A'], ['D'], ['Z']], true)
+    await conn.query('UPDATE c SET parent_id=NULL WHERE parent_id=1')
+    await read([['A'], ['Z']], true)
+    await conn.query("SET optimizer_switch='materialization=off'")
+    await read([['A'], ['Z']], false)
+    await conn.query("SET optimizer_switch='materialization=on,firstmatch=off,duplicateweedout=off'")
+    await read([['A'], ['Z']], true)
+    await conn.query('DELETE FROM c')
+    await read([])
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
 test('integer LooseScan semijoins share execution, metadata and the costed plan', async () => {
   const { db, conn } = await looseScanConnection()
   const base = 'SELECT name FROM pa WHERE id IN (SELECT pa_id FROM ch)'
