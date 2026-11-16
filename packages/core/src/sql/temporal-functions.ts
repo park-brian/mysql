@@ -138,9 +138,19 @@ export function microsToTime(us: bigint): MysqlTime | undefined {
 /** The extreme TIME of a sign: ±838:59:59. */
 const extremeTime = (negative: boolean): MysqlTime => timeFromSeconds(negative, TIME_MAX_SECONDS, 0)
 
+const calendarDay = (value: MysqlDateTime): number => dayNumber(value.year, value.month, value.day)
+
+function clockSeconds(value: Pick<MysqlTime, 'hour' | 'minute' | 'second'>, days = 0): number {
+  return ((days * 24 + value.hour) * 60 + value.minute) * 60 + value.second
+}
+
+function clockMicros(value: Pick<MysqlTime, 'hour' | 'minute' | 'second' | 'microsecond'>, days = 0): number {
+  return clockSeconds(value, days) * 1_000_000 + value.microsecond
+}
+
 /** A datetime as microseconds from day 0. */
 const datetimeMicros = (v: MysqlDateTime): bigint =>
-  BigInt(dayNumber(v.year, v.month, v.day)) * US_PER_DAY + BigInt(((v.hour * 60 + v.minute) * 60 + v.second) * 1_000_000 + v.microsecond)
+  BigInt(calendarDay(v)) * US_PER_DAY + BigInt(clockMicros(v))
 const UNIX_EPOCH = datetimeMicros(midnight(1970, 1, 1))
 
 /** Microseconds from day 0 as a datetime, or undefined outside 0000-01-01 … 9999-12-31. */
@@ -178,6 +188,12 @@ function roundDatetime(v: MysqlDateTime, fsp: number): MysqlDateTime | undefined
   const us = roundFraction(v.microsecond, fsp)
   if (us < 1_000_000) return { ...v, microsecond: us }
   return microsToDatetime(datetimeMicros({ ...v, microsecond: 0 }) + 1_000_000n)
+}
+
+function roundedDatetimeValue(value: MysqlDateTime | null | undefined, fsp: number, keepOverflow = false): Value {
+  if (value == null) return null
+  const rounded = roundDatetime(value, fsp)
+  return rounded === undefined && !keepOverflow ? null : datetimeValue(rounded ?? value, fsp)
 }
 
 /** A constant argument's value, evaluated once at compile time; undefined when it is not constant. */
@@ -319,12 +335,7 @@ export function temporalFunction(name: string, e: CallNode, ctx: CompileContext)
         const fsp = temporalPrecision(x, constant(0, x))
         const read = dateReader(x, FUZZY)
         return {
-          eval: (r, env) => {
-            const d = read(r, env)
-            if (d === null) return null
-            const v = roundDatetime(d, fsp)
-            return v === undefined ? null : datetimeValue(v, fsp)
-          },
+          eval: (r, env) => roundedDatetimeValue(read(r, env), fsp),
           type: datetimeType(FIELD_TYPE.DATETIME, fsp, true),
         }
       }
@@ -333,34 +344,34 @@ export function temporalFunction(name: string, e: CallNode, ctx: CompileContext)
     }
     case 'YEAR': {
       count(1)
-      const c = ofDate(arg(0), 4, FUZZY, (d) => d.year)
+      const c = ofDate(arg(0), 4, FUZZY, DATE_EXTRACT.YEAR)
       return { ...c, type: { ...intType(4, true, true), field: FIELD_TYPE.YEAR } }
     }
     case 'MONTH':
       count(1)
-      return ofDate(arg(0), 3, FUZZY, (d) => d.month)
+      return ofDate(arg(0), 3, FUZZY, DATE_EXTRACT.MONTH)
     case 'DAY':
     case 'DAYOFMONTH':
       count(1)
-      return ofDate(arg(0), 3, FUZZY, (d) => d.day)
+      return ofDate(arg(0), 3, FUZZY, DATE_EXTRACT.DAY)
     case 'QUARTER':
       count(1)
-      return ofDate(arg(0), 2, FUZZY, (d) => Math.floor((d.month + 2) / 3))
+      return ofDate(arg(0), 2, FUZZY, DATE_EXTRACT.QUARTER)
     case 'DAYOFYEAR':
       count(1)
-      return ofDate(arg(0), 4, NO_ZERO, (d) => dayNumber(d.year, d.month, d.day) - dayNumber(d.year, 1, 1) + 1)
+      return ofDate(arg(0), 4, NO_ZERO, (d) => calendarDay(d) - dayNumber(d.year, 1, 1) + 1)
     case 'DAYOFWEEK':
       count(1)
-      return ofDate(arg(0), 2, NO_ZERO, (d) => weekday(dayNumber(d.year, d.month, d.day), true) + 1)
+      return ofDate(arg(0), 2, NO_ZERO, (d) => weekday(calendarDay(d), true) + 1)
     case 'WEEKDAY':
       count(1)
-      return ofDate(arg(0), 2, NO_ZERO, (d) => weekday(dayNumber(d.year, d.month, d.day), false))
+      return ofDate(arg(0), 2, NO_ZERO, (d) => weekday(calendarDay(d), false))
     case 'TO_DAYS':
       count(1)
-      return ofDate(arg(0), 8, NO_ZERO, (d) => dayNumber(d.year, d.month, d.day))
+      return ofDate(arg(0), 8, NO_ZERO, calendarDay)
     case 'TO_SECONDS':
       count(1)
-      return ofDate(arg(0), 21, NO_ZERO, (d) => BigInt(dayNumber(d.year, d.month, d.day)) * 86400n + BigInt((d.hour * 60 + d.minute) * 60 + d.second))
+      return ofDate(arg(0), 21, NO_ZERO, (d) => BigInt(calendarDay(d)) * 86400n + BigInt(clockSeconds(d)))
     case 'WEEK':
     case 'YEARWEEK': {
       count(1, 2)
@@ -389,7 +400,7 @@ export function temporalFunction(name: string, e: CallNode, ctx: CompileContext)
           const d = read(r, env)
           if (d === null) return null
           if (name === 'MONTHNAME') return d.month === 0 ? null : stringValue(MONTH_NAMES[d.month - 1] as string, conn, COERCIBILITY.COERCIBLE)
-          return stringValue(DAY_NAMES[weekday(dayNumber(d.year, d.month, d.day), false)] as string, conn, COERCIBILITY.COERCIBLE)
+          return stringValue(DAY_NAMES[weekday(calendarDay(d), false)] as string, conn, COERCIBILITY.COERCIBLE)
         },
         type: stringType(9, conn, true),
       }
@@ -424,7 +435,7 @@ export function temporalFunction(name: string, e: CallNode, ctx: CompileContext)
       return ofTime(arg(0), 21, (t) => t.microsecond)
     case 'TIME_TO_SEC':
       count(1)
-      return ofTime(arg(0), 10, (t) => (t.negative ? -1 : 1) * (((t.days * 24 + t.hour) * 60 + t.minute) * 60 + t.second))
+      return ofTime(arg(0), 10, (t) => (t.negative ? -1 : 1) * clockSeconds(t, t.days))
     case 'EXTRACT': {
       count(2)
       const unit = keyword(0)
@@ -432,25 +443,8 @@ export function temporalFunction(name: string, e: CallNode, ctx: CompileContext)
       if (width === undefined) throw sqlError('ER_PARSE_ERROR', messages.parseError(unit, 1))
       const x = arg(1)
       // The units of a date read a date; those of a time, DAY_HOUR and on included, read a time.
-      const dated = ['YEAR', 'YEAR_MONTH', 'QUARTER', 'MONTH', 'WEEK', 'DAY'].includes(unit)
-      const readDate = dateReader(x, FUZZY)
-      const readTime = structReader(x)
-      return {
-        eval: (r, env) => {
-          let v: Broken
-          if (dated) {
-            const d = readDate(r, env)
-            if (d === null) return null
-            v = brokenOfDatetime(d)
-          } else {
-            const t = readTime(r, env)
-            if (t === null) return null
-            v = t
-          }
-          return intValue(extract(unit, v))
-        },
-        type: INT(width),
-      }
+      const date = (DATE_EXTRACT as Readonly<Partial<Record<string, (v: MysqlDateTime) => number>>>)[unit]
+      return date === undefined ? integerProjection(structReader(x), width, timeExtractor(unit)) : ofDate(x, width, FUZZY, date)
     }
     default:
       throw unregistered(name)
@@ -594,9 +588,9 @@ export function temporalTextFunction(name: string, e: CallNode, ctx: CompileCont
           if (d === null) return null
           const utc = datetimeMicros(d) - BigInt(a) * 1_000_000n
           // Outside TIMESTAMP's range the value is returned as it was.
-          if (utc < UNIX_EPOCH + 1_000_000n || utc > UNIX_EPOCH + MYTIME_MAX_VALUE * 1_000_000n) return datetimeValue(roundDatetime(d, fsp) ?? d, fsp)
-          const out = microsToDatetime(utc + BigInt(b) * 1_000_000n)
-          return out === undefined ? null : datetimeValue(roundDatetime(out, fsp) ?? out, fsp)
+          const out = utc < UNIX_EPOCH + 1_000_000n || utc > UNIX_EPOCH + MYTIME_MAX_VALUE * 1_000_000n
+            ? d : microsToDatetime(utc + BigInt(b) * 1_000_000n)
+          return roundedDatetimeValue(out, fsp, true)
         },
         type: datetimeType(FIELD_TYPE.DATETIME, fsp, true),
       }
@@ -620,7 +614,7 @@ export function temporalArithmetic(name: string, e: CallNode, ctx: CompileContex
           const x = a(r, env)
           const y = b(r, env)
           if (x === null || y === null) return null
-          return intValue(BigInt(dayNumber(x.year, x.month, x.day) - dayNumber(y.year, y.month, y.day)))
+          return intValue(BigInt(calendarDay(x) - calendarDay(y)))
         },
         type: INT(9),
       }
@@ -820,64 +814,37 @@ function timestampDiff(unit: string, a: MysqlDateTime, b: MysqlDateTime): bigint
   const negative = us < 0n
   const [lo, hi] = negative ? [b, a] : [a, b]
   let months = (hi.year - lo.year) * 12 + (hi.month - lo.month)
-  const loRest = (((lo.day * 24 + lo.hour) * 60 + lo.minute) * 60 + lo.second) * 1_000_000 + lo.microsecond
-  const hiRest = (((hi.day * 24 + hi.hour) * 60 + hi.minute) * 60 + hi.second) * 1_000_000 + hi.microsecond
+  const loRest = clockMicros(lo, lo.day)
+  const hiRest = clockMicros(hi, hi.day)
   if (hiRest < loRest) months--
   const n = BigInt(unit === 'QUARTER' ? Math.trunc(months / 3) : unit === 'YEAR' ? Math.trunc(months / 12) : months)
   return negative ? -n : n
 }
 
-/** EXTRACT's number for one unit. */
-function extract(unit: string, v: Broken): bigint {
-  const sign = v.negative ? -1n : 1n
-  const day = BigInt(v.day)
-  const hour = BigInt(v.hour)
-  const minute = BigInt(v.minute)
-  const second = BigInt(v.second)
-  const us = BigInt(v.microsecond)
-  switch (unit) {
-    case 'YEAR':
-      return BigInt(v.year)
-    case 'YEAR_MONTH':
-      return BigInt(v.year * 100 + v.month)
-    case 'QUARTER':
-      return BigInt(Math.floor((v.month + 2) / 3))
-    case 'MONTH':
-      return BigInt(v.month)
-    case 'WEEK':
-      return BigInt(week(v.year, v.month, v.day, weekBehaviour(0)).week)
-    case 'DAY':
-      return day
-    case 'DAY_HOUR':
-      return sign * (day * 100n + hour)
-    case 'DAY_MINUTE':
-      return sign * (day * 10000n + hour * 100n + minute)
-    case 'DAY_SECOND':
-      return sign * (day * 1000000n + hour * 10000n + minute * 100n + second)
-    case 'DAY_MICROSECOND':
-      return sign * ((day * 1000000n + hour * 10000n + minute * 100n + second) * 1000000n + us)
-    case 'HOUR':
-      return sign * hour
-    case 'HOUR_MINUTE':
-      return sign * (hour * 100n + minute)
-    case 'HOUR_SECOND':
-      return sign * (hour * 10000n + minute * 100n + second)
-    case 'HOUR_MICROSECOND':
-      return sign * ((hour * 10000n + minute * 100n + second) * 1000000n + us)
-    case 'MINUTE':
-      return sign * minute
-    case 'MINUTE_SECOND':
-      return sign * (minute * 100n + second)
-    case 'MINUTE_MICROSECOND':
-      return sign * ((minute * 100n + second) * 1000000n + us)
-    case 'SECOND':
-      return sign * second
-    case 'SECOND_MICROSECOND':
-      return sign * (second * 1000000n + us)
-    case 'MICROSECOND':
-      return sign * us
+const DATE_EXTRACT = {
+  YEAR: (v: MysqlDateTime) => v.year,
+  YEAR_MONTH: (v: MysqlDateTime) => v.year * 100 + v.month,
+  QUARTER: (v: MysqlDateTime) => Math.floor((v.month + 2) / 3),
+  MONTH: (v: MysqlDateTime) => v.month,
+  WEEK: (v: MysqlDateTime) => week(v.year, v.month, v.day, weekBehaviour(0)).week,
+  DAY: (v: MysqlDateTime) => v.day,
+}
+
+const TIME_FIELDS = ['day', 'hour', 'minute', 'second', 'microsecond'] as const
+
+/** A compound time unit packs all fields from its first through its last. */
+function timeExtractor(unit: string): (value: Broken) => bigint {
+  const [first, last = first] = unit.toLowerCase().split('_')
+  const start = TIME_FIELDS.findIndex((field) => field === first)
+  const end = TIME_FIELDS.findIndex((field) => field === last)
+  return (value) => {
+    let packed = 0n
+    for (let i = start; i <= end; i++) {
+      const field = TIME_FIELDS[i]!
+      packed = packed * (field === 'microsecond' ? 1_000_000n : 100n) + BigInt(value[field])
+    }
+    return value.negative ? -packed : packed
   }
-  return 0n
 }
 
 /** Range adjustments share their diagnostic text; callers choose its source spelling. */
@@ -932,8 +899,7 @@ function addTime(x: Compiled, y: Compiled, sub: boolean, shape: 'datetime' | 'ti
         }
         if (out.day === 0) return null
         if (shape === 'text') return stringValue(renderDateTime(out, 'DATETIME', out.microsecond === 0 ? 0 : 6), conn, COERCIBILITY.COERCIBLE)
-        const v = roundDatetime(out, fsp)
-        return v === undefined ? null : datetimeValue(v, fsp)
+        return roundedDatetimeValue(out, fsp)
       }
       const t = clampedTime(us, shape === 'text' ? 6 : fsp, env)
       if (shape === 'text') return stringValue(renderTime(t.v, t.v.microsecond === 0 ? 0 : 6), conn, COERCIBILITY.COERCIBLE)
@@ -974,7 +940,7 @@ function strToDate(s: Compiled, f: Compiled, fixed: Value | undefined): Compiled
       if (out.truncated) raise(env, 1292, `Truncated incorrect ${kind} value: '${text}'`)
       const d = out.v
       if (kind === 'date') return dateValue(d)
-      if (kind === 'time') return timeValue(timeFromSeconds(false, (d.hour * 60 + d.minute) * 60 + d.second, d.microsecond), fsp)
+      if (kind === 'time') return timeValue(timeFromSeconds(false, clockSeconds(d), d.microsecond), fsp)
       return datetimeValue(d, fsp)
     },
     type: datetimeType(field, fsp, true),

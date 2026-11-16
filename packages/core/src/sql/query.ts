@@ -620,7 +620,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
     // A costed antijoin builds once; a nested loop probes its correlated subquery for each row.
     if (semi !== undefined) {
       const whereCtx = compileContext(run, semi.from.scope, 'where clause')
-      from.filter(semi.where, (e) => resolved.read(e, whereCtx))
+      from.filter(semi.where, (e) => resolved.read(e, whereCtx), undefined, semi.preserve)
     } else if (anti?.kind === 'materialized' || anti?.kind === 'correlated') {
       from.filter(undefined, resolved.read)
     } else if (anti?.kind === 'hash') {
@@ -1216,7 +1216,7 @@ function joinOuter(run: Run, q: QueryExpression, node: SelectNode, from: FromPla
 }
 
 /** A bounded integer semijoin using the existing cost search and join iterators. */
-function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan, sortBy: string | undefined, keep: number): { readonly from: FromPlan; readonly where: Expression; readonly outerLoop: boolean } | undefined {
+function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan, sortBy: string | undefined, keep: number): { readonly from: FromPlan; readonly where: Expression; readonly outerLoop: boolean; readonly preserve: Expression | undefined } | undefined {
   const outer = joinOuter(run, q, node, from)
   const where = node.where
   if (outer === undefined || where === undefined || node.having !== undefined || node.distinct === true) return undefined
@@ -1255,11 +1255,12 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   if (innerField === undefined || outerField === undefined) return undefined
   const innerColumn = innerField.parts[1]!.toLowerCase()
   const outerDef = from.single!.def
-  if (any && (extra || q.limit || q.locking || hasLeadingKey(outerDef, outerField.parts[1]!))) return undefined
+  const notNull = any && extra?.kind === NODE.UNARY && extra.op === 'IS NOT NULL' ? extra : undefined
+  if (any && (q.limit || q.locking || hasLeadingKey(outerDef, outerField.parts[1]!))) return undefined
   let residual: Extract<Expression, { kind: typeof NODE.BINARY }> | undefined
   let text = false
-  if (extra !== undefined) {
-    if (extra.kind !== NODE.BINARY || extra.right.kind !== NODE.LITERAL) return undefined
+  if (extra !== undefined && !notNull) {
+    if (any || extra.kind !== NODE.BINARY || extra.right.kind !== NODE.LITERAL) return undefined
     const field = qualify(extra.left, innerAlias)
     if (field === undefined) return undefined
     text = !exists && textBesideColumn(field, extra.right) && (isOrderedComparison(extra.op) ||
@@ -1269,11 +1270,20 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     residual = { ...extra, left: field }
   }
   const equality: Expression = { kind: NODE.BINARY, op: '=', left: innerField, right: outerField, at: where.at }
-  const predicate = and(equality, residual)
   return proof(() => {
     const def = nonTemporaryDefinition(run, inner.table)
     if (def === undefined) return undefined
     if (any && (hasLeadingKey(def, innerColumn) || from.access(run.env).index !== undefined)) return undefined
+    let nullTest: typeof notNull
+    if (notNull) {
+      const column = tableColumn(notNull.operand, def, innerAlias)
+      if (column?.name.toLowerCase() !== innerColumn) return undefined
+      if (column.nullable) {
+        if (!optimizerEnabled(run.env, 'firstmatch') && !optimizerEnabled(run.env, 'duplicateweedout')) return undefined
+        nullTest = { ...notNull, operand: innerField }
+      }
+    }
+    const predicate = and(equality, residual ?? nullTest)
     let candidates = def.indexes.filter((i) => i.kind === 'index' && i.invisible !== true && indexPartMatchesColumn(i.parts[0], innerColumn))
     // Either direction keeps equal leading keys adjacent in a forward scan.
     // Competing keys and ordered limits with FirstMatch still need separate costing.
@@ -1302,7 +1312,12 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     alternative.sortedBy(sortBy, keep)
     const innerFirst = alternative.integerSemijoin(innerAlias, scanOnly ? undefined : index, key, residual,
       !someNode([node.items, q.orderBy], (n) => (n as Expression).kind === NODE.SUBQUERY || undefined))
-    return innerFirst === undefined ? undefined : { from: alternative, where: predicate, outerLoop: !any && !innerFirst }
+    if (innerFirst === undefined) return undefined
+    // MySQL substitutes the first field of an equality class after join ordering.
+    const outerType = !innerFirst && nullTest ? tableColumn(outerField, outerDef, outerAlias)?.type : undefined
+    const preserve = nullTest && outerType?.type === key.type.field && (outerType.unsigned === true) === key.type.unsigned
+      ? { ...nullTest, operand: outerField } : undefined
+    return { from: alternative, where: preserve ? and(equality, preserve) : predicate, outerLoop: !any && !innerFirst, preserve }
   })
 }
 

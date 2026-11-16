@@ -29,9 +29,10 @@ test('unindexed integer equality ANY and SOME choose buffered FirstMatch and wee
   const schema = 'quantified_hash_membership'
   const hash = `Sort\n    Stream results\n        Hash semijoin\n            Table scan on ch\n            Hash\n                Table scan on kl`
   const weedout = `Sort\n    Stream results\n        Remove duplicate ch rows using temporary table\n            Inner hash join\n                Table scan on ch\n                Hash\n                    Table scan on kl`
-  async function read(expected: [string, number][], plan?: string) {
+  async function read(expected: [string, number][], plan?: string, filterInner = false) {
     for (const quantifier of ['ANY', 'SOME']) {
-      const sql = `SELECT label,qty FROM ch WHERE qty = ${quantifier} (SELECT g FROM kl) ORDER BY 1,2`
+      const predicate = filterInner ? ' WHERE g IS NOT NULL' : ''
+      const sql = `SELECT label,qty FROM ch WHERE qty = ${quantifier} (SELECT g FROM kl${predicate}) ORDER BY 1,2`
       const options = { sql, rowsAsArray: true }
       const explain = `EXPLAIN FORMAT=TREE ${sql}`
       if (plan === undefined) {
@@ -45,7 +46,7 @@ test('unindexed integer equality ANY and SOME choose buffered FirstMatch and wee
         assert.deepEqual(rows, expected, label)
         assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
           ['label', 253, 40, 0, 0, 255, schema, 'ch', 'ch', 'label'],
-          ['qty', 3, 11, 0, 0, 63, schema, 'ch', 'ch', 'qty'],
+          ['qty', 3, 11, filterInner ? 4097 : 0, 0, 63, schema, 'ch', 'ch', 'qty'],
         ], label)
         assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], label)
         const [[result]] = api === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
@@ -78,6 +79,24 @@ test('unindexed integer equality ANY and SOME choose buffered FirstMatch and wee
     await read([['hit', 4]], weedout)
     await conn.query("SET optimizer_switch='semijoin=off'")
     await read([['hit', 4]])
+
+    // MySQL retains the substituted predicate even when the outer key is required.
+    await conn.query("SET optimizer_switch='default'")
+    await conn.query('UPDATE ch SET qty=99 WHERE qty IS NULL')
+    await conn.query('ALTER TABLE ch MODIFY qty INT NOT NULL')
+    await conn.query('DELETE FROM ch WHERE id>3')
+    await conn.query('DELETE FROM kl')
+    await conn.query('INSERT INTO kl VALUES(1,0),(2,0),(3,4),(4,NULL)')
+    await conn.query('ANALYZE TABLE ch,kl')
+    const probeFilter = hash.replace('            Table scan on ch', '            Filter\n                Table scan on ch')
+    await read([['dup', 0], ['dup', 0]], probeFilter, true)
+
+    await conn.query("INSERT INTO ch VALUES(4,'hit',4),(5,'skip',3)")
+    await conn.query('ANALYZE TABLE ch,kl')
+    const buildFilter = weedout.replace('                    Table scan on kl', '                    Filter\n                        Table scan on kl')
+    await read([['dup', 0], ['dup', 0], ['hit', 4]], buildFilter, true)
+    await conn.query('UPDATE kl SET g=NULL WHERE g=0')
+    await read([['hit', 4]], buildFilter, true)
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()

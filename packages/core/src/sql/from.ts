@@ -175,8 +175,9 @@ export interface FromPlan {
    * iterator 8.4.11 places it at: a condition on one table at that table, an
    * equality between two sides by their join, and the rest above (M5.43).
    * The FROM's rows are then the WHERE's: no caller applies it again.
+   * Preserve a condition attached by post-cost equality substitution.
    */
-  filter(where: Expression | undefined, compile: (e: Expression) => Pick<Compiled, 'eval'>, semijoin?: (e: Expression) => PlanNode | undefined): void
+  filter(where: Expression | undefined, compile: (e: Expression) => Pick<Compiled, 'eval'>, semijoin?: (e: Expression) => PlanNode | undefined, preserve?: Expression): void
   /** The cost model's choice for a table joined after the preserved side. */
   usesLookup(alias: string): boolean
   /** Price a proved pure integer antijoin; undefined leaves unsupported profiles alone. */
@@ -701,7 +702,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       return false
     },
     single,
-    filter(where, compile, semijoin) {
+    filter(where, compile, semijoin, preserve) {
       settings.where = where
       settings.chosen = new WeakMap()
       // What is true of every row the server folds away (8.4.11: no Filter): `IS NOT NULL` of a NOT NULL column no outer join
@@ -718,7 +719,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         const l = notNull(e.left)
         return l !== undefined ? neverEqual(l, e.right) : neverEqual(notNull(e.right), e.left)
       }
-      conditions = splitAnd(where).filter((e) => !alwaysTrue(e)).map((e): Placed => {
+      conditions = splitAnd(where).filter((e) => e === preserve || !alwaysTrue(e)).map((e): Placed => {
         const compiled = compile(e)
         const semi = semijoin?.(e)
         return { e, aliases: aliasesOf(e, scope), compiled, semijoin: semi }

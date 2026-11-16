@@ -334,10 +334,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
           if (v === null) return null
           const text = toText(v)
           if (!/^[0-9a-fA-F]*$/.test(text)) return invalidString(env, printedArgument(e.args[0] as Expression, ctx), 'unhex')
-          const even = text.length % 2 === 0 ? text : `0${text}`
-          const out = new Uint8Array(even.length / 2)
-          for (let i = 0; i < out.length; i++) out[i] = parseInt(even.slice(i * 2, i * 2 + 2), 16)
-          return bytesValue(out)
+          return bytesValue(hexDigits(text))
         },
         type: stringType(Math.ceil(byteWidth(x.type) / 2), CHARSET_BINARY, true),
       }
@@ -813,6 +810,14 @@ function chosenOf(x: Compiled, result: ResultType): (v: Exclude<Value, null>, en
 /** Bytes as `HEX()` writes them: two upper-case digits each. */
 export function hexOf(b: Uint8Array): string {
   return hex(b).toUpperCase()
+}
+
+/** Decode validated hexadecimal digits, with an odd first digit in its own byte. */
+export function hexDigits(digits: string): Uint8Array {
+  const even = digits.length % 2 === 0 ? digits : `0${digits}`
+  const bytes = new Uint8Array(even.length / 2)
+  for (let i = 0; i < even.length; i += 2) bytes[i / 2] = parseInt(even.slice(i, i + 2), 16)
+  return bytes
 }
 
 /** Diagnostic bytes: printable ASCII retained, other bytes as upper-case escapes. */
