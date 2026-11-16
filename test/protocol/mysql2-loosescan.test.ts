@@ -101,6 +101,76 @@ test('an ordered EXISTS costs a noncovering materialized scan and indexed weedou
   }
 })
 
+test('ordered IN with a noncovering text residual costs indexed weedout or materialization', async () => {
+  const { db, conn } = await looseScanConnection()
+  const schema = 'text_residual_scan'
+  const weedout = `Sort
+    Stream results
+        Remove duplicate p rows using temporary table
+            Nested loop inner join
+                Filter
+                    Table scan on c
+                Single-row index lookup on p using PRIMARY`
+  const scan = `Sort
+    Stream results
+        Nested loop inner join
+            Filter
+                Table scan on <subquery2>
+                    Materialize with deduplication
+                        Filter
+                            Filter
+                                Table scan on c
+            Single-row index lookup on p using PRIMARY`
+  const read = async (atMost: string[][], less: string[][], plan: string) => {
+    for (const [residual, expected] of [["<= 'b'", atMost], ["< 'dee'", less]] as const) {
+      const sql = `SELECT label FROM p WHERE id IN (SELECT c.parent_id FROM c WHERE c.word ${residual}) ORDER BY 1`
+      const options = { sql, rowsAsArray: true }
+      const explain = `EXPLAIN FORMAT=TREE ${sql}`
+      for (const api of ['query', 'execute'] as const) {
+        const [rows, fields] = api === 'query' ? await conn.query(options) : await conn.execute(options)
+        assert.deepEqual(rows, expected, api)
+        assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]),
+          [['label', 253, 64, 4097, 0, 255, schema, 'p', 'p', 'label']], api)
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], api)
+        const [[result]] = api === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
+        assert.equal(planSkeleton(result?.EXPLAIN), plan, api)
+      }
+    }
+  }
+  try {
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,label VARCHAR(16) NOT NULL) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE c(id INT PRIMARY KEY,parent_id INT,word VARCHAR(10),KEY by_parent(parent_id)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO p VALUES (1,'D'),(2,'A'),(3,'Z'),(4,'B'),(5,'Q')")
+    await conn.query('ANALYZE TABLE p,c')
+    await read([], [], weedout)
+    await conn.query("SET optimizer_switch='duplicateweedout=off'")
+    await read([], [], scan)
+    await conn.query("SET optimizer_switch='default'")
+    await conn.query("INSERT INTO c VALUES(1,1,'b')")
+    await conn.query('ANALYZE TABLE p,c')
+    await read([['D']], [['D']], weedout)
+
+    await conn.query("INSERT INTO c VALUES(2,1,'B'),(3,2,'b '),(4,2,'a'),(5,3,'dée'),(6,NULL,'a'),(7,6,'A'),(8,4,NULL)")
+    await conn.query('ANALYZE TABLE p,c')
+    await read([['A'], ['D']], [['A'], ['D']], scan)
+    // Keep the same prepared statements across a rekey and a collation-sensitive edit.
+    await conn.query('UPDATE c SET parent_id=3 WHERE id=1')
+    await conn.query("UPDATE c SET word='dée' WHERE id=4")
+    await read([['D'], ['Z']], [['A'], ['D'], ['Z']], scan)
+    await conn.query('DELETE FROM c')
+    await conn.query('ANALYZE TABLE p,c')
+    await conn.query("SET optimizer_switch='duplicateweedout=off'")
+    await read([], [], scan)
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
 test('integer LooseScan semijoins share execution, metadata and the costed plan', async () => {
   const { db, conn } = await looseScanConnection()
   const base = 'SELECT name FROM pa WHERE id IN (SELECT pa_id FROM ch)'

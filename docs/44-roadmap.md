@@ -110,9 +110,14 @@ dependent reader and broader cost profiles remain open.
 **M5.47 noncovering `EXISTS` residual.** The two captured integer cases now
 use either a materialized scan or indexed duplicate weedout before sorting
 the matching parents. The bounded audit now matches all 213 materialized
-scan choices, including the two with FirstMatch disabled. Next, isolate the
-noncovering text residuals in case 102, statement 12 and case 106, statement
-10. Outer-first weedout execution and lookup plans remain open.
+scan choices, including the two with FirstMatch disabled.
+
+**M5.47 noncovering text residuals.** The bounded ordered `IN` reader uses
+the same materialized scan and indexed weedout for a `VARCHAR` field compared
+with a plain literal in the connection collation. The audit resolves case
+102, statement 12 and case 106, statement 10. Next, isolate the captured
+dependent `NOT IN` reads that need a scan or a zero-row proof. Outer-first
+weedout and materialized lookup profiles remain open.
 
 **0.3 is staged**, with exact workspace versions and installed-package smoke
 checks. Publication still requires claiming the npm scope/name and publishing
@@ -2007,6 +2012,19 @@ Twelve weedout choices remain open in the 480-response audit. The relational
 score is 2,132 of 2,248 with the 2,118 floor. Parser, core and facade are
 45,611, 334,347 and 334,263 B gzipped within the existing caps.
 [MySQL weedout fanout and temporary costs](https://raw.githubusercontent.com/mysql/mysql-server/mysql-8.4.11/sql/sql_planner.cc#L3639)
+
+**M5.47 noncovering text residuals, verified.** An ordered, unbounded `IN`
+with exact integer keys can reuse the indexed weedout and materialized-scan
+readers when a noncovering `VARCHAR` field compares with a plain `<` or `<=`
+literal in the connection collation. The pinned audit improves from 0 to
+290 of 448 complete matches, including all 134 materialized scans and 156 of
+174 duplicate weedout choices. All 240 collation and index controls retain
+their previous results. Both wire protocols retain the matching rows, fields,
+warnings and plans across an empty build, duplicate and NULL keys, a rekey,
+and a collation-sensitive update. Two captured plans bring the relational
+score to 2,134 of 2,248 with the 2,118 floor. Parser, core and facade are
+45,611, 334,338 and 334,266 B gzipped within the existing caps. Other cost
+profiles, lookup strategies and mixed-collation residuals remain open.
 
 **M5.49 legacy index hint admission, verified.** Simple outer SELECTs over
 physical tables, including temporary tables, check index names after opening
@@ -12049,7 +12067,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |
-| Plans agreeing with a real MySQL 8.4 (`EXPLAIN FORMAT=TREE`, costs stripped) | 2,132 / 2,248 relational SELECTs observed, with a required floor of 2,118 skeletons in `relational-vectors.test.ts`. A plan that agrees also has its rows compared in order. `npm run plans` lists the remaining differences, including join order, `ref` access, semijoins and constant tables | every corpus SELECT |
+| Plans agreeing with a real MySQL 8.4 (`EXPLAIN FORMAT=TREE`, costs stripped) | 2,134 / 2,248 relational SELECTs observed, with a required floor of 2,118 skeletons in `relational-vectors.test.ts`. A plan that agrees also has its rows compared in order. `npm run plans` lists the remaining differences, including join order, `ref` access, semijoins and constant tables | every corpus SELECT |
 | Cold start, browser | — | published, tracked |
 
 ---

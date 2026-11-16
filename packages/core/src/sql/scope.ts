@@ -175,8 +175,11 @@ export class TableScope implements Scope {
 
   /** The table a slot belongs to, and its column there. */
   columnAt(index: number): { readonly table: ScopeTable; readonly column: ScopeColumn } | undefined {
-    const table = this.tables.find((x) => index >= x.offset && index < x.offset + x.columns.length)
-    return table === undefined ? undefined : { table, column: table.columns[index - table.offset] as ScopeColumn }
+    for (const table of this.tables) {
+      const column = table.columns[index - table.offset]
+      if (column !== undefined) return { table, column }
+    }
+    return undefined
   }
 }
 

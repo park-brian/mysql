@@ -1,4 +1,4 @@
-import { LITERAL, NODE, QUERY, nativeFunctionWord, type BinaryNode, type CallNode, type Expression, type LiteralNode, type QueryBody, type QueryExpression } from '@myjs/parser'
+import { LITERAL, NODE, QUERY, type REF, nativeFunctionWord, type BinaryNode, type CallNode, type Expression, type LiteralNode, type QueryBody, type QueryExpression, type TableReference } from '@myjs/parser'
 
 /** AND can stop on false, OR on true. Other operators have no such value. */
 export const logicalShortCircuit = (op: string): boolean | undefined => op === 'AND' || op === '&&' ? false : op === 'OR' || op === '||' ? true : undefined
@@ -14,6 +14,9 @@ export function isOrderedComparison(op: string): boolean {
 
 /** Visit a binary predicate's possible key and value in written order. */
 export const operandPairs = ({ left, right }: BinaryNode) => [[left, right], [right, left]] as const
+
+/** How a base table reference names its columns in the query scope. */
+export const tableAlias = (ref: Extract<TableReference, { kind: typeof REF.TABLE }>): string => ref.alias ?? ref.table.name
 
 /** Lookup eligibility, not existence; raw names and collision roles stay on the AST. */
 export function nativeCallName(e: Pick<CallNode, 'name' | 'stored' | 'schema'>): string {

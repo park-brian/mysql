@@ -22,11 +22,13 @@ export const planNode = (label: string, input: PlanNode | readonly PlanNode[] = 
 /** A temporary set's build and its whole-table read are independent iterators. */
 export const materialize = (input?: PlanNode | readonly PlanNode[]): PlanNode => planNode('Materialize with deduplication', input)
 export const scanMaterialized = (build: PlanNode): PlanNode => planNode('Table scan on <subquery2>', build)
+export const lookupMaterialized = (build: PlanNode, dependent = false): PlanNode =>
+  indexLookup(dependent ? '<materialized_subquery>' : '<subquery2>', '<auto_distinct_key>', !dependent, false, build)
 
 /** The same index-read facts name physical and dependent-subquery lookups. */
-export function indexLookup(alias: string, index: string, unique: boolean, covering: boolean, children: readonly PlanNode[] = []): PlanNode {
+export function indexLookup(alias: string, index: string, unique: boolean, covering: boolean, input?: PlanNode): PlanNode {
   const label = unique ? (covering ? 'Single-row covering index' : 'Single-row index') : (covering ? 'Covering index' : 'Index')
-  return planNode(`${label} lookup on ${alias} using ${index}`, children)
+  return planNode(`${label} lookup on ${alias} using ${index}`, input)
 }
 
 /** `node` under `label`, or `node` alone when `when` is false. */

@@ -17,10 +17,10 @@ import { appendConditions, compile, constantNode, isComparison, literalPredicate
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, copiedLength, intType, type ResultType } from './meta.ts'
-import { FIELD_TYPE } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { accessRows, distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { equalBounds, isConstant, optimizerEnabled, pointAccess, splitAnd, tableColumn, type Access } from './plan.ts'
-import { and, columnRefs, integerLiteral, logicalShortCircuit, nativeCallName, operandPairs, queryBody, rewriteExpression, someNode, withoutUnaryPlus } from './ast.ts'
+import { and, columnRefs, integerLiteral, logicalShortCircuit, nativeCallName, operandPairs, queryBody, rewriteExpression, someNode, tableAlias, withoutUnaryPlus } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, proof, wrongArgumentsError } from './errors.ts'
 import { clusteredIndex, indexPartMatchesColumn, indexParts, leadingIndex, singleRefIndex } from './indexes.ts'
@@ -29,7 +29,7 @@ import { ambiguousColumnError, unknownColumnError, requireSchema, safeIndex, saf
 import { holdsRead, indexRecordBytes, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type HintAdmission, type JoinCondition } from './from.ts'
 import { PAGE_READ, ROW_EVALUATE, indexScanCost, membershipCost } from './cost.ts'
 import { firstKey, rowKey, valueKey } from './keys.ts'
-import { filterPlan, indexLookup, materialize, planNode, wrap, type PlanNode } from './explain.ts'
+import { filterPlan, indexLookup, lookupMaterialized, materialize, planNode, wrap, type PlanNode } from './explain.ts'
 import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts'
 import { convert as convertSetValue, checkSetWidth, nestedNullability, setOperation, setOperationType } from './setop.ts'
 import { constTablesHaveRows, neverEqual, optimizerFacts, plannedTruth, rejectsNullExtension, uniqueKey, type OptimizerFacts } from './optimize.ts'
@@ -276,8 +276,9 @@ function itemTexts(run: Run, node: SelectNode): (string | undefined)[] {
   for (; i < tokens.length; i++) {
     // Successful lexing supplies EOF; an unaligned or failed lex returned above.
     const t = tokens[i]!
-    const end = t.kind === TOKEN.EOF || (depth === 0 && (CLAUSE_WORDS.has(queryWord(t)) || t.text === ';' || (t.kind === TOKEN.OPERATOR && t.text === ')')))
-    if (end || (depth === 0 && t.kind === TOKEN.OPERATOR && t.text === ',')) {
+    const op = t.kind === TOKEN.OPERATOR ? t.text : undefined
+    const end = t.kind === TOKEN.EOF || (depth === 0 && (CLAUSE_WORDS.has(queryWord(t)) || t.text === ';' || op === ')'))
+    if (end || (depth === 0 && op === ',')) {
       // The loop starts after SELECT, and the item start never passes i.
       const a = tokens[first]!
       const b = tokens[i - 1]!
@@ -292,8 +293,8 @@ function itemTexts(run: Run, node: SelectNode): (string | undefined)[] {
       if (end) break
       continue
     }
-    if (t.kind === TOKEN.OPERATOR && t.text === '(') depth++
-    if (t.kind === TOKEN.OPERATOR && t.text === ')') depth--
+    if (op === '(') depth++
+    if (op === ')') depth--
   }
   return out
 }
@@ -926,7 +927,7 @@ function subqueryNodes(run: Run, clause: string, outer?: FromPlan['single']): Pl
     const roots = s.plan.explain?.()
     const how = s.quantified
     const rewritten = how === undefined ? undefined : quantifiedPlan(run, s, how, topLevel(run.clauses?.[clause], s.query), roots, outer)
-    out.push(planNode(`Select #${selectNumber(run, s.query)}`, rewritten !== undefined ? [rewritten] : roots))
+    out.push(planNode(`Select #${selectNumber(run, s.query)}`, rewritten ?? roots))
   }
   return out
 }
@@ -976,8 +977,7 @@ function quantifiedPlan(run: Run, bound: BoundSubquery, how: QuantifiedSubquery,
     if (index === undefined || (how.kind === 'keyed-int-not-in' && top && where === 0 && (column.nullable || how.nullable) && run.env.memo !== undefined &&
       optimizerEnabled(run.env, 'materialization') && (!optimizerEnabled(run.env, 'subquery_materialization_cost_based') ||
         (plainBase(query, body) && costedNotIn(run, inner, outer, index, column.nullable))))) {
-      const materialized = materialize(roots)
-      return planNode('Filter', planNode('Limit', indexLookup('<materialized_subquery>', '<auto_distinct_key>', false, false, [materialized])))
+      return planNode('Filter', planNode('Limit', lookupMaterialized(materialize(roots), true)))
     }
     const unique = index.parts.length === 1 && index.kind !== 'index'
     const covering = holdsRead(def, index, read)
@@ -1024,8 +1024,8 @@ function bindIntegers(ctx: CompileContext, key: Compiled, outer: Expression, res
 }
 
 /** These readers retain the ordinary row initialization when generated fields are present. */
-function hasGenerated(def: TableDef): boolean {
-  return def.columns.some((c) => c.attributes?.['generated'] !== undefined)
+function hasGenerated(...defs: TableDef[]): boolean {
+  return defs.some((def) => def.columns.some((c) => c.attributes?.['generated'] !== undefined))
 }
 
 /** Structural boundary shared by the bounded semijoin and antijoin candidates. */
@@ -1081,7 +1081,7 @@ function dependentReader(run: Run, q: QueryExpression, node: SelectNode, from: F
   if (pair === undefined || pair.extra !== undefined || inner === undefined || inner.def.name !== body.from[0].table.name || inner.def.schema !== from.single!.def.schema || isTemporary(inner.def)) return bound
   const projection = body.items[0].expr
   if (!integerLiteral(projection) && !(isQualifiedColumn(projection, inner.alias) && projection.parts[1] === pair.innerKey.parts[1])) return bound
-  if ([from.single!.def, inner.def].some(hasGenerated)) return bound
+  if (hasGenerated(from.single!.def, inner.def)) return bound
   const column = inner.def.columns.find((c) => c.name === pair.innerKey.parts[1])
   const key = compile(pair.outerKey, compileContext(run, from.scope, 'where clause'))
   if (column === undefined || !exactInteger(key) || !exactInteger({ type: columnResultType(inner.def, column, inner.alias) })) return bound
@@ -1121,12 +1121,13 @@ function isQualifiedColumn(e: Expression, alias: string, fold = false): e is Qua
 function correlatedPair(where: Expression | undefined, inner: string, outer: string, fold = false) {
   const parts = splitAnd(where)
   if (parts.length > 2) return undefined
-  for (const equality of parts) {
+  for (const [i, equality] of parts.entries()) {
     if (equality.kind !== NODE.BINARY || equality.op !== '=') continue
-    const { left, right } = equality
-    const [innerKey, outerKey] = isQualifiedColumn(left, inner, fold) ? [left, right] : [right, left]
-    if (!isQualifiedColumn(innerKey, inner, fold) || !isQualifiedColumn(outerKey, outer, fold)) continue
-    return { innerKey, outerKey, extra: parts.find((e) => e !== equality) }
+    for (const [innerKey, outerKey] of operandPairs(equality)) {
+      if (isQualifiedColumn(innerKey, inner, fold) && isQualifiedColumn(outerKey, outer, fold)) {
+        return { innerKey, outerKey, extra: parts[1 - i] }
+      }
+    }
   }
   return undefined
 }
@@ -1159,14 +1160,19 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   if (body === undefined) return undefined
   const inner = body.from[0]
   const item = body.items[0].expr
-  const outerAlias = outer.alias ?? outer.table.name
-  const innerAlias = inner.alias ?? inner.table.name
+  const outerAlias = tableAlias(outer)
+  const innerAlias = tableAlias(inner)
   if (outerAlias === innerAlias) return undefined
-  const column = (e: Expression | undefined, alias: string): e is Extract<Expression, { kind: typeof NODE.COLUMN }> => e?.kind === NODE.COLUMN && (e.parts.length === 1 || isQualifiedColumn(e, alias))
-  let innerKey: Expression | undefined
-  let outerKey: Expression | undefined
+  const qualify = (e: Expression, alias: string) => {
+    if (e.kind !== NODE.COLUMN) return undefined
+    if (e.parts.length === 1) return { ...e, parts: [alias, e.parts[0]!] }
+    return isQualifiedColumn(e, alias) ? e : undefined
+  }
+  let innerKey: Expression
+  let outerKey: Expression
   let extra = body.where
-  if (where.kind === NODE.BINARY) {
+  const exists = where.kind !== NODE.BINARY
+  if (!exists) {
     innerKey = item
     outerKey = where.left
   } else {
@@ -1177,13 +1183,20 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     outerKey = pair.outerKey
     extra = pair.extra
   }
-  if (!column(innerKey, innerAlias) || !column(outerKey, outerAlias)) return undefined
-  const innerColumn = (innerKey.parts.at(-1) as string).toLowerCase()
-  if (extra !== undefined && !(extra.kind === NODE.BINARY && isComparison(extra.op) && column(extra.left, innerAlias) && extra.right.kind === NODE.LITERAL && numeric(extra.right))) return undefined
-  const qualify = (e: Extract<Expression, { kind: typeof NODE.COLUMN }>, alias: string): Expression => ({ ...e, parts: [alias, e.parts.at(-1)!] })
   const innerField = qualify(innerKey, innerAlias)
   const outerField = qualify(outerKey, outerAlias)
-  const residual = extra?.left.kind === NODE.COLUMN ? { ...extra, left: qualify(extra.left, innerAlias) } : extra
+  if (innerField === undefined || outerField === undefined) return undefined
+  const innerColumn = innerField.parts[1]!.toLowerCase()
+  let residual: Extract<Expression, { kind: typeof NODE.BINARY }> | undefined
+  let text = false
+  if (extra !== undefined) {
+    if (extra.kind !== NODE.BINARY || !isComparison(extra.op) || extra.right.kind !== NODE.LITERAL) return undefined
+    const field = qualify(extra.left, innerAlias)
+    if (field === undefined) return undefined
+    text = !exists && (extra.op === '<' || extra.op === '<=') && textBesideColumn(field, extra.right)
+    if (!text && !numberLiteral(extra.right)) return undefined
+    residual = { ...extra, left: field }
+  }
   const equality: Expression = { kind: NODE.BINARY, op: '=', left: innerField, right: outerField, at: where.at }
   const predicate = and(equality, residual)
   return proof(() => {
@@ -1197,19 +1210,24 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     }
     const index = candidates.find((i) => candidates.length === 1 || i.parts.length === 1)
     if (index === undefined) return undefined
+    const innerRead = keyReads(innerColumn, residual)
+    const scanOnly = !holdsRead(def, index, innerRead)
+    if (scanOnly) {
+      if (sortBy !== outerAlias || q.limit !== undefined || q.locking !== undefined || !singleRefIndex(index) ||
+        def.indexes.some((i) => holdsRead(def, i, innerRead)) || hasGenerated(def, from.single!.def)) return undefined
+      if (text) {
+        const type = tableColumn(residual!.left, def, innerAlias)?.type
+        if (type?.type !== FIELD_TYPE.VAR_STRING || type.collationId === CHARSET_BINARY || type.collationId !== run.env.session.characterSet) return undefined
+      } else if (!exists || residual?.op !== '>' || !integerLiteral(residual.right)) return undefined
+    } else if (text) return undefined
     // Keep the outer table's slots first: its logical scope remains the SELECT's scope.
     const alternative = planFrom([outer, inner], fromContext(run), predicate)
     const ctx = compileContext(run, alternative.scope, 'where clause')
     const key = compile(innerField, ctx)
-    if (!bindIntegers(ctx, key, outerField, residual?.left)) return undefined
+    if (!bindIntegers(ctx, key, outerField, text ? undefined : residual?.left)) return undefined
     const read = columnsRead(from.scope, node, q)
-    const innerRead = keyReads(innerColumn, residual)
     read.set(innerAlias, innerRead)
     alternative.reads(read)
-    const scanOnly = !holdsRead(def, index, innerRead)
-    if (scanOnly && (where.kind !== NODE.UNARY || sortBy !== outerAlias || q.limit !== undefined || q.locking !== undefined || !singleRefIndex(index) ||
-      residual?.op !== '>' || !integerLiteral(residual.right) || def.indexes.some((i) => holdsRead(def, i, innerRead)) ||
-      hasGenerated(def) || hasGenerated(from.single!.def))) return undefined
     alternative.sortedBy(sortBy, keep)
     const innerFirst = alternative.integerSemijoin(innerAlias, scanOnly ? undefined : index, key, residual,
       !someNode([node.items, q.orderBy], (n) => (n as Expression).kind === NODE.SUBQUERY || undefined))
@@ -1235,8 +1253,8 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
   const condition = body.where
   if (condition === undefined) return undefined
   const inner = body.from[0]
-  const outerAlias = outer.alias ?? outer.table.name
-  const innerAlias = inner.alias ?? inner.table.name
+  const outerAlias = tableAlias(outer)
+  const innerAlias = tableAlias(inner)
   if (outerAlias.toLowerCase() === innerAlias.toLowerCase()) return undefined
   const pair = correlatedPair(condition, innerAlias, outerAlias, true)
   if (pair === undefined) return undefined
@@ -1259,7 +1277,7 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
     const alternative = planFrom([{ kind: REF.JOIN, type: 'LEFT', left: outer, right: inner, on: condition, at: where.at }], fromContext(run))
     const innerTable = alternative.tables.find((t) => t.alias === innerAlias)
     if (innerTable?.def === undefined || innerTable.table === undefined || (predicateColumn !== undefined && innerTable.def.indexes.some((i) => i.parts.some((p) => p.column.toLowerCase() === predicateColumn.toLowerCase())))) return undefined
-    if (extra === undefined && [from.single!.def, definition].some(hasGenerated)) return undefined
+    if (extra === undefined && hasGenerated(from.single!.def, definition)) return undefined
     const ctx = compileContext(run, alternative.scope, 'where clause')
     if (!bindIntegers(ctx, compile(innerKey, ctx), outerKey, extra?.left)) return undefined
     const read = columnsRead(from.scope, node, q)
@@ -1282,7 +1300,7 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
       // Exact one-column equality: IN's FALSE and UNKNOWN both mean no matching row.
       const read = { eval: membershipReader(key.eval, (env) => plan.rows(env.trx, env), true, intValue(1n)) }
       const nullable = definition.columns[indexOfColumn(definition.columns, keyColumn)]?.nullable === true
-      return { kind: 'materialized', read, plan: indexLookup('<subquery2>', '<auto_distinct_key>', true, false, [materialize(filterPlan(nullable, described))]) }
+      return { kind: 'materialized', read, plan: lookupMaterialized(materialize(filterPlan(nullable, described))) }
     }
     return { kind: alternative.usesLookup(innerAlias) ? 'lookup' : 'hash', key, inner: plan, plan: described }
   })
@@ -1294,7 +1312,7 @@ function semijoinNode(run: Run, e: Expression, explicitLimit = false): PlanNode 
   const query = anti ?? (e.kind === NODE.UNARY && e.op === 'EXISTS' ? positiveSubquery(e) : undefined)
   if (query === undefined) return undefined
   const sub = run.subqueries?.find((s) => s.query === query)?.plan.explain?.()?.[0]
-  return sub === undefined ? undefined : planNode(anti !== undefined ? 'Nested loop antijoin' : 'Nested loop semijoin', [wrap(explicitLimit, 'Limit: 1 row(s)', sub)])
+  return sub === undefined ? undefined : planNode(anti !== undefined ? 'Nested loop antijoin' : 'Nested loop semijoin', wrap(explicitLimit, 'Limit: 1 row(s)', sub))
 }
 
 /** A Filter with a clause's subqueries beside its input, as the server lists them; anything else as it is. */
@@ -1386,7 +1404,7 @@ function emptySubquery(run: Run, query: QueryExpression): boolean {
   if (body.kind !== QUERY.SELECT || body.where === undefined || body.groupBy !== undefined || body.having !== undefined || query.limit !== undefined) return false
   const ref = body.from?.length === 1 ? body.from[0] : undefined
   if (ref?.kind !== REF.TABLE) return false
-  const alias = ref.alias ?? ref.table.name
+  const alias = tableAlias(ref)
   const def = definitionForProof(run, ref.table)
   if (def === undefined) return false
   const own = (parts: readonly string[]): boolean => parts.length === 1 ? indexOfColumn(def.columns, parts[0]!) >= 0 : parts.at(-2) === alias
@@ -1493,7 +1511,7 @@ function nestedLoopSemijoin(where: Expression | undefined, scope: TableScope): b
     const ref = body.from?.[0]
     const w = body.where
     if (ref === undefined || ref.kind !== REF.TABLE || w === undefined || w.kind !== NODE.BINARY || w.op !== '=') return false
-    const innerAlias = ref.alias ?? ref.table.name
+    const innerAlias = tableAlias(ref)
     return operandPairs(w).some(([inner, outer]) => {
       if (inner.kind !== NODE.COLUMN || inner.parts.at(-2) !== innerAlias || outer.kind !== NODE.COLUMN) return false
       const alias = outer.parts.at(-2)

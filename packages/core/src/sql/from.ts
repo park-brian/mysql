@@ -35,18 +35,17 @@
 // physical range and exact point equality already enforce it.
 import { notSupported, proof, wrongUsage } from './errors.ts'
 import { FIELD_TYPE } from '@myjs/bytes'
-import { REVERSE_COMPARISON, and, integerLiteral, isOrderedComparison, logicalShortCircuit, operandPairs, someNode } from './ast.ts'
+import { REVERSE_COMPARISON, and, integerLiteral, isOrderedComparison, logicalShortCircuit, operandPairs, someNode, tableAlias } from './ast.ts'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, type Expression, type IndexHint, type QueryExpression, type TableReference } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { integerBytes, truth, type ColumnType, type Value } from '@myjs/types'
 import { compatibleEqualityKeys, isComparison, type Compiled, type Env, type Row, type Scope } from './compile.ts'
-import { filterPlan, indexLookup, materialize, planNode, scanMaterialized, wrap, type PlanNode } from './explain.ts'
+import { filterPlan, indexLookup, lookupMaterialized, materialize, planNode, scanMaterialized, wrap, type PlanNode } from './explain.ts'
 import { FULL_SCAN, chooseAccess, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type InferredRange, type OuterColumn, type RangeCosting } from './plan.ts'
 import { ROW_EVALUATE, bestAccess, floorFilter, indexScanCost, joinOrder, materializedAntijoinWins, membershipCost, type Candidate, type FirstMatch, type KeyChoice, type Positioned, type RangeRead } from './cost.ts'
 import { rowKey, valueKey } from './keys.ts'
-import { columnResultType } from './meta.ts'
 import { fulltextOf } from './fulltext.ts'
 import { chooseStrategy } from './group.ts'
 import { clusteredIndex, forwardKeyPart, indexPartMatchesColumn, indexParts, leadingIndex, singleRefIndex, uniquePoint } from './indexes.ts'
@@ -313,7 +312,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     switch (ref.kind) {
       case REF.TABLE: {
         // A CTE hides base/system tables; only a missing base table falls back to a view.
-        const alias = ref.alias ?? ref.table.name
+        const alias = tableAlias(ref)
         const cte = ref.table.schema === undefined ? ctx.cte?.(ref.table.name) : undefined
         let source = cte === undefined ? ctx.system?.(ref.table, alias) : { source: cte, schema: undefined }
         if (source === undefined) {
@@ -716,11 +715,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       // What is true of every row the server folds away (8.4.11: no Filter): `IS NOT NULL` of a NOT NULL column no outer join
       // can null, `<>` between such an integer column and a number it never equals, and an OR with either.
       const notNull = (e: Expression): ColumnDef | undefined => {
-        for (const t of tables) {
-          const c = t.nullable ? undefined : columnOf(t, e, scope)
-          if (c !== undefined && !c.nullable) return c
-        }
-        return undefined
+        const source = columnSource(e, settings)
+        return source === undefined || source.table.nullable || source.column.nullable ? undefined : source.column
       }
       const alwaysTrue = (e: Expression): boolean => {
         if (e.kind === NODE.UNARY) return e.op === 'IS NOT NULL' && notNull(e.operand) !== undefined
@@ -813,7 +809,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
  * report).
  */
 function innerWherePossible(root: Node, where: readonly Expression[], scope: TableScope): Node {
-  const slot = (e: Expression): number | undefined => e.kind === NODE.COLUMN ? localSlot(e.parts, scope) : undefined
+  const slot = (e: Expression): number | undefined => localSlot(e, scope)
   const aliasOf = (i: number) => scope.columnAt(i)?.table.alias
   let pool: Expression[] = []
   const converted = new Set<Node>()
@@ -1115,54 +1111,55 @@ function countRows(rows: Iterable<unknown>, limit: number): number {
 function refOf(t: FromTable, conditions: readonly Expression[], outerAliases: ReadonlySet<string>, scope: TableScope, compileOuter: (e: Expression) => Compiled): EqRef | undefined {
   const def = t.def
   if (def === undefined || t.table === undefined) return undefined
-  const own = new Set([t.alias])
   let best: EqRef | undefined
   for (const c of conditions) {
-    const pair = equalitySides(c, outerAliases, own, scope)
-    if (pair === undefined) continue
-    const column = columnOf(t, pair[1], scope)
-    if (column === undefined) continue
-    let index: IndexDef | undefined
-    let single = false
-    for (const candidate of def.indexes) {
-      if (forwardKeyPart(candidate)?.column !== column.name) continue
-      // Prefer a unique key, retaining declaration order within each class.
-      if (uniquePoint(candidate, column)) {
-        index = candidate
-        single = true
-        break
+    if (c.kind !== NODE.BINARY || c.op !== '=') continue
+    for (const [inner, outer] of operandPairs(c)) {
+      const slot = localSlot(inner, scope)
+      if (slot === undefined) continue
+      const column = def.columns[slot - t.offset]
+      if (column === undefined || !within(aliasesOf(outer, scope), outerAliases)) continue
+      let index: IndexDef | undefined
+      let single = false
+      for (const candidate of def.indexes) {
+        if (forwardKeyPart(candidate)?.column !== column.name) continue
+        // Prefer a unique key, retaining declaration order within each class.
+        if (uniquePoint(candidate, column)) {
+          index = candidate
+          single = true
+          break
+        }
+        index ??= candidate
       }
-      index ??= candidate
+      if (index === undefined || (best !== undefined && !single)) continue
+      const value = compileProof(outer, compileOuter)
+      if (value === undefined) continue
+      // A key read needs the two sides to compare as the key's own type.
+      const keyKind = scope.columnAt(slot)!.column.type.kind
+      if (value.type.kind !== keyKind || (keyKind === 'string' && value.type.collationId !== column.type.collationId)) continue
+      best = { index, column, value, unique: single, condition: c }
+      if (single) return best
     }
-    if (index === undefined) continue
-    if (best !== undefined && !single) continue
-    const value = compileProof(pair[0], compileOuter)
-    if (value === undefined) continue
-    // A key read needs the two sides to compare as the key's own type.
-    const keyKind = columnResultType(def, column, t.alias).kind
-    if (value.type.kind !== keyKind || (keyKind === 'string' && value.type.collationId !== column.type.collationId)) continue
-    best = { index, column, value, unique: single, condition: c }
-    if (single) return best
   }
   return best
 }
 
 /** A local logical slot, including USING's synthetic references; correlations decline. */
-function localSlot(parts: readonly string[], scope: TableScope): number | undefined {
-  return syntheticSlot(parts) ?? safeIndex(scope, parts, 'where clause')
+function localSlot(e: Expression, scope: TableScope): number | undefined {
+  if (e.kind !== NODE.COLUMN) return undefined
+  return syntheticSlot(e.parts) ?? safeIndex(scope, e.parts, 'where clause')
 }
 
 /** A column of a base table an expression names: qualified by its alias, one of USING's slots, or a bare name the scope gives it. */
 function columnOf(t: FromTable, e: Expression, scope: TableScope): ColumnDef | undefined {
-  if (e.kind !== NODE.COLUMN || t.def === undefined) return undefined
-  const index = localSlot(e.parts, scope)
-  return index !== undefined && inTable(t, index) ? t.def.columns[index - t.offset] : undefined
+  if (t.def === undefined) return undefined
+  const index = localSlot(e, scope)
+  return index === undefined ? undefined : t.def.columns[index - t.offset]
 }
 
 /** Resolve the slot once, then recover the base column that owns its stored type. */
 function columnSource(e: Expression, { scope, tables }: LeafSettings) {
-  if (e.kind !== NODE.COLUMN) return undefined
-  const slot = localSlot(e.parts, scope)
+  const slot = localSlot(e, scope)
   if (slot === undefined) return undefined
   const bound = scope.columnAt(slot)?.table
   if (bound?.def === undefined) return undefined
@@ -1202,7 +1199,7 @@ function aliasesOf(e: Expression, scope: TableScope): Set<string> | undefined {
     if (n.kind === NODE.LITERAL || n.kind === NODE.PLACEHOLDER) return false
     if (n.kind === NODE.SUBQUERY) return true
     if (n.kind === NODE.COLUMN && n.parts !== undefined) {
-      const index = localSlot(n.parts, scope)
+      const index = localSlot(n as Expression, scope)
       const at = index === undefined ? undefined : scope.columnAt(index)
       if (at === undefined) return true
       out.add(at.table.alias)
@@ -1469,7 +1466,7 @@ function comparesWithEarlier(t: FromTable, e: Expression, before: ReadonlySet<st
   return splitAnd(e).some((c) => {
     if (c.kind !== NODE.BINARY) return false
     if (isOrderedComparison(c.op)) return (leads(c.left) && earlier(c.right)) || (leads(c.right) && earlier(c.left))
-    return c.op.toUpperCase() === 'BETWEEN' && leads(c.left) && (earlier(c.right) || earlier(c.extra as Expression))
+    return c.op === 'BETWEEN' && leads(c.left) && (earlier(c.right) || earlier(c.extra as Expression))
   })
 }
 
@@ -1543,7 +1540,7 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], compile: (e
     const sargable = (x: Expression): Expression | undefined => {
       if (x.kind === NODE.UNARY) return (x.op === 'IS NULL' || x.op === 'IS NOT NULL') && x.operand.kind === NODE.COLUMN ? { ...x, operand: column } : undefined
       if (x.kind !== NODE.BINARY) return undefined
-      const op = x.op.toUpperCase()
+      const { op } = x
       if (logicalShortCircuit(op) !== undefined) {
         const a = sargable(x.left)
         const b = sargable(x.right)
@@ -1632,7 +1629,8 @@ function placeTable(t: FromTable, lookup: EqRef | undefined, prefix: readonly Po
     let f = 1
     for (const [column, n] of range?.counts ?? []) if (column !== key) f *= Math.min(1, Math.fround(n / stats.rows))
     const ignore = key === undefined ? ranged : new Set([...ranged, key])
-    return conditions.reduce((g, c) => g * filterEffect(c.e, t, stats, available, scope, ignore, settings.firstMatch?.filteredScan), f)
+    const effect = filterEffect(t, stats, available, scope, ignore, settings.firstMatch?.filteredScan)
+    return conditions.reduce((g, c) => g * effect(c.e), f)
   }
   const key: KeyChoice | undefined =
     lookup === undefined
@@ -1671,68 +1669,68 @@ const negateFilter = (fraction: number): number => fraction === 1 ? 1 : 1 - frac
  * the columns the table's rows are already counted by — its lookup's key,
  * and the columns a range was estimated on.
  */
-function filterEffect(e: Expression, t: FromTable, stats: TableStatistics, available: ReadonlySet<string>, scope: TableScope, ignore: ReadonlySet<ColumnDef>, filteredScan?: boolean): number {
-  const effect = (expression: Expression): number => filterEffect(expression, t, stats, available, scope, ignore, filteredScan)
-  const atLeast = (f: number): number => Math.max(Math.fround(1 / stats.rows), f)
+function filterEffect(t: FromTable, stats: TableStatistics, available: ReadonlySet<string>, scope: TableScope, ignore: ReadonlySet<ColumnDef>, filteredScan?: boolean): (e: Expression) => number {
+  const minimum = Math.fround(1 / stats.rows)
+  const atLeast = (f: number): number => Math.max(minimum, f)
   const known = (x: Expression): boolean => {
     const a = aliasesOf(x, scope)
     return a !== undefined && subsetOf(a, available)
   }
-  const own = (x: Expression): ColumnDef | undefined => columnOf(t, x, scope)
+  const own = (x: Expression): ColumnDef | undefined => {
+    const c = columnOf(t, x, scope)
+    return c !== undefined && !ignore.has(c) ? c : undefined
+  }
   // A comparison counts where one side is this table's column, not the lookup's, and the other is known.
   const compared = (x: Expression, y: Expression): ColumnDef | undefined => {
     const c = own(x)
-    if (c === undefined || ignore.has(c)) return undefined
-    const other = own(y)
+    if (c === undefined) return undefined
+    const other = columnOf(t, y, scope)
     return known(y) || (other !== undefined && ignore.has(other)) ? c : undefined
   }
-  if (e.kind === NODE.UNARY) {
-    if (e.op === 'NOT' || e.op === '!') {
-      return negateFilter(effect(e.operand))
+  return function effect(e: Expression): number {
+    if (e.kind === NODE.UNARY) {
+      if (e.op === 'NOT' || e.op === '!') {
+        return negateFilter(effect(e.operand))
+      }
+      const c = own(e.operand)
+      if (c === undefined) return 1
+      if (e.op === 'IS NULL') return atLeast(0.1)
+      if (e.op === 'IS NOT NULL') return c.nullable ? 1 - atLeast(0.1) : 1
+      return 1
     }
-    const c = own(e.operand)
-    if (c === undefined || ignore.has(c)) return 1
-    if (e.op === 'IS NULL') return atLeast(0.1)
-    if (e.op === 'IS NOT NULL') return c.nullable ? 1 - atLeast(0.1) : 1
-    return 1
+    if (e.kind !== NODE.BINARY) return 1
+    const { op } = e
+    const logical = logicalShortCircuit(op)
+    if (logical !== undefined) {
+      const left = effect(e.left)
+      const right = effect(e.right)
+      return logical ? left + right - left * right : left * right
+    }
+    switch (op) {
+      case 'BETWEEN':
+      case 'NOT BETWEEN': {
+        if (own(e.left) === undefined || !known(e.right) || (e.extra !== undefined && !known(e.extra as Expression))) return 1
+        return op === 'BETWEEN' ? atLeast(1 / 9) : 1 - atLeast(1 / 9)
+      }
+      case 'IN':
+      case 'NOT IN': {
+        if (own(e.left) === undefined || e.right.kind !== NODE.ROW || !known(e.right)) return 1
+        const f = Math.min(e.right.items.length * atLeast(0.1), 0.5)
+        return op === 'IN' ? f : 1 - f
+      }
+    }
+    const like = op === 'LIKE' || op === 'NOT LIKE'
+    if (!like && !Object.hasOwn(REVERSE_COMPARISON, op)) return 1
+    const pair = compared(e.left, e.right) ?? compared(e.right, e.left)
+    if (pair === undefined) return 1
+    if (op === '=') {
+      // A multiple equality: each of this table's columns in it, by the first index it leads.
+      const index = keyOrder(t.def!).find((i) => i.parts[0]?.column.toLowerCase() === pair.name.toLowerCase())
+      if (index !== undefined) return Math.min(1, Math.fround(stats.recordsPerKey(index, 1) / stats.rows))
+    }
+    const kept = atLeast(like ? 1 / 9 : isOrderedComparison(op) ? (filteredScan ? Math.fround(0.3333) : 1 / 3) : 0.1)
+    return op === '<>' || op === '!=' || op === 'NOT LIKE' ? negateFilter(kept) : kept
   }
-  if (e.kind !== NODE.BINARY) return 1
-  const op = e.op.toUpperCase()
-  switch (op) {
-    case 'AND':
-    case '&&':
-      return effect(e.left) * effect(e.right)
-    case 'OR':
-    case '||': {
-      const a = effect(e.left)
-      const b = effect(e.right)
-      return a + b - a * b
-    }
-    case 'BETWEEN':
-    case 'NOT BETWEEN': {
-      const c = own(e.left)
-      if (c === undefined || ignore.has(c) || !known(e.right) || (e.extra !== undefined && !known(e.extra as Expression))) return 1
-      return op === 'BETWEEN' ? atLeast(1 / 9) : 1 - atLeast(1 / 9)
-    }
-    case 'IN':
-    case 'NOT IN': {
-      const c = own(e.left)
-      if (c === undefined || ignore.has(c) || e.right.kind !== NODE.ROW || !known(e.right)) return 1
-      const f = Math.min(e.right.items.length * atLeast(0.1), 0.5)
-      return op === 'IN' ? f : 1 - f
-    }
-  }
-  const like = op === 'LIKE' || op === 'NOT LIKE'
-  if (!like && !Object.hasOwn(REVERSE_COMPARISON, op)) return 1
-  const pair = compared(e.left, e.right) ?? compared(e.right, e.left)
-  if (pair === undefined) return 1
-  if (op === '=') {
-    // A multiple equality: each of this table's columns in it, by the first index it leads.
-    const index = keyOrder(t.def!).find((i) => i.parts[0]?.column.toLowerCase() === pair.name.toLowerCase())
-    if (index !== undefined) return Math.min(1, Math.fround(stats.recordsPerKey(index, 1) / stats.rows))
-  }
-  const kept = atLeast(like ? 1 / 9 : isOrderedComparison(op) ? (filteredScan ? Math.fround(0.3333) : 1 / 3) : 0.1)
-  return op === '<>' || op === '!=' || op === 'NOT LIKE' ? negateFilter(kept) : kept
 }
 
 /**
@@ -1921,7 +1919,7 @@ function buildJoinOp(left: boolean | 'anti', slots: readonly number[], outer: Op
     },
     describe(env) {
       const built = materialized ? materialize(filterPlan(buildKey?.[0]?.type.nullable === true, build.describe(env))) : undefined
-      if (materialized === 'lookup') return nestedLoop(false, outer.describe(env), indexLookup('<subquery2>', '<auto_distinct_key>', true, false, [built!]))
+      if (materialized === 'lookup') return nestedLoop(false, outer.describe(env), lookupMaterialized(built!))
       if (!indexed) {
         const input = built === undefined ? build.describe(env) : scanMaterialized(built)
         if (materialized === 'loop') return nestedLoop(false, input, filterPlan(on.length > 0, probe.describe(env)))
@@ -1929,7 +1927,7 @@ function buildJoinOp(left: boolean | 'anti', slots: readonly number[], outer: Op
         return wrap(deduplicate, `Remove duplicate ${weedout?.alias} rows using temporary table`, hashJoinPlan(name, probe.describe(env), input))
       }
       const d = index.derived?.explain?.()
-      const lookup = indexLookup(index.alias, '<auto_key0>', false, false, d === undefined || d.merged ? [] : [planNode(d.materialize, d.children)])
+      const lookup = indexLookup(index.alias, '<auto_key0>', false, false, d === undefined || d.merged ? undefined : planNode(d.materialize, d.children))
       const rest = on.filter((c) => !keys?.conditions.includes(c))
       return nestedLoop(left === true, outer.describe(env), filterPlan(rest.length > 0, lookup))
     },

@@ -20,7 +20,7 @@ import { DISALLOWED_DEFAULT_FUNCTIONS } from './registry.ts'
 import { admitValueGenerator, DEFAULT_ADMISSION } from './value-generator.ts'
 import { notSupported, wrongUsage } from './errors.ts'
 import { CHARSET_BINARY, FIELD_TYPE, MyjsError, equalBytes } from '@myjs/bytes'
-import { nativeCallName, someNode } from './ast.ts'
+import { nativeCallName, someNode, tableAlias } from './ast.ts'
 import { CLIENT, hasCap, messages, sqlError, symbolOf, type OkResult } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { EngineError } from '@myjs/engine'
@@ -1022,7 +1022,7 @@ function singleTable(run: Run, tables: UpdateNode['tables'], what: string): { de
   const ref = tables[0]
   if (tables.length !== 1 || ref === undefined || ref.kind !== REF.TABLE) throw notSupported(`Multiple-table ${what}`)
   const { def, table } = openTarget(run, ref.table)
-  return { def, table, alias: ref.alias ?? ref.table.name }
+  return { def, table, alias: tableAlias(ref) }
 }
 
 /**
@@ -1035,7 +1035,7 @@ function withCtes(run: Run, node: UpdateNode | DeleteNode, what: 'UPDATE' | 'DEL
   if (node.with === undefined) return run
   const ref = node.tables[0]
   if (ref?.kind === REF.TABLE && ref.table.schema === undefined && node.with.tables.some((c) => c.name.toLowerCase() === ref.table.name.toLowerCase())) {
-    throw sqlError('ER_NON_UPDATABLE_TABLE', `The target table ${ref.alias ?? ref.table.name} of the ${what} is not updatable`)
+    throw sqlError('ER_NON_UPDATABLE_TABLE', `The target table ${tableAlias(ref)} of the ${what} is not updatable`)
   }
   return withClause(run, node.with)
 }
