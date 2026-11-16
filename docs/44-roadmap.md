@@ -139,15 +139,17 @@ and 296 now match. Projected, negated, nullable `ALL` and indexed extrema
 have separate admission rules.
 
 **M5.47 fresh relational seeds.** Three MySQL 8.4.11 seeds of 300 scripts
-each now match 126 of 138 semijoin and quantified plans. The ordered
+each now match 128 of 138 semijoin and quantified plans. The ordered
 `IN` cases with `>` and a standalone wildcard-leading `LIKE` now match,
 as do the six unindexed integer `= ANY` and `= SOME` cases with a bare
 inner key or a direct `IS NOT NULL` test. Four unindexed integer `<> ALL`
 cases and two correlated `EXISTS` cases with a noncovering integer
 residual also match. The `NOT IN` case with a noncovering wildcard-leading
-`LIKE` now uses the dependent table scan. Next, compare which empty inner
-predicates the optimizer proves before choosing a membership reader.
-Compound predicates and other cost profiles remain open.
+`LIKE` uses the dependent table scan. The optimizer-proved empty inner
+ranges now match for case 180, statement 14 and case 157, statement 13.
+Next, compare covering builds for a required-field `IS NOT NULL` and for
+an inner `NOT IN` list that contains NULL. Compound predicates and other
+cost profiles remain open.
 
 **0.3 is staged**, with exact workspace versions and installed-package smoke
 checks. Publication still requires claiming the npm scope/name and publishing
@@ -2219,6 +2221,33 @@ committed relational score stays at 2,140 of 2,248 with the 2,118 floor.
 Parser/core/facade measure 45,611/334,356/334,266 B gzipped within the
 existing caps. Compound wildcard predicates and the distinct dependent
 `ref_or_null` reader remain open.
+
+**M5.47 cost an optimizer-proved empty inner range, verified.** A direct
+`NOT IN` or `<> ALL` with a nullable inner `INT` key reuses its bound zero-row
+proof when a visible `INT` index proves a NULL comparison or a literal
+`BETWEEN` range empty. The inner reader produces no rows, so every outer
+key qualifies, including NULL. MySQL's empty dependent alternative costs
+one per probe. Its build costs 2.1 to start plus 0.1 per probe, so the
+default chooses the memoized build from three estimated probes. A forced
+build retains its zero-row child and the dependent plan shows `Zero rows`.
+
+The pinned audits match all 2,728 target observations and fix 2,484 plans.
+The other 14,632 observations are unchanged. Both protocols retain the
+choices across writes and optimizer switches. The two fresh cases bring
+the seeds to 128 of 138 and the committed ledger stays at 2,140 of 2,248
+with the 2,118 floor. Compound ranges and covering builds over a residual
+that survives the range optimizer remain open.
+
+**M5.10 base64 line widths and ASCII whitespace, verified.** The byte
+conversion reuses the existing lossless byte-string mapping and the
+browser and Node base64 primitives. `TO_BASE64` reports the width with a
+line break only between 76-character lines. `FROM_BASE64` accepts vertical
+tab and form feed along with the other ASCII whitespace and still requires
+complete groups and valid padding. All 325 pinned observations agree in
+both protocols, including every input byte, malformed inputs, exact line
+boundaries and a one-mebibyte round trip. Fifteen prior mismatches are
+closed. Parser/core/facade measure 45,611/334,338/334,263 B gzipped within
+the unchanged caps.
 
 **M5.49 legacy index hint admission, verified.** Simple outer SELECTs over
 physical tables, including temporary tables, check index names after opening
@@ -12257,7 +12286,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,356 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-16. The facade is 334,266 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
+| Core bundle, gzipped | 334,338 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-16. The facade is 334,263 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

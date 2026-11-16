@@ -208,17 +208,37 @@ test('dependent NOT IN retains a proved empty input across writes', async () => 
     : { stream: db.createStream(), user: 'root', password: '' })
   const schema = 'quantified_empty_input'
   const all = [['a'], ['b'], ['c'], ['d']]
+  const emptyPlan = (key: 'id' | 'k', materialized = false) => {
+    const outer = key === 'id' ? 'Filter\n    Covering index scan on p using label\n    Select #2'
+      : 'Sort\n    Filter\n        Table scan on p\n        Select #2'
+    const inner = materialized ? [
+      'Filter',
+      '    Limit',
+      '        Index lookup on <materialized_subquery> using <auto_distinct_key>',
+      '            Materialize with deduplication',
+      '                Zero rows',
+    ] : ['Zero rows']
+    return [outer, ...inner.map((line) => `${key === 'id' ? '        ' : '            '}${line}`)].join('\n')
+  }
   const read = (key: 'id' | 'k', residual: 'IS NULL' | 'IS NOT NULL', rowsExpected: string[][], lookup = false) => {
     const sql = `SELECT label FROM p WHERE ${key} NOT IN (SELECT parent_id FROM c WHERE qty ${residual}) ORDER BY 1`
-    const empty = key === 'id' ? 'Filter\n    Covering index scan on p using label\n    Select #2\n        Zero rows'
-      : 'Sort\n    Filter\n        Table scan on p\n        Select #2\n            Zero rows'
     return readDependentNotIn(conn, schema, 'label', sql, rowsExpected, (plan, api) => {
-      if (residual === 'IS NULL') assert.equal(plan, empty, api)
+      if (residual === 'IS NULL') assert.equal(plan, emptyPlan(key), api)
       else {
         assert.doesNotMatch(plan, /Zero rows/, api)
         if (lookup) assert.match(plan, /Index lookup on c using by_parent/, api)
       }
     })
+  }
+  async function readRanges(expected: string[][], materialized: boolean) {
+    for (const key of ['id', 'k'] as const) {
+      for (const op of ['NOT IN', '<> ALL']) {
+        for (const range of ['c.parent_id < NULL', 'c.id BETWEEN 3 AND 2']) {
+          const sql = `SELECT label FROM p WHERE ${key} ${op} (SELECT parent_id FROM c WHERE ${range}) ORDER BY 1`
+          await readDependentNotIn(conn, schema, 'label', sql, expected, (plan, api) => assert.equal(plan, emptyPlan(key, materialized), api))
+        }
+      }
+    }
   }
   try {
     await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
@@ -232,6 +252,14 @@ test('dependent NOT IN retains a proved empty input across writes', async () => 
     await read('id', 'IS NULL', all)
     await read('k', 'IS NULL', all)
     await read('k', 'IS NOT NULL', [], true)
+    await readRanges(all, true)
+    await conn.query('DELETE FROM p WHERE id > 2')
+    await readRanges([['a'], ['c']], false)
+    await conn.query("SET optimizer_switch='subquery_materialization_cost_based=off'")
+    await readRanges([['a'], ['c']], true)
+    await conn.query("SET optimizer_switch='default,materialization=off'")
+    await conn.query("INSERT INTO p VALUES (3,NULL,'b'),(4,8,'d')")
+    await readRanges(all, false)
     // Retain the prepared readers while the inner keys and table cardinality change.
     await conn.query('UPDATE c SET parent_id=99 WHERE parent_id IS NULL')
     await read('k', 'IS NULL', all)
@@ -240,6 +268,7 @@ test('dependent NOT IN retains a proved empty input across writes', async () => 
     await read('id', 'IS NULL', all)
     await read('k', 'IS NULL', all)
     await read('k', 'IS NOT NULL', all)
+    await readRanges(all, false)
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end()

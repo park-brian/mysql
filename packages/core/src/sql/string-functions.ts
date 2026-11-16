@@ -64,6 +64,7 @@ import {
   valueBytes,
 } from '@myjs/types'
 import { escapedBytes, hexOf } from './builtins.ts'
+import { byteKey } from './keys.ts'
 import {
   readArguments,
   aggregate,
@@ -933,52 +934,16 @@ function toBase(n: bigint, radix: number): string {
   return v.toString(r).toUpperCase()
 }
 
-const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-
-/** TO_BASE64: a line break after every 76 characters. */
-function toBase64(b: Uint8Array): string {
-  let out = ''
-  let line = 0
-  for (let i = 0; i < b.length; i += 3) {
-    const n = ((b[i] as number) << 16) | ((b[i + 1] ?? 0) << 8) | (b[i + 2] ?? 0)
-    const chunk = (BASE64[(n >> 18) & 63] as string) + (BASE64[(n >> 12) & 63] as string) + (i + 1 < b.length ? (BASE64[(n >> 6) & 63] as string) : '=') + (i + 2 < b.length ? (BASE64[n & 63] as string) : '=')
-    if (line === 76) {
-      out += '\n'
-      line = 0
-    }
-    out += chunk
-    line += 4
-  }
-  return out
+/** TO_BASE64 breaks its result after each 76 characters, without a trailing newline. */
+function toBase64(bytes: Uint8Array): string {
+  return btoa(byteKey(bytes)).replace(/.{76}(?=.)/g, '$&\n')
 }
 
-/** FROM_BASE64: white space skipped, padding where it may be; undefined for anything else. */
-function fromBase64(text: string): Uint8Array | undefined {
-  const out: number[] = []
-  let acc = 0
-  let bits = 0
-  let pad = 0
-  let count = 0
-  for (const ch of text) {
-    if (ch === ' ' || ch === '\n' || ch === '\r' || ch === '\t') continue
-    if (ch !== '=') count++
-    if (ch === '=') {
-      pad++
-      continue
-    }
-    if (pad > 0) return undefined
-    const v = BASE64.indexOf(ch)
-    if (v < 0) return undefined
-    acc = (acc << 6) | v
-    bits += 6
-    if (bits >= 8) {
-      bits -= 8
-      out.push((acc >> bits) & 255)
-    }
-  }
-  // Whole groups of four, padding included, or nothing (8.4.11: '123' and 'Robert' are NULL).
-  if ((count + pad) % 4 !== 0 || pad > 2) return undefined
-  return Uint8Array.from(out)
+/** FROM_BASE64 requires complete groups and permits ASCII whitespace. */
+function fromBase64(bytes: Uint8Array): Uint8Array | undefined {
+  const text = byteKey(bytes).replace(/[ \t-\r]/g, '')
+  if (text.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(text)) return undefined
+  return Uint8Array.from(atob(text), (char) => char.charCodeAt(0))
 }
 
 /** What the other string functions' compilers ask of a call: its count checked, whether any argument may be NULL, a hex string's type, a string in the connection's collation, the name as the server prints it. */
@@ -1368,7 +1333,7 @@ function conversionFunction(name: string, xs: readonly Compiled[], callName: str
           const v = s.eval(r, env)
           return v === null ? null : conv(toBase64(valueBytes(v)))
         },
-        type: hexText(len + Math.floor(len / 76)),
+        type: hexText(len + Math.max(0, Math.ceil(len / 76) - 1)),
       }
     }
     case 'FROM_BASE64': {
@@ -1379,7 +1344,7 @@ function conversionFunction(name: string, xs: readonly Compiled[], callName: str
         eval: (r, env) => {
           const v = s.eval(r, env)
           if (v === null) return null
-          const out = fromBase64(new TextDecoder('latin1').decode(valueBytes(v)))
+          const out = fromBase64(valueBytes(v))
           return out === undefined ? null : bytesValue(out)
         },
         type: stringType(Math.floor((bytes * 3) / 4), CHARSET_BINARY, true),

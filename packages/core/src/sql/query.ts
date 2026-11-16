@@ -27,7 +27,7 @@ import { clusteredIndex, forwardKeyPart, indexPartMatchesColumn, indexParts, lea
 import { collationInfoByName, encodeCollation } from '@myjs/charsets'
 import { ambiguousColumnError, unknownColumnError, requireSchema, safeIndex, safeResolve, TableScope, columnIndex as indexOfColumn } from './scope.ts'
 import { holdsRead, indexRecordBytes, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type HintAdmission, type JoinCondition } from './from.ts'
-import { dependentMembershipAccess } from './cost.ts'
+import { dependentMembershipAccess, membershipCost, ROW_EVALUATE } from './cost.ts'
 import { firstKey, rowKey, valueKey } from './keys.ts'
 import { coveringScan, filterNode, filterPlan, indexLookup, lookupMaterialized, materialize, planNode, tableScan, tableScanLabel, wrap, type PlanNode } from './explain.ts'
 import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts'
@@ -973,6 +973,7 @@ function quantifiedPlan(run: Run, bound: BoundSubquery, how: QuantifiedSubquery,
   if (dependentNotIn && roots === NO_ROWS_PLAN && predicate?.kind === NODE.UNARY && predicate.op === 'IS NULL') return undefined
   const read = keyReads(column.name, predicate)
   if (how.kind === 'dependent-not-in') {
+    if (roots === NO_ROWS_PLAN) return undefined
     // The bound reader already applies any written residual below the probe's Filter.
     return planNode('Limit', filterNode(filterPlan(column.nullable && !predicate, roots?.[0] ?? tableScan(alias))))
   }
@@ -1021,6 +1022,23 @@ function wildcardLike(e: Expression | undefined): e is Extract<Expression, { kin
   return e?.kind === NODE.BINARY && e.op === 'LIKE' && !e.extra && e.right.kind === NODE.LITERAL && /^[%_]/.test(e.right.value as string)
 }
 
+/** Ranges MySQL can prove empty during index access selection, without evaluating a row. */
+function integerRangePredicate(e: Expression | undefined, def: TableDef, alias: string): boolean {
+  if (e?.kind !== NODE.BINARY) return false
+  const nullLiteral = (item: Expression | undefined) => item?.kind === NODE.LITERAL && item.type === LITERAL.NULL
+  let field = e.left
+  if (isComparison(e.op)) {
+    if (nullLiteral(field)) field = e.right
+    else if (!nullLiteral(e.right)) return false
+  } else {
+    const high = e.extra as Expression | undefined
+    if (e.op !== 'BETWEEN' || (!integerLiteral(e.right) && !nullLiteral(e.right)) ||
+        (high === undefined || (!integerLiteral(high) && !nullLiteral(high)))) return false
+  }
+  const column = tableColumn(field, def, alias)
+  return column?.type.type === FIELD_TYPE.LONG && leadingIndex(def, column, true) !== undefined
+}
+
 /** Cost membership on the original bound input, before choosing its reader and EXPLAIN. */
 function boundMembership(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan | undefined, bound: BoundSubquery): BoundSubquery | undefined {
   const where = node.where
@@ -1038,10 +1056,12 @@ function boundMembership(run: Run, q: QueryExpression, node: SelectNode, from: F
       (!left.nullable && !key.nullable && optimizerEnabled(run.env, 'semijoin'))) return undefined
   const predicate = body.where
   const { def, alias } = inner
+  const materialize = membershipMaterialization(run.env)
+  const empty = key.nullable && integerRangePredicate(predicate, def, alias) && bound.plan.explain?.() === NO_ROWS_PLAN
   const index = leadingIndex(def, key, true)
   let includeNonNull: boolean | undefined
   let textSelectivity: number | undefined
-  if (index) {
+  if (!empty && index) {
     if (!singleRefIndex(index) || (!left.nullable && !key.nullable)) return undefined
     if (wildcardLike(predicate)) {
       if (left.nullable || !key.nullable || hasGenerated(outer.def, def) || !textBesideColumn(predicate.left, predicate.right)) return undefined
@@ -1060,21 +1080,26 @@ function boundMembership(run: Run, q: QueryExpression, node: SelectNode, from: F
         if (scan?.label !== 'Filter' || scan.children[0]?.label !== tableScanLabel(alias)) return undefined
       }
     }
-  } else {
+  } else if (!empty) {
     if (hasGenerated(outer.def, def) || hasLeadingKey(outer.def, left.name) || indexedColumn(def, key.name) ||
         from.access(run.env).index !== undefined || (predicate !== undefined && !checksNotNull(predicate, def, alias, key))) return undefined
     includeNonNull = predicate && true
   }
-  const choice = costedNotIn(run, inner, outer, index, key.nullable, membershipMaterialization(run.env), includeNonNull, textSelectivity)
-  if (choice === undefined || (choice === 'materialize' && !index)) return undefined
+  const choice = costedNotIn(run, inner, outer, index, key.nullable, materialize, includeNonNull, textSelectivity, empty)
+  if (choice === undefined || (choice === 'materialize' && !index && !empty)) return undefined
   bound.quantified = { kind: choice === 'scan' ? 'dependent-not-in' : 'materialized-not-in', nullable: left.nullable }
-  return bound
+  return empty ? { ...bound, rows: () => [] } : bound
 }
 
 /** The single-table NOT IN alternatives measured against the native cost trace. */
-function costedNotIn(run: Run, inner: NonNullable<FromPlan['single']>, outer: FromPlan['single'], index: IndexDef | undefined, nullable: boolean, materialize: boolean | undefined, includeNonNull: boolean | undefined, textSelectivity = 0.3333): 'scan' | 'materialize' | undefined {
+function costedNotIn(run: Run, inner: NonNullable<FromPlan['single']>, outer: NonNullable<FromPlan['single']>, index: IndexDef | undefined, nullable: boolean, materialize: boolean | undefined, includeNonNull: boolean | undefined, textSelectivity: number | undefined, empty: boolean): 'scan' | 'materialize' | undefined {
   const store = run.catalog?.store
-  if (outer === undefined || store === undefined || isTemporary(inner.def)) return undefined
+  if (store === undefined || isTemporary(inner.def)) return undefined
+  if (empty) {
+    const probes = statisticsOf(outer.def, outer.table, store).rows
+    // The empty range costs one per dependent probe and one estimated row at build startup.
+    return materialize || (materialize === false && membershipCost(1 + ROW_EVALUATE, 0, probes) < probes) ? 'materialize' : 'scan'
+  }
   const stats = statisticsOf(inner.def, inner.table, store)
   if (stats.pages > 1) return undefined
   const probes = statisticsOf(outer.def, outer.table, store)
@@ -1086,7 +1111,7 @@ function costedNotIn(run: Run, inner: NonNullable<FromPlan['single']>, outer: Fr
     const floor = Math.fround(1 / rows)
     const notNull = 1 - Math.max(floor, 0.1)
     if (index) {
-      const text = Math.max(floor, Math.fround(textSelectivity))
+      const text = Math.max(floor, Math.fround(textSelectivity ?? 0.3333))
       kept = Math.trunc(rows * (includeNonNull ? text + notNull - text * notNull : text)) || 1
     } else if (nullable) {
       // The materialized range cannot be estimated below one row.

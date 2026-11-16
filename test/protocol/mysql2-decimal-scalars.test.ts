@@ -176,6 +176,33 @@ async function outcome(conn: mysql.Connection, sql: string, method: 'query' | 'e
   return [rows, fields(columns as mysql.FieldPacket[]), warnings]
 }
 
+test('base64 preserves binary bytes and wraps at the declared line boundaries', async () => {
+  const { db, conn } = await connect()
+  const bytes = Buffer.from(Array.from({ length: 256 }, (_, i) => i))
+  try {
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+    for (const method of ['query', 'execute'] as const) {
+      for (const [count, width] of [[0, 0], [55, 304], [57, 304], [58, 324], [114, 612], [256, 1392]] as const) {
+        const input = bytes.subarray(0, count)
+        const literal = `X'${input.toString('hex')}'`
+        const sql = `SELECT TO_BASE64(${literal}) AS encoded, HEX(FROM_BASE64(TO_BASE64(${literal}))) AS decoded`
+        const [rows, columns, warnings] = await outcome(conn, sql, method)
+        const encoded = input.toString('base64').match(/.{1,76}/g)?.join('\n') ?? ''
+        assert.deepEqual(rows, [[encoded, input.toString('hex').toUpperCase()]], `${method} ${count}`)
+        assert.deepEqual((columns as ReturnType<typeof fields>)[0], ['encoded', 253, width, 0, 31, 255, '', '', '', ''], `${method} ${count}`)
+        assert.deepEqual(warnings, [], method)
+      }
+      const sql = "SELECT HEX(FROM_BASE64(X'4120090A410B0C0D3D3D')), HEX(FROM_BASE64('AAA')), HEX(FROM_BASE64('AA==AQ==')), HEX(FROM_BASE64(X'41413D3D00'))"
+      const [rows, , warnings] = await outcome(conn, sql, method)
+      assert.deepEqual(rows, [['00', null, null, null]], method)
+      assert.deepEqual(warnings, [], method)
+    }
+  } finally {
+    await conn.end()
+    await db?.end()
+  }
+})
+
 test('scalar string constructors own DECIMAL prefixes across text, binary, field and literal sources', async () => {
   const { db, conn } = await connect()
   const values = [""," ","abc","123x","123.45x","123e1x",".5x","-0.5x",null,"abc1"]
