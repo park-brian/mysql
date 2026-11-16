@@ -20,6 +20,71 @@ async function readDependentNotIn(conn: mysql.Connection, schema: string, field:
   }
 }
 
+test('unindexed integer equality ANY and SOME choose buffered FirstMatch and weedout', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection(db === undefined
+    ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+    : { stream: db.createStream(), user: 'root' })
+  const schema = 'quantified_hash_membership'
+  const hash = `Sort\n    Stream results\n        Hash semijoin\n            Table scan on ch\n            Hash\n                Table scan on kl`
+  const weedout = `Sort\n    Stream results\n        Remove duplicate ch rows using temporary table\n            Inner hash join\n                Table scan on ch\n                Hash\n                    Table scan on kl`
+  async function read(expected: [string, number][], plan?: string) {
+    for (const quantifier of ['ANY', 'SOME']) {
+      const sql = `SELECT label,qty FROM ch WHERE qty = ${quantifier} (SELECT g FROM kl) ORDER BY 1,2`
+      const options = { sql, rowsAsArray: true }
+      const explain = `EXPLAIN FORMAT=TREE ${sql}`
+      if (plan === undefined) {
+        // The final phase binds fresh statements with semijoins disabled.
+        conn.unprepare(options)
+        conn.unprepare(explain)
+      }
+      for (const api of ['query', 'execute'] as const) {
+        const label = `${quantifier}/${api}`
+        const [rows, fields] = api === 'query' ? await conn.query(options) : await conn.execute(options)
+        assert.deepEqual(rows, expected, label)
+        assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
+          ['label', 253, 40, 0, 0, 255, schema, 'ch', 'ch', 'label'],
+          ['qty', 3, 11, 0, 0, 63, schema, 'ch', 'ch', 'qty'],
+        ], label)
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], label)
+        const [[result]] = api === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
+        const observed = planSkeleton(result?.EXPLAIN)
+        if (plan === undefined) assert.match(observed, /Select #2/, label)
+        else assert.equal(observed, plan, label)
+      }
+    }
+  }
+  try {
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,label VARCHAR(10),qty INT) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE kl(id INT PRIMARY KEY,g INT) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO ch VALUES(1,'dup',0)")
+    await conn.query('ANALYZE TABLE ch,kl')
+    await read([], hash)
+
+    await conn.query("INSERT INTO ch VALUES(2,'dup',0),(3,'skip',NULL)")
+    await conn.query('INSERT INTO kl VALUES(1,0),(2,0),(3,4),(4,NULL)')
+    await conn.query('ANALYZE TABLE ch,kl')
+    await read([['dup', 0], ['dup', 0]], hash)
+
+    await conn.query("INSERT INTO ch VALUES(4,'hit',4),(5,'skip',3)")
+    await conn.query('DELETE FROM kl WHERE id IN (2,4)')
+    await conn.query('ANALYZE TABLE ch,kl')
+    await read([['dup', 0], ['dup', 0], ['hit', 4]], weedout)
+    await conn.query('UPDATE kl SET g=NULL WHERE id=1')
+    await read([['hit', 4]], weedout)
+    await conn.query("SET optimizer_switch='semijoin=off'")
+    await read([['hit', 4]])
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
 test('ordered ANY and SOME reuse their bound aggregate across writes', async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined

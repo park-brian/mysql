@@ -31,7 +31,7 @@
 import { notSupported, proof } from './errors.ts'
 import { CHARSET_BINARY, expectTyped, equalBytes } from '@myjs/bytes'
 import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
+import { NODE, type CallNode, type Expression } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
 import {
   COERCIBILITY,
@@ -175,6 +175,14 @@ function aggregateString(types: readonly ResultType[], conn: number): { readonly
   return { binary, collation: binary ? CHARSET_BINARY : aggregateTypes(live, conn), coercibility }
 }
 
+/** ELT and the set functions treat a list of only NULL values as binary. */
+function stringChoice(parts: readonly Compiled[], name: string, conn: number) {
+  const types = parts.map((part) => part.type)
+  aggregateCollations(types, name, false)
+  return types.some((type) => type.kind !== 'null') ? aggregateString(types, conn)
+    : { binary: true, collation: CHARSET_BINARY, coercibility: COERCIBILITY.IGNORABLE }
+}
+
 /** Every argument evaluated; `undefined` when one is NULL. */
 export function all(xs: readonly Compiled[], r: Parameters<Compiled['eval']>[0], env: Parameters<Compiled['eval']>[1]): V[] | undefined {
   const out: V[] = []
@@ -206,6 +214,14 @@ function locate(hay: readonly string[], needle: readonly string[], start: number
 }
 
 const startsWith = (s: readonly string[], p: readonly string[], at: number) => p.every((c, k) => s[at + k] === c)
+function trimUnits(text: string[], leading: boolean, trailing: boolean, remove: readonly string[] = [' ']): string[] {
+  if (!remove.length) return text
+  let start = 0
+  let end = text.length
+  if (leading) while (end - start >= remove.length && startsWith(text, remove, start)) start += remove.length
+  if (trailing) while (end - start >= remove.length && startsWith(text, remove, end - remove.length)) end -= remove.length
+  return text.slice(start, end)
+}
 
 /**
  * A string or numeric function by name, or `undefined` for another name. `e`
@@ -358,12 +374,7 @@ function libraryFunction(name: string, args: readonly Compiled[], e: CallNode, c
           const v = (xs[0] as Compiled).eval(r, env)
           if (v === null) return null
           const s = stringUnits(v, binary, collation)
-          if (name === 'REVERSE') return result(s.reverse(), binary, collation, coercibility)
-          let a = 0
-          let b = s.length
-          if (name === 'LTRIM') while (a < b && s[a] === ' ') a++
-          else while (b > a && s[b - 1] === ' ') b--
-          return result(s.slice(a, b), binary, collation, coercibility)
+          return result(name === 'REVERSE' ? s.reverse() : trimUnits(s, name === 'LTRIM', name === 'RTRIM'), binary, collation, coercibility)
         },
         type: stringResultType(widthOf((xs[0] as Compiled).type, binary), binary, collation, coercibility),
       }
@@ -381,16 +392,11 @@ function libraryFunction(name: string, args: readonly Compiled[], e: CallNode, c
         eval: (r, env) => {
           const v = subject.eval(r, env)
           if (v === null) return null
-          const rv = remove === undefined ? undefined : remove.eval(r, env)
+          const rv = remove?.eval(r, env)
           if (rv === null) return null
           const s = stringUnits(v, binary, collation)
-          const rm = rv === undefined ? [' '] : stringUnits(rv, binary, collation)
-          if (rm.length === 0) return result(s, binary, collation, coercibility)
-          let a = 0
-          let b = s.length
-          if (leading) while (b - a >= rm.length && startsWith(s, rm, a)) a += rm.length
-          if (trailing) while (b - a >= rm.length && startsWith(s, rm, b - rm.length)) b -= rm.length
-          return result(s.slice(a, b), binary, collation, coercibility)
+          const rm = rv && stringUnits(rv, binary, collation)
+          return result(trimUnits(s, leading, trailing, rm), binary, collation, coercibility)
         },
         type: stringResultType(widthOf(subject.type, binary), binary, collation, coercibility),
       }
@@ -554,17 +560,15 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
       const places = xs[1]
       const t = x.type
       const nullable = xs.some((c) => c.type.nullable)
-      const placesOf = (r: Parameters<Compiled['eval']>[0], env: Parameters<Compiled['eval']>[1]): bigint | null => {
-        if (places === undefined) return 0n
-        const p = places.eval(r, env)
-        return p === null ? null : valInt(p)
+      const evaluate = (round: (value: V, precision: bigint) => Value): Compiled['eval'] => (r, env) => {
+        const value = x.eval(r, env)
+        const p = places?.eval(r, env)
+        const precision = p === undefined ? 0n : p === null ? null : valInt(p)
+        return value === null || precision === null ? null : round(value, precision)
       }
       if (t.kind === 'int') {
         return {
-          eval: (r, env) => {
-            const v = x.eval(r, env)
-            const p = placesOf(r, env)
-            if (v === null || p === null) return null
+          eval: evaluate((v, p) => {
             const n = toInteger(v)
             if (p >= 0n) return v.kind === 'int' ? v : intValue(n)
             const unit = p < -20n ? 10n ** 21n : 10n ** -p
@@ -572,8 +576,8 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
             const rem = n % unit
             const away = !truncate && (rem < 0n ? -rem : rem) * 2n >= unit
             return intValue((q + (away ? (n < 0n ? -1n : 1n) : 0n)) * unit, t.unsigned)
-          },
-          type: { ...intType(21, nullable, t.unsigned) },
+          }),
+          type: intType(21, nullable, t.unsigned),
         }
       }
       if (t.kind === 'decimal') {
@@ -593,23 +597,15 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
         if (precision === 0) precision = 1
         const type = decimalType(Math.min(65, precision), scale, nullable)
         return {
-          eval: (r, env) => {
-            const v = x.eval(r, env)
-            const p = placesOf(r, env)
-            if (v === null || p === null) return null
+          eval: evaluate((v, p) => {
             const at = Math.max(-65, Math.min(scale, Number(p)))
             return convertTo(roundDecimal(toDecimal(v), at, truncate), type)
-          },
+          }),
           type,
         }
       }
       return {
-        eval: (r, env) => {
-          const v = x.eval(r, env)
-          const p = placesOf(r, env)
-          if (v === null || p === null) return null
-          return doubleValue(myDoubleRound(toDouble(v), p, truncate))
-        },
+        eval: evaluate((v, p) => doubleValue(myDoubleRound(toDouble(v), p, truncate))),
         type: doubleType(nullable),
       }
     }
@@ -1006,7 +1002,7 @@ function stringCall(xs: readonly Compiled[], callName: string, ctx: CompileConte
 
 /** The rest of the string functions: CHAR, FIELD, ELT, the sets, INSERT, SUBSTRING_INDEX, QUOTE, SOUNDEX, FORMAT, BIT_LENGTH, CONV, base64, ORD. */
 /** Edits of a string: INSERT, SUBSTRING_INDEX, QUOTE, SOUNDEX. */
-function moreStringFunction(name: string, xs: readonly Compiled[], callName: string, label: string, using: string | undefined, constant: readonly boolean[], ctx: CompileContext, args: readonly string[]): Compiled {
+function moreStringFunction(name: string, xs: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext): Compiled {
   const { conn, arity } = stringCall(xs, callName, ctx)
   switch (name) {
     case 'INSERT': {
@@ -1120,7 +1116,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
 }
 
 /** A string as a list or a set: FIELD, ELT, MAKE_SET, EXPORT_SET, FIND_IN_SET. */
-function listFunction(name: string, xs: readonly Compiled[], callName: string, label: string, using: string | undefined, constant: readonly boolean[], ctx: CompileContext, args: readonly string[]): Compiled {
+function listFunction(name: string, xs: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext): Compiled {
   const { conn, arity } = stringCall(xs, callName, ctx)
   switch (name) {
     case 'FIELD': {
@@ -1171,18 +1167,7 @@ function listFunction(name: string, xs: readonly Compiled[], callName: string, l
       arity(2, Infinity)
       const n = intReader(xs[0] as Compiled)
       const choices = xs.slice(1)
-      aggregateCollations(
-        choices.map((c) => c.type),
-        'elt',
-        false,
-      )
-      const texts = choices.some((c) => c.type.kind !== 'null')
-      const agg = aggregateString(
-        choices.map((c) => c.type),
-        conn,
-      )
-      // Only NULLs to choose among is binary's.
-      const { binary, collation, coercibility } = texts ? agg : { binary: true, collation: CHARSET_BINARY, coercibility: COERCIBILITY.IGNORABLE }
+      const { binary, collation, coercibility } = stringChoice(choices, 'elt', conn)
       return {
         eval: (r, env) => {
           const i = n(r, env)
@@ -1199,17 +1184,7 @@ function listFunction(name: string, xs: readonly Compiled[], callName: string, l
       arity(make ? 2 : 3, make ? Infinity : 5)
       const bits = intReader(xs[0] as Compiled)
       const parts = make ? xs.slice(1) : xs.slice(1, 4)
-      aggregateCollations(
-        parts.map((c) => c.type),
-        name.toLowerCase(),
-        false,
-      )
-      const texts = parts.some((c) => c.type.kind !== 'null')
-      const agg = aggregateString(
-        parts.map((c) => c.type),
-        conn,
-      )
-      const { binary, collation, coercibility } = texts ? agg : { binary: true, collation: CHARSET_BINARY, coercibility: COERCIBILITY.IGNORABLE }
+      const { binary, collation, coercibility } = stringChoice(parts, name.toLowerCase(), conn)
       const count = make ? undefined : xs[4] === undefined ? undefined : intReader(xs[4])
       // MAKE_SET counts characters even into bytes; EXPORT_SET counts bytes (8.4.11).
       const widths = parts.map((c) => (make ? charsOf(c.type) : widthOf(c.type, binary)))
@@ -1279,7 +1254,7 @@ function listFunction(name: string, xs: readonly Compiled[], callName: string, l
 }
 
 /** Strings to and from numbers, bytes and other bases: CHAR, ORD, FORMAT, BIT_LENGTH, CONV, TO_BASE64, FROM_BASE64. */
-function conversionFunction(name: string, xs: readonly Compiled[], callName: string, label: string, using: string | undefined, constant: readonly boolean[], ctx: CompileContext, args: readonly string[]): Compiled {
+function conversionFunction(name: string, xs: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext, using?: string): Compiled {
   const { arity, hexText, conv } = stringCall(xs, callName, ctx)
   switch (name) {
     case 'CHAR': {
@@ -1446,7 +1421,7 @@ function conversionFunction(name: string, xs: readonly Compiled[], callName: str
 }
 
 /** The hashes: MD5, SHA1 and SHA, SHA2, CRC32. */
-function hashFunction(name: string, xs: readonly Compiled[], callName: string, label: string, using: string | undefined, constant: readonly boolean[], ctx: CompileContext, args: readonly string[]): Compiled {
+function hashFunction(name: string, xs: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext): Compiled {
   const { arity, hexText, conv } = stringCall(xs, callName, ctx)
   switch (name) {
     case 'MD5':
@@ -1552,5 +1527,5 @@ export function stringFunction(name: string, e: CallNode, ctx: CompileContext): 
     return { ...libraryFunction(name, xs, e, constant, ctx), decimalPrefix: true }
   }
   const family = HASH_FUNCTIONS.has(name) ? hashFunction : LIST_FUNCTIONS.has(name) ? listFunction : CONVERSION_FUNCTIONS.has(name) ? conversionFunction : moreStringFunction
-  return { ...family(name, xs, e.name, deparse(e), e.using, constant, ctx, e.args.map((a) => printedArgument(a, ctx))), decimalPrefix: true }
+  return { ...family(name, xs, e.name, constant, ctx, e.using), decimalPrefix: true }
 }

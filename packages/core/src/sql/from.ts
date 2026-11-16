@@ -654,59 +654,51 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       settings.firstSort = { alias, keys }
     },
     integerSemijoin(alias, index, key, residual, materializationEligible) {
-      const filteredScan = index === undefined
+      // The caller proves a clustered residual scan or a bare unindexed hash candidate.
+      const filteredScan = index === undefined && residual !== undefined
+      const buffered = index === undefined && !filteredScan
+      if (buffered && (!settings.buffered || !optimizerEnabled(ctx.env, 'condition_fanout_filter'))) return undefined
       const firstMatch = { alias, enabled: optimizerEnabled(ctx.env, 'firstmatch'), filteredScan }
-      let selected = false
       if (index && optimizerEnabled(ctx.env, 'loosescan')) settings.loose = { alias, index, key }
-      try {
-        if (residual !== undefined && materializationEligible && index) {
-          joinPlan()
-          // The actual predicate stays in settings.where; only its bounded cost admission changes.
-          if (settings.inferred.size > 0) {
-            residual = undefined
-            planned = undefined
-          }
-        }
-        if (residual === undefined || filteredScan) settings.firstMatch = firstMatch
-        const plan = joinPlan(materializationEligible && settings.firstMatch !== undefined && optimizerEnabled(ctx.env, 'materialization'))
-        if (plan === undefined) return undefined
-        const node = plan.node
-        if (node.kind !== 'join' || node.left || node.outer.kind !== 'leaf' || node.inner.kind !== 'leaf') return undefined
-        const outer = node.outer.table
-        const inner = node.inner.table
-        const materialized = settings.materialized
-        const innerFirst = outer.alias === alias
-        const primary = node.lookup?.unique === true && node.lookup.index.kind === 'primary'
-        // The noncovering build can feed an indexed materialized scan or indexed weedout.
-        if (filteredScan && (!primary || !innerFirst || (materialized && materialized !== 'scan'))) return undefined
-        // Indexed LooseScan retains PRIMARY identity; weedout retains physical outer identity.
-        const loose = !materialized && innerFirst && settings.loose && (node.lookup ? primary : settings.buffered)
-        if (!loose) delete settings.loose
-        if (!materialized && !loose && innerFirst && (filteredScan ? optimizerEnabled(ctx.env, 'duplicateweedout') : residual === undefined)) settings.weedout = inner
-        if (materialized || loose || settings.weedout) {
-          if (!filteredScan || settings.weedout) delete settings.firstMatch
-          if (index) this.readInOrder(index.name, true, false, alias)
-          selected = true
-          return materialized !== 'lookup'
-        }
-        if (filteredScan || inner.alias !== alias || !plan.lookups.has(alias)) return undefined
-        // Empty residual ranges retain their materialization boundary.
-        if (residual !== undefined && ctx.env !== undefined && inner.table !== undefined && inner.def !== undefined) {
-          const access = chooseAccess(inner.def, alias, residual, ctx.env, settings.outer, rangeCosting(inner, settings, ctx.env))
-          if (access.ranges !== undefined && countRows(accessRows(inner.table, access, ctx.env.trx), 0) === 0) return undefined
-        }
-        if (firstMatch.enabled) settings.firstMatch = firstMatch
-        else settings.distinctSelect = new Set([outer.alias])
-        selected = true
-        return false
-      } finally {
-        if (!selected) {
-          delete settings.firstMatch
-          delete settings.loose
+      if (residual !== undefined && materializationEligible && index) {
+        joinPlan()
+        // The actual predicate stays in settings.where; only its bounded cost admission changes.
+        if (settings.inferred.size > 0) {
+          residual = undefined
           planned = undefined
-          delete settings.materialized
         }
       }
+      if (residual === undefined || filteredScan) settings.firstMatch = firstMatch
+      const plan = joinPlan(materializationEligible && settings.firstMatch !== undefined && optimizerEnabled(ctx.env, 'materialization'))
+      if (plan === undefined) return undefined
+      const node = plan.node
+      if (node.kind !== 'join' || node.left || node.outer.kind !== 'leaf' || node.inner.kind !== 'leaf') return undefined
+      const outer = node.outer.table
+      const inner = node.inner.table
+      const materialized = settings.materialized
+      const innerFirst = outer.alias === alias
+      const primary = node.lookup?.unique === true && node.lookup.index.kind === 'primary'
+      if (buffered && materialized) return undefined
+      // The noncovering build can feed an indexed materialized scan or indexed weedout.
+      if (filteredScan && (!primary || !innerFirst || (materialized && materialized !== 'scan'))) return undefined
+      // Indexed LooseScan retains PRIMARY identity; weedout retains physical outer identity.
+      const loose = !materialized && innerFirst && settings.loose && (node.lookup ? primary : settings.buffered)
+      if (!loose) delete settings.loose
+      if (!materialized && !loose && innerFirst && (filteredScan ? optimizerEnabled(ctx.env, 'duplicateweedout') : residual === undefined)) settings.weedout = inner
+      if (materialized || loose || settings.weedout) {
+        if (!filteredScan || settings.weedout) delete settings.firstMatch
+        if (index) this.readInOrder(index.name, true, false, alias)
+        return materialized !== 'lookup'
+      }
+      if (filteredScan || inner.alias !== alias || (buffered ? !firstMatch.enabled : !plan.lookups.has(alias))) return undefined
+      // Empty residual ranges retain their materialization boundary.
+      if (residual !== undefined && ctx.env !== undefined && inner.table !== undefined && inner.def !== undefined) {
+        const access = chooseAccess(inner.def, alias, residual, ctx.env, settings.outer, rangeCosting(inner, settings, ctx.env))
+        if (access.ranges !== undefined && countRows(accessRows(inner.table, access, ctx.env.trx), 0) === 0) return undefined
+      }
+      if (firstMatch.enabled) settings.firstMatch = firstMatch
+      else settings.distinctSelect = new Set([outer.alias])
+      return false
     },
     single,
     filter(where, compile, semijoin) {
@@ -1334,7 +1326,8 @@ function toOp(node: Node, conditions: readonly Placed[], settings: LeafSettings,
   const on = node.left ? spanning : spanning.filter((c) => equalitySides(c.e, outerAliases, innerAliases, scope) !== undefined)
   const anti = node.left && !materialized && !indexed && d !== undefined && node.outer.kind === 'leaf' &&
     above.length === 1 && testsNullExtension(above[0]!.e, d, scope) && spanning.some(({ e }) => equalitySides(e, outerAliases, innerAliases, scope) !== undefined)
-  return filterOp(buildJoinOp(anti ? 'anti' : node.left, node.innerSlots, outer, inner, on, keys, indexed ? d : undefined, materialized, settings.weedout), node.left ? above : spanning.filter((c) => !on.includes(c)))
+  const semi = d !== undefined && settings.firstMatch?.enabled === true && settings.firstMatch.alias === d.alias
+  return filterOp(buildJoinOp(semi ? 'semi' : anti ? 'anti' : node.left, node.innerSlots, outer, inner, on, keys, indexed ? d : undefined, materialized, settings.weedout), node.left ? above : spanning.filter((c) => !on.includes(c)))
 }
 
 // --- the cost model's choices (M5.7) -----------------------------------------------
@@ -1857,7 +1850,7 @@ function hashAntijoinOp(input: Op, key: Compiled, rows: (trx: Trx | undefined, e
  * every candidate, but emits only the first match for this one outer identity.
  * An antijoin emits only the NULL-extended row and retains ON evaluation.
  */
-function* matchingRows(outer: JoinedRow, inner: Iterable<JoinedRow>, slots: readonly number[], on: readonly Placed[], env: Env, left: boolean | 'anti', reverse = false, weedout = false): Iterable<JoinedRow> {
+function* matchingRows(outer: JoinedRow, inner: Iterable<JoinedRow>, slots: readonly number[], on: readonly Placed[], env: Env, left: boolean | 'anti' | 'semi', reverse = false, weedout = false): Iterable<JoinedRow> {
   let matched = false
   for (const candidate of inner) {
     const o = reverse ? candidate : outer
@@ -1865,10 +1858,11 @@ function* matchingRows(outer: JoinedRow, inner: Iterable<JoinedRow>, slots: read
     const row = o.row.slice()
     for (const slot of slots) row[slot] = i.row[slot] ?? null
     if (!holds(on, row, env)) continue
+    if (left === 'semi') { yield outer; return }
     if (left !== 'anti' && (!weedout || !matched)) yield joined(row, joinIds(o.ids, i.ids))
     matched = true
   }
-  if (left && !matched) yield outer
+  if (left && left !== 'semi' && !matched) yield outer
 }
 
 /** The ordinary nested-loop topology shared by constant, dynamic and derived reads. */
@@ -1883,7 +1877,7 @@ function nestedLoop(left: boolean, outer: PlanNode, inner: PlanNode, semi = fals
  * and visit matches oldest first. MaterializeLookup defers its build until a
  * non-NULL outer key. MaterializeScan builds eagerly and skips an empty probe.
  */
-function buildJoinOp(left: boolean | 'anti', slots: readonly number[], outer: Op, inner: Op, on: readonly Placed[], keys: HashKeys | undefined, index?: FromTable, materialized: Materialization = false, weedout?: FromTable): Op {
+function buildJoinOp(left: boolean | 'anti' | 'semi', slots: readonly number[], outer: Op, inner: Op, on: readonly Placed[], keys: HashKeys | undefined, index?: FromTable, materialized: Materialization = false, weedout?: FromTable): Op {
   const deduplicate = weedout !== undefined
   const indexed = index !== undefined
   const buildOuter = !indexed && !left
@@ -1910,7 +1904,7 @@ function buildJoinOp(left: boolean | 'anti', slots: readonly number[], outer: Op
         return built
       }
       let built = materialized === 'lookup' ? undefined : read()
-      if ((materialized || deduplicate) && built instanceof Map && built.size === 0) return
+      if ((materialized || deduplicate || left === 'semi') && built instanceof Map && built.size === 0) return
       // Buffered probes run once; each materialized loop key owns an outer scan.
       const groups = materialized === 'loop' && built instanceof Map ? built.values() : [undefined]
       for (const group of groups) for (const p of probe.rows(run, context)) {
@@ -1926,7 +1920,7 @@ function buildJoinOp(left: boolean | 'anti', slots: readonly number[], outer: Op
       if (!indexed) {
         const input = built === undefined ? build.describe(env) : scanMaterialized(built)
         if (materialized === 'loop') return nestedLoop(false, input, filterPlan(on.length > 0, probe.describe(env)))
-        const name = left === 'anti' ? 'Hash antijoin' : left ? 'Left hash join' : 'Inner hash join'
+        const name = typeof left === 'string' ? `Hash ${left}join` : left ? 'Left hash join' : 'Inner hash join'
         return wrap(deduplicate, `Remove duplicate ${weedout?.alias} rows using temporary table`, hashJoinPlan(name, probe.describe(env), input))
       }
       const d = index.derived?.explain?.()

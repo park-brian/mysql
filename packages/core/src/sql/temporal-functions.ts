@@ -648,10 +648,7 @@ export function temporalArithmetic(name: string, e: CallNode, ctx: CompileContex
           if (b === null || a.type !== b.type) return null
           const sign = a.negative !== b.negative ? -1 : 1
           const us = timeDiff(a, b, sign, dayNumber)
-          let negative = us < 0n
-          const abs = negative ? -us : us
-          if (a.negative && abs !== 0n) negative = !negative
-          return clampedTime(negative ? -abs : abs, fsp, env)
+          return clampedTime(a.negative ? -us : us, fsp, env)
         },
         type: datetimeType(FIELD_TYPE.TIME, fsp, true),
       }
@@ -924,13 +921,11 @@ function addTime(x: Compiled, y: Compiled, sub: boolean, shape: 'datetime' | 'ti
       const isTime = a.type === 'TIME'
       let sign: 1 | -1 = sub ? -1 : 1
       if (a.negative !== b.negative) sign = sign === 1 ? -1 : 1
-      const us = timeDiff(a, b, sign === 1 ? -1 : 1, dayNumber)
-      let negative = us < 0n
-      const abs = negative ? -us : us
-      if (a.negative && abs !== 0n) negative = !negative
+      const difference = timeDiff(a, b, sign === 1 ? -1 : 1, dayNumber)
+      const us = a.negative ? -difference : difference
       if (!isTime) {
-        if (negative) return null
-        const out = microsToDatetime(abs)
+        if (us < 0n) return null
+        const out = microsToDatetime(us)
         if (out === undefined) {
           raise(env, 1441, 'Datetime function: datetime field overflow')
           return null
@@ -940,7 +935,7 @@ function addTime(x: Compiled, y: Compiled, sub: boolean, shape: 'datetime' | 'ti
         const v = roundDatetime(out, fsp)
         return v === undefined ? null : datetimeValue(v, fsp)
       }
-      const t = clampedTime(negative ? -abs : abs, shape === 'text' ? 6 : fsp, env)
+      const t = clampedTime(us, shape === 'text' ? 6 : fsp, env)
       if (shape === 'text') return stringValue(renderTime(t.v, t.v.microsecond === 0 ? 0 : 6), conn, COERCIBILITY.COERCIBLE)
       return t
     },

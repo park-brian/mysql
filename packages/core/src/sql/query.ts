@@ -527,7 +527,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   const semi = from === undefined || windowed || !semijoin ? undefined : costedIntegerSemijoin(run, q, node, from, sortBy, keep)
   if (semi !== undefined) {
     from = semi.from
-    if (semi.innerFirst) source = undefined
+    if (!semi.outerLoop) source = undefined
   }
   const loopSemijoin = semijoin && scope !== undefined && (semi !== undefined || (anti !== undefined && anti.kind !== 'hash') || nestedLoopSemijoin(node.where, scope))
   if (from !== undefined) from.sortedBy(sortBy, keep)
@@ -671,7 +671,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
     dataColumns = undefined
   }
   // Windows and hash antijoins still sort their delivered rows, even over an ordered index.
-  const outerLoop = (semi?.innerFirst === false || anti?.kind === 'materialized' || anti?.kind === 'correlated') && source !== undefined && sortBy === source.alias
+  const outerLoop = (semi?.outerLoop === true || anti?.kind === 'materialized' || anti?.kind === 'correlated') && source !== undefined && sortBy === source.alias
   // Reconsider PRIMARY for ordinary scans and the modeled outer-first loop.
   // A proved UNIQUE projection can reconsider PRIMARY as an ordinary scan does.
   const ordered = source !== undefined && !deduplicated && !windowed && anti?.kind !== 'hash' && match === undefined && keys.length > 0 && read!.ranges === undefined ? orderingIndex(source, order, items, lookup, read!.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index'), from!) : undefined
@@ -1050,6 +1050,12 @@ function keyReads(column: string, where: unknown): Set<string> {
   return read
 }
 
+/** An indexed alternative may exist even when its leading key is invisible. */
+function hasLeadingKey(def: TableDef, name: string): boolean {
+  const folded = name.toLowerCase()
+  return def.indexes.some((i) => indexPartMatchesColumn(i.parts[0], folded))
+}
+
 /** BIT and YEAR have their own comparison representations rather than exact integer keys. */
 function exactInteger(c: { readonly type: ResultType }): boolean {
   return c.type.kind === 'int' && c.type.field !== FIELD_TYPE.BIT && c.type.field !== FIELD_TYPE.YEAR
@@ -1088,8 +1094,7 @@ function orderedAny(outer: FromPlan['single'], where: Expression | undefined, bo
   if (inner === undefined || body === undefined) return bound
   const column = tableColumn(body.items[0].expr, inner.def, inner.alias)
   if (column?.type.type !== FIELD_TYPE.LONG) return bound
-  const name = column.name.toLowerCase()
-  if (inner.def.indexes.some((i) => indexPartMatchesColumn(i.parts[0], name))) return bound
+  if (hasLeadingKey(inner.def, column.name)) return bound
   const predicate = body.where
   if (predicate && !checksNotNull(predicate, inner.def, inner.alias, column)) return bound
 
@@ -1210,12 +1215,13 @@ function joinOuter(run: Run, q: QueryExpression, node: SelectNode, from: FromPla
   return run.parent === undefined && from.single !== undefined && !isTemporary(from.single.def) ? unhintedBase(q, node) : undefined
 }
 
-/** A bounded integer semijoin using the existing cost search and indexed join iterators. */
-function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan, sortBy: string | undefined, keep: number): { readonly from: FromPlan; readonly where: Expression; readonly innerFirst: boolean } | undefined {
+/** A bounded integer semijoin using the existing cost search and join iterators. */
+function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan, sortBy: string | undefined, keep: number): { readonly from: FromPlan; readonly where: Expression; readonly outerLoop: boolean } | undefined {
   const outer = joinOuter(run, q, node, from)
   const where = node.where
   if (outer === undefined || where === undefined || node.having !== undefined || node.distinct === true) return undefined
-  const sub = positiveSubquery(where)
+  const any = where.kind === NODE.BINARY && where.op === '=' && where.right.kind === NODE.SUBQUERY && where.right.quantifier === 'ANY' ? where.right.query : undefined
+  const sub = any ?? positiveSubquery(where)
   if (sub === undefined) return undefined
   const body = boundedSubquery(sub)
   if (body === undefined) return undefined
@@ -1248,6 +1254,8 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   const outerField = qualify(outerKey, outerAlias)
   if (innerField === undefined || outerField === undefined) return undefined
   const innerColumn = innerField.parts[1]!.toLowerCase()
+  const outerDef = from.single!.def
+  if (any && (extra || q.limit || q.locking || hasLeadingKey(outerDef, outerField.parts[1]!))) return undefined
   let residual: Extract<Expression, { kind: typeof NODE.BINARY }> | undefined
   let text = false
   if (extra !== undefined) {
@@ -1265,6 +1273,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   return proof(() => {
     const def = nonTemporaryDefinition(run, inner.table)
     if (def === undefined) return undefined
+    if (any && (hasLeadingKey(def, innerColumn) || from.access(run.env).index !== undefined)) return undefined
     let candidates = def.indexes.filter((i) => i.kind === 'index' && i.invisible !== true && indexPartMatchesColumn(i.parts[0], innerColumn))
     // Either direction keeps equal leading keys adjacent in a forward scan.
     // Competing keys and ordered limits with FirstMatch still need separate costing.
@@ -1272,12 +1281,13 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
       candidates = candidates.filter((i) => !i.parts[0]!.descending)
     }
     const index = candidates.find((i) => candidates.length === 1 || i.parts.length === 1)
-    if (index === undefined) return undefined
+    if (!any && index === undefined) return undefined
     const innerRead = keyReads(innerColumn, residual)
-    const scanOnly = !holdsRead(def, index, innerRead)
+    const scanOnly = index !== undefined && !holdsRead(def, index, innerRead)
+    if ((any || scanOnly) && hasGenerated(def, outerDef)) return undefined
     if (scanOnly) {
       if (sortBy !== outerAlias || q.limit !== undefined || q.locking !== undefined || !singleRefIndex(index) ||
-        def.indexes.some((i) => holdsRead(def, i, innerRead)) || hasGenerated(def, from.single!.def)) return undefined
+        def.indexes.some((i) => holdsRead(def, i, innerRead))) return undefined
       if (!text && (!exists || residual?.op !== '>' || !integerLiteral(residual.right))) return undefined
     }
     if (text && (!scanOnly || !sessionVarchar(tableColumn(residual!.left, def, innerAlias), run))) return undefined
@@ -1292,7 +1302,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     alternative.sortedBy(sortBy, keep)
     const innerFirst = alternative.integerSemijoin(innerAlias, scanOnly ? undefined : index, key, residual,
       !someNode([node.items, q.orderBy], (n) => (n as Expression).kind === NODE.SUBQUERY || undefined))
-    return innerFirst === undefined ? undefined : { from: alternative, where: predicate, innerFirst }
+    return innerFirst === undefined ? undefined : { from: alternative, where: predicate, outerLoop: !any && !innerFirst }
   })
 }
 
