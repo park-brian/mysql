@@ -94,13 +94,12 @@ function midnight(year: number, month: number, day: number): MysqlDateTime {
 }
 
 /** The names `temporalFunction` compiles. */
-export const TEMPORAL_FUNCTIONS: ReadonlySet<string> = new Set(['DATE', 'TIME', 'TIMESTAMP', 'YEAR', 'MONTH', 'DAY', 'DAYOFMONTH', 'QUARTER', 'DAYOFYEAR', 'DAYOFWEEK', 'WEEKDAY', 'TO_DAYS', 'TO_SECONDS', 'WEEK', 'YEARWEEK', 'DAYNAME', 'MONTHNAME', 'LAST_DAY', 'HOUR', 'MINUTE', 'SECOND', 'MICROSECOND', 'TIME_TO_SEC', 'EXTRACT'])
-
-/** The names `temporalTextFunction` compiles. */
-export const TEMPORAL_TEXT_FUNCTIONS: ReadonlySet<string> = new Set(['DATE_FORMAT', 'TIME_FORMAT', 'STR_TO_DATE', 'UNIX_TIMESTAMP', 'FROM_UNIXTIME', 'GET_FORMAT', 'CONVERT_TZ'])
-
-/** The names `temporalArithmetic` compiles. */
-export const TEMPORAL_ARITHMETIC: ReadonlySet<string> = new Set(['DATEDIFF', 'TIMEDIFF', 'TIMESTAMPDIFF', 'TIMESTAMPADD', 'ADDTIME', 'SUBTIME', 'MAKEDATE', 'FROM_DAYS', 'MAKETIME', 'SEC_TO_TIME', 'PERIOD_ADD', 'PERIOD_DIFF'])
+export const TEMPORAL_FUNCTIONS: ReadonlySet<string> = new Set([
+  'DATE', 'TIME', 'TIMESTAMP', 'YEAR', 'MONTH', 'DAY', 'DAYOFMONTH', 'QUARTER', 'DAYOFYEAR', 'DAYOFWEEK', 'WEEKDAY',
+  'TO_DAYS', 'TO_SECONDS', 'WEEK', 'YEARWEEK', 'DAYNAME', 'MONTHNAME', 'LAST_DAY', 'HOUR', 'MINUTE', 'SECOND', 'MICROSECOND', 'TIME_TO_SEC', 'EXTRACT',
+  'DATE_FORMAT', 'TIME_FORMAT', 'STR_TO_DATE', 'UNIX_TIMESTAMP', 'FROM_UNIXTIME', 'GET_FORMAT', 'CONVERT_TZ',
+  'DATEDIFF', 'TIMEDIFF', 'TIMESTAMPDIFF', 'TIMESTAMPADD', 'ADDTIME', 'SUBTIME', 'MAKEDATE', 'FROM_DAYS', 'MAKETIME', 'SEC_TO_TIME', 'PERIOD_ADD', 'PERIOD_DIFF',
+])
 
 /** The statement's date, in UTC: where a TIME read as a date lands. */
 export function today(env: Env): () => MysqlDateTime {
@@ -223,8 +222,6 @@ function intReader(c: Compiled): (r: Row, env: Env) => bigint | null {
 }
 
 /** The broken-down value DATE_FORMAT writes from a datetime. */
-const brokenOfDatetime = (v: MysqlDateTime): Broken => ({ negative: false, ...v })
-
 const INT = (width: number, nullable = true): ResultType => intType(width, nullable)
 
 /** Integer projections share result writing; date/time input policies stay with their readers. */
@@ -283,8 +280,8 @@ const EXTRACT_WIDTH: Readonly<Record<string, number>> = {
   SECOND_MICROSECOND: 9, MICROSECOND: 7,
 }
 
-/** What a temporal function's compiler asks of its call: its arguments compiled one at a time, a keyword argument read, its count checked, a constant one evaluated. */
-function temporalCall(e: CallNode, ctx: CompileContext) {
+/** Bind temporal projections, formatting and arithmetic. */
+export function temporalFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
   const conn = ctx.connectionCollation
   const count = nativeArity(e.name, e.args.length)
   const keyword = (i: number): string => {
@@ -295,21 +292,6 @@ function temporalCall(e: CallNode, ctx: CompileContext) {
   }
   const arg = (i: number): Compiled => compile(e.args[i] as Expression, ctx)
   const constant = (i: number, c: Compiled): Value | undefined => constantOf(e.args[i] as Expression, c, ctx)
-  const notNull = (...cs: Compiled[]): boolean => cs.every((c) => !c.type.nullable)
-
-  return {
-    conn,
-    count,
-    keyword,
-    arg,
-    constant,
-    notNull,
-  }
-}
-
-/** A temporal value made, or one of its parts read: DATE, TIME, TIMESTAMP, YEAR … MICROSECOND, the week and day counts, LAST_DAY, EXTRACT. */
-export function temporalFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
-  const { conn, count, keyword, arg, constant } = temporalCall(e, ctx)
   switch (name) {
     case 'DATE': {
       count(1)
@@ -446,47 +428,13 @@ export function temporalFunction(name: string, e: CallNode, ctx: CompileContext)
       const date = (DATE_EXTRACT as Readonly<Partial<Record<string, (v: MysqlDateTime) => number>>>)[unit]
       return date === undefined ? integerProjection(structReader(x), width, timeExtractor(unit)) : ofDate(x, width, FUZZY, date)
     }
-    default:
-      throw unregistered(name)
-  }
-}
-
-/** Temporals to and from text and seconds: DATE_FORMAT, TIME_FORMAT, STR_TO_DATE, GET_FORMAT, UNIX_TIMESTAMP, FROM_UNIXTIME, CONVERT_TZ. */
-export function temporalTextFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
-  const { conn, count, keyword, arg, constant } = temporalCall(e, ctx)
-  switch (name) {
+    // Temporal formatting and conversion.
     case 'DATE_FORMAT':
     case 'TIME_FORMAT': {
       count(2)
       const x = arg(0)
-      const f = arg(1)
       const time = name === 'TIME_FORMAT'
-      const fixed = (e.args[1] as Expression).kind === NODE.LITERAL ? constant(1, f) : undefined
-      const chars = fixed !== undefined && fixed !== null ? formatLength(toText(fixed)) : Math.min(Math.min(charWidth(f.type), 16_777_216) * 10, 16_777_216)
-      const read = time ? undefined : dateReader(x, FUZZY)
-      const readStruct = structReader(x)
-      return {
-        eval: (r, env) => {
-          let broken: Broken
-          if (read !== undefined) {
-            const d = read(r, env)
-            if (d === null) return null
-            broken = brokenOfDatetime(d)
-          } else {
-            // A time, its date set to zero: `%Y` of any value is 0000.
-            const t = readStruct(r, env)
-            if (t === null) return null
-            broken = { negative: t.negative, year: 0, month: 0, day: 0, hour: t.hour, minute: t.minute, second: t.second, microsecond: t.microsecond }
-          }
-          const fv = f.eval(r, env)
-          if (fv === null) return null
-          const format = toText(fv)
-          if (format === '') return null
-          const out = formatDateTime(broken, format, time)
-          return out === undefined ? null : stringValue(out, conn, COERCIBILITY.COERCIBLE)
-        },
-        type: stringType(chars, conn, true),
-      }
+      return formatted(time ? structReader(x) : dateReader(x, FUZZY), time)
     }
     case 'STR_TO_DATE':
       count(2)
@@ -539,20 +487,7 @@ export function temporalTextFunction(name: string, e: CallNode, ctx: CompileCont
           type: datetimeType(FIELD_TYPE.DATETIME, fsp, true),
         }
       }
-      const f = arg(1)
-      const fixed = (e.args[1] as Expression).kind === NODE.LITERAL ? constant(1, f) : undefined
-      const chars = fixed !== undefined && fixed !== null ? formatLength(toText(fixed)) : Math.min(charWidth(f.type) * 10, 16_777_216)
-      return {
-        eval: (r, env) => {
-          const d = at(r, env)
-          if (d === null) return null
-          const fv = f.eval(r, env)
-          if (fv === null || toText(fv) === '') return null
-          const out = formatDateTime(brokenOfDatetime(d), toText(fv), false)
-          return out === undefined ? null : stringValue(out, conn, COERCIBILITY.COERCIBLE)
-        },
-        type: stringType(chars, conn, true),
-      }
+      return formatted(at)
     }
     case 'GET_FORMAT': {
       count(2)
@@ -595,28 +530,24 @@ export function temporalTextFunction(name: string, e: CallNode, ctx: CompileCont
         type: datetimeType(FIELD_TYPE.DATETIME, fsp, true),
       }
     }
-    default:
-      throw unregistered(name)
-  }
-}
-
-/** Arithmetic on temporals: the differences, TIMESTAMPADD, ADDTIME and SUBTIME, MAKEDATE, FROM_DAYS, MAKETIME, SEC_TO_TIME, the periods. */
-export function temporalArithmetic(name: string, e: CallNode, ctx: CompileContext): Compiled {
-  const { conn, count, keyword, arg, constant, notNull } = temporalCall(e, ctx)
-  switch (name) {
-    case 'DATEDIFF': {
-      count(2)
-      const a = dateReader(arg(0), NO_ZERO)
-      const b = dateReader(arg(1), NO_ZERO)
+    // Temporal arithmetic.
+    case 'DATEDIFF':
+    case 'TIMESTAMPDIFF': {
+      const days = name === 'DATEDIFF'
+      count(days ? 2 : 3)
+      const unit = days ? undefined : keyword(0)
+      const a = dateReader(arg(days ? 0 : 1), NO_ZERO)
+      const b = dateReader(arg(days ? 1 : 2), NO_ZERO)
       return {
         eval: (r, env) => {
-          // Both are read, and both warn, whatever the first is.
+          // DATEDIFF reads both inputs even when the first has already failed.
           const x = a(r, env)
+          if (x === null && !days) return null
           const y = b(r, env)
           if (x === null || y === null) return null
-          return intValue(BigInt(calendarDay(x) - calendarDay(y)))
+          return intValue(unit === undefined ? BigInt(calendarDay(x) - calendarDay(y)) : timestampDiff(unit, x, y))
         },
-        type: INT(9),
+        type: INT(days ? 9 : 21),
       }
     }
     case 'TIMEDIFF': {
@@ -645,22 +576,6 @@ export function temporalArithmetic(name: string, e: CallNode, ctx: CompileContex
           return clampedTime(a.negative ? -us : us, fsp, env)
         },
         type: datetimeType(FIELD_TYPE.TIME, fsp, true),
-      }
-    }
-    case 'TIMESTAMPDIFF': {
-      count(3)
-      const unit = keyword(0)
-      const a = dateReader(arg(1), NO_ZERO)
-      const b = dateReader(arg(2), NO_ZERO)
-      return {
-        eval: (r, env) => {
-          const x = a(r, env)
-          if (x === null) return null
-          const y = b(r, env)
-          if (y === null) return null
-          return intValue(timestampDiff(unit, x, y))
-        },
-        type: INT(21),
       }
     }
     case 'TIMESTAMPADD': {
@@ -734,12 +649,7 @@ export function temporalArithmetic(name: string, e: CallNode, ctx: CompileContex
           const ah = negative ? -hour : hour
           const us = ((sec.v % unit) * 1_000_000n + unit / 2n) / unit
           const total = ((ah * 60n + minute) * 60n + whole) * 1_000_000n + us
-          const t = microsToTime(negative ? -total : total)
-          if (t === undefined) {
-            warnTime(env, `${negative ? '-' : ''}${ah}:${String(minute).padStart(2, '0')}:${String(whole).padStart(2, '0')}`)
-            return timeValue(extremeTime(negative), fsp)
-          }
-          return timeValue(t, fsp)
+          return clampedTime(negative ? -total : total, fsp, env, () => `${negative ? '-' : ''}${ah}:${p2(Number(minute))}:${p2(Number(whole))}`)
         },
         type: datetimeType(FIELD_TYPE.TIME, fsp, true),
       }
@@ -757,12 +667,8 @@ export function temporalArithmetic(name: string, e: CallNode, ctx: CompileContex
           const unit = 10n ** BigInt(d.scale)
           // To microseconds, a seventh digit rounding half away from zero.
           const scaled = d.v * 1_000_000n
-          const t = microsToTime(d.scale > 6 ? (scaled + (d.v < 0n ? -unit / 2n : unit / 2n)) / unit : scaled / unit)
-          if (t === undefined) {
-            warnTime(env, toText(v))
-            return timeValue(extremeTime(d.v < 0n), fsp)
-          }
-          return timeValue(t, fsp)
+          const us = d.scale > 6 ? (scaled + (d.v < 0n ? -unit / 2n : unit / 2n)) / unit : scaled / unit
+          return clampedTime(us, fsp, env, () => toText(v))
         },
         type: datetimeType(FIELD_TYPE.TIME, fsp, true),
       }
@@ -785,11 +691,32 @@ export function temporalArithmetic(name: string, e: CallNode, ctx: CompileContex
           if (name === 'PERIOD_DIFF') return intValue(periodToMonth(p) - periodToMonth(q))
           return intValue(BigInt.asIntN(64, monthToPeriod(BigInt.asUintN(64, periodToMonth(p) + q))))
         },
-        type: INT(21, !notNull(x, y)),
+        type: INT(21, x.type.nullable || y.type.nullable),
       }
     }
     default:
       throw unregistered(name)
+  }
+
+  /** Format a bound temporal reader with the second argument's declared width. */
+  function formatted(read: (r: Row, env: Env) => MysqlDateTime | Broken | null, time = false): Compiled {
+    const f = arg(1)
+    const fixed = e.args[1]!.kind === NODE.LITERAL ? constant(1, f) : undefined
+    const chars = fixed == null ? Math.min(charWidth(f.type) * 10, 16_777_216) : formatLength(toText(fixed))
+    return {
+      eval: (r, env) => {
+        const value = read(r, env)
+        if (value === null) return null
+        const format = f.eval(r, env)
+        const text = format === null ? '' : toText(format)
+        if (text === '') return null
+        // TIME_FORMAT never supplies a calendar date.
+        const broken = { negative: false, ...value, ...(time && { year: 0, month: 0, day: 0 }) }
+        const out = formatDateTime(broken, text, time)
+        return out === undefined ? null : stringValue(out, conn, COERCIBILITY.COERCIBLE)
+      },
+      type: stringType(chars, conn, true),
+    }
   }
 }
 
@@ -853,14 +780,18 @@ function warnTime(env: Env, text: string): void {
 }
 
 /** A TIME of signed microseconds, clamped to ±838:59:59 with a 1292 warning (`adjust_time_range_with_warn`). */
-function clampedTime(us: bigint, fsp: number, env: Env): TimeValue {
+function clampedTime(us: bigint, fsp: number, env: Env, text?: () => string): TimeValue {
   const t = microsToTime(us)
   if (t !== undefined) return timeValue(t, fsp)
-  const abs = us < 0n ? -us : us
-  const seconds = abs / 1_000_000n
-  const frac = fsp === 0 ? '' : `.${String(abs % 1_000_000n).padStart(6, '0').slice(0, fsp)}`
-  warnTime(env, `${us < 0n ? '-' : ''}${seconds / 3600n}:${p2(Number((seconds / 60n) % 60n))}:${p2(Number(seconds % 60n))}${frac}`)
-  return timeValue(extremeTime(us < 0n), fsp)
+  const negative = us < 0n
+  if (text !== undefined) warnTime(env, text())
+  else {
+    const abs = negative ? -us : us
+    const seconds = abs / 1_000_000n
+    const frac = fsp === 0 ? '' : `.${String(abs % 1_000_000n).padStart(6, '0').slice(0, fsp)}`
+    warnTime(env, `${negative ? '-' : ''}${seconds / 3600n}:${p2(Number((seconds / 60n) % 60n))}:${p2(Number(seconds % 60n))}${frac}`)
+  }
+  return timeValue(extremeTime(negative), fsp)
 }
 
 /**

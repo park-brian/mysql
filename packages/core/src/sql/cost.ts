@@ -121,11 +121,12 @@ const worstSeeks = (t: TableStatistics): number => Math.max(Math.min(PAGE_READ *
 const noncoveringRefRead = (t: TableStatistics, rows: number): number => Math.min(PAGE_READ * rows, worstSeeks(t))
 
 /** Quote a dependent read and its materialized alternative. A covering ref already wins its scan comparison. */
-export function dependentMembershipAccess(stats: TableStatistics, fanout: number, probes: number, kept: number, materialize: boolean | undefined, recordBytes?: number): 'scan' | 'materialize' | undefined {
+export function dependentMembershipAccess(stats: TableStatistics, fanout: number | undefined, probes: number, kept: number, materialize: boolean | undefined, recordBytes?: number): 'scan' | 'materialize' | undefined {
   if (materialize) return 'materialize'
   const read = scanCost(stats)
   const scan = accessCost(read, stats.rows)
-  const ref = accessCost(recordBytes === undefined ? noncoveringRefRead(stats, fanout) : indexScanCost(fanout, recordBytes), fanout)
+  const ref = fanout === undefined ? Infinity
+    : accessCost(recordBytes === undefined ? noncoveringRefRead(stats, fanout) : indexScanCost(fanout, recordBytes), fanout)
   const useScan = recordBytes === undefined && scan < ref
   if (materialize === false) {
     // Best_read already excludes the optimizer's adjustment on both completed plans.

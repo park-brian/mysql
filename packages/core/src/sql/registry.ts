@@ -24,7 +24,7 @@ import { JSON_CONSTRUCTORS, jsonConstructor } from './json.ts'
 import { MATH_FUNCTIONS, mathFunction } from './math-functions.ts'
 import { NETWORK_FUNCTIONS, networkFunction } from './network-functions.ts'
 import { STRING_FUNCTIONS, stringFunction } from './string-functions.ts'
-import { TEMPORAL_ARITHMETIC, TEMPORAL_FUNCTIONS, TEMPORAL_TEXT_FUNCTIONS, temporalArithmetic, temporalFunction, temporalTextFunction } from './temporal-functions.ts'
+import { TEMPORAL_FUNCTIONS, temporalFunction } from './temporal-functions.ts'
 
 /** Native-call arity failures retain the spelling of the written function name. */
 export function wrongParameterCount(name: string): SqlError {
@@ -59,8 +59,6 @@ const families = (): readonly (readonly [ReadonlySet<string>, FunctionCompiler])
   [JSON_PATH_FUNCTIONS, (name, e, ctx) => jsonPathFunction(name, args(e, ctx), e.name)],
   [STRING_FUNCTIONS, stringFunction],
   [TEMPORAL_FUNCTIONS, temporalFunction],
-  [TEMPORAL_TEXT_FUNCTIONS, temporalTextFunction],
-  [TEMPORAL_ARITHMETIC, temporalArithmetic],
   [MATH_FUNCTIONS, mathFunction],
   [NETWORK_FUNCTIONS, networkFunction],
   [BUILTINS, builtinFunction],

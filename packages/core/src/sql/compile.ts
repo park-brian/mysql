@@ -2121,11 +2121,13 @@ function sameComparisonKind(items: readonly Compiled[], classify: (type: ResultT
   return true
 }
 
-/** The first decisive comparison wins, otherwise a NULL comparison makes the result unknown. */
-function membershipResult<T>(items: readonly T[], negated: boolean, compare: (item: T, index: number) => number | null, decides?: (comparison: number) => boolean): Value {
+/** The first decisive comparison wins. An undefined comparison ends a probe that must stay unknown. */
+function membershipResult<T>(items: Iterable<T>, negated: boolean, compare: (item: T, index: number) => number | null | undefined, decides?: (comparison: number) => boolean): Value {
   let sawNull = false
-  for (let i = 0; i < items.length; i++) {
-    const c = compare(items[i]!, i)
+  let i = 0
+  for (const item of items) {
+    const c = compare(item, i++)
+    if (c === undefined) return null
     if (c === null) sawNull = true
     else if (decides?.(c) ?? c === 0) return bool(!negated)
   }
@@ -2881,7 +2883,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
 /** An uncorrelated scalar `[NOT] IN`, `= ALL` or `<> ANY` subquery as compiled. */
 export interface QuantifiedSubquery {
   /** A plain integer NOT IN whose execution has a keyed membership reader. */
-  readonly kind: 'in' | 'not-in' | 'keyed-int-not-in' | 'scan'
+  readonly kind: 'in' | 'not-in' | 'keyed-int-not-in' | 'scan' | 'dependent-not-in'
   /** Whether the expression it is compared with can be NULL. */
   readonly nullable: boolean
 }
@@ -3014,23 +3016,26 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
   // otherwise a NULL on either side makes it NULL.
   const sub = (plan.columns[0] as { type: ResultType }).type
   const a0 = as[0] as Compiled
+  const dependent = plan.quantified?.kind === 'dependent-not-in'
   const single = as.length === 1 && !plan.correlated
   const membership = all ? op === '<>' : op === '='
   const keyed = single && membership && compatibleEqualityKeys(a0.type, sub)
-  if (single && (op === '=' || op === '<>')) {
+  if (!dependent && single && (op === '=' || op === '<>')) {
     const plainNotIn = keyed && all && right.quantifier === undefined && left.kind === NODE.COLUMN && ctx.clause === 'where clause' &&
       a0.type.field === FIELD_TYPE.LONG && sub.field === FIELD_TYPE.LONG && a0.type.unsigned === sub.unsigned
     const kind = !membership ? 'scan' : !all ? 'in' : plainNotIn ? 'keyed-int-not-in' : 'not-in'
     plan.quantified = { kind, nullable: a0.type.nullable }
   }
-  return { eval: keyed ? membershipReader(a0.eval, plan.rows, all, null, compareAll) : compareAll, type: boolType(true) }
+  return { eval: keyed && !dependent ? membershipReader(a0.eval, plan.rows, all, null, compareAll) : compareAll, type: boolType(true) }
 
   /** Every subquery row compared in turn. */
   function compareAll(row: Row, env: Env): Value {
-    const rows = rowsOf(plan, key, row, env)
-    if (rows.length === 0) return bool(all)
-    const v = as.map((a) => a.eval(row, env))
-    return membershipResult(rows, all, (r) => compareRow(v, r), decisive)
+    const rows = dependent ? plan.rows(env) : rowsOf(plan, key, row, env)
+    let v: Value[] | undefined
+    return membershipResult(rows, all, (r) => {
+      v ??= as.map((a) => a.eval(row, env))
+      return dependent && v[0] === null ? undefined : compareRow(v, r)
+    }, decisive)
   }
 }
 

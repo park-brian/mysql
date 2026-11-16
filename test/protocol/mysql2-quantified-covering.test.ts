@@ -362,3 +362,62 @@ test('nullable integer NOT IN describes forced and costed membership builds acro
     await db?.end()
   }
 })
+
+test('unindexed integer NOT IN and <> ALL retain dependent scans and builds', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection(db === undefined
+    ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+    : { stream: db.createStream(), user: 'root' })
+  const schema = 'quantified_unindexed_membership'
+  const outer = 'Filter\n    Table scan on p\n    Select #2'
+  const dependent = `${outer}\n        Limit\n            Filter\n                Filter\n                    Table scan on c`
+  const materialized = `${outer}\n        Filter\n            Limit\n                Index lookup on <materialized_subquery> using <auto_distinct_key>\n                    Materialize with deduplication\n`
+  const parents = [[1, 'hit'], [2, 'miss'], [3, 'null'], [4, 'hit'], [5, 'miss']] as const
+  async function read(bare: readonly (readonly unknown[])[], filtered: readonly (readonly unknown[])[], useScan: boolean) {
+    for (const op of ['NOT IN', '<> ALL']) {
+      for (const where of ['', ' WHERE c.k IS NOT NULL']) {
+        const sql = `SELECT id,label FROM p WHERE p.k ${op} (SELECT c.k FROM c${where})`
+        const plan = useScan ? dependent : materialized + (where
+          ? '                        Filter\n                            Table scan on c'
+          : '                        Table scan on c')
+        const options = { sql, rowsAsArray: true }
+        for (const method of ['query', 'execute'] as const) {
+          const label = `${method}: ${sql}`
+          const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+          assert.deepEqual(rows, where ? filtered : bare, label)
+          assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
+            ['id', 3, 11, 20483, 0, 63, schema, 'p', 'p', 'id'], ['label', 253, 64, 4097, 0, 224, schema, 'p', 'p', 'label'],
+          ], label)
+          assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], label)
+          const explainSql = `EXPLAIN FORMAT=TREE ${sql}`
+          const [explain] = method === 'query' ? await conn.query<mysql.RowDataPacket[]>(explainSql) : await conn.execute<mysql.RowDataPacket[]>(explainSql)
+          assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan, label)
+        }
+      }
+    }
+  }
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,k INT,label VARCHAR(16) NOT NULL) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE c(id INT PRIMARY KEY,k INT) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO p VALUES (1,2,'hit'),(2,99,'miss'),(3,NULL,'null')")
+    await conn.query('ANALYZE TABLE p,c')
+    await read(parents.slice(0, 3), parents.slice(0, 3), true)
+    await conn.query('INSERT INTO c VALUES (1,2),(2,2),(3,5),(4,NULL)')
+    await conn.query('ANALYZE TABLE p,c')
+    await read([], [parents[1]], true)
+    await conn.query("INSERT INTO p VALUES (4,5,'hit'),(5,88,'miss')")
+    await conn.query('ANALYZE TABLE p,c')
+    await read([], [parents[1], parents[4]], false)
+    await conn.query("SET optimizer_switch='materialization=off'")
+    await read([], [parents[1], parents[4]], true)
+    await conn.query('DELETE FROM c WHERE k IS NOT NULL')
+    await read([], parents, true)
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})

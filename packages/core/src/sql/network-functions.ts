@@ -19,40 +19,41 @@ export const NETWORK_FUNCTIONS: ReadonlySet<string> = new Set([
   'INET_ATON', 'INET_NTOA', 'INET6_ATON', 'INET6_NTOA', 'IS_IPV4', 'IS_IPV6', 'IS_UUID', 'IS_IPV4_COMPAT', 'IS_IPV4_MAPPED', 'UUID_TO_BIN', 'BIN_TO_UUID',
 ])
 
-/** A dotted IPv4 address of exactly four parts, as INET6_ATON and IS_IPV4 read one. */
-function ipv4(text: string): Uint8Array | undefined {
-  const parts = text.split('.')
-  if (parts.length !== 4) return undefined
+const byteView = (b: Uint8Array): DataView => new DataView(b.buffer, b.byteOffset, b.byteLength)
+
+/** INET_ATON also allows up to three missing parts immediately before the last byte. */
+function ipv4(text: string, abbreviated = false): Uint8Array | undefined {
+  const parts = text.split('.', 5)
+  if (parts.length > 4 || (!abbreviated && parts.length !== 4)) return undefined
   const out = new Uint8Array(4)
-  for (let i = 0; i < 4; i++) {
-    const p = parts[i] as string
-    if (!/^\d{1,3}$/.test(p) || Number(p) > 255) return undefined
-    out[i] = Number(p)
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]!
+    if ((!abbreviated && part.length > 3) || !/^\d+$/.test(part)) return undefined
+    const byte = Number(part)
+    if (byte > 255) return undefined
+    out[i === parts.length - 1 ? 3 : i] = byte
   }
   return out
 }
 
-/** INET_ATON also reads abbreviated addresses of one to three parts. */
-function packedIpv4(text: string): number | undefined {
-  let total = 0
-  let byte = 0
-  let dots = 0
-  let hasDigit = false
-  for (const ch of text) {
-    if (ch >= '0' && ch <= '9') {
-      byte = byte * 10 + ch.charCodeAt(0) - 48
-      hasDigit = true
-      if (byte > 255) return undefined
-    } else if (ch === '.') {
-      if (!hasDigit || dots === 3) return undefined
-      total = total * 256 + byte
-      byte = 0
-      hasDigit = false
-      dots++
-    } else return undefined
+/** Explicit words on either side of an IPv6 zero run. */
+function ipv6Words(part: string): number[] | undefined {
+  if (part === '') return []
+  const out: number[] = []
+  const groups = part.split(':')
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i]!
+    if (i === groups.length - 1 && g.includes('.')) {
+      const v4 = ipv4(g)
+      if (v4 === undefined) return undefined
+      const view = byteView(v4)
+      out.push(view.getUint16(0), view.getUint16(2))
+      continue
+    }
+    if (!/^[0-9a-fA-F]{1,4}$/.test(g)) return undefined
+    out.push(parseInt(g, 16))
   }
-  if (!hasDigit) return undefined
-  return total * 256 ** (4 - dots) + byte
+  return out
 }
 
 /** An IPv6 address: groups of hex, one `::`, an IPv4 tail. */
@@ -60,65 +61,42 @@ function ipv6(text: string): Uint8Array | undefined {
   if (text.length === 0 || text.length > 39 + 7) return undefined
   const halves = text.split('::')
   if (halves.length > 2) return undefined
-  const words = (part: string): number[] | undefined => {
-    if (part === '') return []
-    const out: number[] = []
-    const groups = part.split(':')
-    for (let i = 0; i < groups.length; i++) {
-      const g = groups[i] as string
-      if (i === groups.length - 1 && g.includes('.')) {
-        const v4 = ipv4(g)
-        if (v4 === undefined) return undefined
-        out.push(((v4[0] as number) << 8) | (v4[1] as number), ((v4[2] as number) << 8) | (v4[3] as number))
-        continue
-      }
-      if (!/^[0-9a-fA-F]{1,4}$/.test(g)) return undefined
-      out.push(parseInt(g, 16))
-    }
-    return out
-  }
-  const head = words(halves[0] as string)
-  const tail = halves.length === 2 ? words(halves[1] as string) : []
+  const head = ipv6Words(halves[0]!)
+  const tail = ipv6Words(halves[1] ?? '')
   if (head === undefined || tail === undefined) return undefined
-  const fill = 8 - head.length - tail.length
-  if (halves.length === 1 ? fill !== 0 : fill < 1) return undefined
-  const all8 = [...head, ...new Array<number>(halves.length === 2 ? fill : 0).fill(0), ...tail]
+  const used = head.length + tail.length
+  if (halves.length === 1 ? used !== 8 : used >= 8) return undefined
   const out = new Uint8Array(16)
-  all8.forEach((w, i) => {
-    out[i * 2] = w >> 8
-    out[i * 2 + 1] = w & 255
-  })
+  const view = byteView(out)
+  head.forEach((w, i) => view.setUint16(i * 2, w))
+  tail.forEach((w, i) => view.setUint16(2 * (8 - tail.length + i), w))
   return out
 }
 
 /** INET6_NTOA's text of 16 bytes: the longest run of zero words as `::`, IPv4-compatible and -mapped tails dotted. */
 function ipv6Text(b: Uint8Array): string {
-  const w = Array.from({ length: 8 }, (_, i) => ((b[i * 2] as number) << 8) | (b[i * 2 + 1] as number))
+  const view = byteView(b)
+  const w = Array.from({ length: 8 }, (_, i) => view.getUint16(i * 2))
   const dotted = b.subarray(12).join('.')
-  if (zeroBytes(b, 0, 12) && (w[6] !== 0 || (w[7] as number) > 1)) return `::${dotted}`
+  if (zeroPrefix(b, 12) && (w[6] !== 0 || (w[7] as number) > 1)) return `::${dotted}`
   if (ipv4Mapped(b)) return `::ffff:${dotted}`
   let best = -1
-  let bestLen = 0
-  for (let i = 0; i < 8; ) {
-    if (w[i] !== 0) {
-      i++
-      continue
-    }
-    let j = i
-    while (j < 8 && w[j] === 0) j++
-    if (j - i > bestLen && j - i >= 2) {
+  let bestLen = 1
+  for (let i = 0, j = 0; i < w.length; i = j + 1) {
+    j = i
+    while (w[j] === 0) j++
+    if (j - i > bestLen) {
       best = i
       bestLen = j - i
     }
-    i = j
   }
   const hex = w.map((x) => x.toString(16))
   if (best < 0) return hex.join(':')
   return `${hex.slice(0, best).join(':')}::${hex.slice(best + bestLen).join(':')}`
 }
 
-const zeroBytes = (b: Uint8Array, from: number, to: number): boolean => b.subarray(from, to).every((x) => x === 0)
-const ipv4Mapped = (b: Uint8Array): boolean => zeroBytes(b, 0, 10) && b[10] === 0xff && b[11] === 0xff
+const zeroPrefix = (b: Uint8Array, length: number): boolean => b.subarray(0, length).every((x) => x === 0)
+const ipv4Mapped = (b: Uint8Array): boolean => zeroPrefix(b, 10) && b[10] === 0xff && b[11] === 0xff
 
 /** A UUID's 16 bytes from its 32-, 36- or 38-character text, or undefined. */
 function uuidBytes(text: string): Uint8Array | undefined {
@@ -141,6 +119,7 @@ const wrongValue = (text: string, fn: string) => sqlError('ER_WRONG_VALUE_FOR_TY
 export function networkFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
   const xs = e.args.map((a) => compile(a, ctx))
   const arity = nativeArity(e.name, xs.length)
+  const s = xs[0] as Compiled
   const conn = ctx.connectionCollation
   // Diagnostics quote the first argument as it was bound.
   const first = e.args[0]
@@ -148,20 +127,23 @@ export function networkFunction(name: string, e: CallNode, ctx: CompileContext):
   const textType = (chars: number): ResultType => ({ ...stringType(chars, conn, true), coercibility: COERCIBILITY.COERCIBLE })
   const conv = (s: string): Value => stringValue(s, conn, COERCIBILITY.COERCIBLE)
   switch (name) {
-    case 'INET_ATON': {
+    case 'INET_ATON':
+    case 'INET6_ATON': {
       arity(1)
-      const s = xs[0] as Compiled
+      const v6 = name === 'INET6_ATON'
       return {
         eval: readNonNull(s.eval, (v, env) => {
-          const packed = packedIpv4(toText(v))
-          return packed === undefined ? invalidString(env, shown, 'inet_aton') : intValue(BigInt(packed), true)
+          const text = toText(v)
+          const address = v6 ? ipv4(text) ?? ipv6(text) : ipv4(text, true)
+          if (address === undefined) return invalidString(env, shown, v6 ? 'inet6_aton' : 'inet_aton')
+          return v6 ? bytesValue(address) : intValue(BigInt(byteView(address).getUint32(0)), true)
         }),
-        type: intType(21, true, true),
+        type: v6 ? stringType(16, CHARSET_BINARY, true) : intType(21, true, true),
       }
     }
     case 'INET_NTOA': {
       arity(1)
-      const n = intReader(xs[0] as Compiled)
+      const n = intReader(s)
       return {
         eval: (r, env) => {
           const v = n(r, env)
@@ -171,27 +153,15 @@ export function networkFunction(name: string, e: CallNode, ctx: CompileContext):
             raise(env, 1411, `Incorrect integer value: '${shown}' for function inet_ntoa`)
             return null
           }
-          const x = Number(v)
-          return conv(`${x >>> 24}.${(x >>> 16) & 255}.${(x >>> 8) & 255}.${x & 255}`)
+          const address = new Uint8Array(4)
+          byteView(address).setUint32(0, Number(v))
+          return conv(address.join('.'))
         },
         type: textType(31),
       }
     }
-    case 'INET6_ATON': {
-      arity(1)
-      const s = xs[0] as Compiled
-      return {
-        eval: readNonNull(s.eval, (v, env) => {
-          const text = toText(v)
-          const out = ipv4(text) ?? ipv6(text)
-          return out === undefined ? invalidString(env, shown, 'inet6_aton') : bytesValue(out)
-        }),
-        type: stringType(16, CHARSET_BINARY, true),
-      }
-    }
     case 'INET6_NTOA': {
       arity(1)
-      const s = xs[0] as Compiled
       return {
         eval: readNonNull(s.eval, (v, env) => {
           if (v.kind !== 'bytes' || (v.v.length !== 4 && v.v.length !== 16)) return invalidString(env, shown, 'inet6_ntoa')
@@ -204,22 +174,20 @@ export function networkFunction(name: string, e: CallNode, ctx: CompileContext):
     case 'IS_IPV6':
     case 'IS_UUID': {
       arity(1)
-      const s = xs[0] as Compiled
-      const test = name === 'IS_IPV4' ? (t: string) => ipv4(t) !== undefined : name === 'IS_IPV6' ? (t: string) => ipv6(t) !== undefined : (t: string) => uuidBytes(t) !== undefined
+      const parse = name === 'IS_IPV4' ? ipv4 : name === 'IS_IPV6' ? ipv6 : uuidBytes
       return {
-        eval: readNonNull(s.eval, (v) => bool(test(toText(v)))),
-        type: intType(1, name === 'IS_UUID' ? true : s.type.nullable),
+        eval: readNonNull(s.eval, (v) => bool(parse(toText(v)) !== undefined)),
+        type: intType(1, name === 'IS_UUID' || s.type.nullable),
       }
     }
     case 'IS_IPV4_COMPAT':
     case 'IS_IPV4_MAPPED': {
       arity(1)
-      const s = xs[0] as Compiled
+      const compatible = name === 'IS_IPV4_COMPAT'
       return {
         eval: readNonNull(s.eval, (v) => {
-          if (v.kind !== 'bytes' || v.v.length !== 16) return intValue(0n)
-          const b = v.v
-          return bool(name === 'IS_IPV4_COMPAT' ? zeroBytes(b, 0, 12) && !zeroBytes(b, 12, 16) : ipv4Mapped(b))
+          const b = v.kind === 'bytes' ? v.v : undefined
+          return bool(b?.length === 16 && (compatible ? zeroPrefix(b, 12) && byteView(b).getUint32(12) !== 0 : ipv4Mapped(b)))
         }),
         type: intType(1, true),
       }
@@ -228,8 +196,8 @@ export function networkFunction(name: string, e: CallNode, ctx: CompileContext):
     case 'BIN_TO_UUID': {
       arity(1, 2)
       const encode = name === 'UUID_TO_BIN'
-      const s = xs[0] as Compiled
-      const swap = xs[1] === undefined ? undefined : intReader(xs[1])
+      const flag = xs[1]
+      const swap = flag && intReader(flag)
       return {
         eval: (r, env) => {
           const v = s.eval(r, env)
@@ -238,10 +206,9 @@ export function networkFunction(name: string, e: CallNode, ctx: CompileContext):
           const b = text === undefined ? valueBytes(v) : uuidBytes(text)
           if (b?.length !== 16) throw wrongValue(text ?? (v.kind === 'bytes' ? hexOf(v.v) : toText(v)), name.toLowerCase())
           const sw = swap?.(r, env) ?? 0n
-          if (encode) return bytesValue(sw === 0n ? b : swapped(b))
-          const u = sw === 0n ? b : unswapped(b)
-          const h = hex(u)
-          return conv(`${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`)
+          const u = sw === 0n ? b : encode ? swapped(b) : unswapped(b)
+          if (encode) return bytesValue(u)
+          return conv(hex(u).replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5'))
         },
         type: encode ? stringType(16, CHARSET_BINARY, true) : textType(36),
       }

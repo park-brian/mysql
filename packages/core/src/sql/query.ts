@@ -460,7 +460,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   const checkedOutput = anti?.kind === 'correlated' && checkedCorrelatedOutput(node, q, source, items, boundedSubquery(anti.query))
   let checkedWhere = false
   let whereCtx = compileContext(run, lookup, 'where clause', undefined, (bound) => {
-    if (!bound.correlated) return orderedAny(source, node.where, bound)
+    if (!bound.correlated) return unindexedMembership(run, q, node, from, bound) ?? orderedAny(source, node.where, bound)
     if (semijoin) return bound
     const finalized = dependentReader(run, q, node, from, items, bound)
     if (finalized !== bound) checkedWhere = bound.checkRead !== undefined
@@ -974,15 +974,15 @@ function quantifiedPlan(run: Run, bound: BoundSubquery, how: QuantifiedSubquery,
   // Keep the bound query's proof for a direct IS NULL on a required field.
   if (dependentNotIn && roots === NO_ROWS_PLAN && predicate?.kind === NODE.UNARY && predicate.op === 'IS NULL') return undefined
   const read = keyReads(column.name, predicate)
-  if (how.kind === 'scan') {
-    const cover = def.indexes.find((i) => holdsRead(def, i, read) && i.kind !== 'primary')
+  if (how.kind === 'scan' || how.kind === 'dependent-not-in') {
+    const cover = how.kind === 'scan' ? def.indexes.find((i) => holdsRead(def, i, read) && i.kind !== 'primary') : undefined
     const access = cover === undefined ? tableScan(alias) : coveringScan(alias, cover.name)
     return planNode('Limit', filterNode(filterPlan(column.nullable, access)))
   }
   const index = leadingIndex(def, column, true)
   if (index === undefined) return materializedQuantified(roots)
   if (dependentNotIn && run.env.memo !== undefined) {
-    const materialize = optimizerEnabled(run.env, 'materialization') ? !optimizerEnabled(run.env, 'subquery_materialization_cost_based') : undefined
+    const materialize = membershipMaterialization(run.env)
     if (materialize && predicate === undefined) return materializedQuantified(roots)
     if (plainBase(query, body) && singleRefIndex(index)) {
       const scan = roots?.[0]
@@ -1024,23 +1024,58 @@ function checksNotNull(e: Expression, def: TableDef, alias: string, key: ColumnD
   return e.kind === NODE.UNARY && e.op === 'IS NOT NULL' && tableColumn(e.operand, def, alias) === key
 }
 
+function membershipMaterialization(env: Env): boolean | undefined {
+  return optimizerEnabled(env, 'materialization') ? !optimizerEnabled(env, 'subquery_materialization_cost_based') : undefined
+}
+
+/** Cost the scan with the original live subquery, so its reader and EXPLAIN share the choice. */
+function unindexedMembership(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan | undefined, bound: BoundSubquery): BoundSubquery | undefined {
+  const where = node.where
+  if (where?.kind !== NODE.BINARY || where.right.kind !== NODE.SUBQUERY || where.right.query !== bound.query ||
+      !(where.op === 'NOT IN' || (where.op === '<>' && where.right.quantifier === 'ALL'))) return undefined
+  const outer = from?.single
+  const inner = bound.plan.source
+  const body = boundedSubquery(bound.query)
+  if (from === undefined || outer === undefined || inner === undefined || body === undefined ||
+      run.preparing || run.env.memo === undefined || q.limit || !plainProjection(q, node) || !joinOuter(run, q, node, from)) return undefined
+  const left = tableColumn(where.left, outer.def, outer.alias)
+  const key = tableColumn(body.items[0].expr, inner.def, inner.alias)
+  if (left?.type.type !== FIELD_TYPE.LONG || key?.type.type !== FIELD_TYPE.LONG ||
+      (left.type.unsigned === true) !== (key.type.unsigned === true) ||
+      (!left.nullable && !key.nullable && optimizerEnabled(run.env, 'semijoin')) ||
+      hasLeadingKey(outer.def, left.name) || indexedColumn(inner.def, key.name) || hasGenerated(outer.def, inner.def)) return undefined
+  const predicate = body.where
+  if (predicate !== undefined && !checksNotNull(predicate, inner.def, inner.alias, key)) return undefined
+  if (from.access(run.env).index !== undefined) return undefined
+  const includeNonNull = predicate === undefined ? undefined : true
+  if (costedNotIn(run, inner, outer, undefined, key.nullable, membershipMaterialization(run.env), includeNonNull) !== 'scan') return undefined
+  bound.quantified = { kind: 'dependent-not-in', nullable: left.nullable }
+  return bound
+}
+
 /** The single-table NOT IN alternatives measured against the native cost trace. */
-function costedNotIn(run: Run, inner: NonNullable<FromPlan['single']>, outer: FromPlan['single'], index: IndexDef, nullable: boolean, materialize: boolean | undefined, includeNonNull: boolean | undefined): 'scan' | 'materialize' | undefined {
+function costedNotIn(run: Run, inner: NonNullable<FromPlan['single']>, outer: FromPlan['single'], index: IndexDef | undefined, nullable: boolean, materialize: boolean | undefined, includeNonNull: boolean | undefined): 'scan' | 'materialize' | undefined {
   const store = run.catalog?.store
   if (outer === undefined || store === undefined || isTemporary(inner.def)) return undefined
   const stats = statisticsOf(inner.def, inner.table, store)
-  if (stats.pages !== 1) return undefined
+  if (stats.pages > 1) return undefined
+  const probes = statisticsOf(outer.def, outer.table, store)
+  if (!index && probes.pages > 1) return undefined
   const { rows } = stats
-  const fanout = stats.recordsPerKey(index, 1) * (nullable ? 2 : 1)
+  const fanout = index && stats.recordsPerKey(index, 1) * (nullable ? 2 : 1)
   let kept = rows
   if (includeNonNull !== undefined && materialize === false && optimizerEnabled(run.env, 'condition_fanout_filter')) {
     const floor = Math.fround(1 / rows)
-    const ordered = Math.max(floor, Math.fround(0.3333))
     const notNull = 1 - Math.max(floor, 0.1)
-    kept = Math.trunc(rows * (includeNonNull ? ordered + notNull - ordered * notNull : ordered))
+    if (index) {
+      const ordered = Math.max(floor, Math.fround(0.3333))
+      kept = Math.trunc(rows * (includeNonNull ? ordered + notNull - ordered * notNull : ordered))
+    } else if (nullable) {
+      // The materialized range cannot be estimated below one row.
+      kept = Math.trunc(rows * Math.fround(notNull)) || 1
+    }
   }
-  const probes = statisticsOf(outer.def, outer.table, store).rows
-  return dependentMembershipAccess(stats, fanout, probes, kept, materialize, includeNonNull === undefined ? indexRecordBytes(inner.def, index) : undefined)
+  return dependentMembershipAccess(stats, fanout, probes.rows, kept, materialize, index && includeNonNull === undefined ? indexRecordBytes(inner.def, index) : undefined)
 }
 
 /** A lookup key and the columns its residual condition reads, by folded name. */
@@ -1054,6 +1089,11 @@ function keyReads(column: string, where: unknown): Set<string> {
 function hasLeadingKey(def: TableDef, name: string): boolean {
   const folded = name.toLowerCase()
   return def.indexes.some((i) => indexPartMatchesColumn(i.parts[0], folded))
+}
+
+function indexedColumn(def: TableDef, name: string): boolean {
+  const folded = name.toLowerCase()
+  return def.indexes.some((i) => i.parts.some((p) => p.column.toLowerCase() === folded))
 }
 
 /** BIT and YEAR have their own comparison representations rather than exact integer keys. */
@@ -1362,7 +1402,7 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
     // An outer join's ON does not reduce its build estimate, as for this antijoin.
     const alternative = planFrom([{ kind: REF.JOIN, type: 'LEFT', left: outer, right: inner, on: condition, at: where.at }], fromContext(run))
     const innerTable = alternative.tables.find((t) => t.alias === innerAlias)
-    if (innerTable?.def === undefined || innerTable.table === undefined || (predicateColumn !== undefined && innerTable.def.indexes.some((i) => i.parts.some((p) => p.column.toLowerCase() === predicateColumn.toLowerCase())))) return undefined
+    if (innerTable?.def === undefined || innerTable.table === undefined || (predicateColumn !== undefined && indexedColumn(innerTable.def, predicateColumn))) return undefined
     if (extra === undefined && hasGenerated(from.single!.def, definition)) return undefined
     const ctx = compileContext(run, alternative.scope, 'where clause')
     if (!bindIntegers(ctx, compile(innerKey, ctx), outerKey, extra?.left)) return undefined
