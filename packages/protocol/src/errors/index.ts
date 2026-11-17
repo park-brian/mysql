@@ -20,8 +20,12 @@ interface Entry {
   readonly sqlState: string
 }
 
-let bySymbol: Map<string, Entry> | null = null
-let byErrno: Map<number, Entry> | null = null
+interface ErrorTable {
+  readonly bySymbol: ReadonlyMap<string, Entry>
+  readonly byErrno: ReadonlyMap<number, Entry>
+}
+
+let registry: ErrorTable | undefined
 
 /**
  * Expand the packed table on first lookup.
@@ -30,39 +34,36 @@ let byErrno: Map<number, Entry> | null = null
  * times what the packed string costs after gzip, and most connections never
  * look up more than a handful of codes.
  */
-function load(): { bySymbol: Map<string, Entry>; byErrno: Map<number, Entry> } {
-  if (bySymbol === null || byErrno === null) {
-    const s = new Map<string, Entry>()
-    const n = new Map<number, Entry>()
-    const words = ERROR_NAME_WORDS.split(' ')
-    const unpack = (token: string): string => {
-      if (token === '~') return ''
-      const first = token.charCodeAt(0) - 97
-      if (first < 0) return token
-      // The first 12 words use a through l, followed by 26 words for each two-letter prefix.
-      return words[token.length === 1 ? first : 12 + 26 * (first - 12) + token.charCodeAt(1) - 97]!
-    }
-    let errno = 0
-    for (const row of PACKED_ERROR_TABLE.split(',')) {
-      if (row.startsWith('@')) {
-        errno = Number(row.slice(1))
-        continue
-      }
-      const space = row.indexOf(' ')
-      const packedSymbol = space === -1 ? row : row.slice(0, space)
-      const prefix = packedSymbol[0] === '!' ? '' : 'ER_'
-      const symbol = prefix + packedSymbol.match(/[a-l]|[m-z][a-z]|[A-Z0-9]+|~/g)!.map(unpack).join('_')
-      const sqlState = space === -1 ? DEFAULT_SQLSTATE : row.slice(space + 1)
-      const entry: Entry = { errno, symbol, sqlState }
-      s.set(symbol, entry)
-      // Some symbols share a number (aliases); the first wins for errno lookup.
-      if (!n.has(errno)) n.set(errno, entry)
-      errno++
-    }
-    bySymbol = s
-    byErrno = n
+function load(): ErrorTable {
+  if (registry !== undefined) return registry
+  const bySymbol = new Map<string, Entry>()
+  const byErrno = new Map<number, Entry>()
+  const words = ERROR_NAME_WORDS.split(' ')
+  const unpack = (token: string): string => {
+    if (token === '~') return ''
+    const first = token.charCodeAt(0) - 97
+    if (first < 0) return token
+    // The first 12 words use a through l, followed by 26 words for each two-letter prefix.
+    return words[token.length === 1 ? first : 12 + 26 * (first - 12) + token.charCodeAt(1) - 97]!
   }
-  return { bySymbol, byErrno }
+  let errno = 0
+  for (const row of PACKED_ERROR_TABLE.split(',')) {
+    if (row.startsWith('@')) {
+      errno = Number(row.slice(1))
+      continue
+    }
+    const space = row.indexOf(' ')
+    const packedSymbol = space === -1 ? row : row.slice(0, space)
+    const prefix = packedSymbol[0] === '!' ? '' : 'ER_'
+    const symbol = prefix + packedSymbol.match(/[a-l]|[m-z][a-z]|[A-Z0-9]+|~/g)!.map(unpack).join('_')
+    const sqlState = space === -1 ? DEFAULT_SQLSTATE : row.slice(space + 1)
+    const entry: Entry = { errno, symbol, sqlState }
+    bySymbol.set(symbol, entry)
+    // Some symbols share a number (aliases); the first wins for errno lookup.
+    if (!byErrno.has(errno)) byErrno.set(errno, entry)
+    errno++
+  }
+  return (registry = { bySymbol, byErrno })
 }
 
 /** The MySQL error number for a symbol, e.g. `ER_DUP_ENTRY` -> 1062. */
