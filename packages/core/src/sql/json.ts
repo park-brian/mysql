@@ -28,7 +28,7 @@ import {
   type Value,
 } from '@myjs/types'
 import type { Compiled, Env, Row } from './compile.ts'
-import { jsonType, type ResultType } from './meta.ts'
+import { isBlobField, jsonType, type ResultType } from './meta.ts'
 import { bitBytes } from './wire.ts'
 import { unregistered, wrongParameterCount } from './registry.ts'
 
@@ -47,7 +47,7 @@ export function asJson(v: Value, t: ResultType): JsonDoc {
 /** The field type a binary string's opaque JSON value names. */
 function opaqueField(t: ResultType): number {
   if (t.field === FIELD_TYPE.STRING) return FIELD_TYPE.STRING
-  if (t.field === FIELD_TYPE.BLOB || t.field === FIELD_TYPE.TINY_BLOB || t.field === FIELD_TYPE.MEDIUM_BLOB || t.field === FIELD_TYPE.LONG_BLOB) return FIELD_TYPE.BLOB
+  if (isBlobField(t.field)) return FIELD_TYPE.BLOB
   return FIELD_TYPE.VARCHAR
 }
 

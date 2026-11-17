@@ -38,7 +38,7 @@ import { checkTargetNotRead, compileContext, fromContext, limitValue, openTable,
 import { planFrom, type FromPlan, type FromTable, type JoinedRow } from './from.ts'
 import { columnIndex as indexOfColumn, ambiguousColumnError, unknownColumnError, TableScope } from './scope.ts'
 import { firstKey } from './keys.ts'
-import { NULL_TYPE, type ResultType } from './meta.ts'
+import { isBlobField, NULL_TYPE, type ResultType } from './meta.ts'
 import { modeOf } from './mode.ts'
 
 
@@ -89,11 +89,14 @@ export function checkDefaults(run: Run, columns: readonly ColumnDef[], table: re
       if (!column.nullable) throw invalid(column)
       continue
     }
-    if (BLOB_TYPES.has(column.type.type)) throw sqlError('ER_BLOB_CANT_HAVE_DEFAULT', `BLOB, TEXT, GEOMETRY or JSON column '${column.name}' can't have a default value`)
+    const type = column.type.type
+    if (isBlobField(type) || type === FIELD_TYPE.JSON || type === FIELD_TYPE.GEOMETRY) {
+      throw sqlError('ER_BLOB_CANT_HAVE_DEFAULT', `BLOB, TEXT, GEOMETRY or JSON column '${column.name}' can't have a default value`)
+    }
     const literal = e.kind === NODE.LITERAL || (e.kind === NODE.UNARY && (e.op === '-' || e.op === '+') && e.operand.kind === NODE.LITERAL)
     if (!literal) continue
     const numeric = e.kind === NODE.UNARY || (e.kind === NODE.LITERAL && (e.type === 'int' || e.type === 'decimal' || e.type === 'double'))
-    if (numeric && (column.type.type === FIELD_TYPE.ENUM || column.type.type === FIELD_TYPE.SET)) throw invalid(column)
+    if (numeric && (type === FIELD_TYPE.ENUM || type === FIELD_TYPE.SET)) throw invalid(column)
     const ctx: StoreContext = { strict: true, row: 1, warnings: 0, ...sink(run) }
     let field: Uint8Array | null
     try {
@@ -103,7 +106,7 @@ export function checkDefaults(run: Run, columns: readonly ColumnDef[], table: re
       throw err
     }
     // The zero date, where the mode forbids it (8.4.11's default mode does).
-    if (field !== null && modeOf(run.env.session.sqlMode).noZeroDate && (column.type.type === FIELD_TYPE.DATE || column.type.type === FIELD_TYPE.DATETIME || column.type.type === FIELD_TYPE.TIMESTAMP)) {
+    if (field !== null && modeOf(run.env.session.sqlMode).noZeroDate && (type === FIELD_TYPE.DATE || type === FIELD_TYPE.DATETIME || type === FIELD_TYPE.TIMESTAMP)) {
       const v = decodeField(field, column.type)
       if (v !== null && v.kind === 'datetime' && v.v.year === 0 && v.v.month === 0 && v.v.day === 0) throw invalid(column)
     }
@@ -112,7 +115,6 @@ export function checkDefaults(run: Run, columns: readonly ColumnDef[], table: re
   return notes
 }
 
-const BLOB_TYPES: ReadonlySet<number> = new Set([FIELD_TYPE.TINY_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB, FIELD_TYPE.JSON, FIELD_TYPE.GEOMETRY])
 
 /** Source policy is independent of generated-column membership; no expression is evaluated. */
 export function checkDefaultAdmission(expression: Expression, column: string, mode: SqlMode): void {

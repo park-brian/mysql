@@ -26,7 +26,7 @@ import { fromUtf8, messages, sqlError } from '@myjs/protocol'
 import type { ColumnType } from '@myjs/types'
 import { checkFulltext, type FulltextDef } from './fulltext.ts'
 import { checkGenerated, checkGeneratedDefault } from './generated.ts'
-import { NATIONAL_DEPRECATION, UTF8MB3_DEPRECATION } from './meta.ts'
+import { isBlobField, NATIONAL_DEPRECATION, UTF8MB3_DEPRECATION } from './meta.ts'
 import { resolveCollation } from './collation.ts'
 
 export { resolveCollation } from './collation.ts'
@@ -410,7 +410,7 @@ export function column(c: ColumnDefinition, tableCollation: number, inPrimary: b
   const attributes: Record<string, unknown> = {}
   // A nullable TEXT or BLOB's DEFAULT NULL is no default at all: SHOW CREATE TABLE writes none (8.4.11).
   const nullDefault = c.default?.kind === NODE.LITERAL && c.default.type === 'null' && c.defaultExpression !== true
-  if (c.default !== undefined && !(nullDefault && nullable && code >= FIELD_TYPE.TINY_BLOB && code <= FIELD_TYPE.BLOB)) attributes['default'] = deparse(c.default)
+  if (c.default !== undefined && !(nullDefault && nullable && isBlobField(code))) attributes['default'] = deparse(c.default)
   if (c.defaultExpression === true) attributes['defaultExpression'] = true
   if (c.generated !== undefined) {
     attributes['generated'] = deparse(c.generated.expr)

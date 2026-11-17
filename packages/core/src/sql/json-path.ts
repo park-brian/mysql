@@ -41,7 +41,7 @@ import {
   type Value,
 } from '@myjs/types'
 import { readArguments, type Compiled } from './compile.ts'
-import { CHARSET_UTF8MB4_BIN, charWidth, intType, jsonType, stringType, type ResultType } from './meta.ts'
+import { CHARSET_UTF8MB4_BIN, charWidth, intType, isStringField, jsonType, stringType, type ResultType } from './meta.ts'
 import { nativeArity, unregistered } from './registry.ts'
 
 /** The collation of every text these functions make, whatever the connection's (8.4.11: `JSON_UNQUOTE('"ABC"') = 'abc'` is 0). */
@@ -334,7 +334,7 @@ function typeName(d: JsonDoc): string {
     case 'opaque':
       if (d.field === FIELD_TYPE.BIT) return 'BIT'
       if (d.field === FIELD_TYPE.GEOMETRY) return 'GEOMETRY'
-      if (d.field === FIELD_TYPE.BLOB || d.field === FIELD_TYPE.VARCHAR || d.field === FIELD_TYPE.STRING || d.field === FIELD_TYPE.VAR_STRING || d.field === FIELD_TYPE.TINY_BLOB || d.field === FIELD_TYPE.MEDIUM_BLOB || d.field === FIELD_TYPE.LONG_BLOB) return 'BLOB'
+      if (isStringField(d.field)) return 'BLOB'
       return 'OPAQUE'
   }
 }

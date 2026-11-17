@@ -119,6 +119,43 @@ test('a fractional BETWEEN primary range competes with a covering LooseScan', as
   }
 })
 
+test('FirstMatch uses a parent key range for a NULL-list membership disjunction', async () => {
+  const { db, conn } = await looseScanConnection()
+  const schema = 'first_match_parent_range'
+  const sql = 'SELECT name FROM pa WHERE id IN (SELECT pa_id FROM ch WHERE ch.pa_id IN (NULL, 0) OR ch.pa_id IS NULL)'
+  const plan = `Nested loop semijoin
+    Filter
+        Index range scan on pa using PRIMARY over
+    Covering index lookup on ch using pa_id`
+  const read = (names: readonly string[]) => readSemijoin(conn, schema, sql, names, plan, { flags: 20485, charset: 255 })
+  try {
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,pa_id INT,qty INT NOT NULL,KEY(pa_id)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO pa VALUES (1,'zoë'),(2,'dee')")
+    await conn.query('INSERT INTO ch VALUES (1,NULL,2),(2,2,3),(3,4,5),(4,3,5)')
+    await conn.query('ANALYZE TABLE pa,ch')
+    await read([])
+    await conn.query('INSERT INTO ch VALUES (10,0,1)')
+    await read([])
+    await conn.query("INSERT INTO pa VALUES (0,'zero')")
+    await read(['zero'])
+    await conn.query('UPDATE ch SET pa_id=NULL WHERE id=10')
+    await read([])
+    await conn.query("SET optimizer_switch='materialization=off'")
+    await conn.query('UPDATE ch SET pa_id=0 WHERE id=10')
+    await conn.query('INSERT INTO ch VALUES (11,0,1)')
+    await read(['zero'])
+    await conn.query('DELETE FROM pa WHERE id=0')
+    await read([])
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
+
 test('a covering LooseScan keeps the selected access for overlapping fractional bounds', async () => {
   const { db, conn } = await looseScanConnection()
   const schema = 'fractional_overlap_loosescan'

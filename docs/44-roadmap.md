@@ -139,8 +139,9 @@ and 296 now match. Projected, negated, nullable `ALL` and indexed extrema
 have separate admission rules.
 
 **M5.47 fresh relational seeds.** Three MySQL 8.4.11 seeds of 300 scripts
-each now match 137 of 138 semijoin and quantified plans. The ordered
-`IN` cases with `>` and a standalone wildcard-leading `LIKE` now match,
+each now match all 138 semijoin and quantified observations, including
+plans, rows, field metadata, binary execution and warning counts. The
+ordered `IN` cases with `>` and a standalone wildcard-leading `LIKE` match,
 as do the six unindexed integer `= ANY` and `= SOME` cases with a bare
 inner key or a direct `IS NOT NULL` test. Four unindexed integer `<> ALL`
 cases and two correlated `EXISTS` cases with a noncovering integer
@@ -157,7 +158,8 @@ case 9, statement 16 also uses duplicate weedout for the unordered text
 comparison. In seed 2026111603, case 135, statement 14 uses LooseScan
 over a covering range for the overlapping fractional bounds. In seed
 2026111601, case 36, statement 17 and case 98, statement 12 now use
-materialized scans for the two noncovering disjunctions.
+materialized scans for the two noncovering disjunctions. In seed 2026111603,
+case 275, statement 13 uses FirstMatch over the parent primary-key range.
 
 **0.3 is staged**, with exact workspace versions and installed-package smoke
 checks. Publication still requires claiming the npm scope/name and publishing
@@ -2594,6 +2596,32 @@ diagnostic outcomes and 1,029 opaque JSON renders. Parser/core/facade
 measure 45,567/334,335/334,253 B gzipped within existing caps. M5.47 stays
 partial. Investigate the FirstMatch parent range for the NULL-list
 disjunction in seed 2026111603, case 275, statement 13 next.
+
+**M5.47 FirstMatch over a parent key range, verified.** An unordered,
+unbounded, nonlocking positive integer `IN` can use the parent's signed
+single-column `PRIMARY` range when the nullable signed `INT` child key
+has the written `IN (NULL, integer) OR … IS NULL` predicate with an
+in-range integer literal. The selected covering child ref must use the
+eligible ascending single-column key. The equal parent key evaluates the
+written predicate, and the child probe stops on its first match.
+Both wire protocols match MySQL 8.4.11 across inserts,
+rekeys, duplicate child keys, and deletes. Twenty-eight complete wire
+observations match, including with materialization disabled.
+The pinned audit repairs 424 of 16,384 outcomes and preserves the other
+15,960. All 114,688 index and column controls are unchanged, including
+16,384 with competing child indexes. The committed 300-script relational
+ledger is unchanged. In the three fresh seeds, case 275, statement 13 is
+the only changed observation, bringing the total to 138 of 138.
+
+SQL callers share the BLOB and string field-code tests. JSON reuses the
+time renderer and the built-in string quoter, preserving lone UTF-16
+surrogates. The differential matches all 256 field codes, 137,220 string
+quotes, and 10,752 time renders. Parser/core/facade measure
+45,567/334,350/334,260 B gzipped within the existing caps.
+
+M5.47 remains partial. Compare the outer-first hash semijoin with
+materialization when `condition_fanout_filter` is disabled. Keep stale
+range estimates under M5.49 and the explicit-zero insert mode under M5.8.
 
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.

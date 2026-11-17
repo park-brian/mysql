@@ -20,6 +20,7 @@
 //     collation, and always for utf8mb4_0900_ai_ci. AUTO_INCREMENT appears
 //     when the table has such a column and its counter is past 1.
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
+import { isBlobField } from './meta.ts'
 import { CHARSET_UTF8MB4_0900_AI_CI } from '@myjs/protocol'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, Table, TableDef } from '@myjs/engine'
@@ -38,7 +39,6 @@ import type { Run } from './query.ts'
 const quoted = (s: string): string => `'${s.replace(/[\0\n\r\\']/g, (ch) => UNESCAPED[ch] as string)}'`
 const UNESCAPED: Readonly<Record<string, string>> = { '\0': '\\0', '\n': '\\n', '\r': '\\r', '\\': '\\\\', "'": "''" }
 
-const BLOBS: ReadonlySet<number> = new Set([FIELD_TYPE.TINY_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB])
 
 /** A collation the character set's own default, and not utf8mb4_0900_ai_ci: COLLATE is left unsaid. */
 function isPrimary(id: number): boolean {
@@ -49,7 +49,7 @@ function isPrimary(id: number): boolean {
 function defaultClause(run: Run, c: ColumnDef): string {
   const text = c.attributes?.['default']
   if (typeof text !== 'string') {
-    if (!c.nullable || BLOBS.has(c.type.type) || c.attributes?.['noDefault'] === true) return ''
+    if (!c.nullable || isBlobField(c.type.type) || c.attributes?.['noDefault'] === true) return ''
     return ' DEFAULT NULL'
   }
   const generated = generatedDefault(text)

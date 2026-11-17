@@ -327,20 +327,11 @@ export function parseJson(text: string): JsonDoc {
 
 /** A string as MySQL quotes it in JSON text: `"`, `\` and control characters escaped, `/` and non-ASCII not. */
 export function quoteJsonString(s: string): string {
-  let out = '"'
-  for (const ch of s) {
-    const c = ch.codePointAt(0) as number
-    if (ch === '"') out += '\\"'
-    else if (ch === '\\') out += '\\\\'
-    else if (c === 0x08) out += '\\b'
-    else if (c === 0x0c) out += '\\f'
-    else if (c === 0x0a) out += '\\n'
-    else if (c === 0x0d) out += '\\r'
-    else if (c === 0x09) out += '\\t'
-    else if (c < 0x20) out += `\\u${c.toString(16).padStart(4, '0')}`
-    else out += ch
-  }
-  return `${out}"`
+  const quoted = JSON.stringify(s)
+  if (!/[\ud800-\udfff]/u.test(s)) return quoted
+  // Skip escaped backslashes so only surrogate escapes produced by stringify are restored.
+  return quoted.replace(/\\\\|\\u(d[89a-f][\da-f]{2})/g, (escape, code: string | undefined) =>
+    code === undefined ? escape : String.fromCharCode(parseInt(code, 16)))
 }
 
 /** A double as JSON text: MySQL's rendering, with `.0` where it would read as an integer (`1.0`, `100.0`, `-0.0`). */
@@ -370,12 +361,8 @@ export function renderJson(doc: JsonDoc): string {
     case 'datetime':
     case 'timestamp':
       return `"${renderMysqlDateTime(doc.v, 6)}"`
-    case 'time': {
-      // Hours padded to two digits, a sign in front: `"-01:02:03.000000"` (8.4.11).
-      const t = doc.v
-      const hours = String(t.days * 24 + t.hour).padStart(2, '0')
-      return `"${t.negative ? '-' : ''}${hours}:${renderMysqlTime({ ...t, negative: false, days: 0, hour: 0 }, 6).slice(2)}"`
-    }
+    case 'time':
+      return `"${renderMysqlTime(doc.v, 6, 2)}"`
     case 'opaque':
       return `"base64:type${doc.field}:${btoa(byteText(doc.v))}"`
     case 'array':

@@ -36,7 +36,7 @@ import { fulltextOf } from './fulltext.ts'
 import { checkClause, checksOf } from './checks.ts'
 import { foreignKeysOf } from './foreign-keys.ts'
 import { INFORMATION_SCHEMA, type InformationSchemaColumn } from './information-schema-defs.ts'
-import { datetimeType, intType, keyFlags, NULL_TYPE, stringType, type ResultType } from './meta.ts'
+import { datetimeType, intType, isBlobField, keyFlags, NULL_TYPE, stringType, type ResultType } from './meta.ts'
 import { planViewQuery, type Run } from './query.ts'
 import { viewUpdatable } from './view-text.ts'
 import { generationOf, printGeneration } from './generated.ts'
@@ -55,7 +55,7 @@ function systemColumnType(c: InformationSchemaColumn, table: string, alias: stri
   if (text) {
     const id = c.collation === null ? 255 : (collationInfoByName(c.collation)?.id ?? 255)
     const chars = Math.max(1, Math.ceil(length / 4))
-    const blob = field >= FIELD_TYPE.TINY_BLOB && field <= FIELD_TYPE.BLOB
+    const blob = isBlobField(field)
     base = { ...stringType(chars, id, nullable), field, coercibility: COERCIBILITY.IMPLICIT, ...(blob ? { blobBytes: chars } : {}) }
   } else if (field === FIELD_TYPE.NULL) base = NULL_TYPE
   else if (field === FIELD_TYPE.TIMESTAMP || field === FIELD_TYPE.DATETIME) base = datetimeType(FIELD_TYPE.DATETIME, 0, nullable)

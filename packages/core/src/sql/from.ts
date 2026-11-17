@@ -160,7 +160,7 @@ export interface FromPlan {
   /** Sort the first table before its indexed joins expand or discard rows. */
   sortFirst(alias: string, keys: readonly SortKey[]): void
   /** Select a bounded integer semijoin; return whether its physical order is inner-first. */
-  integerSemijoin(alias: string, index: IndexDef | undefined, key: Compiled, residual: Expression | undefined, materializationEligible: boolean, strategy?: 'filteredHash' | 'filteredMaterial' | 'weedout' | 'NOT IN' | 'BETWEEN' | 'OR'): boolean | undefined
+  integerSemijoin(alias: string, index: IndexDef | undefined, key: Compiled, residual: Expression | undefined, materializationEligible: boolean, strategy?: 'filteredHash' | 'filteredMaterial' | 'weedout' | 'NOT IN' | 'BETWEEN' | 'OR' | 'parentRange'): boolean | undefined
   /**
    * The columns the query reads of each table (`'all'` for one read whole).
    * A table no condition chooses an access path for is read through the
@@ -681,6 +681,14 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const inner = node.inner.table
       const materialized = settings.materialized
       const innerFirst = outer.alias === alias
+      if (strategy === 'parentRange') {
+        if (materialized || !firstMatch.enabled || !singleRefIndex(index) ||
+          inner.alias !== alias || node.lookup?.index.name !== index.name || !plan.lookups.has(alias) || !ctx.env) return undefined
+        const access = chosenAccess(outer, settings, ctx.env)
+        if (access.index !== 'PRIMARY' || access.ranges?.length !== 1) return undefined
+        delete settings.loose
+        return false
+      }
       const primary = node.lookup?.unique && node.lookup.index.kind === 'primary'
       if (filteredScan) {
         // A constant residual cannot request a range based on the probe.

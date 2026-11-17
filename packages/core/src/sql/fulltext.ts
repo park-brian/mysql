@@ -43,6 +43,7 @@
 import { columnIndex as indexOfColumn } from './scope.ts'
 import { notSupported, wrongUsage, wrongArgumentsError, missingKeyColumn } from './errors.ts'
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
+import { isStringField } from './meta.ts'
 import { collation, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, TableDef } from '@myjs/engine'
 import { SqlError, sqlError } from '@myjs/protocol'
@@ -62,7 +63,6 @@ export function fulltextOf(def: { readonly options?: Readonly<Record<string, unk
   return Array.isArray(stored) ? (stored as FulltextDef[]) : []
 }
 
-const TEXT_TYPES: ReadonlySet<number> = new Set([FIELD_TYPE.STRING, FIELD_TYPE.VAR_STRING, FIELD_TYPE.VARCHAR, FIELD_TYPE.TINY_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB])
 
 /** A FULLTEXT key's columns, checked: text columns of an engine that has full-text search. */
 export function checkFulltext(engine: string, columns: readonly ColumnDef[], names: readonly string[], ordered = false): void {
@@ -75,7 +75,7 @@ export function checkFulltext(engine: string, columns: readonly ColumnDef[], nam
     if (c.type.type === FIELD_TYPE.JSON) throw sqlError('ER_JSON_USED_AS_KEY', `JSON column '${c.name}' supports indexing only via generated columns on a specified JSON path.`)
     // Every column of one index is text in one character set (8.4.11: 1283 on the first that is not).
     const own = c.type.collationId === undefined || c.type.collationId === CHARSET_BINARY ? undefined : requireCollationInfo(c.type.collationId).charset
-    if (!TEXT_TYPES.has(c.type.type) || own === undefined || (charset !== undefined && own !== charset)) {
+    if (!isStringField(c.type.type) || own === undefined || (charset !== undefined && own !== charset)) {
       throw sqlError('ER_BAD_FT_COLUMN', `Column '${c.name}' cannot be part of FULLTEXT index`)
     }
     charset = own

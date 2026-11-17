@@ -21,6 +21,14 @@ import type { ColumnDef, TableDef } from '@myjs/engine'
 import type { ColumnDefinition } from '@myjs/protocol'
 import { blobByteLimit } from '@myjs/types'
 
+export function isBlobField(field: number): boolean {
+  return field >= FIELD_TYPE.TINY_BLOB && field <= FIELD_TYPE.BLOB
+}
+
+export function isStringField(field: number): boolean {
+  return field === FIELD_TYPE.STRING || field === FIELD_TYPE.VAR_STRING || field === FIELD_TYPE.VARCHAR || isBlobField(field)
+}
+
 /** `PART_KEY_FLAG`, `include/mysql_com.h`: the column is in some index. */
 const PART_KEY_FLAG = 0x4000
 
@@ -513,7 +521,7 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
     length = materialized ? Math.floor(t.wireLength / (t.kind === 'string' ? requireCollationInfo(t.collationId).mbmaxlen : 1)) : t.wireLength
   }
   // Normalize BLOB class and flags once, after all width overrides.
-  if (materialized && (t.wireLength !== undefined || (column === undefined && field >= FIELD_TYPE.TINY_BLOB && field <= FIELD_TYPE.BLOB))) {
+  if (materialized && (t.wireLength !== undefined || (column === undefined && isBlobField(field)))) {
     flags |= COLUMN_FLAG.BLOB
     field = FIELD_TYPE.BLOB
   }

@@ -1,5 +1,6 @@
 import { lastConstraintNumber } from './ast.ts'
 import { missingKeyColumn } from './errors.ts'
+import { isStringField } from './meta.ts'
 // M5.25 — foreign keys: what one is, what makes one, and what it does to a write.
 //
 // A foreign key lives in its child table's definition (`options.foreignKeys`),
@@ -115,8 +116,6 @@ export const foreignKeyChecks = (run: Run): boolean => {
 
 // --- making one -------------------------------------------------------------------
 
-const STRINGS: ReadonlySet<number> = new Set([FIELD_TYPE.STRING, FIELD_TYPE.VAR_STRING, FIELD_TYPE.VARCHAR, FIELD_TYPE.TINY_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB])
-
 /** A column as InnoDB stores it, which is what a foreign key compares (`get_innobase_type_from_mysql_type`). */
 export function storageClass(t: ColumnType): string {
   const width = t.type === FIELD_TYPE.YEAR ? 1 : integerBytes(t.type)
@@ -136,7 +135,7 @@ export function storageClass(t: ColumnType): string {
     case FIELD_TYPE.DOUBLE:
       return 'double'
     default:
-      if (STRINGS.has(t.type)) return t.collationId === undefined || t.collationId === CHARSET_BINARY ? 'binary' : `text ${t.collationId}`
+      if (isStringField(t.type)) return t.collationId === undefined || t.collationId === CHARSET_BINARY ? 'binary' : `text ${t.collationId}`
       // DECIMAL, TIME, DATETIME, TIMESTAMP, BIT, JSON: fixed or binary bytes.
       return 'binary'
   }
