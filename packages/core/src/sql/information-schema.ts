@@ -81,7 +81,7 @@ export function informationSchemaTable(run: Run, name: TableName, alias: string,
     if (KNOWN.has(table)) throw notSupported(`INFORMATION_SCHEMA.${table}`)
     throw sqlError('ER_UNKNOWN_TABLE', `Unknown table '${name.name}' in information_schema`)
   }
-  const rowsOf = ROWS[table] as (run: Run) => Iterable<readonly Value[]>
+  const rowsOf = ROWS[table]!
   const columns = defs.map((c) => ({ name: c.name, type: systemColumnType(c, table, alias) }))
   // Each string in its column's own collation, so a comparison is made in it.
   const collations = columns.map((c) => (c.type.kind === 'string' ? c.type.collationId : undefined))
@@ -90,7 +90,11 @@ export function informationSchemaTable(run: Run, name: TableName, alias: string,
     source: {
       joined: true,
       columns,
-      rows: () => [...rowsOf(run)].map((row) => row.map((v, i) => (v !== null && v.kind === 'string' && collations[i] !== undefined ? stringValue(v.v, collations[i] as number, COERCIBILITY.IMPLICIT) : v))),
+      rows: () => [...rowsOf(run)].map((row) => row.map((v, i) => {
+        if (typeof v === 'string') return stringValue(v, collations[i] ?? TEXT, COERCIBILITY.IMPLICIT)
+        if (typeof v === 'number') return intValue(BigInt(v))
+        return v
+      })),
     },
   }
 }
@@ -106,9 +110,8 @@ const KNOWN = new Set([
 
 // --- values -------------------------------------------------------------------------
 
-const TEXT = 33 // utf8mb3_general_ci: what the rows are made in; each column's own collation is its type's.
-const s = (v: string | null): Value => (v === null ? null : stringValue(v, TEXT, COERCIBILITY.IMPLICIT))
-const n = (v: number | bigint | null): Value => (v === null ? null : intValue(BigInt(v)))
+const TEXT = 33 // utf8mb3_general_ci when the column has no string collation.
+type SystemCell = string | number | Extract<Value, { kind: 'datetime' }> | null
 
 function schemaNames(run: Run): string[] {
   return (run.catalog?.schemas() ?? []).map((x) => x.name)
@@ -274,16 +277,16 @@ function columnKey(def: TableDef, column: ColumnDef): string {
 }
 
 /** COLUMNS's rows for one table or view, from its columns and what each reports. */
-function* columnRows(run: Run, schema: string, table: string, columns: readonly { column: ColumnDef; key: string; extra: string; def: string | null }[]): Generator<readonly Value[]> {
+function* columnRows(schema: string, table: string, columns: readonly { column: ColumnDef; key: string; extra: string; def: string | null }[]): Generator<readonly SystemCell[]> {
   for (const [i, x] of columns.entries()) {
     const c = x.column
     const f = typeFacts(c)
     const comment = c.attributes?.['comment']
     const generation = generationOf(c)
     yield [
-      s('def'), s(schema), s(table), s(c.name), n(i + 1), s(x.def), s(c.nullable ? 'YES' : 'NO'), s(f.dataType), n(f.charMax), n(f.octets), n(f.precision), n(f.scale), n(f.datetimePrecision),
-      s(f.collationId === null ? null : charsetName(f.collationId)), s(f.collationId === null ? null : collationName(f.collationId)), s(f.columnType), s(x.key), s(x.extra),
-      s('select,insert,update,references'), s(typeof comment === 'string' ? comment : ''), s(generation === undefined ? '' : printGeneration(c, generation, true)), null,
+      'def', schema, table, c.name, i + 1, x.def, c.nullable ? 'YES' : 'NO', f.dataType, f.charMax, f.octets, f.precision, f.scale, f.datetimePrecision,
+      f.collationId === null ? null : charsetName(f.collationId), f.collationId === null ? null : collationName(f.collationId), f.columnType, x.key, x.extra,
+      'select,insert,update,references', typeof comment === 'string' ? comment : '', generation === undefined ? '' : printGeneration(c, generation, true), null,
     ]
   }
 }
@@ -347,7 +350,7 @@ function* everyTable(run: Run): Generator<{ schema: string; def: TableDef }> {
   for (const schema of schemaNames(run)) for (const def of tablesOf(run, schema)) yield { schema, def }
 }
 
-const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> = {
+const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly SystemCell[]>>> = {
   // The metrics this engine keeps, as InnoDB names them: the history list's
   // length, its longest and shortest since the server started (a value
   // metric has no average), enabled from then on.
@@ -356,8 +359,8 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
     if (engine === undefined) return
     const { figures: f, started } = engine
     const enabled: Value = { kind: 'datetime', v: { ...dateToMysql(new Date(started)), microsecond: 0 }, type: 'DATETIME', fsp: 0 }
-    const [count, max, min] = [n(f.historyLength), n(f.historyMax), n(f.historyMin)]
-    yield [s('trx_rseg_history_len'), s('transaction'), count, max, min, null, count, max, min, null, enabled, null, n(Math.floor((Date.now() - started) / 1000)), null, s('enabled'), s('value'), s('Length of the TRX_RSEG_HISTORY list')]
+    const [count, max, min] = [f.historyLength, f.historyMax, f.historyMin]
+    yield ['trx_rseg_history_len', 'transaction', count, max, min, null, count, max, min, null, enabled, null, Math.floor((Date.now() - started) / 1000), null, 'enabled', 'value', 'Length of the TRX_RSEG_HISTORY list']
   },
 
   // 8.4.11's engines, in its order, as supported here: InnoDB stores what
@@ -365,8 +368,8 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
   // TABLE, as a server answers for an engine it lacks. No XA is served.
   *ENGINES() {
     for (const [name, support, comment, flags] of ENGINES) {
-      const [t, x, p] = flags === undefined ? [null, null, null] : flags.split('').map((c) => s(c === 'Y' ? 'YES' : 'NO'))
-      yield [s(name), s(support), s(comment), t ?? null, x ?? null, p ?? null]
+      const [t, x, p] = flags === undefined ? [null, null, null] : flags.split('').map((c) => c === 'Y' ? 'YES' : 'NO')
+      yield [name, support, comment, t ?? null, x ?? null, p ?? null]
     }
   },
 
@@ -374,8 +377,8 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
   *SCHEMATA(run) {
     for (const x of [...(run.catalog?.schemas() ?? [])].sort((a, b) => a.id - b.id)) {
       const id = x.collationId ?? 255
-      yield [s('def'), s(x.name), s(charsetName(id)), s(collationName(id)), null, s('NO')]
-      if (x.name === 'mysql') yield [s('def'), s('information_schema'), s('utf8mb3'), s('utf8mb3_general_ci'), null, s('NO')]
+      yield ['def', x.name, charsetName(id), collationName(id), null, 'NO']
+      if (x.name === 'mysql') yield ['def', 'information_schema', 'utf8mb3', 'utf8mb3_general_ci', null, 'NO']
     }
   },
 
@@ -384,10 +387,10 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
       for (const def of tablesOf(run, schema)) {
         const comment = def.options['comment']
         // Statistics and clocks as a table fresh from CREATE has them.
-        yield [s('def'), s(schema), s(def.name), s('BASE TABLE'), s(ENGINE[def.engine] ?? 'InnoDB'), n(10), s(def.engine === 'memory' ? 'Fixed' : 'Dynamic'), n(0), n(0), n(16384), n(0), n(0), n(0), null, null, null, null, s(collationName(tableCollation(def))), null, s(''), s(typeof comment === 'string' ? comment : '')]
+        yield ['def', schema, def.name, 'BASE TABLE', ENGINE[def.engine] ?? 'InnoDB', 10, def.engine === 'memory' ? 'Fixed' : 'Dynamic', 0, 0, 16384, 0, 0, 0, null, null, null, null, collationName(tableCollation(def)), null, '', typeof comment === 'string' ? comment : '']
       }
       for (const v of viewsOf(run, schema)) {
-        yield [s('def'), s(schema), s(v.name), s('VIEW'), null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, s('VIEW')]
+        yield ['def', schema, v.name, 'VIEW', null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 'VIEW']
       }
     }
   },
@@ -396,8 +399,8 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
     // Tables and views in one order, by name as bytes (8.4.11: `User`,
     // `User_v`, `checked28`). A view's columns have no key and no auto_increment.
     for (const schema of schemaNames(run)) {
-      const objects: { name: string; rows: () => Iterable<readonly Value[]> }[] = []
-      for (const def of tablesOf(run, schema)) objects.push({ name: def.name, rows: () => columnRows(run, schema, def.name, def.columns.map((c) => ({ column: c, key: columnKey(def, c), extra: extraOf(c), def: columnDefault(run, c) }))) })
+      const objects: { name: string; rows: () => Iterable<readonly SystemCell[]> }[] = []
+      for (const def of tablesOf(run, schema)) objects.push({ name: def.name, rows: () => columnRows(schema, def.name, def.columns.map((c) => ({ column: c, key: columnKey(def, c), extra: extraOf(c), def: columnDefault(run, c) }))) })
       for (const v of viewsOf(run, schema)) {
         objects.push({
           name: v.name,
@@ -415,7 +418,7 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
               const zero = column.nullable || (base !== undefined && base.autoIncrement !== true) ? null : zeroOf(run, column)
               return { column, key: '', extra, def: d ?? zero }
             })
-            yield* columnRows(run, schema, v.name, rows)
+            yield* columnRows(schema, v.name, rows)
           },
         })
       }
@@ -427,19 +430,19 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
   *STATISTICS(run) {
     for (const { schema, def } of everyTable(run)) {
       const counts = run.catalog === undefined ? undefined : cardinalities(def, run.catalog.table(schema, def.name), run.catalog.store, fulltextOf(def))
-      const cardinality = (index: string, i: number) => n(counts?.get(index)?.[i] ?? 0)
+      const cardinality = (index: string, i: number) => counts?.get(index)?.[i] ?? 0
       for (const index of def.indexes) {
         const unique = index.kind === 'primary' || index.kind === 'unique'
         for (const [i, p] of index.parts.entries()) {
           const column = def.columns.find((c) => c.name === p.column)
-          yield [s('def'), s(schema), s(def.name), n(unique ? 0 : 1), s(schema), s(index.name), n(i + 1), s(p.column), s(p.descending === true ? 'D' : 'A'), cardinality(index.name, i), n(p.prefix ?? null), null, s(column?.nullable === true ? 'YES' : ''), s(def.engine === 'memory' ? 'HASH' : 'BTREE'), s(''), s(index.comment ?? ''), s(index.invisible === true ? 'NO' : 'YES'), null]
+          yield ['def', schema, def.name, unique ? 0 : 1, schema, index.name, i + 1, p.column, p.descending === true ? 'D' : 'A', cardinality(index.name, i), p.prefix ?? null, null, column?.nullable === true ? 'YES' : '', def.engine === 'memory' ? 'HASH' : 'BTREE', '', index.comment ?? '', index.invisible === true ? 'NO' : 'YES', null]
         }
       }
       // A FULLTEXT key has no order, so no COLLATION (8.4.11).
       for (const index of fulltextOf(def)) {
         for (const [i, name] of index.columns.entries()) {
           const column = def.columns.find((c) => c.name === name)
-          yield [s('def'), s(schema), s(def.name), n(1), s(schema), s(index.name), n(i + 1), s(name), null, cardinality(index.name, i), null, null, s(column?.nullable === true ? 'YES' : ''), s('FULLTEXT'), s(''), s(index.comment ?? ''), s(index.invisible === true ? 'NO' : 'YES'), null]
+          yield ['def', schema, def.name, 1, schema, index.name, i + 1, name, null, cardinality(index.name, i), null, null, column?.nullable === true ? 'YES' : '', 'FULLTEXT', '', index.comment ?? '', index.invisible === true ? 'NO' : 'YES', null]
         }
       }
     }
@@ -449,10 +452,10 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
     for (const { schema, def } of everyTable(run)) {
       for (const index of def.indexes) {
         if (index.kind === 'index') continue
-        for (const [i, p] of index.parts.entries()) yield [s('def'), s(schema), s(index.name), s('def'), s(schema), s(def.name), s(p.column), n(i + 1), null, null, null, null]
+        for (const [i, p] of index.parts.entries()) yield ['def', schema, index.name, 'def', schema, def.name, p.column, i + 1, null, null, null, null]
       }
       for (const fk of foreignKeysOf(def)) {
-        for (const [i, c] of fk.columns.entries()) yield [s('def'), s(schema), s(fk.name), s('def'), s(schema), s(def.name), s(c), n(i + 1), n(i + 1), s(fk.references.schema), s(fk.references.table), s(fk.references.columns[i] ?? null)]
+        for (const [i, c] of fk.columns.entries()) yield ['def', schema, fk.name, 'def', schema, def.name, c, i + 1, i + 1, fk.references.schema, fk.references.table, fk.references.columns[i] ?? null]
       }
     }
   },
@@ -462,7 +465,7 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
       for (const fk of foreignKeysOf(def)) {
         const parent = run.catalog === undefined ? undefined : tablesOf(run, fk.references.schema).find((t) => t.name === fk.references.table)
         const unique = parent?.indexes.find((i) => i.kind !== 'index' && i.parts.length === fk.references.columns.length && i.parts.every((p, k) => p.column.toLowerCase() === fk.references.columns[k]?.toLowerCase()))
-        yield [s('def'), s(schema), s(fk.name), s('def'), s(fk.references.schema), s(unique?.name ?? null), s('NONE'), s(fk.onUpdate), s(fk.onDelete), s(def.name), s(fk.references.table)]
+        yield ['def', schema, fk.name, 'def', fk.references.schema, unique?.name ?? null, 'NONE', fk.onUpdate, fk.onDelete, def.name, fk.references.table]
       }
     }
   },
@@ -471,15 +474,15 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
     for (const { schema, def } of everyTable(run)) {
       for (const index of def.indexes) {
         if (index.kind === 'index') continue
-        yield [s('def'), s(schema), s(index.name), s(schema), s(def.name), s(index.kind === 'primary' ? 'PRIMARY KEY' : 'UNIQUE'), s('YES')]
+        yield ['def', schema, index.name, schema, def.name, index.kind === 'primary' ? 'PRIMARY KEY' : 'UNIQUE', 'YES']
       }
-      for (const fk of foreignKeysOf(def)) yield [s('def'), s(schema), s(fk.name), s(schema), s(def.name), s('FOREIGN KEY'), s('YES')]
-      for (const c of checksOf(def)) yield [s('def'), s(schema), s(c.name), s(schema), s(def.name), s('CHECK'), s(c.enforced ? 'YES' : 'NO')]
+      for (const fk of foreignKeysOf(def)) yield ['def', schema, fk.name, schema, def.name, 'FOREIGN KEY', 'YES']
+      for (const c of checksOf(def)) yield ['def', schema, c.name, schema, def.name, 'CHECK', c.enforced ? 'YES' : 'NO']
     }
   },
 
   *CHECK_CONSTRAINTS(run) {
-    for (const { schema, def } of everyTable(run)) for (const c of checksOf(def)) yield [s('def'), s(schema), s(c.name), s(checkClause(c))]
+    for (const { schema, def } of everyTable(run)) for (const c of checksOf(def)) yield ['def', schema, c.name, checkClause(c)]
   },
 
   *VIEWS(run) {
@@ -488,7 +491,7 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
         const printed = printedView(run, v)
         const updatable = printed !== undefined && viewUpdatable(printed.query)
         const collation = v.collationConnection ?? 255
-        yield [s('def'), s(schema), s(v.name), s(printed?.text ?? v.query), s(v.checkOption ?? 'NONE'), s(updatable ? 'YES' : 'NO'), s(v.definer ?? 'root@%'), s(v.security ?? 'DEFINER'), s(charsetName(collation)), s(collationName(collation))]
+        yield ['def', schema, v.name, printed?.text ?? v.query, v.checkOption ?? 'NONE', updatable ? 'YES' : 'NO', v.definer ?? 'root@%', v.security ?? 'DEFINER', charsetName(collation), collationName(collation)]
       }
     }
   },

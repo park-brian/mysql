@@ -1379,10 +1379,9 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   return proof(() => {
     const def = nonTemporaryDefinition(run, inner.table)
     if (def === undefined) return undefined
-    if (looseOnly) {
-      const field = tableColumn(residual!.left, def, innerAlias)
-      if (field?.type.type !== FIELD_TYPE.LONG || field.type.unsigned === true || !def.indexes.some((i) => i.kind === 'primary' && i.parts.length === 1 && i.parts[0]!.column === field.name)) return undefined
-    }
+    const field = residual && tableColumn(residual.left, def, innerAlias)
+    const signedInt = field?.type.type === FIELD_TYPE.LONG && !field.type.unsigned
+    if (looseOnly && (!signedInt || !def.indexes.some((i) => i.kind === 'primary' && i.parts.length === 1 && i.parts[0]!.column === field.name))) return undefined
     if (any && (hasLeadingKey(def, innerColumn) || from.access(run.env).index !== undefined)) return undefined
     let nullTest: typeof notNull
     if (notNull) {
@@ -1405,13 +1404,22 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     const innerRead = keyReads(innerColumn, residual)
     const scanOnly = index !== undefined && !holdsRead(def, index, innerRead)
     const ordersOuter = sortBy === outerAlias
+    if (text && (!scanOnly || !sessionVarchar(field, run))) return undefined
     if ((any || scanOnly) && hasGenerated(def, outerDef)) return undefined
+    let strategy: 'filteredHash' | 'weedout' | typeof looseOnly = looseOnly
     if (scanOnly) {
       if ((!ordersOuter && (!exists || q.orderBy !== undefined)) || limitOrLock || !singleRefIndex(index) ||
         def.indexes.some((i) => holdsRead(def, i, innerRead))) return undefined
-      if (!text && (!exists || residual?.op !== '>' || !integerLiteral(residual.right))) return undefined
+      if (exists) {
+        if (residual?.op !== '>' || !integerLiteral(residual.right)) return undefined
+        strategy = 'filteredHash'
+      } else if (!text) {
+        // A noncovering fractional comparison can feed the selected weedout scan.
+        if (residual?.op !== '<=' || !signedInt || indexedColumn(def, field.name) || !fractionalIntBound(constantValue(residual.right, run.env))) return undefined
+        strategy = 'weedout'
+      }
     }
-    if (text && (!scanOnly || !sessionVarchar(tableColumn(residual!.left, def, innerAlias), run))) return undefined
+
     // Keep the outer table's slots first: its logical scope remains the SELECT's scope.
     const alternative = planFrom([outer, inner], fromContext(run), predicate)
     const ctx = compileContext(run, alternative.scope, 'where clause')
@@ -1422,7 +1430,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     alternative.reads(read)
     alternative.sortedBy(sortBy, keep)
     const innerFirst = alternative.integerSemijoin(innerAlias, scanOnly ? undefined : index, key, residual,
-      !someNode([node.items, q.orderBy], (n) => (n as Expression).kind === NODE.SUBQUERY || undefined), exists ? 'filteredHash' : looseOnly)
+      !someNode([node.items, q.orderBy], (n) => (n as Expression).kind === NODE.SUBQUERY || undefined), strategy)
     if (innerFirst === undefined || (scanOnly && innerFirst && !ordersOuter)) return undefined
     // MySQL substitutes the first field of an equality class after join ordering.
     const outerType = !innerFirst && nullTest ? tableColumn(outerField, outerDef, outerAlias)?.type : undefined

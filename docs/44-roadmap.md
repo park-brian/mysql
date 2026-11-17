@@ -139,7 +139,7 @@ and 296 now match. Projected, negated, nullable `ALL` and indexed extrema
 have separate admission rules.
 
 **M5.47 fresh relational seeds.** Three MySQL 8.4.11 seeds of 300 scripts
-each now match 132 of 138 semijoin and quantified plans. The ordered
+each now match 133 of 138 semijoin and quantified plans. The ordered
 `IN` cases with `>` and a standalone wildcard-leading `LIKE` now match,
 as do the six unindexed integer `= ANY` and `= SOME` cases with a bare
 inner key or a direct `IS NOT NULL` test. Four unindexed integer `<> ALL`
@@ -151,7 +151,8 @@ match. A dependent build with a two-item `NOT IN` list containing NULL and a
 fractional decimal now uses the bound covering read's cost. Case 300,
 statement 13 matches. In seed 2026111602, covering LooseScan matches the
 fractional primary-key `NOT IN` in case 296, statement 16 and `BETWEEN` in
-case 183, statement 15.
+case 183, statement 15. In seed 2026111603, case 41, statement 11 matches
+with duplicate weedout over the child table scan.
 
 **0.3 is staged**, with exact workspace versions and installed-package smoke
 checks. Publication still requires claiming the npm scope/name and publishing
@@ -2507,9 +2508,27 @@ fresh seeds, with 132 of 138 matching plans, are unchanged.
 Group aggregates reuse the ordered argument reader. Both binary JSON
 readers and the current encoder preserve bytes, values and truncation
 errors across 20,026 documents. Parser/core/facade measure
-45,567/334,353/334,266 B gzipped within the existing caps. Continue M5.47
-with the noncovering fractional comparison in seed 2026111603, case 41,
-statement 11, where MySQL chooses duplicate weedout over a child table scan.
+45,567/334,353/334,266 B gzipped within the existing caps.
+
+**M5.47 noncovering fractional duplicate weedout, verified.** An ordered
+positive integer `IN` can use a child table scan followed by a unique parent
+`PRIMARY` lookup and duplicate weedout. This covers an unindexed signed
+`INT` residual with a written `<=` comparison against an in-range fractional
+decimal, when the membership index is noncovering and the query has no
+limit or lock. The original residual remains in the physical scan. Both
+wire protocols match MySQL 8.4.11 across writes, including NULL membership
+keys and materialization disabled. The pinned audit repairs 480 of 21,504
+outcomes and preserves the rest, plus 43,008 index and type controls.
+The earlier primary-range and ordered text audits are unchanged, as is
+the committed relational ledger. The three fresh seeds improve to
+133 of 138 matching plans.
+
+`INFORMATION_SCHEMA` catalog readers supply plain strings and numbers.
+One conversion assigns the output column's collation and integer values.
+The 2,568 pinned schema observations agree. Parser/core/facade measure
+45,567/334,324/334,243 B gzipped within the existing caps. M5.47 stays
+partial. The next case to investigate is the unordered noncovering text
+comparison in seed 2026111602, case 9, statement 16.
 
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.

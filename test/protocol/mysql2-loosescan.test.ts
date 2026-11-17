@@ -118,6 +118,39 @@ test('a fractional BETWEEN primary range competes with a covering LooseScan', as
   }
 })
 
+test('an ordered IN can weed out an unindexed fractional comparison over a table scan', async () => {
+  const { db, conn } = await looseScanConnection()
+  const schema = 'fractional_weedout382'
+  const sql = 'SELECT name FROM pa WHERE id IN (SELECT pa_id FROM ch WHERE ch.qty <= 1.5) ORDER BY 1'
+  const plan = `Sort
+    Stream results
+        Remove duplicate pa rows using temporary table
+            Nested loop inner join
+                Filter
+                    Table scan on ch
+                Single-row index lookup on pa using PRIMARY`
+  try {
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,pa_id INT,qty INT NOT NULL,KEY(pa_id)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO pa VALUES (1,'al'),(2,'x y')")
+    await conn.query('INSERT INTO ch VALUES (1,2,3)')
+    await conn.query('ANALYZE TABLE pa,ch')
+    await readFractionalSemijoin(conn, schema, sql, [], plan)
+    await conn.query('UPDATE ch SET qty=1 WHERE id=1')
+    await readFractionalSemijoin(conn, schema, sql, ['x y'], plan)
+    await conn.query('UPDATE ch SET pa_id=NULL WHERE id=1')
+    await readFractionalSemijoin(conn, schema, sql, [], plan)
+    await conn.query("SET optimizer_switch='materialization=off'")
+    await conn.query('UPDATE ch SET pa_id=1 WHERE id=1')
+    await readFractionalSemijoin(conn, schema, sql, ['al'], plan)
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
+
 test('an ordered EXISTS costs a noncovering materialized scan and indexed weedout', async () => {
   const { db, conn } = await looseScanConnection()
   const schema = 'filtered_semijoin356'
