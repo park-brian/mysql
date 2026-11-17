@@ -137,7 +137,9 @@ for (const entry of entries) {
   lines.push(entry.sqlState === null || entry.sqlState === 'HY000' ? symbol : `${symbol} ${entry.sqlState}`)
   expected = entry.errno + 1
 }
-const packed = lines.join('\n')
+// Comma-delimited rows gzip smaller. Line continuations keep one generated
+// row per source line without adding newlines to the packed data.
+const packed = lines.join(',\\\n')
 
 const out = `// GENERATED FILE — do not edit by hand. Run \`npm run gen:errors\`.
 //
@@ -171,11 +173,11 @@ export const STRICT_ERROR_CODES: ReadonlySet<number> = new Set([${strictCodes.jo
 export const ERROR_NAME_WORDS = '${words.join(' ')}'
 
 /**
- * \`@errno\` starts a sequential range; each following line consumes one code.
- * Entry lines contain a packed symbol and an optional SQLSTATE. Symbols begin
- * with an implicit ER_ unless prefixed by !. Lowercase tokens encode words, _
- * separates adjacent raw words and ~ encodes an empty word. The decoder
- * preserves entry order and alias precedence.
+ * \`@errno\` starts a sequential range; each following entry consumes one code.
+ * Comma-delimited entries hold a packed symbol and an optional SQLSTATE.
+ * Symbols begin with an implicit ER_ unless prefixed by !. Lowercase tokens
+ * encode words, _ separates adjacent raw words and ~ encodes an empty word.
+ * The decoder preserves entry order and alias precedence.
  */
 export const PACKED_ERROR_TABLE = \`${packed}\`
 `

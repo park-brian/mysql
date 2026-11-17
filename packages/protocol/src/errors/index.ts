@@ -43,17 +43,16 @@ function load(): { bySymbol: Map<string, Entry>; byErrno: Map<number, Entry> } {
       return words[token.length === 1 ? first : 12 + 26 * (first - 12) + token.charCodeAt(1) - 97]!
     }
     let errno = 0
-    for (const line of PACKED_ERROR_TABLE.split('\n')) {
-      if (line === '') continue
-      if (line.startsWith('@')) {
-        errno = Number(line.slice(1))
+    for (const row of PACKED_ERROR_TABLE.split(',')) {
+      if (row.startsWith('@')) {
+        errno = Number(row.slice(1))
         continue
       }
-      const space = line.indexOf(' ')
-      const packedSymbol = space === -1 ? line : line.slice(0, space)
+      const space = row.indexOf(' ')
+      const packedSymbol = space === -1 ? row : row.slice(0, space)
       const prefix = packedSymbol[0] === '!' ? '' : 'ER_'
       const symbol = prefix + packedSymbol.match(/[a-l]|[m-z][a-z]|[A-Z0-9]+|~/g)!.map(unpack).join('_')
-      const sqlState = space === -1 ? DEFAULT_SQLSTATE : line.slice(space + 1)
+      const sqlState = space === -1 ? DEFAULT_SQLSTATE : row.slice(space + 1)
       const entry: Entry = { errno, symbol, sqlState }
       s.set(symbol, entry)
       // Some symbols share a number (aliases); the first wins for errno lookup.
