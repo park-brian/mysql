@@ -100,23 +100,30 @@ if (strictSymbols.length !== 23 || new Set(strictSymbols).size !== 23 || strictS
 const strictCodes = strictSymbols.map((s) => bySymbol.get(s).errno)
 
 // Encode the most repeated parts of uppercase symbols with lowercase letters.
-const wordSavings = new Map()
+const storedName = (symbol) => symbol.startsWith('ER_') ? symbol.slice(3) : symbol
+const counts = new Map()
 for (const { symbol } of entries) {
-  for (const word of symbol.split('_')) {
-    if (word.length > 1) wordSavings.set(word, (wordSavings.get(word) ?? 0) + word.length - 1)
+  for (const word of storedName(symbol).split('_')) {
+    if (word.length > 1) counts.set(word, (counts.get(word) ?? 0) + 1)
   }
 }
 const letters = 'abcdefghijklmnopqrstuvwxyz'
+const shortCount = 12
 // The letters a through l are single-letter tokens. The rest start two-letter tokens.
-const tokens = [...letters.slice(0, 12), ...[...letters.slice(12)].flatMap((prefix) => [...letters].map((letter) => prefix + letter))]
-const words = [...wordSavings.keys()].sort().sort((a, b) => wordSavings.get(b) - wordSavings.get(a)).slice(0, tokens.length)
+const tokens = [...letters.slice(0, shortCount), ...[...letters.slice(shortCount)].flatMap((prefix) => [...letters].map((letter) => prefix + letter))]
+// A one-letter slot saves one byte per occurrence over a two-letter slot.
+const names = [...counts.keys()].sort().sort((a, b) => counts.get(b) - counts.get(a))
+const shortWords = names.slice(0, shortCount)
+const savings = (word) => counts.get(word) * (word.length - 1)
+const longWords = names.slice(shortCount).sort((a, b) => savings(b) - savings(a)).slice(0, tokens.length - shortCount)
+const words = [...shortWords, ...longWords]
 const codes = new Map(words.map((word, i) => [word, tokens[i]]))
 
 function packSymbol(symbol) {
-  const ordinary = symbol.startsWith('ER_')
-  let packed = ordinary ? '' : '!'
+  const name = storedName(symbol)
+  let packed = name === symbol ? '!' : ''
   let previousRaw = false
-  for (const word of (ordinary ? symbol.slice(3) : symbol).split('_')) {
+  for (const word of name.split('_')) {
     const token = codes.get(word)
     const raw = token === undefined && word !== ''
     if (previousRaw && raw) packed += '_'
