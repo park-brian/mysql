@@ -285,8 +285,7 @@ export interface RangeCosting {
 
 /** Merge one nullable INT secondary range and one signed INT primary range. */
 function sortUnionAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, costing: RangeCosting, indexes: readonly IndexDef[]): Access | undefined {
-  if (def.engine !== 'native' || where?.kind !== NODE.BINARY || !logicalShortCircuit(where.op) ||
-    !optimizerEnabled(env, 'index_merge') || !optimizerEnabled(env, 'index_merge_sort_union')) return undefined
+  if (def.engine !== 'native' || where?.kind !== NODE.BINARY || !logicalShortCircuit(where.op)) return undefined
   const primary = indexes.find((key) => key.kind === 'primary')
   if (primary?.parts.length !== 1) return undefined
   const pk = forwardKeyColumn(def, primary)
@@ -316,24 +315,25 @@ function sortUnionAccess(def: TableDef, alias: string, where: Expression | undef
     const value = constantValue(secondaryCondition.constants[0]!, env)
     if (value?.kind !== 'int' && value?.kind !== 'decimal') return undefined
     const endsBelow = secondaryCondition.op.startsWith('<')
-    let inclusive = secondaryCondition.op.endsWith('=')
-    let v = value
-    if (value.kind === 'decimal') {
-      // A fractional lower edge starts past its floor, and an upper edge ends before its ceiling.
-      const { integer, fractional } = integerEndpoint(value, endsBelow)
-      v = intValue(integer)
-      inclusive &&= !fractional
-    }
+    // A fractional lower edge starts past its floor, and an upper edge ends before its ceiling.
+    const { integer, fractional } = integerEndpoint(value, endsBelow)
+    const inclusive = !fractional && secondaryCondition.op.endsWith('=')
     const { min, max } = integerRange(column.type)!
-    // The empty or one-value domain at the minimum needs a different plan.
-    if (endsBelow && v.v <= min) return undefined
+    if (endsBelow && integer <= min) {
+      // An impossible arm leaves only the primary comparison as an access path.
+      if (costing.allowSortUnion && (integer < min || !inclusive)) {
+        return rangeAccess(def, alias, [primaryFirst ? where.left : where.right], env, costing)
+      }
+      return undefined
+    }
     // An edge admitting its domain limit admits every non-NULL key.
     const limit = endsBelow ? max : min
-    if ((endsBelow ? v.v < limit : v.v > limit) || (v.v === limit && !inclusive)) {
-      const edge = { v, inclusive }
+    if ((endsBelow ? integer < limit : integer > limit) || (integer === limit && !inclusive)) {
+      const edge = { v: intValue(integer), inclusive }
       secondaryInterval = endsBelow ? { hi: edge } : { lo: edge }
     }
   }
+  if (!optimizerEnabled(env, 'index_merge') || !optimizerEnabled(env, 'index_merge_sort_union')) return undefined
   const secondaryRange = keyRanges([secondaryInterval], column)?.[0]?.range
   if (secondaryRange?.from === undefined) return undefined
   const { stats, coveringScan } = costing

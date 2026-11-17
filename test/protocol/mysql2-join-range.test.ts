@@ -788,3 +788,53 @@ test('Sort Union uses the non-NULL upper range of a nullable INT index', async (
     await conn.end(); await db?.end()
   }
 })
+
+test('an impossible INT comparison leaves a clustered range and keeps the written filter', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'index_merge_empty413'
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    for (const [type, minimum] of [['INT', -2147483648], ['INT UNSIGNED', 0]] as const) {
+      await conn.query(`CREATE TABLE t(id INT PRIMARY KEY,g ${type},n INT,KEY by_g(g)) STATS_AUTO_RECALC=0`)
+      await conn.query('INSERT INTO t VALUES ?', [Array.from({ length: 30 }, (_, i) => [i + 1, i === 0 ? minimum : null, i])])
+      await conn.query('ANALYZE TABLE t')
+      const select = 'SELECT id,g,n FROM t WHERE '
+      for (const switches of ['default', 'default,index_merge=off', 'default,index_merge_sort_union=off']) {
+        await conn.query('SET optimizer_switch=?', [switches])
+        for (const predicate of [
+          `g < ${minimum} OR id > 27`,
+          `27 < id OR ${minimum - 1}.5 >= g`,
+        ]) for (const method of ['query', 'execute'] as const) {
+          const read = (sql: string) => method === 'query' ? conn.query<mysql.RowDataPacket[]>(sql) : conn.execute<mysql.RowDataPacket[]>(sql)
+          const sql = select + predicate
+          assert.deepEqual((await read(sql))[0].map((r) => r.id), [28, 29, 30])
+          assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+          const [explain] = await read('EXPLAIN FORMAT=TREE ' + sql)
+          assert.equal(planSkeleton(explain[0]?.EXPLAIN), 'Filter\n    Index range scan on t using PRIMARY over')
+          assert.match(String(explain[0]?.EXPLAIN), /using PRIMARY over \(27 < id\)/)
+        }
+      }
+      await conn.query("SET optimizer_switch='default'")
+
+      const prepared = select + '? > g OR id > 27 ORDER BY id'
+      const statement = await conn.prepare(prepared)
+      const ids = async (bound: number) => {
+        const [rows] = await statement.execute([mysql.TypedParameter.NEWDECIMAL(String(bound))])
+        return (rows as mysql.RowDataPacket[]).map((r) => r.id)
+      }
+      try {
+        assert.deepEqual(await ids(minimum), [28, 29, 30])
+        await conn.query('DELETE FROM t WHERE id=29')
+        assert.deepEqual(await ids(minimum), [28, 30])
+        assert.deepEqual(await ids(minimum + 1), [1, 28, 30])
+      } finally {
+        conn.unprepare(prepared)
+      }
+      await conn.query('DROP TABLE t')
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
