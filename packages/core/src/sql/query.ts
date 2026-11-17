@@ -1471,13 +1471,13 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
       }
     }
     const predicate = and(equality, residual ?? nullTest)
-    let candidates = def.indexes.filter((i) => i.kind === 'index' && i.invisible !== true && indexPartMatchesColumn(i.parts[0], innerColumn))
-    // An unfiltered inner scan of the membership key can use its shortest covering index.
+    let candidates = def.indexes.filter((i) => i.kind === 'index' && !i.invisible && indexPartMatchesColumn(i.parts[0], innerColumn))
+    // LooseScan and materialization can share the shortest covering membership key.
     if (candidates.length > 1 && !exists && !any && extra === undefined && q.orderBy === undefined &&
-      !limitOrLock && optimizerEnabled(run.env, 'loosescan')) {
+      !limitOrLock && (optimizerEnabled(run.env, 'loosescan') || optimizerEnabled(run.env, 'materialization'))) {
       candidates = [candidates.reduce((best, key) => indexRecordBytes(def, key) < indexRecordBytes(def, best) ? key : best)]
     } else if (candidates.length > 1 || (q.orderBy !== undefined && q.limit !== undefined && optimizerEnabled(run.env, 'firstmatch'))) {
-      candidates = candidates.filter((i) => !i.parts[0]!.descending)
+      candidates = candidates.filter(forwardKeyPart)
     }
     const index = candidates.length === 1 ? candidates[0] : candidates.find((i) => i.parts.length === 1)
     if (!any && index === undefined) return undefined

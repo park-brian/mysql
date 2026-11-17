@@ -51,7 +51,7 @@ test('semijoin costs select LooseScan for captures 149/248 and FirstMatch under 
   }
 })
 
-test('plain integer membership picks a narrow covering LooseScan key in declaration order', async () => {
+test('plain integer membership picks a narrow covering key in declaration order', async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = await mysql.createConnection(db === undefined
@@ -75,7 +75,7 @@ test('plain integer membership picks a narrow covering LooseScan key in declarat
       await conn.query('CREATE TABLE c(id INT PRIMARY KEY,pid INT,qty INT,extra TINYINT,' + keys + ') STATS_AUTO_RECALC=0')
       await conn.query('INSERT INTO c VALUES (1,1,5,2),(2,1,1,4),(3,3,6,6),(4,NULL,2,8),(5,8,1,0)')
       await conn.query('ANALYZE TABLE p,c')
-      for (const mode of ['default', 'firstmatch=off', 'loosescan=off']) {
+      for (const mode of ['default', 'firstmatch=off', 'loosescan=off', 'loosescan=off,firstmatch=off']) {
         await conn.query("SET optimizer_switch='default'")
         if (mode !== 'default') await conn.query('SET optimizer_switch=?', [mode])
         for (const method of ['query', 'execute'] as const) {
@@ -86,7 +86,17 @@ test('plain integer membership picks a narrow covering LooseScan key in declarat
           assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
           const [planRows] = await read('EXPLAIN FORMAT=TREE ' + sql)
           const plan = planSkeleton(planRows[0]?.[0])
-          if (mode === 'loosescan=off') {
+          if (mode === 'loosescan=off,firstmatch=off') {
+            assert.equal(plan, [
+              'Nested loop inner join',
+              '    Table scan on p',
+              '    Single-row index lookup on <subquery2> using <auto_distinct_key>',
+              '        Materialize with deduplication',
+              '            Filter',
+              '                Covering index scan on c using ' + index,
+            ].join('\n'))
+            assert.deepEqual(rows, [[1, 'b'], [3, 'c']])
+          } else if (mode === 'loosescan=off') {
             assert.equal(plan.includes('Remove duplicates from input sorted'), false)
             assert.deepEqual(rows.map((row) => row[0]).sort((a, b) => a - b), [1, 3])
           } else {
