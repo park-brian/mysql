@@ -377,6 +377,7 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
     ? (e: Expression) => pruneImpossibleOr(e, (arm) => impossibleBetween(arm, indexedColumn, value))
     : undefined
   const storedBounds = known === undefined && conjuncts.length === 1
+  const primaryNullList = known === undefined && !costing.hasIndexHints && costing.coveringScan === undefined
   for (const index of eligible) {
     const column = forwardKeyColumn(def, index)
     if (column === undefined) continue
@@ -384,7 +385,7 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
     let implied: ImpliedRange | undefined
     const isColumn = (e: Expression) => tableColumn(e, def, alias) === column
     for (const c of conjuncts) {
-      let range = rangeOf(c, isColumn, column, value, storedBounds)
+      let range = rangeOf(c, isColumn, column, value, storedBounds, primaryNullList && index.kind === 'primary')
       if (range === 'all' && index.kind !== 'primary' && column.type.type === FIELD_TYPE.VAR_STRING) {
         const predicate = simplify?.(c)
         if (predicate !== undefined && predicate !== c) {

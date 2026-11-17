@@ -838,3 +838,50 @@ test('an impossible INT comparison leaves a clustered range and keeps the writte
     await conn.end(); await db?.end()
   }
 })
+
+test('an integer NOT IN pair with a written NULL can use the clustered key', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'range_not_in_418'
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    for (const type of ['INT', 'INT UNSIGNED']) {
+      await conn.query(`CREATE TABLE t(id ${type} PRIMARY KEY,g INT,n INT,KEY by_g(g)) STATS_AUTO_RECALC=0`)
+      await conn.query('INSERT INTO t VALUES ?', [Array.from({ length: 12 }, (_, i) => [i + 1, i % 2 ? i : null, i])])
+      await conn.query('ANALYZE TABLE t')
+      const select = 'SELECT id,g,n FROM t WHERE '
+      for (const method of ['query', 'execute'] as const) {
+        const read = (sql: string) => method === 'query' ? conn.query<mysql.RowDataPacket[]>(sql) : conn.execute<mysql.RowDataPacket[]>(sql)
+        for (const list of ['4,NULL', 'NULL,4']) {
+          const sql = select + `id NOT IN (${list})`
+          const [rows, fields] = await read(sql)
+          assert.deepEqual(rows, [])
+          assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.characterSet]), [['id', 3, 63], ['g', 3, 63], ['n', 3, 63]])
+          assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+          const [plan] = await read('EXPLAIN FORMAT=TREE ' + sql)
+          const tree = String(plan[0]?.EXPLAIN)
+          assert.equal(planSkeleton(tree), 'Filter\n    Index range scan on t using PRIMARY over')
+          assert.match(tree, /using PRIMARY over \(id < 4\) OR \(4 < id\)/)
+        }
+        const disjunction = select + 'id NOT IN (NULL,4) OR id > 11'
+        assert.deepEqual((await read(disjunction))[0].map((r) => r.id), [12])
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+        const covering = 'EXPLAIN FORMAT=TREE SELECT id FROM t WHERE id NOT IN (NULL,4)'
+        assert.equal(planSkeleton((await read(covering))[0][0]?.EXPLAIN), 'Filter\n    Covering index scan on t using by_g')
+      }
+      const sql = select + 'id NOT IN (NULL,?)'
+      const bind = (n: number) => [mysql.TypedParameter.LONG(n)]
+      const [before] = await conn.execute<mysql.RowDataPacket[]>(sql, bind(4))
+      assert.deepEqual(before, [])
+      await conn.query('DELETE FROM t WHERE id=4')
+      const [after] = await conn.execute<mysql.RowDataPacket[]>(sql, bind(5))
+      assert.deepEqual(after, [])
+      const [tree] = await conn.execute<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql, bind(5))
+      assert.match(String(tree[0]?.EXPLAIN), /using PRIMARY over \(id < 5\) OR \(5 < id\)/)
+      await conn.query('DROP TABLE t')
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})

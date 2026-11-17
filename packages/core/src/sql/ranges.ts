@@ -108,7 +108,7 @@ export function pruneImpossibleOr(e: Expression, impossible: (e: Expression) => 
   return impossible(right) ? left : left === e.left && right === e.right ? e : { ...e, left, right }
 }
 
-export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, column: ColumnDef, value: Constant, storedBounds = false): RangeSet {
+export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, column: ColumnDef, value: Constant, storedBounds = false, primaryNullList = false): RangeSet {
   if (e.kind === NODE.UNARY && (e.op === 'IS NULL' || e.op === 'IS NOT NULL') && isColumn(e.operand)) return e.op === 'IS NULL' ? (column.nullable ? ['null'] : []) : [ALL_VALUES]
   if (e.kind !== NODE.BINARY) return 'all'
   const disjunction = logicalShortCircuit(e.op)
@@ -139,10 +139,17 @@ export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, col
     const items = e.right.items
     const negated = e.op === 'NOT IN'
     if (negated && fractionalNullList(items, column, value)) return [ALL_VALUES]
+    // An exact pair can price the integer exclusion while the written filter still rejects every row.
+    const [first, second] = items
+    const other = primaryNullList && negated && items.length === 2 && column.type.type === FIELD_TYPE.LONG
+      ? nullLiteral(first) ? second : nullLiteral(second) ? first : undefined
+      : undefined
+    const singleInteger = other && value(other)
+    const integralList = singleInteger?.kind === 'int' && encodeBound(singleInteger, column, true) !== undefined
     const points: Interval[] = []
     for (const item of items) {
       const v = constantFor(item, column, value)
-      if (v === undefined || (v === null && negated)) return 'all'
+      if (v === undefined || (v === null && negated && !integralList)) return 'all'
       if (v !== null && (!negated || !significantCharPadding(v, column))) points.push(pointInterval(v))
     }
     if (!negated) return points
