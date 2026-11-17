@@ -367,6 +367,19 @@ coercion warning counts. Parser, core and facade measure 44,526, 334,340
 and 334,266 gzipped bytes. The relational score is 2,158 of 2,248.
 Other FirstMatch lookup and empty-inner strategy choices remain open.
 
+**M5.47 single-column descending equality probes, verified.** An exact
+equality can use a visible, complete single-column DESC key. Ordered and
+range readers still require their existing direction proofs. Two pinned
+studies gain 52 of 1,000 and four of 30 exact observations across both
+protocols, with all other observations unchanged. A retained FirstMatch
+case checks the selected covering DESC key with materialization on and off.
+Full Docker verification passes 1,880 tests, all nine size gates, seeded
+fuzzing, 10,000 crash points, package and client smoke and all seven pinned
+corpora, including 1,737 coercion warning counts. Parser, core and facade
+measure 44,526, 334,342 and 334,266 gzipped bytes. The relational score
+stays at 2,158 of 2,248. Composite key costing and empty-inner strategy
+choices remain open.
+
 **M5.47 left hash antijoin.** A buffered left join can use the antijoin for
 a direct `WHERE` null test on a declared `NOT NULL` right field. Indexed and
 nested-loop variants remain open.

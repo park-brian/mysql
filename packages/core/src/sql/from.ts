@@ -1192,7 +1192,7 @@ function refOf(t: FromTable, conditions: readonly Expression[], outerAliases: Re
       let index: IndexDef | undefined
       let single = false
       for (const candidate of def.indexes) {
-        if (forwardKeyPart(candidate)?.column !== column.name) continue
+        if (forwardKeyPart(candidate, true)?.column !== column.name) continue
         // Prefer a unique key, retaining declaration order within each class.
         if (uniquePoint(candidate, column)) {
           index = candidate

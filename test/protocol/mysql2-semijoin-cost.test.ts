@@ -64,9 +64,10 @@ test('plain integer membership picks a narrow covering key in declaration order'
     await conn.query('USE ' + schema)
     await conn.query('CREATE TABLE p(id INT PRIMARY KEY,label VARCHAR(16) NOT NULL) STATS_AUTO_RECALC=0')
     await conn.query("INSERT INTO p VALUES (1,'b'),(2,'a'),(3,'c'),(4,'d'),(5,'e')")
+    const descendingFirst = 'KEY b(pid DESC), KEY a(pid)'
     const layouts = [
       ['KEY a(pid), KEY b(pid DESC)', 'a'],
-      ['KEY b(pid DESC), KEY a(pid)', 'b'],
+      [descendingFirst, 'b'],
       ['KEY a(pid,qty), KEY b(pid DESC)', 'b'],
       ['KEY a(pid DESC,qty), KEY b(pid DESC,extra)', 'b'],
     ] as const
@@ -75,7 +76,9 @@ test('plain integer membership picks a narrow covering key in declaration order'
       await conn.query('CREATE TABLE c(id INT PRIMARY KEY,pid INT,qty INT,extra TINYINT,' + keys + ') STATS_AUTO_RECALC=0')
       await conn.query('INSERT INTO c VALUES (1,1,5,2),(2,1,1,4),(3,3,6,6),(4,NULL,2,8),(5,8,1,0)')
       await conn.query('ANALYZE TABLE p,c')
-      for (const mode of ['default', 'firstmatch=off', 'loosescan=off', 'loosescan=off,firstmatch=off']) {
+      const modes = ['default', 'firstmatch=off', 'loosescan=off', 'loosescan=off,firstmatch=off']
+      if (keys === descendingFirst) modes.push('loosescan=off,materialization=off')
+      for (const mode of modes) {
         await conn.query("SET optimizer_switch='default'")
         if (mode !== 'default') await conn.query('SET optimizer_switch=?', [mode])
         for (const method of ['query', 'execute'] as const) {
@@ -95,6 +98,9 @@ test('plain integer membership picks a narrow covering key in declaration order'
               '            Filter',
               '                Covering index scan on c using ' + index,
             ].join('\n'))
+            assert.deepEqual(rows, [[1, 'b'], [3, 'c']])
+          } else if (keys === descendingFirst && mode.startsWith('loosescan=off')) {
+            assert.equal(plan, 'Nested loop semijoin\n    Table scan on p\n    Covering index lookup on c using b')
             assert.deepEqual(rows, [[1, 'b'], [3, 'c']])
           } else if (mode === 'loosescan=off') {
             assert.equal(plan.includes('Remove duplicates from input sorted'), false)

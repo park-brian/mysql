@@ -1477,7 +1477,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
       !limitOrLock && (optimizerEnabled(run.env, 'loosescan') || optimizerEnabled(run.env, 'materialization'))) {
       candidates = [candidates.reduce((best, key) => indexRecordBytes(def, key) < indexRecordBytes(def, best) ? key : best)]
     } else if (candidates.length > 1 || (q.orderBy !== undefined && q.limit !== undefined && optimizerEnabled(run.env, 'firstmatch'))) {
-      candidates = candidates.filter(forwardKeyPart)
+      candidates = candidates.filter((key) => forwardKeyPart(key))
     }
     const index = candidates.length === 1 ? candidates[0] : candidates.find((i) => i.parts.length === 1)
     if (!any && index === undefined) return undefined

@@ -17,10 +17,11 @@ export function indexPartMatchesColumn(part: IndexDef['parts'][number] | undefin
   return part?.column.toLowerCase() === name && part.prefix === undefined
 }
 
-/** The visible, complete ascending first key part. */
-export function forwardKeyPart(index: IndexDef): IndexPartDef | undefined {
+/** The visible, complete leading key part. A single-column equality can also use DESC. */
+export function forwardKeyPart(index: IndexDef, singlePoint = false): IndexPartDef | undefined {
   const part = index.parts[0]
-  return index.invisible === true || part?.prefix !== undefined || part?.descending === true ? undefined : part
+  if (!part || index.invisible || part.prefix !== undefined) return undefined
+  return !part.descending || (singlePoint && index.parts.length === 1) ? part : undefined
 }
 
 /** The canonical column that part reads. */
