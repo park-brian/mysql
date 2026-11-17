@@ -1,15 +1,15 @@
 // M2.1, M2.4, M2.17 — the generated collation registry.
 //
-// Like `error-table.test.ts`, this asserts the *contract* rather than
-// freshness: CI regenerates and diffs, so a test that pinned the whole table
-// would only ever restate the generator. What is worth asserting here is the
-// handful of facts the rest of the engine will be built on.
+// CI regenerates and diffs the storage representation. These tests check
+// the exported format and the collations the engine relies on.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import {
   COLLATION_TABLE_SIZE,
   COLLATION_TABLE_SOURCE,
   COLLATION_TABLE_SOURCE_SHA256,
+  PACKED_COLLATIONS,
   allCollations,
   collationInfo,
   collationInfoByName,
@@ -21,6 +21,13 @@ import {
   encodeCollation,
 } from '@myjs/charsets'
 import { charsetWidths, charsetWidthTableSize, CHARSET_METRICS_SOURCE_SHA256, isProhibitedConnectionCharset } from '@myjs/protocol'
+
+test('the public packed registry preserves every row in id order', () => {
+  // The string is a package export. This hash pins its spelling, flags and
+  // row order across storage changes for the current pinned source.
+  assert.equal(createHash('sha256').update(PACKED_COLLATIONS).digest('hex'),
+    'a68ad14a66801e350afc9029476233b647d4dd02a2d0e0bf967a93eba191df73')
+})
 
 test('M2.1: every id the roadmap names resolves', () => {
   // The acceptance list from M2.1, with the facts doc 29's table gives.

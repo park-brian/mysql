@@ -330,16 +330,18 @@ const sha256 = combinedSha256(sources)
 
 // --- @myjs/charsets: the full registry --------------------------------------
 //
-// One collation per line: `id collation charset mbminlen mbmaxlen flags`,
-// where flags is a subset of `n` (NO PAD), `d` (default for its charset) and
-// `b` (binary). Absent flags are the common case, so the field is usually one
-// character or none.
-const registryLines = collations
-  .map((c) => {
-    const flags = `${c.pad === 'NO PAD' ? 'n' : ''}${c.isDefault ? 'd' : ''}${c.isBinary ? 'b' : ''}`
-    return `${c.id} ${c.collation} ${c.charset} ${c.mbminlen} ${c.mbmaxlen}${flags === '' ? '' : ` ${flags}`}`
-  })
-  .join('\n')
+// Most collation names repeat the charset. Keep the name prefix and byte
+// widths in a group header, with full names marked by @ when they differ.
+const registryGroups = new Map()
+for (const c of collations) {
+  const header = `${c.charset} ${c.mbminlen} ${c.mbmaxlen}`
+  if (!registryGroups.has(header)) registryGroups.set(header, [header])
+  const prefix = `${c.charset}_`
+  const name = c.collation.startsWith(prefix) ? c.collation.slice(prefix.length) : `@${c.collation}`
+  const flags = `${c.pad === 'NO PAD' ? 'n' : ''}${c.isDefault ? 'd' : ''}${c.isBinary ? 'b' : ''}`
+  registryGroups.get(header).push(`${c.id} ${name}${flags ? ` ${flags}` : ''}`)
+}
+const registryLines = [...registryGroups.values()].map((group) => group.join('\n')).join('\n\n')
 
 writeFileSync(
   REGISTRY_OUT,
@@ -360,14 +362,28 @@ export const COLLATION_TABLE_SOURCE_SHA256 =
 /** Number of collations MySQL ${REF} compiles in. */
 export const COLLATION_TABLE_SIZE = ${collations.length}
 
+/** Restore the registry's public, ascending-id row format. */
+function collationRows(data: string): string {
+  const rows: string[] = []
+  for (const group of data.split('\\n\\n')) {
+    const [header, ...entries] = group.split('\\n')
+    const [charset, min, max] = header!.split(' ')
+    for (const entry of entries) {
+      const [id, suffix, flags] = entry.split(' ')
+      const name = suffix!.startsWith('@') ? suffix!.slice(1) : \`\${charset}_\${suffix}\`
+      rows[Number(id)] = \`\${id} \${name} \${charset} \${min} \${max}\${flags === undefined ? '' : \` \${flags}\`}\`
+    }
+  }
+  return rows.filter(Boolean).join('\\n')
+}
+
 /**
  * One collation per line: \`id collation charset mbminlen mbmaxlen [flags]\`.
  *
  * Flags are a subset of \`n\` (NO PAD), \`d\` (the charset's default collation)
- * and \`b\` (binary). Expanded lazily by \`registry\` — a minified object
- * literal of ${collations.length} entries costs several times this in the bundle.
+ * and \`b\` (binary). The public rows keep their original spelling and order.
  */
-export const PACKED_COLLATIONS = ${packed(registryLines)}
+export const PACKED_COLLATIONS = collationRows(${packed(registryLines)})
 
 /**
  * The \`*_bin\` collations whose sort key is **not** the value, and how many
