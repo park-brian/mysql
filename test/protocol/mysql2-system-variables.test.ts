@@ -1,6 +1,8 @@
 // M5.13 — the system variables, as 8.4.11 has them (`tools/capture-variables.mjs`):
 // what `@@name` reads, what a `SET` takes and refuses, and SHOW VARIABLES as
 // the query over PERFORMANCE_SCHEMA it is. Every expected answer is 8.4.11's.
+import { createHash } from 'node:crypto'
+import { systemVariableInfo, systemVariableNames } from '../../packages/core/src/sql/variables.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
@@ -78,4 +80,18 @@ test('SHOW STATUS counts what this server keeps: its statements, its connections
     assert.equal(after - before, 2, 'the SELECT and the SHOW itself')
     assert.deepEqual(await rows(conn, "SHOW GLOBAL STATUS WHERE Variable_name IN ('Connections', 'Threads_connected')"), [['Connections', '1'], ['Threads_connected', '1']])
   })
+})
+
+
+test('packed variable names preserve the complete captured registry', () => {
+  const definitions = [...systemVariableNames()].map((name) => systemVariableInfo(name))
+  const encoded = JSON.stringify(definitions, (_, value) => {
+    if (typeof value === 'bigint') return ['integer', String(value)]
+    if (value === undefined) return ['undefined']
+    if (Object.is(value, -0)) return ['double', '-0']
+    return value
+  })
+  assert.equal(definitions.length, 619)
+  // Digest from the prior registry before substituting repeated name words.
+  assert.equal(createHash('sha256').update(encoded).digest('hex'), 'f5e336ff5bcf7203c1e206417898b5522e398fecd13f0e7f81bb319c65c0638c')
 })

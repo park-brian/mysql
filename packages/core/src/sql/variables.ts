@@ -2,7 +2,7 @@
 // captured by `tools/capture-variables.mjs`): what a variable is, its default,
 // and how SHOW VARIABLES writes its value.
 import type { SqlValue } from '@myjs/protocol'
-import { SYSTEM_VARIABLES } from './system-variables.ts'
+import { SYSTEM_VARIABLES, VARIABLE_NAME_CODES, VARIABLE_NAME_WORDS } from './system-variables.ts'
 
 export interface SystemVariable {
   readonly name: string
@@ -30,9 +30,13 @@ let registry: ReadonlyMap<string, SystemVariable> | undefined
 function variables(): ReadonlyMap<string, SystemVariable> {
   if (registry !== undefined) return registry
   const out = new Map<string, SystemVariable>()
+  const words = VARIABLE_NAME_WORDS.split(' ')
+  const unpack = (name: string): string => name.startsWith('\\') ? name.slice(1)
+    : name.match(/[a-z0-9]+|[^_]/g)?.map((part) => words[VARIABLE_NAME_CODES.indexOf(part)] ?? part).join('_') ?? ''
   for (const group of SYSTEM_VARIABLES.split('\n\n')) {
     const lines = group.split('\n')
-    const [flags, prefix] = lines.shift()!.split('\t') as [string, string]
+    const [flags, packedPrefix] = lines.shift()!.split('\t') as [string, string]
+    const prefix = packedPrefix === '' ? '' : unpack(packedPrefix) + '_'
     const kind = KINDS[flags[2] as keyof typeof KINDS]
     const nullable = flags.includes('n')
     const traits = {
@@ -50,7 +54,7 @@ function variables(): ReadonlyMap<string, SystemVariable> {
         ...(kind === 'int' ? { min: BigInt(min!), max: BigInt(max!) } : {}),
       }
       for (const suffix of suffixes.split(' ')) {
-        const name = prefix + suffix
+        const name = prefix + unpack(suffix)
         out.set(name, { ...fields, name })
       }
     }
