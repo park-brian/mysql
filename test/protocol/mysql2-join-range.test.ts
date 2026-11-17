@@ -565,6 +565,9 @@ test('Sort Union compares signed primary endpoints and floors fractional seconda
       ['g > 5.5 OR id < 0', [0, 5, -6, -5, -4, -3, -2, -1], '(id < 0)', '(5 < g)'],
       ['g > 5.5 OR id <= 0', [5, -6, -5, -4, -3, -2, -1, 0], '(id <= 0)', '(5 < g)'],
       ['id > 2 OR g >= -2.5', [-6, -4, 0, 3, 4, 5], '(2 < id)', '(-3 < g)'],
+      ['0 < id OR 5.5 < g', [-6, 0, 1, 2, 3, 4, 5], '(0 < id)', '(5 < g)'],
+      ['5.5 < g OR 0 >= id', [5, -6, -5, -4, -3, -2, -1, 0], '(id <= 0)', '(5 < g)'],
+      ['-2.5 <= g OR 2 < id', [-6, -4, 0, 3, 4, 5], '(2 < id)', '(-3 < g)'],
     ] as const) for (const method of ['query', 'execute'] as const) {
       const read = (text: string) => method === 'query' ? conn.query<mysql.RowDataPacket[]>(text) : conn.execute<mysql.RowDataPacket[]>(text)
       const [rows] = await read(sql + predicate)
@@ -577,20 +580,23 @@ test('Sort Union compares signed primary endpoints and floors fractional seconda
       assert.ok(description.includes('using by_g over ' + secondary))
     }
 
-    const prepared = sql + 'id > 2 OR g > ?'
-    const statement = await conn.prepare(prepared)
-    try {
-      const { NEWDECIMAL } = mysql.TypedParameter
-      const rowsFor = async (value: string) => {
-        const [rows] = await statement.execute([NEWDECIMAL(value)])
-        return (rows as mysql.RowDataPacket[]).map((row) => row.id)
+    for (const predicate of ['id > 2 OR g > ?', '2 < id OR ? < g']) {
+      await conn.query('UPDATE t SET g=-3 WHERE id=-5')
+      const prepared = sql + predicate
+      const statement = await conn.prepare(prepared)
+      try {
+        const { NEWDECIMAL } = mysql.TypedParameter
+        const rowsFor = async (value: string) => {
+          const [rows] = await statement.execute([NEWDECIMAL(value)])
+          return (rows as mysql.RowDataPacket[]).map((row) => row.id)
+        }
+        assert.deepEqual(await rowsFor('5.5'), [-6, 0, 3, 4, 5])
+        await conn.query('UPDATE t SET g=-2 WHERE id=-5')
+        assert.deepEqual(await rowsFor('-2.5'), [-6, -5, -4, 0, 3, 4, 5])
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      } finally {
+        conn.unprepare(prepared)
       }
-      assert.deepEqual(await rowsFor('5.5'), [-6, 0, 3, 4, 5])
-      await conn.query('UPDATE t SET g=-2 WHERE id=-5')
-      assert.deepEqual(await rowsFor('-2.5'), [-6, -5, -4, 0, 3, 4, 5])
-      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
-    } finally {
-      conn.unprepare(prepared)
     }
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
@@ -626,6 +632,7 @@ ${children}
     for (const [on, names, expected, disabled] of [
       [predicate, ['name01', 'name06', 'name29', 'name30'], merge(primary, secondary), false],
       ['p.grp>5.5 OR p.id>27 AND p.id=c.pa_id', ['name01', 'name06', 'name29', 'name30'], merge(secondary, primary), false],
+      ['5.5<p.grp OR 27<p.id AND p.id=c.pa_id', ['name01', 'name06', 'name29', 'name30'], merge(secondary, primary), false],
       ['p.grp>5.5 OR p.id>27 AND p.grp=c.pa_id', ['name01', 'name06', 'name30'], merge(secondary, primary), false],
       [predicate, ['name01', 'name06', 'name29', 'name30'], plan('                Table scan on p'), true],
     ] as const) {

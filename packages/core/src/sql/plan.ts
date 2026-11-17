@@ -291,18 +291,20 @@ function sortUnionAccess(def: TableDef, alias: string, where: Expression | undef
   if (primary?.parts.length !== 1) return undefined
   const pk = forwardKeyColumn(def, primary)
   if (pk?.type.type !== FIELD_TYPE.LONG || pk.type.unsigned) return undefined
-  const primaryFirst = where.left.kind === NODE.BINARY && tableColumn(where.left.left, def, alias) === pk
-  const [comparison, present] = primaryFirst ? [where.left, where.right] : [where.right, where.left]
-  if (comparison.kind !== NODE.BINARY || !isOrderedComparison(comparison.op) ||
-    !isConstant(comparison.right) || tableColumn(comparison.left, def, alias) !== pk) return undefined
-  const greater = present.kind === NODE.BINARY && (present.op === '>' || present.op === '>=') && isConstant(present.right)
-  const operand = greater ? present.left : present.kind === NODE.UNARY && present.op === 'IS NOT NULL' ? present.operand : undefined
-  const column = operand && tableColumn(operand, def, alias)
+  const left = conditionOf(where.left, def, alias, undefined, env)
+  const right = conditionOf(where.right, def, alias, undefined, env)
+  const primaryFirst = left?.column === pk
+  const [comparison, lower] = primaryFirst ? [left, right] : [right, left]
+  if (comparison?.column !== pk || !isOrderedComparison(comparison.op)) return undefined
+  const present = primaryFirst ? where.right : where.left
+  const greater = lower?.op === '>' || lower?.op === '>='
+  const column = greater ? lower.column
+    : present.kind === NODE.UNARY && present.op === 'IS NOT NULL' ? tableColumn(present.operand, def, alias) : undefined
   if (!column?.nullable || column.type.type !== FIELD_TYPE.LONG) return undefined
   const keys = indexes.filter((key) => forwardKeyColumn(def, key) === column)
   const secondary = keys[0]
   if (keys.length !== 1 || !singleRefIndex(secondary)) return undefined
-  const bound = constantValue(comparison.right, env)
+  const bound = constantValue(comparison.constants[0]!, env)
   if (bound?.kind !== 'int') return undefined
   const edge = { v: bound, inclusive: comparison.op.endsWith('=') }
   const key = encodeBound(bound, pk, edge.inclusive)
@@ -311,9 +313,9 @@ function sortUnionAccess(def: TableDef, alias: string, where: Expression | undef
   const pkRange = upper ? { to: key } : { from: key }
   let secondaryInterval: Interval = {}
   if (greater) {
-    const value = constantValue(present.right, env)
+    const value = constantValue(lower.constants[0]!, env)
     if (value?.kind !== 'int' && value?.kind !== 'decimal') return undefined
-    let inclusive = present.op === '>='
+    let inclusive = lower.op === '>='
     let v = value
     if (value.kind === 'decimal') {
       // On an integer column either inequality above a fraction starts after its floor.
