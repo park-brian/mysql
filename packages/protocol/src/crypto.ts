@@ -10,7 +10,7 @@
 // trace comparison is only possible if the 20-byte scramble can be fixed, so
 // injectability is a protocol requirement rather than a testing convenience.
 
-import { MyjsError, concatBytes } from '@myjs/bytes'
+import { MyjsError, byteText, concatBytes } from '@myjs/bytes'
 
 const subtle: SubtleCrypto = globalThis.crypto.subtle
 
@@ -146,9 +146,7 @@ export async function importPublicKeyPem(pem: string): Promise<CryptoKey> {
 
 /** PEM without `Buffer`: `btoa` is a global on both platforms. */
 export function toPem(der: Uint8Array, label: string): string {
-  let binary = ''
-  for (const byte of der) binary += String.fromCharCode(byte)
-  const base64 = btoa(binary)
+  const base64 = btoa(byteText(der))
   const lines = base64.match(/.{1,64}/g) ?? []
   return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----\n`
 }

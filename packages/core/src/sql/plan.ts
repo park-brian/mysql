@@ -29,7 +29,7 @@
 // that. Costed readers compare primary and secondary ranges with the scan.
 // Without range costing, the fallback allows points on either key type and
 // inequalities on the primary key only.
-import { CHARSET_BINARY, FIELD_TYPE, equalBytes } from '@myjs/bytes'
+import { byteText, CHARSET_BINARY, FIELD_TYPE, equalBytes } from '@myjs/bytes'
 import type { ColumnDef, IndexDef, KeyBound, KeyRange, TableDef } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
 import {
@@ -59,7 +59,6 @@ import type { TableStatistics } from './stats.ts'
 import { forwardKeyColumn, forwardKeyPart, singleRefIndex, uniquePoint } from './indexes.ts'
 import { columnIndex } from './scope.ts'
 import { isNotEqual, REVERSE_COMPARISON, isOrderedComparison, logicalShortCircuit, signedOperand } from './ast.ts'
-import { byteKey } from './keys.ts'
 import { proof } from './errors.ts'
 
 /** Whether a named transformation is enabled in the normalized session settings. */
@@ -617,7 +616,7 @@ function pointRanges(column: ColumnDef, conditions: readonly Condition[], outer:
       for (const v of values as Value[]) {
         const b = encodeBound(v, column, true)
         if (b === undefined) return false
-        points.set(byteKey(encodeKey(b.values, [part])), b)
+        points.set(byteText(encodeKey(b.values, [part])), b)
       }
       return [...points.keys()].sort().map((key) => pointRange(points.get(key)!))
     }

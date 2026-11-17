@@ -17,3 +17,4 @@ export { isMysqlDateTime, isMysqlTime, renderMysqlDateTime, renderMysqlTime } fr
 export type { SqlValue, MysqlDateTime, MysqlTime } from './values.ts'
 export { FIELD_TYPE, COLUMN_FLAG, CHARSET_BINARY } from './field-types.ts'
 export type { FieldTypeCode } from './field-types.ts'
+export { byteText } from './byte-text.ts'

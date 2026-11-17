@@ -70,6 +70,15 @@ test('reserve + patch backfills a packet header written before its length', () =
   assert.equal(hex(w.view()), '03 00 00 07 01 02 03')
 })
 
+test('int<3> append and backfill both retain the low 24 bits', () => {
+  const writer = new Writer(16)
+  const header = writer.reserve(15)
+  writer.u24(0x01_01_02_03)
+  writer.patchU24(header, 0x01_01_02_03)
+  assert.equal(hex(writer.view().subarray(header, header + 3)), '03 02 01')
+  assert.equal(hex(writer.view().subarray(15)), '03 02 01')
+})
+
 test('patching outside what has been written is a typed error', () => {
   const w = new Writer()
   w.reserve(4)

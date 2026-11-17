@@ -141,3 +141,9 @@ Rules that keep this safe and fast:
 4. **The writer grows geometrically** and emits the 4-byte header last, once the
    payload length is known — or, better, reserves the header and backfills, so a
    large resultset is written in one pass.
+
+`bytes(n)` and `skip(n)` share length validation. The writer uses one
+three-byte store for appending and backfilling, and the typed buffer applies
+the width of each write. `byteText` maps raw bytes to U+0000 through U+00FF for
+uses such as binary SQL values and base64. Column text still goes through its
+MySQL charset decoder.

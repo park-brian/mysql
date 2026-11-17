@@ -29,7 +29,7 @@
 //     half to even, as `rint` does; an integer or a decimal half away from zero.
 //   - GREATEST and LEAST take the type CASE would, and compare in it.
 import { notSupported, proof } from './errors.ts'
-import { CHARSET_BINARY, expectTyped, equalBytes } from '@myjs/bytes'
+import { byteText, CHARSET_BINARY, expectTyped, equalBytes } from '@myjs/bytes'
 import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, escapedBytes, requireCollationInfo } from '@myjs/charsets'
 import { NODE, type CallNode, type Expression } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
@@ -64,7 +64,6 @@ import {
   valueBytes,
 } from '@myjs/types'
 import { hexOf } from './builtins.ts'
-import { byteKey } from './keys.ts'
 import {
   readArguments,
   aggregate,
@@ -118,7 +117,7 @@ function stringUnits(v: V, binary: boolean, collation: number): string[] {
 }
 
 function stringText(v: V, binary: boolean, collation: number): string {
-  if (binary) return byteKey(valueBytes(v))
+  if (binary) return byteText(valueBytes(v))
   return v.kind === 'bytes' ? asText(v.v, collation) : v.kind === 'string' ? convertTextCharset(v.v, v.collationId, collation) : toText(v)
 }
 
@@ -1292,7 +1291,7 @@ function scalarStringFunction(name: string, xs: readonly Compiled[], callName: s
         eval: (r, env) => {
           const v = s.eval(r, env)
           if (v === null) return null
-          const base64 = btoa(byteKey(valueBytes(v)))
+          const base64 = btoa(byteText(valueBytes(v)))
           // MySQL separates its 76-character lines with LF.
           return conv(base64.replace(/.{76}(?=.)/g, '$&\n'))
         },
@@ -1307,7 +1306,7 @@ function scalarStringFunction(name: string, xs: readonly Compiled[], callName: s
         eval: (r, env) => {
           const v = s.eval(r, env)
           if (v === null) return null
-          const text = byteKey(valueBytes(v)).replace(/[ \t-\r]/g, '')
+          const text = byteText(valueBytes(v)).replace(/[ \t-\r]/g, '')
           // MySQL requires complete groups, with padding only at the end.
           if (text.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(text)) return null
           return bytesValue(Uint8Array.from(atob(text), (char) => char.charCodeAt(0)))

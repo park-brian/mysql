@@ -17,10 +17,10 @@
 // `nulls_equal`). A non-unique index's prefixes run on through the clustered
 // key it carries (`n_diff_pfx02` of KEY(g) is (g, id)); a unique one's stop
 // at its own columns. 8.4.11's `innodb_index_stats` after ANALYZE, probed.
+import { byteText } from '@myjs/bytes'
 import type { IndexDef, Store, Table, TableDef, TableStats } from '@myjs/engine'
 import { clusteredKeyOf, keyColumnsOf } from '@myjs/engine'
 import { encodeKey } from '@myjs/types'
-import { byteKey } from './keys.ts'
 
 /** What ANALYZE computes and a `STATS_AUTO_RECALC=0` table keeps: the row count then, and each index's `n_diff` by prefix. */
 export interface IndexStatistics {
@@ -53,7 +53,7 @@ export function analyze(def: TableDef, table: Table): IndexStatistics {
       const prefix = columns.slice(0, k + 1)
       const parts = prefix.map((c) => c.part)
       const seen = new Set<string>()
-      for (const row of rows) seen.add(byteKey(encodeKey(prefix.map((c) => row[c.field] ?? null), parts)))
+      for (const row of rows) seen.add(byteText(encodeKey(prefix.map((c) => row[c.field] ?? null), parts)))
       return seen.size
     })
   }

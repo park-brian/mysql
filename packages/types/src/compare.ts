@@ -18,11 +18,10 @@
 //   5. Integers and decimals — exactly, as decimals.
 //   6. Anything else — a number against a string, or a double anywhere — as
 //      doubles.
-import { CHARSET_BINARY } from '@myjs/bytes'
+import { byteText, CHARSET_BINARY } from '@myjs/bytes'
 import { collation, collationInfoByName, encodeCollation, memcmp, requireCollationInfo } from '@myjs/charsets'
 import { compareJson, orderJson, toJsonDoc } from './json-doc.ts'
 import {
-  byteText,
   COERCIBILITY,
   rescale,
   temporalOrdinal,

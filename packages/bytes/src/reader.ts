@@ -128,21 +128,22 @@ export class Reader {
 
   // ---- byte strings ------------------------------------------------------
 
+  #needLength(n: number, what: string): number {
+    if (!Number.isInteger(n) || n < 0) {
+      throw new ProtocolError('PROTOCOL_BAD_LENGTH', `${what}(${n}): length must be a non-negative integer`)
+    }
+    return this.#need(n, what)
+  }
+
   /** `string<fix>` / `string<var>` — exactly `n` bytes, zero-copy. */
   bytes(n: number): Uint8Array {
-    if (!Number.isInteger(n) || n < 0) {
-      throw new ProtocolError('PROTOCOL_BAD_LENGTH', `bytes(${n}): length must be a non-negative integer`)
-    }
-    const at = this.#need(n, 'bytes')
+    const at = this.#needLength(n, 'bytes')
     return this.#bytes.subarray(at, at + n)
   }
 
   /** Advance without reading. Throws rather than clamping. */
   skip(n: number): void {
-    if (!Number.isInteger(n) || n < 0) {
-      throw new ProtocolError('PROTOCOL_BAD_LENGTH', `skip(${n}): length must be a non-negative integer`)
-    }
-    this.#need(n, 'skip')
+    this.#needLength(n, 'skip')
   }
 
   /** `string<NUL>` — up to the NUL, which is consumed but not returned. */

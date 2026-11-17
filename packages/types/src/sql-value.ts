@@ -13,7 +13,7 @@
 // A DECIMAL is an unscaled `bigint` and a scale, so arithmetic is exact and
 // needs no decimal library: `12.50` is `{ v: 1250n, scale: 2 }`.
 import { utf8 } from './utf8.ts'
-import { renderMysqlDateTime, renderMysqlTime, type MysqlDateTime, type MysqlTime } from '@myjs/bytes'
+import { byteText, renderMysqlDateTime, renderMysqlTime, type MysqlDateTime, type MysqlTime } from '@myjs/bytes'
 import { decodeCollation, encodeCollation } from '@myjs/charsets'
 import { renderJson, type JsonDoc } from './json-doc.ts'
 import { scanDateTime, scanTime, type Deprecation, type ScanFlags } from './temporal-scan.ts'
@@ -264,13 +264,6 @@ export function integerPrefix(v: Exclude<Value, null>): string | undefined {
 export function textOf(v: StringValue | BytesValue): string {
   // A binary string in a numeric context is read byte by byte, as ASCII is.
   return v.kind === 'string' ? v.v : byteText(v.v)
-}
-
-/** Map each byte to its code point from U+0000 through U+00FF without an argument limit. */
-export function byteText(bytes: Uint8Array): string {
-  let text = ''
-  for (const byte of bytes) text += String.fromCharCode(byte)
-  return text
 }
 
 // --- conversions ----------------------------------------------------------------

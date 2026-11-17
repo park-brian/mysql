@@ -119,6 +119,9 @@ test('bytes(n) and skip(n) throw rather than clamp', () => {
   assert.throws(() => new Reader(b(1, 2)).skip(3), ProtocolError)
   assert.throws(() => new Reader(b(1, 2)).bytes(-1), ProtocolError)
   assert.throws(() => new Reader(b(1, 2)).bytes(1.5), ProtocolError)
+  const reader = new Reader(b(1, 2))
+  assert.throws(() => reader.skip(1.5), { code: 'PROTOCOL_BAD_LENGTH', message: 'skip(1.5): length must be a non-negative integer' })
+  assert.equal(reader.position, 0)
 })
 
 test('a Reader over an invalid range is rejected at construction', () => {

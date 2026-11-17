@@ -382,6 +382,20 @@ including 1,737 coercion warning counts. Parser, core and facade measure
 44,906, 334,317 and 334,258 gzipped bytes. The relational score stays at
 2,158 of 2,248.
 
+**M0.3 and M0.4 shared byte handling, verified.** Binary value text,
+key text and PEM formatting use the same byte-to-code-point conversion.
+Reader byte operations share the length check. Writer append and backfill
+share one three-byte store, and typed writes apply their own widths.
+The Docker comparison reproduces 1,017 writer inputs, 2,038 reader calls
+and 262,157 byte mappings. The retained checks cover an invalid skip and
+an oversized three-byte write across buffer growth. Full Docker verification
+passes 1,883 tests, all nine size gates, seeded fuzzing, 10,000 crash points,
+package and client smoke and all seven pinned corpora, including 1,737
+coercion warning counts. Parser, core and facade measure 44,906, 334,273
+and 334,205 gzipped bytes. The bytes package measures 2,935 against its
+2,949 cap. Core and facade save 44 and 53 gzipped bytes, enough for the
+M5.52 TABLE prototype. The relational score stays at 2,158 of 2,248.
+
 **M5.2 packed field type merge table, verified.** The generator stores
 one triangle of the matrix and emits an exception for each ordered pair
 that differs from its reverse. All 576 public results retain their order

@@ -42,14 +42,13 @@
 // MATCH over a derived table, which the server merges, is 1191 here.
 import { columnIndex as indexOfColumn } from './scope.ts'
 import { notSupported, wrongUsage, wrongArgumentsError, missingKeyColumn } from './errors.ts'
-import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
+import { byteText, CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { isStringField } from './meta.ts'
 import { collation, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, TableDef } from '@myjs/engine'
 import { SqlError, sqlError } from '@myjs/protocol'
 import { toText, type Value } from '@myjs/types'
 import { FT_MAX_TOKEN, FT_MIN_TOKEN, FT_STOPWORDS } from './fulltext-params.ts'
-import { byteKey } from './keys.ts'
 
 export interface FulltextDef {
   readonly name: string
@@ -89,7 +88,7 @@ const WORD = /[\p{L}\p{N}_]+/gu
 /** A word as the index compares it: its collation's sort key, so 'Müller' and 'muller' meet where the collation says they do. */
 function folder(collationId: number): (w: string) => string {
   const c = collation(collationId)
-  return (w) => byteKey(c.sortKey(encodeCollation(w, collationId)))
+  return (w) => byteText(c.sortKey(encodeCollation(w, collationId)))
 }
 
 /** Whether a word is one the index keeps. */

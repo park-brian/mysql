@@ -67,30 +67,29 @@ export class Writer {
 
   // ---- fixed-width unsigned, little-endian -------------------------------
 
+  // Typed-array and DataView writes keep the low bits at their own widths.
   u8(v: number): this {
     const at = this.#ensure(1)
-    this.#bytes[at] = v & 0xff
+    this.#bytes[at] = v
     return this
   }
 
   u16(v: number): this {
     const at = this.#ensure(2)
-    this.#dataView().setUint16(at, v & 0xffff, true)
+    this.#dataView().setUint16(at, v, true)
     return this
   }
 
   /** `int<3>` — the packet header's `payload_length` is one. */
   u24(v: number): this {
     const at = this.#ensure(3)
-    this.#bytes[at] = v & 0xff
-    this.#bytes[at + 1] = (v >>> 8) & 0xff
-    this.#bytes[at + 2] = (v >>> 16) & 0xff
+    this.#writeU24(at, v)
     return this
   }
 
   u32(v: number): this {
     const at = this.#ensure(4)
-    this.#dataView().setUint32(at, v >>> 0, true)
+    this.#dataView().setUint32(at, v, true)
     return this
   }
 
@@ -99,8 +98,8 @@ export class Writer {
     const at = this.#ensure(6)
     const lo = v % 0x1_0000_0000
     const hi = Math.floor(v / 0x1_0000_0000)
-    this.#dataView().setUint32(at, lo >>> 0, true)
-    this.#dataView().setUint16(at + 4, hi & 0xffff, true)
+    this.#dataView().setUint32(at, lo, true)
+    this.#dataView().setUint16(at + 4, hi, true)
     return this
   }
 
@@ -216,14 +215,18 @@ export class Writer {
 
   patchU8(offset: number, v: number): void {
     this.#assertInside(offset, 1)
-    this.#bytes[offset] = v & 0xff
+    this.#bytes[offset] = v
   }
 
   patchU24(offset: number, v: number): void {
     this.#assertInside(offset, 3)
-    this.#bytes[offset] = v & 0xff
-    this.#bytes[offset + 1] = (v >>> 8) & 0xff
-    this.#bytes[offset + 2] = (v >>> 16) & 0xff
+    this.#writeU24(offset, v)
+  }
+
+  #writeU24(at: number, v: number): void {
+    this.#bytes[at] = v
+    this.#bytes[at + 1] = v >>> 8
+    this.#bytes[at + 2] = v >>> 16
   }
 
   #assertInside(offset: number, n: number): void {

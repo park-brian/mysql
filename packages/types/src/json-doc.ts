@@ -24,12 +24,12 @@
 // was read off 8.4.11 (tools/capture-json.mjs, M5.21).
 import { fromUtf8, utf8 } from './utf8.ts'
 import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
-import { FIELD_TYPE, compareBytes, MyjsError, renderMysqlDateTime, renderMysqlTime } from '@myjs/bytes'
+import { byteText, FIELD_TYPE, compareBytes, MyjsError, renderMysqlDateTime, renderMysqlTime } from '@myjs/bytes'
 import { decodeDecimal, encodeDecimal } from './decimal.ts'
 import { invalidJson } from './errors.ts'
 import { JSON_TYPE, compareJsonKeys, isInlined, varint, writeVarint } from './json.ts'
 import { compareDecimals } from './compare.ts'
-import { parseDecimal, renderDecimal, renderDouble, timeFieldValue, byteText, type DecimalValue, type Value } from './sql-value.ts'
+import { parseDecimal, renderDecimal, renderDouble, timeFieldValue, type DecimalValue, type Value } from './sql-value.ts'
 
 export type JsonDoc =
   | { readonly t: 'null' }
