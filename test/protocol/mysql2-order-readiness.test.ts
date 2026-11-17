@@ -153,6 +153,12 @@ test('ordinary LIMIT closes its reader after OFFSET without truncating sort inpu
           assert.equal(catalog.store.transactions.stats().openViews, views)
         }
         read = closed = 0
+        const [skipped] = await invoke("SELECT IF(id=3,CAST('bad' AS JSON),id) FROM a WHERE CONCAT(id,'x')+0>2 ORDER BY id LIMIT 0 OFFSET 1")
+        assert.deepEqual(skipped, [])
+        assert.equal(read, 3, 'stop at the final qualifying row skipped by OFFSET')
+        assert.equal(closed, 1)
+        assert.equal(catalog.store.transactions.stats().openViews, views)
+        read = closed = 0
         await assert.rejects(invoke("SELECT id FROM a ORDER BY IF(id=700,CAST('bad' AS JSON),id) LIMIT 1 OFFSET 1"), { errno: 3141 })
         assert.equal(read, 700, 'the sort still evaluates every input key')
         assert.equal(closed, 1)
@@ -197,6 +203,14 @@ test('prepared NULL offsets and write limits rebind as zero', async () => {
     }
     const [stored] = await conn.query({ sql: 'SELECT id,v FROM t ORDER BY id', rowsAsArray: true })
     assert.deepEqual(stored, [[1, 10], [2, 20], [3, 30]])
+    for (const method of ['query', 'execute'] as const) {
+      const invoke = (sql: string) => method === 'query' ? conn.query(sql) : conn.execute(sql)
+      const [skipped] = await invoke("SELECT IF(id=2,CAST('bad' AS JSON),id) FROM t WHERE CONCAT(id,'x')+0>1 ORDER BY id LIMIT 0 OFFSET 1")
+      assert.deepEqual(skipped, [])
+      const [warnings] = await conn.query<mysql.RowDataPacket[]>('SHOW WARNINGS')
+      assert.deepEqual(warnings.map((entry) => entry.Code), [1292, 1292])
+      await assert.rejects(invoke("SELECT id FROM t WHERE IF(id=2,CAST('bad' AS JSON),id)>0 LIMIT 0 OFFSET 2"), { errno: 3141 })
+    }
   } finally {
     await conn.query('DROP DATABASE IF EXISTS prepared_null_limit')
     await conn.end()

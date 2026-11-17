@@ -273,17 +273,18 @@ export function* distinct<T>(source: Iterable<T>, key: (row: T) => string | unde
   }
 }
 
-/** `LIMIT count OFFSET offset`. */
-export function* limit<T>(source: Iterable<T>, offset: number, count: number | undefined): Generator<T> {
-  if (count === 0) return
-  let skipped = 0
-  let taken = 0
+/** A filtered reader may need to satisfy OFFSET even when LIMIT is zero. */
+export function* limit<T>(source: Iterable<T>, offset: number, count: number | undefined, demandOffset?: boolean): Generator<T> {
+  if (count === 0) {
+    if (demandOffset) for (const _ of limit(source, 0, offset)) {}
+    return
+  }
   for (const item of source) {
-    if (skipped < offset) {
-      skipped++
+    if (offset > 0) {
+      offset--
       continue
     }
     yield item
-    if (count !== undefined && ++taken >= count) return
+    if (count !== undefined && --count <= 0) return
   }
 }

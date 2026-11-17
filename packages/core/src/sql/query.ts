@@ -711,7 +711,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   const readerReady = !windowed && (wholeReaderReady(q, node) || checkedWhere) && (from === undefined
     ? !order.length
     : !node.distinct && ((base && (!order.length || rowOrder || (checkedWhere && sortedFirst))) || (!order.length && !q.with && !node.options && from.tables.length === 1 && from.tables[0]?.derived)))
-  const take = q.limit && limitStage(offset, limitCount)
+  const take = q.limit && limitStage(offset, limitCount, limitFirst && base && node.where && !locking)
   const stages: Stage[] = [
     ...(from === undefined && node.where !== undefined ? [filterStage(resolved.predicates)] : []),
     // Retain the clause's bound correlated reader above its physical outer sort.
@@ -906,9 +906,9 @@ function resultColumns(items: readonly { name: string; compiled: Compiled }[], r
 }
 
 /** LIMIT and OFFSET. */
-function limitStage(offset: number, count: number | undefined): Stage {
+function limitStage(offset: number, count: number | undefined, demandOffset?: boolean): Stage {
   return {
-    run: (rows) => limit(rows, offset, count),
+    run: (rows) => limit(rows, offset, count, demandOffset),
     describe: (n) => planNode(offset > 0 ? 'Limit/Offset' : 'Limit', n),
   }
 }
@@ -3331,7 +3331,8 @@ function orderKey(o: OrderItem, items: readonly { name: string; compiled: Compil
 /** Parse the count before the offset, preserving LIMIT error precedence. */
 function queryLimit(run: Run, q: QueryExpression): [count: number | undefined, offset: number] {
   const bound = q.limit
-  return bound === undefined ? [undefined, 0] : [limitValue(run, bound.count), bound.offset ? limitValue(run, bound.offset) : 0]
+  if (!bound) return [undefined, 0]
+  return [limitValue(run, bound.count), bound.offset ? limitValue(run, bound.offset) : 0]
 }
 
 /**
@@ -3341,8 +3342,8 @@ function queryLimit(run: Run, q: QueryExpression): [count: number | undefined, o
  * naming `mysqld_stmt_execute`, as the server words it.
  */
 export function limitValue(run: Run, e: Expression): number {
-  if (e.kind === NODE.PLACEHOLDER && run.params === undefined) return 0
-  const v = compile(e, compileContext(run, EMPTY_SCOPE, 'LIMIT')).eval([], run.env)
+  const v = e.kind === NODE.PLACEHOLDER ? run.params?.[e.index]
+    : compile(e, compileContext(run, EMPTY_SCOPE, 'LIMIT')).eval([], run.env)
   if (!v) return 0
   // Invalid representations and negative counts have the same argument error.
   const n = (v.kind === 'double' && !Number.isInteger(v.v)) || v.kind === 'decimal' || v.kind === 'datetime' || v.kind === 'time' ? -1n : toInteger(v)
