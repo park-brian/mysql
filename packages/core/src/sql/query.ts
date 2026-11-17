@@ -213,9 +213,11 @@ function viewContext(run: Run, view: ViewDef): Run {
  */
 export function viewTable(run: Run, name: TableName, alias: string, given?: ViewDef): { schema: string; source: DerivedSource } | undefined {
   const schema = name.schema ?? defaultDatabase(run)
-  if (schema === null || schema === undefined || run.catalog === undefined) return undefined
-  const view = given ?? run.catalog.view(schema, name.name)
-  if (view === undefined) return undefined
+  const catalog = run.catalog
+  if (schema == null || catalog === undefined) return undefined
+  const view = given ?? catalog.view(schema, name.name)
+  // A missed table and view can also mean that the schema is absent.
+  if (view === undefined) return void catalog.schema(schema)
   const path = `${schema}.${view.name}`
   if (run.views?.includes(path) === true && given === undefined) {
     const e = sqlError('ER_NO_SUCH_TABLE', messages.noSuchTable(schema, view.name))
@@ -425,11 +427,11 @@ function planValues(run: Run, q: QueryExpression, node: ValuesNode): SelectPlan 
   // MySQL resolves a value constructor's ORDER BY without sorting its rows.
   resultSortKeys(run, q, columns)
   const [count, offset] = queryLimit(run, q)
-  const selected = q.limit === undefined ? items : items.slice(offset, count === undefined ? undefined : offset + count)
+  const selected = count === undefined ? items : items.slice(offset, offset + count)
   return {
     columns,
     locking: false,
-    explain: () => count === 0 ? NO_ROWS_PLAN : [wrap(q.limit !== undefined, 'Limit', planNode('Rows fetched before execution'))],
+    explain: () => count === 0 ? NO_ROWS_PLAN : [wrap(count !== undefined, 'Limit', planNode('Rows fetched before execution'))],
     *rows(trx, given) {
       const env = executionEnv(run, trx, given)
       for (const row of selected) yield row.map((item) => item.eval([], env))

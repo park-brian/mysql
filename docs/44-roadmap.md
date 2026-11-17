@@ -408,7 +408,7 @@ smoke and all seven pinned corpora, including 1,737 coercion warning counts.
 Parser, core and facade measure 44,906, 334,329 and 334,261 gzipped bytes.
 The relational score stays at 2,158 of 2,248. EXPLAIN order propagation
 through a CTE, field identity in a sorted outer wrapper with an inner
-LIMIT, INTO diagnostics and unknown schema diagnostics stay open.
+LIMIT and INTO diagnostics stay open.
 
 **M2.19 compact charset data by slot and radix, verified.** Collation
 ids select byte-weight table slots. The shared run codec uses base-36
@@ -441,6 +441,19 @@ points, package and client smoke and all seven pinned corpora, including
 1,737 coercion warning counts. Parser, core and facade measure 44,812,
 334,330 and 334,255 gzipped bytes. The relational score stays at 2,158
 of 2,248.
+
+**M5.52 missing-schema diagnostics, verified.** Once both a table and
+its view fallback miss, the planner checks the catalog schema. An absent
+schema raises 1049 through `TABLE`, `SELECT` and dependent views. A missing
+table in an existing schema still raises 1146. Temporary tables that
+survive `DROP DATABASE` resolve earlier. Both protocols improve from 30
+to 46 exact outcomes in the pinned study, with every prior match
+preserved. The VALUES reader uses its parsed count to apply the limit.
+Full Docker verification passes 1,885 tests, all nine size gates, seeded
+fuzzing, 10,000 crash points, package and client smoke and all seven
+pinned corpora, including 1,737 coercion warning counts. Parser, core
+and facade measure 44,812, 334,334 and 334,259 gzipped bytes. The
+relational score stays at 2,158 of 2,248.
 
 **M5.2 packed field type merge table, verified.** The generator stores
 one triangle of the matrix and emits an exception for each ordered pair
