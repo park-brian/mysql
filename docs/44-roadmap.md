@@ -241,8 +241,7 @@ Full Docker verification passes 1,876 tests, all nine size gates, seeded
 fuzzing, 10,000 crash points, package and client smoke and all seven pinned
 corpora, including 1,737 coercion warning counts. Parser, core and facade
 measure 44,526, 334,324 and 334,255 gzipped bytes. The relational score
-stays at 2,158 of 2,248. Ordinary equality and broader ordered union
-plans remain open.
+stays at 2,158 of 2,248. Broader ordered union plans remain open.
 
 **M5.49 ordered row-ID union for a nullable secondary point, verified.**
 A direct `IS NULL` supplies a single key value to the existing ordered
@@ -255,8 +254,23 @@ through concurrent writes. Docker verification passes 1,876 tests, all
 nine size gates, seeded fuzzing, 10,000 crash points, package and client
 smoke and all seven pinned corpora, including 1,737 coercion warning
 counts. Parser, core and facade measure 44,526, 334,332 and 334,264
-gzipped bytes. The relational score is 2,158 of 2,248. Ordinary equality
-and broader ordered union plans remain open.
+gzipped bytes. The relational score is 2,158 of 2,248. Broader ordered
+union plans remain open.
+
+**M5.49 ordered row-ID union for exact INT equality, verified.**
+An equality on the secondary key can supply an exact signed or unsigned
+INT point. Both operand orders work, including a DECIMAL literal with
+zero fractional value. The existing interval reader supplies the ordered
+union and the shared condition reader recognizes both NULL tests. Two
+pinned studies gain 576 of 1,152 and 192 of 1,920 exact observations.
+Another 1,536 controls remain identical. The retained test covers both
+protocols and a consistent snapshot through writes. Full Docker
+verification passes 1,879 tests, all nine size gates, seeded fuzzing,
+10,000 crash points, package and client smoke and all seven pinned
+corpora, including 1,737 coercion warning counts. Parser, core and facade
+measure 44,526, 334,338 and 334,259 gzipped bytes. The relational score
+stays at 2,158 of 2,248. Other secondary integer widths and broader
+ordered union plans remain open.
 
 **M5.10 `REGEXP_LIKE` result nullability, verified.** The regex binder
 uses the operands' nullability for the scalar result field. Both

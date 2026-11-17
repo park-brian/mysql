@@ -109,7 +109,7 @@ export const FULL_SCAN: Access = {}
 /** An empty read proved by the stored integer bounds of a direct BETWEEN. */
 export const EMPTY_KEY_RANGES: readonly KeyRange[] = []
 
-type Op = '=' | '<=>' | '<' | '<=' | '>' | '>=' | 'IN' | 'IS NULL'
+type Op = '=' | '<=>' | '<' | '<=' | '>' | '>=' | 'IN' | 'IS NULL' | 'IS NOT NULL'
 
 interface Condition {
   readonly column: ColumnDef
@@ -167,9 +167,9 @@ export function tableColumn(e: Expression, def: TableDef, alias: string): Column
 
 function conditionOf(e: Expression, def: TableDef, alias: string, outer: OuterColumn | undefined, env: Env): Condition | undefined {
   const constant = (x: Expression): boolean => isConstant(x) || outer?.(x) !== undefined
-  if (e.kind === NODE.UNARY && e.op === 'IS NULL') {
+  if (e.kind === NODE.UNARY && (e.op === 'IS NULL' || e.op === 'IS NOT NULL')) {
     const column = tableColumn(e.operand, def, alias)
-    return column === undefined ? undefined : { column, op: 'IS NULL', constants: [] }
+    return column === undefined ? undefined : { column, op: e.op, constants: [] }
   }
   if (e.kind !== NODE.BINARY) return undefined
   const left = tableColumn(e.left, def, alias)
@@ -296,12 +296,12 @@ function indexUnionAccess(def: TableDef, alias: string, where: Expression | unde
   const primaryFirst = left?.column === pk
   const [comparison, secondaryCondition] = primaryFirst ? [left, right] : [right, left]
   if (comparison?.column !== pk || !isOrderedComparison(comparison.op)) return undefined
-  const present = primaryFirst ? where.right : where.left
-  const ordered = secondaryCondition !== undefined && isOrderedComparison(secondaryCondition.op)
-  const nullPoint = costing.allowIndexUnion && secondaryCondition?.op === 'IS NULL'
-  const column = ordered || nullPoint ? secondaryCondition.column
-    : present.kind === NODE.UNARY && present.op === 'IS NOT NULL' ? tableColumn(present.operand, def, alias) : undefined
-  if (!column?.nullable || column.type.type !== FIELD_TYPE.LONG) return undefined
+  if (!secondaryCondition) return undefined
+  const { op, column } = secondaryCondition
+  const ordered = isOrderedComparison(op)
+  const point = op === '=' || op === 'IS NULL'
+  if (point ? !costing.allowIndexUnion : !ordered && op !== 'IS NOT NULL') return undefined
+  if (!column.nullable || column.type.type !== FIELD_TYPE.LONG) return undefined
   const keys = indexes.filter((key) => forwardKeyColumn(def, key) === column)
   const secondary = keys[0]
   if (keys.length !== 1 || !singleRefIndex(secondary)) return undefined
@@ -312,30 +312,35 @@ function indexUnionAccess(def: TableDef, alias: string, where: Expression | unde
   if (!key) return undefined
   const upper = comparison.op.startsWith('<')
   const pkRange = upper ? { to: key } : { from: key }
-  let secondaryInterval: Interval = nullPoint ? 'null' : {}
-  if (ordered) {
+  let secondaryInterval: Interval = op === 'IS NULL' ? 'null' : {}
+  if (ordered || op === '=') {
     const value = constantValue(secondaryCondition.constants[0]!, env)
     if (value?.kind !== 'int' && value?.kind !== 'decimal') return undefined
-    const endsBelow = secondaryCondition.op.startsWith('<')
-    // A fractional lower edge starts past its floor, and an upper edge ends before its ceiling.
+    const endsBelow = op.startsWith('<')
+    // Round a range outward, retaining whether an equality is exact.
     const { integer, fractional } = integerEndpoint(value, endsBelow)
-    const inclusive = !fractional && secondaryCondition.op.endsWith('=')
-    const { min, max } = integerRange(column.type)!
-    const endpoint = endsBelow ? min : max
-    if ((endsBelow ? integer < min : integer > max) || (integer === endpoint && !inclusive)) {
-      // An impossible arm leaves only the primary comparison as an access path.
-      return costing.allowIndexUnion
-        ? rangeAccess(def, alias, [primaryFirst ? where.left : where.right], env, costing) : undefined
-    }
-    if (integer === endpoint && (endsBelow || costing.allowIndexUnion)) {
-      if (!costing.allowIndexUnion) return undefined
-      secondaryInterval = pointInterval(intValue(endpoint))
+    if (op === '=') {
+      if (fractional) return undefined
+      secondaryInterval = pointInterval(intValue(integer))
     } else {
-      // An edge admitting its domain limit admits every non-NULL key.
-      const limit = endsBelow ? max : min
-      if ((endsBelow ? integer < limit : integer > limit) || (integer === limit && !inclusive)) {
-        const edge = { v: intValue(integer), inclusive }
-        secondaryInterval = endsBelow ? { hi: edge } : { lo: edge }
+      const inclusive = !fractional && op.endsWith('=')
+      const { min, max } = integerRange(column.type)!
+      const endpoint = endsBelow ? min : max
+      if ((endsBelow ? integer < min : integer > max) || (integer === endpoint && !inclusive)) {
+        // An impossible arm leaves only the primary comparison as an access path.
+        return costing.allowIndexUnion
+          ? rangeAccess(def, alias, [primaryFirst ? where.left : where.right], env, costing) : undefined
+      }
+      if (integer === endpoint && (endsBelow || costing.allowIndexUnion)) {
+        if (!costing.allowIndexUnion) return undefined
+        secondaryInterval = pointInterval(intValue(endpoint))
+      } else {
+        // An edge admitting its domain limit admits every non-NULL key.
+        const limit = endsBelow ? max : min
+        if ((endsBelow ? integer < limit : integer > limit) || (integer === limit && !inclusive)) {
+          const edge = { v: intValue(integer), inclusive }
+          secondaryInterval = endsBelow ? { hi: edge } : { lo: edge }
+        }
       }
     }
   }

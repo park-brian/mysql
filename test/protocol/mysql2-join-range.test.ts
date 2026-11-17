@@ -943,10 +943,11 @@ test('an ordered row-ID union keeps ascending IDs and the statement snapshot on 
     await conn.query(`CREATE DATABASE ${schema}`)
     await conn.query(`USE ${schema}`)
     await writer.query(`USE ${schema}`)
-    for (const [type, comparison, endpoint] of [
+    for (const [type, comparison, endpoint, syntax] of [
       ['INT', '<=', -2147483648], ['INT UNSIGNED', '<=', 0],
       ['INT', '>=', 2147483647], ['INT UNSIGNED', '>=', 4294967295],
       ['INT', 'IS NULL', null], ['INT UNSIGNED', 'IS NULL', null],
+      ['INT', '=', -7, 'g = -7'], ['INT UNSIGNED', '=', 7, '7.0 = g'],
     ] as const) {
       await conn.query(`CREATE TABLE t(id INT PRIMARY KEY,g ${type},v INT,KEY by_g(g)) STATS_AUTO_RECALC=0`)
       const stored = Array.from({ length: 30 }, (_, i) => {
@@ -955,7 +956,8 @@ test('an ordered row-ID union keeps ascending IDs and the statement snapshot on 
       })
       await conn.query('INSERT INTO t VALUES ?', [stored])
       await conn.query('ANALYZE TABLE t')
-      const suffix = endpoint === null ? ` OR g ${comparison}` : ` OR g ${comparison} ${endpoint}`
+      const secondary = syntax ?? (endpoint === null ? `g ${comparison}` : `g ${comparison} ${endpoint}`)
+      const suffix = ` OR ${secondary}`
       const lower = 'SELECT id,g,v FROM t WHERE id > 27' + suffix
       const upper = 'SELECT id,g,v FROM t WHERE id < 4' + suffix
 
