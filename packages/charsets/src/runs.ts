@@ -36,8 +36,8 @@ export function expandRuns(spec: string, base: number, length: number): number[]
   return out
 }
 
-/** Rebuild the public relative format for named byte tables or hex Unicode pages. */
-export function relativeWeights(packed: string, pages = false): string {
+/** Rebuild the public relative format for named tables or hex Unicode pages. */
+export function relativeTables(packed: string, pages = false): string {
   return packed.split('\n').map((line) => {
     const at = line.indexOf(' ')
     const name = line.slice(0, at)

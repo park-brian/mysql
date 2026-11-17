@@ -1,6 +1,7 @@
 // M2.3, M2.4 — encoding, and the limits `mbmaxlen` drives.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import {
   APPROXIMATE_CHARSETS,
   CharsetError,
@@ -77,7 +78,11 @@ test('B0: latin1 decodes from the generated table, not from the runtime', async 
   // involved. A runtime whose cp1252 decoder is really ISO-8859-1 cannot make
   // this pass and cannot make it fail.
   const { PACKED_CHARSET_TO_UNI } = await import('@myjs/charsets')
-  const line = PACKED_CHARSET_TO_UNI.split('\n').find((l) => l.startsWith('latin1 '))
+  const { CHARSET_ENCODING_RUNS } = await import('../../packages/charsets/src/encodings.ts')
+  const packed = PACKED_CHARSET_TO_UNI satisfies `armscii8 ${string}`
+  assert.equal(createHash('sha256').update(packed).digest('hex'),
+    'af9e462e6a498ed41244b3b7a9d122c7de0f7e0a335a63d4c9836cc26af3e880')
+  const line = CHARSET_ENCODING_RUNS.split('\n').find((l) => l.startsWith('latin1 '))
   assert.ok(line, 'latin1 must have a generated table')
   const table = expandRuns(line.slice('latin1 '.length), 0, 256)
   assert.equal(table[0x80], 0x20ac, 'MySQL latin1 is cp1252: 0x80 is the euro sign')

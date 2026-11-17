@@ -25,7 +25,7 @@
 // probed rather than trusted — see `rejectsLatin1Substitute` below.
 import { unsupportedCharset } from './errors.ts'
 import { requireCollationInfo } from './collation.ts'
-import { PACKED_CHARSET_TO_UNI } from './encodings.ts'
+import { CHARSET_ENCODING_RUNS } from './encodings.ts'
 import { expandRuns } from './runs.ts'
 
 /**
@@ -87,7 +87,7 @@ let toUni: Map<string, Uint16Array> | null = null
 function singleByteTable(charset: string): Uint16Array | undefined {
   if (toUni === null) {
     toUni = new Map()
-    for (const line of PACKED_CHARSET_TO_UNI.split('\n')) {
+    for (const line of CHARSET_ENCODING_RUNS.split('\n')) {
       const at = line.indexOf(' ')
       toUni.set(line.slice(0, at), Uint16Array.from(expandRuns(line.slice(at + 1), 0, 256)))
     }

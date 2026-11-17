@@ -155,8 +155,8 @@ Beyond collation, the *encodings* themselves:
 | Charset | Bytes/char | Notes |
 |---|---|---|
 | `utf8mb4` | 1–4 | full Unicode; the modern default |
-| `utf8mb3` ("utf8") | 1–3 | **deprecated**; cannot represent emoji or any BMP-supplementary character |
-| `latin1` | 1 | ISO-8859-1; MySQL's `latin1` is actually cp1252, which differs in 0x80–0x9F |
+| `utf8mb3` ("utf8") | 1–3 | **deprecated**; covers only the Basic Multilingual Plane |
+| `latin1` | 1 | MySQL's cp1252 variant, including its 0x80–0x9F mappings |
 | `ascii` | 1 | |
 | `binary` | 1 | no interpretation |
 | `ucs2`, `utf16`, `utf16le`, `utf32` | 2–4 | supported in columns, **not usable as a connection charset** |
@@ -168,7 +168,11 @@ and writing independent of host ICU. UTF-8 has its own encoder; the host-decoder
 fallback table covers Unicode and legacy codecs still used by the decoder,
 including TIS620, which does not have a generated map yet. Every host decoder
 must pass the substitution check before use. Missing decoders and unavailable
-inverse encoders raise typed errors rather than guessing a mapping.
+inverse encoders raise typed errors rather than guessing a mapping. The
+internal maps pack repeated zeroes. `PACKED_CHARSET_TO_UNI` exposes the
+original relative runs, and `PACKED_COLLATIONS` exposes the original rows
+in collation ID order. Both exports retain their original TypeScript
+literal types.
 
 MySQL treats leading U+FEFF as part of a `utf8mb3` or `utf8mb4` value. The
 UTF-8 charset decoder preserves it for SQL input, text conversion, storage and

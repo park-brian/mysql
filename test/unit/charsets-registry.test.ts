@@ -25,7 +25,8 @@ import { charsetWidths, charsetWidthTableSize, CHARSET_METRICS_SOURCE_SHA256, is
 test('the public packed registry preserves every row in id order', () => {
   // The string is a package export. This hash pins its spelling, flags and
   // row order across storage changes for the current pinned source.
-  assert.equal(createHash('sha256').update(PACKED_COLLATIONS).digest('hex'),
+  const rows = PACKED_COLLATIONS satisfies `1 big5_chinese_ci ${string}`
+  assert.equal(createHash('sha256').update(rows).digest('hex'),
     'a68ad14a66801e350afc9029476233b647d4dd02a2d0e0bf967a93eba191df73')
 })
 

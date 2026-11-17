@@ -334,6 +334,7 @@ const sha256 = combinedSha256(sources)
 // Most collation names repeat the charset. Keep the name prefix and byte
 // widths in a group header, with full names marked by @ when they differ.
 const registryGroups = new Map()
+const registryRows = []
 for (const c of collations) {
   const header = `${c.charset} ${c.mbminlen} ${c.mbmaxlen}`
   if (!registryGroups.has(header)) registryGroups.set(header, [header])
@@ -341,6 +342,7 @@ for (const c of collations) {
   const name = c.collation.startsWith(prefix) ? c.collation.slice(prefix.length) : `@${c.collation}`
   const flags = `${c.pad === 'NO PAD' ? 'n' : ''}${c.isDefault ? 'd' : ''}${c.isBinary ? 'b' : ''}`
   registryGroups.get(header).push(`${c.id} ${name}${flags ? ` ${flags}` : ''}`)
+  registryRows.push(`${c.id} ${c.collation} ${header}${flags ? ` ${flags}` : ''}`)
 }
 const registryLines = [...registryGroups.values()].map((group) => group.join('\n')).join('\n\n')
 
@@ -384,7 +386,7 @@ function collationRows(data: string): string {
  * Flags are a subset of \`n\` (NO PAD), \`d\` (the charset's default collation)
  * and \`b\` (binary). The public rows keep their original spelling and order.
  */
-export const PACKED_COLLATIONS = collationRows(${packed(registryLines)})
+export const PACKED_COLLATIONS = collationRows(${packed(registryLines)}) as ${packed(registryRows.join('\n'))}
 
 /**
  * The \`*_bin\` collations whose sort key is **not** the value, and how many
@@ -555,7 +557,7 @@ writeFileSync(
     },
   })}
 
-import { relativeWeights } from '../runs.ts'
+import { relativeTables } from '../runs.ts'
 
 /** SHA-256 over every source file's own hash — the same value the registry carries. */
 export const WEIGHT_TABLE_SOURCE_SHA256 =
@@ -569,7 +571,7 @@ export const WEIGHT_TABLE_SOURCE_SHA256 =
 export const BYTE_WEIGHT_RUNS = ${packed(byteLines('absolute'))}
 
 /** The public byte weights in their original delta format and literal type. */
-export const PACKED_BYTE_WEIGHTS = /* @__PURE__ */ relativeWeights(BYTE_WEIGHT_RUNS) as ${packed(byteLines())}
+export const PACKED_BYTE_WEIGHTS = /* @__PURE__ */ relativeTables(BYTE_WEIGHT_RUNS) as ${packed(byteLines())}
 
 /**
  * \`my_unicase_default\`'s non-null pages: \`page runs\`, one per line, the page
@@ -579,7 +581,7 @@ export const PACKED_BYTE_WEIGHTS = /* @__PURE__ */ relativeWeights(BYTE_WEIGHT_R
 export const UNICASE_WEIGHT_RUNS = ${packed(unicaseLines('absolute'))}
 
 /** The public weight pages in their original delta format and literal type. */
-export const PACKED_UNICASE_WEIGHTS = /* @__PURE__ */ relativeWeights(UNICASE_WEIGHT_RUNS, true) as ${packed(unicaseLines())}
+export const PACKED_UNICASE_WEIGHTS = /* @__PURE__ */ relativeTables(UNICASE_WEIGHT_RUNS, true) as ${packed(unicaseLines())}
 
 /**
  * The same pages' \`tolower\` column, in the same format: what a \`MY_CS_LOWER_SORT\`
@@ -739,9 +741,9 @@ check(
   `gen-charsets: single-byte charsets with no to_uni table changed: ${untabled.join(', ')}`,
 )
 
-const encodingLines = [...charsetToUni]
+const encodingLines = (repeats) => [...charsetToUni]
   .sort(([a], [b]) => (a < b ? -1 : 1))
-  .map(([cs, table]) => `${cs} ${packRuns(table, 0, 'zero')}`)
+  .map(([cs, table]) => `${cs} ${packRuns(table, 0, repeats)}`)
   .join('\n')
 
 writeFileSync(
@@ -766,6 +768,8 @@ and reads the table through a custom handler, so it stays on \`TextDecoder\`.`,
     counts: { 'Single-byte charsets': charsetToUni.size, 'Left on TextDecoder': untabled.join(' ') },
   })}
 
+import { relativeTables } from './runs.ts'
+
 /** SHA-256 over every source file's own hash — the same value the registry carries. */
 export const ENCODING_TABLE_SOURCE_SHA256 =
   '${sha256}'
@@ -775,7 +779,10 @@ export const ENCODING_TABLE_SOURCE_SHA256 =
  *
  * Delta-plus-run with additional zero runs.
  */
-export const PACKED_CHARSET_TO_UNI = ${packed(encodingLines)}
+export const CHARSET_ENCODING_RUNS = ${packed(encodingLines('zero'))}
+
+/** The public code-point tables in their original delta format and literal type. */
+export const PACKED_CHARSET_TO_UNI = /* @__PURE__ */ relativeTables(CHARSET_ENCODING_RUNS) as ${packed(encodingLines())}
 `,
 )
 
