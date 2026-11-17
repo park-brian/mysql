@@ -33,6 +33,7 @@
 // inside ground rule 7. What we never take is MySQL's prose.
 import { fileURLToPath } from 'node:url'
 import { writeFileSync } from 'node:fs'
+import { packRuns } from '../packages/charsets/src/run-format.ts'
 import { REF, REPO, banner, check, combinedSha256, fetchAllPinned, packed } from './lib/gen-common.mjs'
 
 // Every `strings/` file that defines a `CHARSET_INFO`. Enumerated rather than
@@ -524,39 +525,17 @@ check(weightOf(0x00df) === weightOf(0x0073), 'gen-charsets: general_ci must fold
 // latin1_swedish_ci is Swedish: the umlauts sort *after* z, which is the point.
 check(byteWeightsOf(8)[0xe4] > byteWeightsOf(8)[0x7a], 'gen-charsets: latin1_swedish_ci must sort a-umlaut after z')
 
-// `[count*]delta` encodes a run relative to identity. Only the internal
-// charset encoding tables can also use `[count]=` for absolute zeroes.
-const runs = (values, base, zeroRuns = false) => {
-  const out = []
-  let i = 0
-  while (i < values.length) {
-    const d = values[i] - (base + i)
-    let n = 1
-    while (i + n < values.length && values[i + n] - (base + i + n) === d) n++
-    if (zeroRuns && n === 1 && values[i] === 0) {
-      while (values[i + n] === 0) n++
-      out.push(n === 1 ? '=' : `${n}=`)
-      i += n
-      continue
-    }
-    const hex = d.toString(16)
-    out.push(n === 1 ? hex : `${n}*${hex}`)
-    i += n
-  }
-  return out.join(',')
-}
-
 const usedByteTables = [...new Set(byteWeighted.map((c) => c.sortOrder))].sort()
 const byteLines = usedByteTables
-  .map((name) => `${name.replace('sort_order_', '')} ${runs(byteTables.get(name), 0)}`)
+  .map((name) => `${name.replace('sort_order_', '')} ${packRuns(byteTables.get(name), 0)}`)
   .join('\n')
 const unicaseLines = [...unicasePages.entries()]
   .sort((a, b) => a[0] - b[0])
-  .map(([page, weights]) => `${page.toString(16)} ${runs(weights, page << 8)}`)
+  .map(([page, weights]) => `${page.toString(16)} ${packRuns(weights, page << 8, 'absolute')}`)
   .join('\n')
 const lowerLines = [...lowerPages.entries()]
   .sort((a, b) => a[0] - b[0])
-  .map(([page, weights]) => `${page.toString(16)} ${runs(weights, page << 8)}`)
+  .map(([page, weights]) => `${page.toString(16)} ${packRuns(weights, page << 8)}`)
   .join('\n')
 const weightedLines = [...byteWeighted, ...unicaseWeighted, ...lowerWeighted]
   .sort((a, b) => a.id - b.id)
@@ -576,6 +555,8 @@ writeFileSync(
     },
   })}
 
+import { relativePages } from '../runs.ts'
+
 /** SHA-256 over every source file's own hash — the same value the registry carries. */
 export const WEIGHT_TABLE_SOURCE_SHA256 =
   '${sha256}'
@@ -590,10 +571,13 @@ export const PACKED_BYTE_WEIGHTS = ${packed(byteLines)}
 
 /**
  * \`my_unicase_default\`'s non-null pages: \`page runs\`, one per line, the page
- * index in hex and the runs relative to the code point. An absent page is
- * identity; a code point above 0xFFFF weighs 0xFFFD.
+ * index in hex and the runs are relative to the code point or absolute.
+ * An absent page is identity. A code point above 0xFFFF weighs 0xFFFD.
  */
-export const PACKED_UNICASE_WEIGHTS = ${packed(unicaseLines)}
+export const UNICASE_WEIGHT_RUNS = ${packed(unicaseLines)}
+
+/** The public weight pages in their original delta format. */
+export const PACKED_UNICASE_WEIGHTS = /* @__PURE__ */ relativePages(UNICASE_WEIGHT_RUNS)
 
 /**
  * The same pages' \`tolower\` column, in the same format: what a \`MY_CS_LOWER_SORT\`
@@ -755,7 +739,7 @@ check(
 
 const encodingLines = [...charsetToUni]
   .sort(([a], [b]) => (a < b ? -1 : 1))
-  .map(([cs, table]) => `${cs} ${runs(table, 0, true)}`)
+  .map(([cs, table]) => `${cs} ${packRuns(table, 0, 'zero')}`)
   .join('\n')
 
 writeFileSync(
@@ -771,8 +755,8 @@ succeeds and silently behaves as ISO-8859-1, so MySQL's latin1 decoded 0x80 to
 U+0080 rather than the euro sign and no error was raised anywhere.
 
 Format: \`<charset> <runs for 256 code points>\`. Relative runs are the same
-as the weight tables. \`[count]=\` encodes absolute zeroes. The identity ASCII
-half fits in one relative run.
+as the weight tables. \`[count]=\` encodes absolute zeroes. An identity span can
+fit in one relative run. Some charsets, such as swe7, remap ASCII bytes.
 
 \`tis620\` is deliberately absent: MySQL leaves its struct's \`tab_to_uni\` null
 and reads the table through a custom handler, so it stays on \`TextDecoder\`.`,

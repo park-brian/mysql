@@ -9,8 +9,8 @@
 // U+0080 rather than the euro sign and no error was raised anywhere.
 //
 // Format: `<charset> <runs for 256 code points>`. Relative runs are the same
-// as the weight tables. `[count]=` encodes absolute zeroes. The identity ASCII
-// half fits in one relative run.
+// as the weight tables. `[count]=` encodes absolute zeroes. An identity span can
+// fit in one relative run. Some charsets, such as swe7, remap ASCII bytes.
 //
 // `tis620` is deliberately absent: MySQL leaves its struct's `tab_to_uni` null
 // and reads the table through a custom handler, so it stays on `TextDecoder`.

@@ -54,9 +54,11 @@ A per-character weight table: fold to a single 16-bit weight per code point,
 compare weight sequences. Fast, approximate, and full of well-known quirks
 (`ä` = `a`, no expansions, `ß` ≠ `ss`).
 
-Implementable from a generated table. `utf8mb4_general_ci` is roughly 1.1 MB of
-source weights but compresses to a few tens of KB with the right structure
-(most of Unicode maps to identity).
+The generated `utf8mb4_general_ci` table stores eleven nonidentity pages.
+Missing pages in the Basic Multilingual Plane use identity weights, and
+supplementary code points share weight `0xFFFD`. Relative and absolute runs
+pack the stored pages into 2,207 bytes, or 831 bytes gzipped. The public
+packed export retains its original 5,033-byte relative format.
 
 ### 3. `*_0900_*` — UCA-based collations
 

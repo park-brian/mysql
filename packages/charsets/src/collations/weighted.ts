@@ -26,7 +26,7 @@ import { comparePadded, memcmp } from './memcmp.ts'
 import { utf8CodePoints } from './utf8.ts'
 import { expandRuns } from '../runs.ts'
 import { corruptTable } from '../errors.ts'
-import { PACKED_BYTE_WEIGHTS, PACKED_UNICASE_LOWER, PACKED_UNICASE_WEIGHTS, PACKED_WEIGHTED_COLLATIONS } from './weights.ts'
+import { PACKED_BYTE_WEIGHTS, PACKED_UNICASE_LOWER, UNICASE_WEIGHT_RUNS, PACKED_WEIGHTED_COLLATIONS } from './weights.ts'
 
 /** Code points above `my_unicase_default`'s `maxchar` all weigh this. */
 const REPLACEMENT_WEIGHT = 0xfffd
@@ -61,7 +61,7 @@ let lowerPages: Map<number, Uint16Array> | null = null
 /** A code point's weight: `my_unicase_default`'s sort column, or, for a `MY_CS_LOWER_SORT` collation, its `tolower`. */
 function unicaseWeight(codePoint: number, lower = false): number {
   if (codePoint > 0xffff) return REPLACEMENT_WEIGHT
-  const pages = lower ? (lowerPages ??= unicaseTable(PACKED_UNICASE_LOWER)) : (unicasePages ??= unicaseTable(PACKED_UNICASE_WEIGHTS))
+  const pages = lower ? (lowerPages ??= unicaseTable(PACKED_UNICASE_LOWER)) : (unicasePages ??= unicaseTable(UNICASE_WEIGHT_RUNS))
   const page = pages.get(codePoint >> 8)
   // An absent page is identity — 245 of the 256 pages, and the whole reason
   // this table is kilobytes rather than a megabyte (Q-04).

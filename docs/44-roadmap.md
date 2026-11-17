@@ -2860,12 +2860,16 @@ observes 728 sort-deduplicate plans across cardinalities, hints and
 optimizer switches. Case 219:13 also needs a join-side merge. Physical
 selection, row lifetime and the remaining index-merge shapes stay open.
 
-**M2.19 compact Unicode weight pages, open.** The bundle-space prototype
-uses repeated weights in the eleven internal pages and restores the
-public Unicode weight string in its original format. The 2,816 decoded
-weights, public packed strings and generator provenance match byte for
-byte. The warm check saves 863 bytes in core and 877 in the facade
-without changing caps. Full Docker verification remains ahead.
+**M2.19 compact Unicode weight pages, verified.** Relative and absolute
+runs pack repeated weights in the eleven internal pages. The public Unicode
+weight export rebuilds its original format once when the source module
+loads. Bundles that leave the export unused can drop that reconstruction.
+The 2,816 decoded weights and both public packed strings match the
+previous format. Regeneration retains the pinned source hash. Full Docker
+verification passes 1,857 tests, seeded fuzzing, 10,000 crash points,
+package and real-client smoke and all seven pinned corpora. Charset,
+parser, core and facade measure 16,540, 44,518, 333,469 and 333,384 bytes
+gzipped within the existing caps.
 
 **M2.3 zero runs in internal charset encodings, verified.** The shared
 codec records absolute zeroes directly in the 24 byte-to-code-point
@@ -12818,7 +12822,7 @@ is a note; with one, it is a blocker with a deadline.
 | Q-01 | ~~What is the undo spill threshold — at what size does an in-memory undo log move to a page file?~~ **Answered (M4.20): there is none, because undo lives in pages from its first record.** An in-memory log cannot survive a crash, and crash rollback needs it to: a page the writer dirtied may be written out mid-transaction, and the undo that reverses it must then be durable. Pages logged through the journal are durable for free, the buffer pool is the in-memory part, and eviction is the spill. | M4 | Doc 25 says "spilled … when it exceeds a threshold" and does not name one. |
 | Q-02 | ~~How is `ER_LOCK_DEADLOCK` actually detected under optimistic concurrency, with no lock manager?~~ **Answered (D-53, D-54): it is not, because with one writer there is no conflict to detect.** A second writer is refused at once (`ENGINE_WRITER_BUSY`, which the edge turns into 1205), so no lock cycle can form. 1213 is raised for an expired snapshot, and only then. | M4 | Doc 41 says "an optimistic conflict detected at commit"; the detection mechanism is undesigned. D-09 requires we report it. |
 | Q-03 | ~~What does the page-level schema version look like, concretely?~~ **Answered (M4.4).** A `u32` in the index page header, on clustered leaves only, meaning "every record on this page is encoded in version v". The tree re-encodes a leaf through an injected `upgrade` before any write to it, through the insert path so it can split. Doc 22 §The page-level schema version | M4 (owned by M4.4) | D-21 rejects InnoDB's per-record version byte, but doc 22's page-header proposal reserved no field for the replacement. |
-| Q-04 | ~~How do the `general_ci` weight tables get from ~1.1 MB of source weights to "a few tens of KB"?~~ **Answered (M2.19).** They are already stored that way: `my_unicase_default` is 256 pages of which **11 are non-null**, an absent page means the weight *is* the code point, and everything above 0xFFFF is the constant 0xFFFD. That is 2,816 weights; delta-plus-run over them is **5,033 bytes raw and 1,726 gzipped**, against a 20 KB / 10 KB budget, asserted by a test. | M2 | The structure doc 29 declined to name is MySQL's own. |
+| Q-04 | ~~How do the `general_ci` weight tables get from ~1.1 MB of source weights to "a few tens of KB"?~~ **Answered (M2.19).** `my_unicase_default` has 256 pages, of which **11 are non-null**. An absent page uses identity weights, and everything above `0xFFFF` weighs `0xFFFD`. Relative and absolute runs store the 2,816 internal weights in **2,207 bytes raw and 831 gzipped**. The public packed export retains **5,033 bytes raw and 1,726 gzipped**, within the tested 20 KB / 10 KB budget. | M2 | [29](./29-charsets-and-collations.md) describes the representation. |
 | Q-05 | Do our index pages get prefix compression? | M7 (deferred from M4) | Doc 30 notes MyISAM's saves 30–50% on string keys. Explicitly not decided. *Re-pinned 2026-10-09: M4 closed without deciding it. It is a page-format question, so the format work of M7, which reads InnoDB's own pages, is where it gets an answer.* |
 | Q-06 | ~~How faithful must `INFORMATION_SCHEMA` be?~~ **Answered (M5.12): byte for byte, column metadata included, because Prisma diffs what it reads against what it pushed.** A captured corpus of 2,568 statements agrees in full. | M5 (owned by M5.12) | Doc 15 raises it and does not settle it. Migration tools query it directly, and `MULTIPLE_KEY_FLAG` is set only on an index's first column, so clients cannot reconstruct indexes from flags alone. |
 | Q-07 | How are legacy temporals disambiguated when their byte lengths overlap the modern forms? | M7 | Doc 24 says the dictionary's declared type decides, without naming the SDI field that carries it. |
