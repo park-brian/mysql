@@ -236,18 +236,19 @@ const materializedScan = `Sort
                                 Table scan on ch
             Single-row index lookup on pa using PRIMARY`
 
-test('an ordered fractional IN chooses between hash and materialization with fanout filtering off', async () => {
-  const { db, conn } = await looseScanConnection()
-  const schema = 'fanout_fractional_semijoin'
-  const sql = 'SELECT name FROM pa WHERE id IN (SELECT pa_id FROM ch WHERE ch.qty <= 0.5) ORDER BY 1'
-  const hash = `Sort
+const noncoveringHash = `Sort
     Stream results
         Hash semijoin
             Covering index scan on pa using name
             Hash
                 Filter
                     Table scan on ch`
-  const read = (names: readonly string[], plan = hash) => readSemijoin(conn, schema, sql, names, plan, { flags: 4097, charset: 255 })
+
+test('an ordered fractional IN chooses between hash and materialization with fanout filtering off', async () => {
+  const { db, conn } = await looseScanConnection()
+  const schema = 'fanout_fractional_semijoin'
+  const sql = 'SELECT name FROM pa WHERE id IN (SELECT pa_id FROM ch WHERE ch.qty <= 0.5) ORDER BY 1'
+  const read = (names: readonly string[], plan = noncoveringHash) => readSemijoin(conn, schema, sql, names, plan, { flags: 4097, charset: 255 })
   try {
     await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
     await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
@@ -267,6 +268,41 @@ test('an ordered fractional IN chooses between hash and materialization with fan
     await conn.query('UPDATE ch SET qty=2 WHERE id=7')
     await read(['zoë'])
     await conn.query('DELETE FROM ch WHERE id IN (2,3,5,6,7)')
+    await conn.query('ANALYZE TABLE pa,ch')
+    await read(['zoë'], materializedScan)
+    await conn.query("SET optimizer_switch='materialization=off'")
+    await read(['zoë'])
+    await conn.query("SET optimizer_switch='materialization=on,firstmatch=off'")
+    await read(['zoë'], materializedScan)
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
+
+test('an ordered inverted BETWEEN disjunction chooses hash or materialization with fanout filtering off', async () => {
+  const { db, conn } = await looseScanConnection()
+  const schema = 'fanout_inverted_semijoin'
+  const sql = "SELECT name FROM pa WHERE id IN (SELECT pa_id FROM ch WHERE ch.label <=> 'ann' OR ch.id BETWEEN 5 AND 1) ORDER BY 1"
+  const read = (names: readonly string[], plan = noncoveringHash) => readSemijoin(conn, schema, sql, names, plan, { flags: 4097, charset: 255 })
+  try {
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,pa_id INT,label VARCHAR(10),KEY(pa_id)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO pa VALUES (1,'zoë'),(2,'dee'),(3,'ann')")
+    await conn.query("INSERT INTO ch VALUES (1,2,'ann'),(2,2,'Ann '),(3,2,'a'),(4,2,'é'),(5,NULL,'dée'),(6,2,'ba'),(7,2,'red')")
+    await conn.query('ANALYZE TABLE pa,ch')
+    await conn.query("SET optimizer_switch='condition_fanout_filter=off'")
+    await read(['dee'])
+    await conn.query("UPDATE ch SET label='ANN' WHERE id=3")
+    await conn.query('UPDATE ch SET pa_id=1 WHERE id=3')
+    await read(['dee', 'zoë'])
+    await conn.query('UPDATE ch SET pa_id=NULL WHERE id=1')
+    await conn.query("UPDATE ch SET label='ann' WHERE id=5")
+    await read(['zoë'])
+    await conn.query('DELETE FROM ch WHERE id >= 4')
     await conn.query('ANALYZE TABLE pa,ch')
     await read(['zoë'], materializedScan)
     await conn.query("SET optimizer_switch='materialization=off'")

@@ -638,9 +638,10 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       }
       const { table } = node
       if (table.def === undefined || table.derived?.joined === true || settings.constants?.has(table.alias) || settings.hidden?.has(table.alias)) return undefined
+      const driver = new Set([table.alias])
       for (const key of keys) {
         const own = aliasesOf(key.expr, scope)
-        if (own === undefined || (own.size !== 0 && (own.size !== 1 || !own.has(table.alias)))) return undefined
+        if (own === undefined || !subsetOf(own, driver)) return undefined
       }
       const candidate = chooseStrategy(table.def, keys.map((k) => columnOf(table, k.expr, scope)?.name), false, true).index
       // A non-covering secondary scan competes with a scan and sort by cost; leave that choice open.
@@ -657,6 +658,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       // A noncovering residual can feed either a clustered lookup or a hash build.
       const filteredScan = !index && residual !== undefined
       const buffered = !index && !filteredScan
+      const compoundScan = strategy === 'filteredMaterial'
+      if (fanoutOff && compoundScan && !settings.buffered) return undefined
       const canBuffer = settings.buffered && optimizerEnabled(ctx.env, 'condition_fanout_filter')
       if (buffered && !canBuffer) return undefined
       // Use the legacy scan estimate for the bounded ordered fractional candidate.
@@ -675,8 +678,10 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const materialization = materializationEligible && settings.firstMatch !== undefined && optimizerEnabled(ctx.env, 'materialization')
       let plan = joinPlan(materialization)
       const probe = plan?.positions[1]
+      const probesMember = probe?.alias === alias
       // An unsupported outer-first lookup leaves the previous weedout search available.
-      if (!firstMatch.fanoutFilter && probe?.alias === alias && (probe.lookup || !firstMatch.enabled || plan?.dynamic.has(alias))) {
+      if (!firstMatch.fanoutFilter && probesMember && (probe.lookup || !firstMatch.enabled || plan?.dynamic.has(alias))) {
+        if (compoundScan) return undefined
         firstMatch.fanoutFilter = true
         planned = undefined
         plan = joinPlan(materialization)
@@ -700,7 +705,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       if (filteredScan) {
         // A constant residual cannot request a range based on the probe.
         if (!innerFirst) {
-          const hash = firstMatch.fanoutFilter ? strategy === 'filteredHash' && canBuffer : !plan.dynamic.has(alias)
+          const hash = firstMatch.fanoutFilter ? strategy === 'filteredHash' && canBuffer : probesMember
           if (!hash || !firstMatch.enabled || materialized || node.lookup) return undefined
           return false
         }
@@ -710,7 +715,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
           if (materialized !== 'scan' || strategy === 'weedout' && firstMatch.fanoutFilter) return undefined
           return true
         }
-        if (strategy === 'filteredMaterial' || !optimizerEnabled(ctx.env, 'duplicateweedout')) return undefined
+        if (compoundScan || !optimizerEnabled(ctx.env, 'duplicateweedout')) return undefined
         settings.weedout = inner
         delete settings.firstMatch
         return true

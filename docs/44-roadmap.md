@@ -2670,6 +2670,28 @@ different `DECIMAL` declaration have a separate M5.53 gap. With four
 declared integer digits, the untyped parameter audit matches 133 of 182
 live outcomes for retained statements and all 182 with fresh prepares.
 
+**M5.47 inverted disjunction with fanout filtering disabled, verified.**
+An ordered, unbounded, nonlocking positive `IN` can use the selected hash
+semijoin or materialized scan with join buffering enabled. The child
+filter pairs a literal NULL-safe equality on an unindexed,
+session-collated `VARCHAR` with an inverted integer `BETWEEN` over its
+signed primary key.
+The existing fanout-off estimate applies to the signed parent primary
+key and nullable signed child membership key. The child scan retains
+the written disjunction. Both wire protocols match MySQL 8.4.11 through
+text and key changes, duplicates, deletes, and optimizer switches.
+The pinned audits repair 506 of 29,088 outcomes and preserve the other
+28,582 plus 92,928 structural controls. Collation keys reuse the byte
+reader, and the decimal integer and fractional groups share a reader.
+The committed 300-statement ledger is unchanged, and all 138 observations
+in the three fresh seeds still agree.
+The parser, core, and facade measure 45,567, 334,338, and 334,265 bytes
+gzipped under the existing caps.
+
+The `LIKE` disjunction still needs separate handling. In the outer-first
+hash plan, MySQL substitutes the equal parent key into the `<=` arm
+and evaluates the result on each candidate pair before FirstMatch stops.
+
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.
 Grouping, DISTINCT and byte readers now see the same result collation.

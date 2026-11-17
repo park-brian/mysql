@@ -1364,6 +1364,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   const outerDef = from.single!.def
   const notNull = any && extra?.kind === NODE.UNARY && extra.op === 'IS NOT NULL' ? extra : undefined
   const limitOrLock = q.limit || q.locking
+  const fanoutFilter = optimizerEnabled(run.env, 'condition_fanout_filter')
   const ordersOuter = sortBy === outerAlias
   if (any && (limitOrLock || hasLeadingKey(outerDef, outerField.parts[1]!))) return undefined
   let residual: Extract<Expression, { kind: typeof NODE.BINARY }> | undefined
@@ -1399,13 +1400,13 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
         strategy = 'OR'
       } else {
         // Both disjunctions feed the existing filtered table scan when materialization wins.
-        if (!ordersOuter || !optimizerEnabled(run.env, 'condition_fanout_filter')) return undefined
+        if (!ordersOuter) return undefined
         const high = right.extra as Expression | undefined
         if (left.op === '<=>' && right.op === 'BETWEEN' && integerLiteral(right.right) &&
           integerLiteral(high) && right.right.value > high.value) {
           text = textBesideColumn(left.left, left.right)
           compoundBound = right.left
-        } else if (member && left.op === '<=' && integerLiteral(left.right) && wildcardLike(right)) {
+        } else if (fanoutFilter && member && left.op === '<=' && integerLiteral(left.right) && wildcardLike(right)) {
           text = textBesideColumn(right.left, right.right)
           compoundBound = left.left
           operand = right.left
@@ -1430,7 +1431,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     } else {
       if (right.kind !== NODE.LITERAL) return undefined
       text = !exists && textBesideColumn(field, right) && (isOrderedComparison(extra.op) ||
-        (wildcardLike(extra) && optimizerEnabled(run.env, 'condition_fanout_filter')))
+        (wildcardLike(extra) && fanoutFilter))
       if (!text && (!isComparison(extra.op) || !numberLiteral(right))) return undefined
     }
     operand = field
@@ -1443,13 +1444,15 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     const field = operand && tableColumn(operand, def, innerAlias)
     const signedInt = signedIntColumn(field)
     const parentRange = strategy === 'parentRange'
-    if (strategy === 'filteredMaterial') {
+    const compoundScan = strategy === 'filteredMaterial'
+    const signedMembership = (member: ColumnDef | undefined) =>
+      signedPrimaryMembership(outerDef, tableColumn(outerField, outerDef, outerAlias), member)
+    if (compoundScan) {
       const bound = compoundBound && tableColumn(compoundBound, def, innerAlias)
       if (!field || indexedColumn(def, field.name) || !signedIntColumn(bound) ||
         (wildcardLike(residual?.right) ? !bound.nullable : bound.nullable || !singlePrimary(def, bound))) return undefined
     } else if (parentRange) {
-      const parent = tableColumn(outerField, outerDef, outerAlias)
-      if (!signedPrimaryMembership(outerDef, parent, field)) return undefined
+      if (!signedMembership(field)) return undefined
     } else if (strategy && (!signedInt || (strategy === 'OR' ? !field.nullable : !singlePrimary(def, field)))) return undefined
     if (any && (hasLeadingKey(def, innerColumn) || from.access(run.env).index !== undefined)) return undefined
     let nullTest: typeof notNull
@@ -1468,14 +1471,13 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     if (candidates.length > 1 || (q.orderBy !== undefined && q.limit !== undefined && optimizerEnabled(run.env, 'firstmatch'))) {
       candidates = candidates.filter((i) => !i.parts[0]!.descending)
     }
-    const index = candidates.find((i) => candidates.length === 1 || i.parts.length === 1)
+    const index = candidates.length === 1 ? candidates[0] : candidates.find((i) => i.parts.length === 1)
     if (!any && index === undefined) return undefined
     const innerResidual = parentRange ? undefined : residual
     const innerRead = keyReads(innerColumn, innerResidual)
     const scanOnly = index !== undefined && !holdsRead(def, index, innerRead)
     if (text && (!scanOnly || !sessionVarchar(field, run))) return undefined
     if ((any || scanOnly) && hasGenerated(def, outerDef)) return undefined
-    let fanoutOff = false
     if (scanOnly) {
       if ((!ordersOuter && q.orderBy !== undefined) || limitOrLock || !singleRefIndex(index) ||
         def.indexes.some((i) => holdsRead(def, i, innerRead))) return undefined
@@ -1490,13 +1492,11 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
         // A noncovering fractional comparison can feed the selected weedout scan.
         if (residual?.op !== '<=' || !signedInt || indexedColumn(def, field.name) || !fractionalIntBound(constantValue(residual.right, run.env))) return undefined
         strategy = 'weedout'
-        if (!optimizerEnabled(run.env, 'condition_fanout_filter')) {
-          const parent = tableColumn(outerField, outerDef, outerAlias)
-          const member = tableColumn(innerField, def, innerAlias)
-          fanoutOff = signedPrimaryMembership(outerDef, parent, member)
-        }
       }
     }
+    const fanoutOff = !fanoutFilter && scanOnly && (compoundScan || strategy === 'weedout' && !text) &&
+      signedMembership(tableColumn(innerField, def, innerAlias))
+    if (!fanoutFilter && compoundScan && !fanoutOff) return undefined
 
     // Keep the outer table's slots first: its logical scope remains the SELECT's scope.
     const alternative = planFrom([outer, inner], fromContext(run), predicate)

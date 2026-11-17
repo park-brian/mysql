@@ -22,6 +22,7 @@ import { CHARSET_BINARY } from '@myjs/bytes'
 import { collation, collationInfoByName, encodeCollation, memcmp, requireCollationInfo } from '@myjs/charsets'
 import { compareJson, orderJson, toJsonDoc } from './json-doc.ts'
 import {
+  byteText,
   COERCIBILITY,
   rescale,
   temporalOrdinal,
@@ -130,9 +131,7 @@ export function equalityKey(text: string, id: number): string {
     while (end >= pad.length && pad.every((b, i) => key[end - pad.length + i] === b)) end -= pad.length
     key = key.subarray(0, end)
   }
-  let out = ''
-  for (let i = 0; i < key.length; i += 8192) out += String.fromCharCode(...key.subarray(i, i + 8192))
-  return out
+  return byteText(key)
 }
 
 function compareText(a: Exclude<Value, null>, b: Exclude<Value, null>): number {

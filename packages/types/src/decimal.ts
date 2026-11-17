@@ -39,15 +39,18 @@ function checkShape(precision: number, scale: number): void {
   if (scale < 0 || scale > MAX_DECIMAL_SCALE || scale > precision) throw outOfRange('decimal scale', scale)
 }
 
+function wholeDigits(text: string): string {
+  return text.replace(/^0+(?=\d)/, '') || '0'
+}
+
 /** Split `'-1234567890.1234'` into sign and zero-padded digit strings. */
 function parse(text: string, precision: number, scale: number): { negative: boolean; intg: string; frac: string } {
   const m = /^([+-]?)(\d*)(?:\.(\d*))?$/.exec(text.trim())
   if (m === null) throw badValue('decimal', `${JSON.stringify(text)} is not a decimal literal`)
   const negative = m[1] === '-'
-  let intg = (m[2] ?? '').replace(/^0+(?=\d)/, '')
+  const intg = wholeDigits(m[2]!)
   let frac = m[3] ?? ''
-  if (intg === '') intg = '0'
-  // MySQL rounds a too-long fraction and rejects a too-large integer part.
+  // Field storage rounds to scale before packing. The codec clips excess digits.
   if (frac.length > scale) frac = frac.slice(0, scale)
   frac = frac.padEnd(scale, '0')
   const intgDigits = precision - scale
@@ -67,7 +70,7 @@ function parse(text: string, precision: number, scale: number): { negative: bool
 function putBE(out: Uint8Array, at: number, width: number, value: number): void {
   for (let i = width - 1; i >= 0; i--) {
     out[at + i] = value & 0xff
-    value = Math.floor(value / 256)
+    value >>>= 8
   }
 }
 
@@ -129,18 +132,16 @@ export function decodeDecimal(bytes: Uint8Array, precision: number, scale: numbe
   buf[0] = (buf[0] as number) ^ 0x80
   if (negative) for (let i = 0; i < buf.length; i++) buf[i] = (buf[i] as number) ^ 0xff
 
-  let intg = ''
-  const at = eachGroup(precision - scale, 0, true, (offset, width, first, end) => {
-    intg += String(getBE(buf, offset, width)).padStart(end - first, '0')
-  })
-  let frac = ''
-  eachGroup(scale, at, false, (offset, width, first, end) => {
-    frac += String(getBE(buf, offset, width)).padStart(end - first, '0')
-  })
-
-  const whole = intg === '' ? '0' : intg.replace(/^0+(?=\d)/, '')
-  const sign = negative ? '-' : ''
+  let at = 0
+  const read = (length: number, leading: boolean) => {
+    let digits = ''
+    at = eachGroup(length, at, leading, (offset, width, first, end) => {
+      digits += String(getBE(buf, offset, width)).padStart(end - first, '0')
+    })
+    return digits
+  }
+  const whole = (negative ? '-' : '') + wholeDigits(read(precision - scale, true))
   // Trailing zeros are kept to the declared scale — D-15's reason for making
   // DECIMAL a string in the first place.
-  return scale === 0 ? `${sign}${whole}` : `${sign}${whole}.${frac}`
+  return scale === 0 ? whole : `${whole}.${read(scale, false)}`
 }
