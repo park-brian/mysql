@@ -75,17 +75,25 @@ const regions = (size: number): readonly [number, number][] => [
 /** Equal bytes shorter than this between two differences are carried in one run: a run costs about this much. */
 const MERGE_GAP = 8
 
+const words = (bytes: Uint8Array): Uint32Array | undefined =>
+  (bytes.byteOffset & 3) === 0 ? new Uint32Array(bytes.buffer, bytes.byteOffset, bytes.length >> 2) : undefined
+
+/** Skip equal complete words within a logged region, from an aligned offset. */
+function skipWords(after: Uint32Array, before: Uint32Array | undefined, from: number, to: number): number {
+  let word = from >> 2
+  const end = to >> 2
+  if (before === undefined) while (word < end && after[word] === 0) word++
+  else while (word < end && after[word] === before[word]) word++
+  return word << 2
+}
+
 /** Whether two pages hold the same logged content: `diffPage(before, after)` is empty, found without building it. */
 export function samePage(before: Uint8Array, after: Uint8Array): boolean {
-  const aligned = (before.byteOffset & 3) === 0 && (after.byteOffset & 3) === 0
+  const a32 = words(after)
+  const b32 = words(before)
   for (const [from, to] of regions(after.length)) {
-    let i = from
-    if (aligned) {
-      const a32 = new Uint32Array(after.buffer, after.byteOffset, after.length >> 2)
-      const b32 = new Uint32Array(before.buffer, before.byteOffset, before.length >> 2)
-      for (; i + 4 <= to && (i & 3) === 0; i += 4) if (a32[i >> 2] !== b32[i >> 2]) return false
-    }
-    for (; i < to; i++) if (after[i] !== before[i]) return false
+    const start = a32 !== undefined && b32 !== undefined ? skipWords(a32, b32, from, to) : from
+    for (let i = start; i < to; i++) if (after[i] !== before[i]) return false
   }
   return true
 }
@@ -94,26 +102,14 @@ export function samePage(before: Uint8Array, after: Uint8Array): boolean {
 export function diffPage(before: Uint8Array | null, after: Uint8Array): Run[] {
   const runs: Run[] = []
   const at = (i: number): number => (before === null ? 0 : (before[i] as number))
-  // Equal stretches are skipped a word at a time where both pages are
-  // word-aligned, as the buffer pool's frames are: a page is mostly
-  // unchanged, and a byte at a time this was most of an INSERT's cost.
-  const words = (b: Uint8Array): Uint32Array | undefined => ((b.byteOffset & 3) === 0 ? new Uint32Array(b.buffer, b.byteOffset, b.length >> 2) : undefined)
-  const a32 = words(after)
+  // Skip equal stretches a word at a time when the pages are aligned, as the pool's frames are.
   const b32 = before === null ? undefined : words(before)
-  const fast = a32 !== undefined && (before === null || b32 !== undefined)
+  const a32 = before === null || b32 !== undefined ? words(after) : undefined
   for (const [from, to] of regions(after.length)) {
     let i = from
     while (i < to) {
-      if (fast && (i & 3) === 0) {
-        let k = i >> 2
-        const last = to >> 2
-        if (b32 === undefined) while (k < last && (a32 as Uint32Array)[k] === 0) k++
-        else while (k < last && (a32 as Uint32Array)[k] === b32[k]) k++
-        if (k << 2 !== i) {
-          i = k << 2
-          continue
-        }
-      }
+      if (a32 !== undefined && (i & 3) === 0) i = skipWords(a32, b32, i, to)
+      if (i === to) break
       if (after[i] === at(i)) {
         i++
         continue

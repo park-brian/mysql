@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { EngineError, applyPage, decodeGroup, diffPage, encodeGroup, groupLength, type Redo } from '@myjs/engine'
+import { samePage } from '../../packages/engine/src/redo.ts'
 
 const PAGE = 512
 const masked = (i: number) => i < 4 || (i >= 8 && i < 16) || i >= PAGE - 8
@@ -116,7 +117,9 @@ test('a diff skipping equal words gives the runs a byte-at-a-time diff gives, al
       const before = view(before0, shiftA)
       const after = view(after0, shiftB)
       const got = diffPage(image ? null : before, after).map((r) => [r.at, [...r.bytes]])
-      assert.deepEqual(got, reference(image ? null : before, after))
+      const expected = reference(image ? null : before, after)
+      assert.deepEqual(got, expected)
+      if (!image) assert.equal(samePage(before, after), expected.length === 0)
     }),
     { numRuns: 500 },
   )

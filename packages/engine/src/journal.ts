@@ -185,19 +185,13 @@ export class Journal {
     const records: Redo[] = []
     const logged: number[] = []
     for (const [pageNo, t] of this.#touched) {
-      if (t.page === null) {
-        records.push({ type: 'page', pageNo, image: true, runs: this.pool.read(pageNo, (p) => diffPage(null, p)) })
-      } else {
-        // A page clean before this change is logged whole: its image, not a diff.
-        if (!t.wasDirty) {
-          if (t.before !== null && samePage(t.before, t.page)) continue
-          records.push({ type: 'page', pageNo, image: true, runs: diffPage(null, t.page) })
-        } else {
-          const runs = diffPage(t.before, t.page)
-          if (runs.length === 0) continue
-          records.push({ type: 'page', pageNo, image: false, runs })
-        }
-      }
+      const page = t.page
+      // A page clean before this change is logged whole if anything changed.
+      const image = page === null || !t.wasDirty
+      if (image && page !== null && t.before !== null && samePage(t.before, page)) continue
+      const runs = page === null ? this.pool.read(pageNo, (p) => diffPage(null, p)) : diffPage(image ? null : t.before, page)
+      if (!image && runs.length === 0) continue
+      records.push({ type: 'page', pageNo, image, runs })
       logged.push(pageNo)
     }
     if (records.length > 0 || this.#rows.length > 0) {
