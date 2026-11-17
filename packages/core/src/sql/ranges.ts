@@ -5,10 +5,12 @@
 // built from these is never too narrow; the WHERE is applied to every row it
 // reads anyway (D-65).
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
+import { decodeCollation, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
-import { compareValues, intValue, integerBytes, integerRange, toInteger, type Value } from '@myjs/types'
-import { REVERSE_COMPARISON, logicalShortCircuit, nullLiteral, signedOperand } from './ast.ts'
+import { COERCIBILITY, charsetOfCollation, compareValues, intValue, integerBytes, integerRange, toInteger, type Value } from '@myjs/types'
+import { REVERSE_COMPARISON, isNotEqual, logicalShortCircuit, nullLiteral, signedOperand } from './ast.ts'
+import { proof } from './errors.ts'
 
 /** A constant's value while planning — a literal, or a bound `?` — or `undefined` for anything else. */
 export type Constant = (e: Expression) => Value | undefined
@@ -22,12 +24,25 @@ export type RangeSet = readonly Interval[] | 'all'
 
 const ALL_VALUES: Interval = {}
 
+/** CHAR storage drops trailing spaces that a NO PAD comparison still sees. */
+export function significantCharPadding(v: Value, { type }: ColumnDef): boolean {
+  return type.type === FIELD_TYPE.STRING && v?.kind === 'string' && v.v.endsWith(' ') && type.collationId !== undefined &&
+    type.collationId !== CHARSET_BINARY && requireCollationInfo(type.collationId).padAttribute === 'NO PAD'
+}
+
 /** A constant brought to the column's comparison, or `undefined` when the two do not compare as the column's type. */
 function constantFor(e: Expression, column: ColumnDef, value: Constant): RangeValue | null | undefined {
   const v = value(e)
   if (v === undefined || v === null) return v
   const { type, collationId } = column.type
-  if (collationId !== undefined && collationId !== CHARSET_BINARY) return v.kind === 'string' ? { ...v, collationId, coercibility: 2 } : undefined
+  if (collationId !== undefined && collationId !== CHARSET_BINARY) {
+    if (v.kind !== 'string' || v.coercibility <= COERCIBILITY.IMPLICIT) return undefined
+    if (v.collationId === collationId) return v
+    // Compare under the indexed collation without moving an unrepresentable key.
+    if (charsetOfCollation(v.collationId) !== charsetOfCollation(collationId) &&
+      proof(() => decodeCollation(encodeCollation(v.v, collationId), collationId)) !== v.v) return undefined
+    return { ...v, collationId }
+  }
   if (integerBytes(type) || type === FIELD_TYPE.NEWDECIMAL || type === FIELD_TYPE.DECIMAL) return v.kind === 'int' || v.kind === 'decimal' ? v : undefined
   return undefined
 }
@@ -83,7 +98,7 @@ export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, col
     for (const item of items) {
       const v = constantFor(item, column, value)
       if (v === undefined || (v === null && negated)) return 'all'
-      if (v !== null) points.push(point(v))
+      if (v !== null && (!negated || !significantCharPadding(v, column))) points.push(point(v))
     }
     if (!negated) return points
     const out: Interval[] = []
@@ -102,6 +117,8 @@ export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, col
   const v = constantFor(onLeft ? e.right : e.left, column, value)
   if (v === undefined) return 'all'
   if (v === null) return op === '<=>' && column.nullable ? ['null'] : []
+  // Leave a lossy exclusion to the residual filter, with only the NULLs skipped.
+  if (isNotEqual(op) && significantCharPadding(v, column)) return [ALL_VALUES]
   switch (op) {
     case '=':
     case '<=>':

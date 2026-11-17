@@ -27,7 +27,7 @@ import { clusteredIndex, forwardKeyPart, indexPartMatchesColumn, indexParts, lea
 import { collationInfoByName, encodeCollation } from '@myjs/charsets'
 import { ambiguousColumnError, unknownColumnError, requireSchema, safeIndex, safeResolve, TableScope, columnIndex as indexOfColumn } from './scope.ts'
 import { holdsRead, indexRecordBytes, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type HintAdmission, type JoinCondition } from './from.ts'
-import { dependentMembershipAccess, membershipCost, ROW_EVALUATE, type RangeRead } from './cost.ts'
+import { dependentMembershipAccess, membershipCost, PAGE_READ, ROW_EVALUATE, type RangeRead } from './cost.ts'
 import { fractionalIntBound, fractionalNullList } from './ranges.ts'
 import { firstKey, rowKey, valueKey } from './keys.ts'
 import { coveringScan, filterNode, filterPlan, indexLookup, lookupMaterialized, materialize, planNode, tableScan, wrap, type PlanNode } from './explain.ts'
@@ -674,11 +674,16 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   }
   // Windows and hash antijoins still sort their delivered rows, even over an ordered index.
   const outerLoop = (semi?.outerLoop === true || anti?.kind === 'materialized' || anti?.kind === 'correlated') && source !== undefined && sortBy === source.alias
-  // Reconsider PRIMARY for ordinary scans and the modeled outer-first loop.
-  // A proved UNIQUE projection can reconsider PRIMARY as an ordinary scan does.
-  const ordered = source !== undefined && !deduplicated && !windowed && anti?.kind !== 'hash' && match === undefined && keys.length > 0 && read!.ranges === undefined ? orderingIndex(source, order, items, lookup, read!.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index'), from!) : undefined
-  if (ordered) from!.readInOrder(ordered.index.name, false, ordered.reverse, source!.alias)
-  // Only whole scans can be replaced above, so this selected range is final.
+  const prefer = keys.length > 0 && (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index')
+  const range = read?.quote
+  const allRows = read?.orderRows
+  // A clustered key reads about keep / selectivity rows to supply ORDER BY.
+  // At a one-record cost difference, prefer the order over a live dive that can miss a native delete-marked slot.
+  const reconsider = base && prefer && range && allRows !== undefined &&
+    PAGE_READ * Math.min(allRows, Math.max(1, Math.trunc(keep * allRows / range.rows))) < range.cost + PAGE_READ + ROW_EVALUATE
+  const ordered = source !== undefined && !deduplicated && !windowed && anti?.kind !== 'hash' && match === undefined && keys.length > 0 && (read!.ranges === undefined || (base && allRows !== undefined))
+    ? orderingIndex(source, order, items, lookup, read!.index, read!.ranges === undefined ? prefer : !!reconsider, from!) : undefined
+  if (ordered) from!.readInOrder(ordered.index.name, read!.ranges !== undefined && ordered.index.name !== read!.index, ordered.reverse, source!.alias)
   // A pinned complete PRIMARY point binds ORDER but needs none of its readers.
   const point = read?.ranges?.length === 1 ? read.ranges[0] : undefined
   if (base && point?.from?.values.length === 1 && point.from === point.to && base.def.indexes.some((i) => i.name === read!.index && i.kind === 'primary' && i.parts.length === 1 && facts?.pins.has(i.parts[0]!.column.toLowerCase()))) keys.length = 0

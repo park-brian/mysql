@@ -36,6 +36,7 @@ import {
   MAX_SIGNED,
   bytesValue,
   compareValues,
+  decodeField,
   doubleValue,
   encodeField,
   encodeKey,
@@ -51,7 +52,7 @@ import {
 } from '@myjs/types'
 import type { Compiled, Env } from './compile.ts'
 import { rangeBaseline, rangeCost, type RangeShape, type RangeRead } from './cost.ts'
-import { intersect, normalize, rangeOf, type Constant, type Interval, type RangeSet, type RangeValue } from './ranges.ts'
+import { intersect, normalize, rangeOf, significantCharPadding, type Constant, type Interval, type RangeSet, type RangeValue } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
 import { forwardKeyColumn, uniquePoint } from './indexes.ts'
 import { columnIndex } from './scope.ts'
@@ -75,6 +76,8 @@ type ImpliedRange = Extract<InferredRange, { readonly column: ColumnDef }>
 
 /** How to read a table: an index and the ranges of it, in index order, or a full scan. */
 export interface Access {
+  /** Table cardinality for a noncovering text range's ordering competitor. */
+  readonly orderRows?: number | undefined
   /** Range estimate from the same selection, when the optimizer measured it. */
   readonly quote?: RangeRead | undefined
   readonly index?: string
@@ -192,7 +195,7 @@ function exact(v: Value, c: ColumnDef): boolean {
       // The column's collation decides the comparison only against a string
       // whose own coercibility is weaker (a literal's or a parameter's).
       if (v.kind !== 'string' || v.coercibility <= 2) return false
-      return [...v.v].length <= (t.length ?? 1)
+      return [...v.v].length <= (t.length ?? 1) && !significantCharPadding(v, c)
     }
     default:
       return exactNumber(v, c)
@@ -227,7 +230,8 @@ function conditionAccess(def: TableDef, conditions: readonly Condition[], env: E
     const eligible = conditions.filter((c) => c.column === column)
     const points = pointRanges(column, eligible, unresolved, evaluate)
     if (points) {
-      const access = { index: index.name, ranges: points }
+      const over = allowRange ? undefined : describeTextPoints(points, column)
+      const access = { index: index.name, ranges: points, ...(over === undefined ? {} : { over }) }
       if (index.kind === 'primary') return access
       if (point === undefined || index.name === def.clustered) point = access
     } else if (points === undefined && allowRange && index.kind === 'primary') {
@@ -294,10 +298,15 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
   if (candidates.length === 0) return undefined
   const { stats: t, coveringScan, forceRange } = costing
   let best = rangeBaseline(t, coveringScan && costing.shape(coveringScan).recordBytes, forceRange)
-  const access = (c: (typeof candidates)[number], rows?: number): Access => ({ index: c.index.name, ranges: c.empty ? EMPTY_KEY_RANGES : c.keyed.map((k) => k.range), over: describeIntervals(c.intervals, c.column.name), implied: c.implied, quote: rows === undefined ? undefined : { index: c.index.name, rows, cost: best } })
+  const competesForOrder = ({ shape, column }: (typeof candidates)[number]): boolean =>
+    !shape.clustered && !shape.covering && column.type.collationId !== undefined
+  const access = (c: (typeof candidates)[number], rows?: number): Access => ({
+    index: c.index.name, ranges: c.empty ? EMPTY_KEY_RANGES : c.keyed.map((k) => k.range), over: describeIntervals(c.intervals, c.column.name), implied: c.implied,
+    quote: rows === undefined ? undefined : { index: c.index.name, rows, cost: best }, orderRows: competesForOrder(c) ? t.rows : undefined,
+  })
   // One range that wins even reading every row needs no count: no other is weighed against it.
   const only = candidates.length === 1 ? candidates[0] : undefined
-  if (!costing.quote && only !== undefined && rangeCost(t, only.shape, only.keyed.length, t.rows) < best) return access(only)
+  if (!costing.quote && only !== undefined && !competesForOrder(only) && rangeCost(t, only.shape, only.keyed.length, t.rows) < best) return access(only)
   // MySQL skips index dives for one forced key. A nonpoint, non-NULL range estimates one row.
   const skipDive = forceRange && indexes.length === 1
   let chosen: Access | undefined
@@ -322,6 +331,17 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
 
 const NULL_KEY: KeyBound = { values: [null], inclusive: true }
 const pointRange = (bound: KeyBound): KeyRange => ({ from: bound, to: bound })
+
+/** A multi-point VARCHAR read shows the bounds in physical key order. */
+function describeTextPoints(points: readonly KeyRange[], column: ColumnDef): string | undefined {
+  const t = column.type
+  if (points.length < 2 || t.type !== FIELD_TYPE.VAR_STRING || t.collationId === undefined || t.collationId === CHARSET_BINARY) return undefined
+  return describeIntervals(points.map(({ from }) => {
+    const v = decodeField(from!.values[0]!, t) as RangeValue
+    const endpoint = { v, inclusive: true }
+    return { lo: endpoint, hi: endpoint }
+  }), column.name)
+}
 
 /** Intervals as EXPLAIN writes a range: `(2 < grp <= 5) OR (grp = 7)`, `(NULL < grp)`, `(grp = NULL)`. */
 function describeIntervals(intervals: readonly Interval[], name: string): string {

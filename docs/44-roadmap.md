@@ -2755,8 +2755,32 @@ fraction-first lists. Full Docker verification passes 1,851 tests, the
 seeded fuzz suites, 10,000 crash points, package and real-client smoke,
 and all seven pinned corpora. Parser, core and facade measure 44,945,
 333,947 and 333,897 bytes gzipped within the existing caps. Wider primary
-shapes, named ranges in set-operation branches and range selection after
-outer-join simplification remain open.
+shapes and range selection after outer-join simplification remain open.
+
+**M5.49 named text ranges and ordering, verified.**
+The range builder uses the indexed collation and preserves the source
+bound's coercibility. Bounds that cannot round-trip into the key's charset
+fall back to the original filter. A `NO PAD` `CHAR` comparison can still
+distinguish trailing spaces that storage removes, so those exclusions
+remain in the filter. The selected multi-point `VARCHAR` access displays
+its stored points in key order. The focused MySQL 8.4.11 checks cover
+both branches of case 24:12 and repeat prepared reads through an index
+update. A selected noncovering text range can supply `ORDER BY` in either
+direction or yield to the ordered primary scan. The ordering comparison
+prefers the clustered scan within one record's estimated cost because
+native index dives can still count delete-marked entries. The 4,176-case
+audit repairs 1,823 plans and 325 row-arrival orders with all earlier
+matches retained. The relational replay reaches 2,151 of 2,248 matching
+plans, up from 2,141. The 138 fresh semijoin observations are unchanged.
+The positive `NO PAD` `CHAR` control uses the native table scan as its
+oracle because the native index lookup can omit stored non-ASCII spaces
+that compare equal. Full Docker verification passes 1,853 tests, seeded
+fuzzing, 10,000 crash points, package and real-client smoke, and all seven
+pinned corpora. Parser, core and facade measure 44,945, 334,289 and
+334,220 bytes gzipped within the existing caps. Native delete-marked range
+estimates and the named range in case 11:15 remain open. In that case a
+reversed fractional `BETWEEN` on another column prevents the range
+chooser from using a text index for the other arm of the `OR`.
 
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.

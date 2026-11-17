@@ -1098,7 +1098,7 @@ function leafAccess(t: FromTable, settings: LeafSettings, env: Env): Access {
     const same = clustered ? access.index === undefined : access.index === order.index
     const whole = clustered ? FULL_SCAN : { index: order.index }
     if (access.ranges === undefined || (order.force && !same)) return order.reverse ? { ...whole, reverse: true } : whole
-    return access
+    return order.reverse && access.index === order.index ? { ...access, reverse: true } : access
   }
   const cover = settings.covering.get(t.alias)
   return access.index === undefined && access.ranges === undefined && cover !== undefined ? { index: cover } : access

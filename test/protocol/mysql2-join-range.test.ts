@@ -122,6 +122,96 @@ test('a LEFT hash build reads the right primary ranges and retains the ON filter
   }
 })
 
+test('named VARCHAR ranges preserve set-operation reads and prepared parameters', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'join_range395'
+  try {
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+    await conn.query('CREATE TABLE pa(id INT AUTO_INCREMENT PRIMARY KEY,name VARCHAR(12) NOT NULL,grp INT,amt DECIMAL(6,2),UNIQUE KEY(name),KEY(grp)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE lt(n INT PRIMARY KEY,s VARCHAR(10) CHARACTER SET latin1) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO pa(name,grp,amt) VALUES ('ann',3,165.14), ('ÄNNA',4,235.52)")
+    await conn.query("INSERT INTO lt VALUES (1,'al'),(3,'x y'),(5,'cy'),(7,'zoë'),(9,'Mo')")
+    await conn.query('ANALYZE TABLE pa,lt')
+    const sql = `SELECT amt,amt FROM pa WHERE name NOT IN ('al','cy') EXCEPT SELECT n,s FROM lt
+      UNION ALL (SELECT name,grp FROM pa WHERE name IN ('green','cy') AND amt BETWEEN 152.25 AND 147) ORDER BY 1,2`
+    const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+    const tree = String(explain[0]?.EXPLAIN)
+    assert.match(tree, /Index range scan on pa using name over \(name < 'al'\) OR \('al' < name < 'cy'\) OR \('cy' < name\)/)
+    assert.match(tree, /Index range scan on pa using name over \(name = 'cy'\) OR \(name = 'green'\)/)
+    for (const method of ['query', 'execute'] as const) {
+      const options = { sql, rowsAsArray: true }
+      const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+      assert.deepEqual(rows, [['165.14', '165.14'], ['235.52', '235.52']])
+      assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
+        ['amt', 253, 56, 0, 0, 255, '', '', '', 'amt'],
+        ['amt', 253, 44, 0, 0, 255, '', '', '', 'amt'],
+      ])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+    }
+
+    const filter = 'SELECT id,name FROM pa WHERE name NOT IN (?,?) ORDER BY id'
+    const statement = await conn.prepare(filter)
+    try {
+      assert.deepEqual((await statement.execute(['ANN', 'cy']))[0], [{ id: 2, name: 'ÄNNA' }])
+      await conn.query("UPDATE pa SET name='cy' WHERE id=2")
+      assert.deepEqual((await statement.execute(['ANN', 'cy']))[0], [])
+      assert.deepEqual((await statement.execute(['al', 'cy']))[0], [{ id: 1, name: 'ann' }])
+      assert.deepEqual((await statement.execute([null, 'cy']))[0], [])
+    } finally { conn.unprepare(filter) }
+
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,n VARCHAR(8),p INT,KEY by_name(n)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO t VALUES ?', [[[1, 'AL', 1], [2, 'al ', 2], [3, 'al\u00a0', 3], [4, 'ax', 4], [5, 'CY', 5], [6, null, 6], [7, 'z', 7], [8, '', 8]]])
+    await conn.query('ANALYZE TABLE t')
+    for (const [condition, order, expectedPlan, ids] of [
+      ["n NOT IN ('al ','CY')", 'id', 'Filter\n    Index scan on t using PRIMARY', [1, 4, 7, 8]],
+      ["n < 'al '", 'id', 'Sort\n    Index range scan on t using by_name over', [1, 8]],
+      ["n < 'al '", 'n,id', 'Index range scan on t using by_name over', [8, 1]],
+      ["n < 'al '", 'n DESC,id DESC', 'Index range scan on t using by_name over', [1, 8]],
+    ] as const) {
+      const sql = `SELECT id,p FROM t WHERE ${condition} ORDER BY ${order}`
+      const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+      assert.equal(planSkeleton(explain[0]?.EXPLAIN), expectedPlan, order)
+      for (const method of ['query', 'execute'] as const) {
+        const options = { sql, rowsAsArray: true }
+        const [rows] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+        assert.deepEqual(rows, ids.map((id) => [id, id]))
+      }
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
+
+test('NO PAD CHAR bounds retain rows through padding and exclusion', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'join_range_pad395'
+  try {
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,n CHAR(8),KEY by_name(n))')
+    await conn.query('INSERT INTO t VALUES ?', [[[1, 'al '], [2, 'al\u00a0'], [3, 'al\u3000'], [4, 'cy'], [5, null]]])
+    for (const method of ['query', 'execute'] as const) {
+      const notIn = { sql: "SELECT id FROM t WHERE n NOT IN ('al ','cy') ORDER BY id", rowsAsArray: true }
+      const [excluded] = method === 'query' ? await conn.query(notIn) : await conn.execute(notIn)
+      assert.deepEqual(excluded, [[1]])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+
+      // The reference's index lookup loses the non-ASCII space matches.
+      // Its table scan gives the SQL comparison result used as the oracle.
+      const equal = { sql: `SELECT id FROM t ${db === undefined ? 'IGNORE INDEX (by_name)' : ''} WHERE n = 'al ' ORDER BY id`, rowsAsArray: true }
+      const [matched] = method === 'query' ? await conn.query(equal) : await conn.execute(equal)
+      assert.deepEqual(matched, [[2], [3]])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
+
 test('buffered and repeated range joins close reads under LIMIT and stream cancellation', async () => {
   for (const covering of [false, true]) for (const buffered of [true, false]) {
     const db = await MySQL.open(':memory:')
