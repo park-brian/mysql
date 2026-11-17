@@ -12,6 +12,7 @@
 //   - REGEXP_LIKE's match type is any of `c`, `i`, `m`, `n`, `u`, the last of
 //     `c` and `i` winning; anything else is 1210. `.` does not match a line
 //     end without `n`; `^` and `$` are the whole subject's without `m`.
+//     With `u`, the parser starts in ICU's LF-only line mode.
 //   - An empty pattern, and the POSIX word boundaries `[[:<:]]`, are 3685.
 //     ICU's syntax errors keep their own numbers, which `icu-pattern.ts` lists.
 //
@@ -70,10 +71,8 @@ function shapeOf(pattern: string): { readonly depth: number; readonly nested: bo
 
 const RUNAWAY_LENGTH = 17
 
-export interface MatchType {
-  readonly insensitive?: boolean
-  readonly multiline: boolean
-  readonly dotAll: boolean
+export interface MatchType extends Omit<IcuFlags, 'i'> {
+  readonly i: boolean | undefined
 }
 
 /** REGEXP_LIKE's third argument: 1210 for a letter it does not know. */
@@ -81,21 +80,23 @@ export function matchType(text: string, fn: string): MatchType {
   let insensitive: boolean | undefined
   let multiline = false
   let dotAll = false
+  let unixLines = false
   for (const ch of text) {
     if (ch === 'c') insensitive = false
     else if (ch === 'i') insensitive = true
     else if (ch === 'm') multiline = true
     else if (ch === 'n') dotAll = true
-    else if (ch !== 'u') throw wrongArgumentsError(fn)
+    else if (ch === 'u') unixLines = true
+    else throw wrongArgumentsError(fn)
   }
-  return insensitive === undefined ? { multiline, dotAll } : { insensitive, multiline, dotAll }
+  return { i: insensitive, m: multiline, s: dotAll, d: unixLines }
 }
 
 const cache = new Map<string, IcuPattern & { readonly re: RegExp }>()
 
 /** A pattern compiled once per flags and text: ICU's syntax read, the engine's written. */
 function compiled(pattern: string, flags: IcuFlags): IcuPattern & { readonly re: RegExp } {
-  const key = `${Number(flags.insensitive)}${Number(flags.multiline)}${Number(flags.dotAll)}/${pattern}`
+  const key = `${flags.i}${flags.m}${flags.s}${flags.d}/${pattern}`
   let c = cache.get(key)
   if (c === undefined) {
     const p = compileIcu(pattern, flags)
@@ -137,7 +138,7 @@ function regexpFor(subject: Exclude<Value, null>, pattern: Exclude<Value, null>,
   if (text === '' || text.includes('[[:<:]]') || text.includes('[[:>:]]')) throw illegal()
   const shape = shapeOf(text)
   if (shape.depth >= 100) throw sqlError('ER_REGEXP_INTERNAL_ERROR', 'Internal error in the regular expression library.')
-  const c = compiled(text, { insensitive: type?.insensitive ?? /_ci$/.test(nameOf(collation)), multiline: type?.multiline === true, dotAll: type?.dotAll === true })
+  const c = compiled(text, { i: type?.i ?? nameOf(collation).endsWith('_ci'), m: type?.m ?? false, s: type?.s ?? false, d: type?.d ?? false })
   if (shape.nested && [...textOf(subject)].length > RUNAWAY_LENGTH) throw sqlError('ER_REGEXP_TIME_OUT', 'Timeout exceeded in regular expression match.')
   return c
 }

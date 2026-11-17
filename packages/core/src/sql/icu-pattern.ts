@@ -55,12 +55,6 @@ export interface IcuPattern {
   readonly names: ReadonlyMap<string, number>
 }
 
-export interface IcuFlags {
-  readonly insensitive: boolean
-  readonly multiline: boolean
-  readonly dotAll: boolean
-}
-
 interface Flags {
   i: boolean
   m: boolean
@@ -68,6 +62,9 @@ interface Flags {
   x: boolean
   d: boolean
 }
+
+/** ICU flags set by the SQL match type. */
+export type IcuFlags = Readonly<Omit<Flags, 'x'>>
 
 /** ICU's `\w`: `[\p{Alphabetic}\p{M}\p{Nd}\p{Pc}‌‍]`. */
 const WORD = '\\p{Alphabetic}\\p{M}\\p{Nd}\\p{Pc}\\u{200C}\\u{200D}'
@@ -920,7 +917,7 @@ class Writer {
 /** ICU's pattern as the engine's, or ICU's error for it. */
 export function compileIcu(pattern: string, initial: IcuFlags): IcuPattern {
   const parser = new Parser(pattern)
-  const flags: Flags = { i: initial.insensitive, m: initial.multiline, s: initial.dotAll, x: false, d: false }
+  const flags: Flags = { ...initial, x: false }
   const tree = parser.parseAlternation(flags, 0)
   // One case-sensitivity throughout is the engine's flag; a mix is folded by hand.
   const mixed = parser.seen.i && parser.seen.c
