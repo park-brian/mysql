@@ -931,3 +931,61 @@ test('a LEFT hash build reads two primary points and null-extends unmatched prob
     await conn.end(); await db?.end()
   }
 })
+
+test('an ordered row-ID union keeps ascending IDs and the statement snapshot on both sides of the clustered bound', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'index_merge_ordered428'
+  let writer: mysql.Connection | undefined
+  try {
+    writer = await mysql.createConnection(db === undefined
+      ? { host: process.env.MYSQL_REFERENCE_HOST ?? 'reference', user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+      : { stream: db.createStream(), user: 'root' })
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await writer.query(`USE ${schema}`)
+    for (const [type, minimum] of [['INT', -2147483648], ['INT UNSIGNED', 0]] as const) {
+      await conn.query(`CREATE TABLE t(id INT PRIMARY KEY,g ${type},v INT,KEY by_g(g)) STATS_AUTO_RECALC=0`)
+      await conn.query('INSERT INTO t VALUES ?', [Array.from({ length: 30 }, (_, i) => [i + 1, i === 0 || i === 29 ? minimum : i % 3 ? 20 : null, i])])
+      await conn.query('ANALYZE TABLE t')
+      const suffix = ` OR g <= ${minimum}`
+      const lower = 'SELECT id,g,v FROM t WHERE id > 27' + suffix
+      const upper = 'SELECT id,g,v FROM t WHERE id < 4' + suffix
+
+      for (const [switches, title, upperIds] of [
+        ['default', 'Deduplicate rows sorted by row ID', [1, 2, 3, 30]],
+        ['default,index_merge_sort_union=off', 'Deduplicate rows sorted by row ID', [1, 2, 3, 30]],
+        ['default,index_merge_union=off', 'Sort-deduplicate by row ID', [30, 1, 2, 3]],
+        ['default,index_merge=off', 'Table scan on t', [1, 2, 3, 30]],
+      ] as const) {
+        await conn.query('SET optimizer_switch=?', [switches])
+        for (const method of ['query', 'execute'] as const) {
+          const read = (sql: string) => method === 'query' ? conn.query<mysql.RowDataPacket[]>(sql) : conn.execute<mysql.RowDataPacket[]>(sql)
+          for (const [sql, ids] of [[lower, [1, 28, 29, 30]], [upper, upperIds]] as const) {
+            const [rows] = await read(sql)
+            assert.deepEqual(rows.map((row) => row.id), ids)
+            assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+            const [tree] = await read('EXPLAIN FORMAT=TREE ' + sql)
+            const plan = String(tree[0]?.EXPLAIN)
+            assert.ok(plan.includes(title))
+            if (title === 'Deduplicate rows sorted by row ID') {
+              assert.ok(plan.includes(`using by_g over (g = ${minimum})`))
+              assert.ok(!plan.includes('Clustered primary key (scanned separately)'))
+            }
+          }
+        }
+      }
+      await conn.query("SET optimizer_switch='default'")
+      await conn.query('START TRANSACTION WITH CONSISTENT SNAPSHOT')
+      await writer.query('UPDATE t SET g=20 WHERE id=1')
+      await writer.query('UPDATE t SET g=?,v=100 WHERE id=4', [minimum])
+      const ids = async () => (await conn.execute<mysql.RowDataPacket[]>(lower))[0].map((row) => row.id)
+      assert.deepEqual(await ids(), [1, 28, 29, 30])
+      await conn.query('COMMIT')
+      assert.deepEqual(await ids(), [4, 28, 29, 30])
+      await conn.query('DROP TABLE t')
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await writer?.end(); await conn.end(); await db?.end()
+  }
+})

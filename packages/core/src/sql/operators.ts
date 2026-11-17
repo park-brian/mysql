@@ -26,23 +26,12 @@ export const decodeRow = (columns: readonly ColumnDef[], fields: readonly FieldB
 /** The rows an access path reads, in its order. */
 export function* accessRows(table: Table, access: Access, trx?: Trx, current?: boolean, ready?: () => void): Generator<ScannedRow> {
   const { columns } = table.def
-  const { index, ranges, reverse, sortUnion } = access
+  const { index, ranges, reverse, indexUnion } = access
   const mode = current ? 'current' : undefined
-  if (sortUnion) {
-    const ids: RowId[] = []
-    const primary = ranges![0]!
-    const bound = primary.from ?? primary.to!
-    // The primary range reads its own rows last, under the same statement view.
-    for (const [id] of table.indexScan(sortUnion.index, sortUnion.range, trx, mode)) {
-      const order = compareBytes(id, sortUnion.bound)
-      const inPrimary = order === 0 ? bound.inclusive : primary.from === undefined ? order < 0 : order > 0
-      if (!inPrimary) ids.push(id)
-    }
-    for (const id of ids.sort(compareBytes)) {
-      const fields = table.get(id, trx, mode)
-      if (fields !== undefined) yield { id, row: decodeRow(columns, fields) }
-    }
-  }
+  const secondary = indexUnion && unionTail(table, indexUnion, ranges![0]!, trx, mode)
+  // A point reader is in row-ID order. Its nonoverlapping rows are all on one side of the clustered range.
+  const primaryBeforeSecondary = indexUnion?.ordered && ranges![0]!.to !== undefined
+  if (secondary && !primaryBeforeSecondary) yield* secondary
   const ordered = ranges === undefined ? [{ reverse: reverse === true }]
     : reverse === true ? [...ranges].reverse().map((r) => ({ ...r, reverse: true })) : ranges
   for (const range of ordered) {
@@ -50,6 +39,25 @@ export function* accessRows(table: Table, access: Access, trx?: Trx, current?: b
     // Construction precedes readiness; deferred visibility checks and decoding follow it.
     if (ranges === undefined) ready?.()
     for (const [id, fields] of rows) yield { id, row: decodeRow(columns, fields) }
+  }
+  if (primaryBeforeSecondary) yield* secondary!
+}
+
+/** Read the secondary arm's rows outside the one-sided clustered range. */
+function* unionTail(table: Table, indexUnion: NonNullable<Access['indexUnion']>, primary: NonNullable<Access['ranges']>[number], trx: Trx | undefined, mode: 'current' | undefined): Generator<ScannedRow> {
+  const { columns } = table.def
+  const ids: RowId[] = []
+  const bound = primary.from ?? primary.to!
+  const direction = primary.from === undefined ? -1 : 1
+  for (const [id, fields] of table.indexScan(indexUnion.index, indexUnion.range, trx, mode)) {
+    const order = direction * compareBytes(id, indexUnion.bound)
+    if (order > 0 || (order === 0 && bound.inclusive)) continue
+    if (indexUnion.ordered) yield { id, row: decodeRow(columns, fields) }
+    else ids.push(id)
+  }
+  for (const id of ids.sort(compareBytes)) {
+    const fields = table.get(id, trx, mode)
+    if (fields !== undefined) yield { id, row: decodeRow(columns, fields) }
   }
 }
 

@@ -51,7 +51,7 @@ import {
   type Value,
 } from '@myjs/types'
 import type { Compiled, Env } from './compile.ts'
-import { PAGE_READ, ROW_EVALUATE, rangeBaseline, rangeCost, sortUnionCost, type RangeShape, type RangeRead } from './cost.ts'
+import { PAGE_READ, ROW_EVALUATE, rangeBaseline, rangeCost, indexUnionCost, type RangeShape, type RangeRead } from './cost.ts'
 import { encodeBound, impossibleBetween, intersect, normalize, pointInterval, pruneImpossibleOr, rangeOf, significantCharPadding, type Constant, type Interval, type RangeSet, type RangeValue } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
 import { forwardKeyColumn, forwardKeyPart, singleRefIndex, uniquePoint } from './indexes.ts'
@@ -81,12 +81,13 @@ type ImpliedRange = Extract<InferredRange, { readonly column: ColumnDef }>
 
 /** How to read a table: an index and the ranges of it, in index order, or a full scan. */
 export interface Access {
-  /** One secondary range adds rows ahead of the clustered primary range. */
-  readonly sortUnion?: {
+  /** A secondary range merged with one clustered range. */
+  readonly indexUnion?: {
     readonly index: string
     readonly range: KeyRange
     readonly over: string
     readonly bound: Uint8Array
+    readonly ordered: boolean
     readonly primaryFirst: boolean
   }
   /** Table cardinality for a noncovering text range's ordering competitor. */
@@ -225,7 +226,7 @@ export function chooseAccess(def: TableDef, alias: string, where: Expression | u
   const conditions = conjuncts.flatMap((e) => conditionOf(e, def, alias, outer, env) ?? [])
   const read = conditionAccess(def, conditions, env, outer, indexes, costing === undefined)
   return read ?? (costing && (rangeAccess(def, alias, conjuncts, env, costing, undefined, inferred, indexes) ??
-    sortUnionAccess(def, alias, inferred?.condition ?? (costing.allowSortUnion ? where : undefined), env, costing, indexes))) ?? FULL_SCAN
+    indexUnionAccess(def, alias, inferred?.condition ?? (costing.allowIndexUnion ? where : undefined), env, costing, indexes))) ?? FULL_SCAN
 }
 
 /** Points win first, with the primary or clustered key preferred among them. */
@@ -267,7 +268,7 @@ export function dynamicAccess(def: TableDef, alias: string, conjuncts: readonly 
 /** What the range optimizer weighs a table's ranges by (M5.7). */
 export interface RangeCosting {
   /** The query has no early ordered-reader competitor. */
-  readonly allowSortUnion?: boolean | undefined
+  readonly allowIndexUnion?: boolean | undefined
   /** Request selected-range row estimates alongside the physical access. */
   readonly quote?: boolean
   /** FORCE INDEX excludes the table-scan cost for an eligible unordered read. */
@@ -284,7 +285,7 @@ export interface RangeCosting {
 }
 
 /** Merge one nullable INT secondary range and one signed INT primary range. */
-function sortUnionAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, costing: RangeCosting, indexes: readonly IndexDef[]): Access | undefined {
+function indexUnionAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, costing: RangeCosting, indexes: readonly IndexDef[]): Access | undefined {
   if (def.engine !== 'native' || where?.kind !== NODE.BINARY || !logicalShortCircuit(where.op)) return undefined
   const primary = indexes.find((key) => key.kind === 'primary')
   if (primary?.parts.length !== 1) return undefined
@@ -322,22 +323,29 @@ function sortUnionAccess(def: TableDef, alias: string, where: Expression | undef
     const endpoint = endsBelow ? min : max
     if ((endsBelow ? integer < min : integer > max) || (integer === endpoint && !inclusive)) {
       // An impossible arm leaves only the primary comparison as an access path.
-      return costing.allowSortUnion
+      return costing.allowIndexUnion
         ? rangeAccess(def, alias, [primaryFirst ? where.left : where.right], env, costing) : undefined
     }
-    if (endsBelow && integer === min) return undefined
-    // An edge admitting its domain limit admits every non-NULL key.
-    const limit = endsBelow ? max : min
-    if ((endsBelow ? integer < limit : integer > limit) || (integer === limit && !inclusive)) {
-      const edge = { v: intValue(integer), inclusive }
-      secondaryInterval = endsBelow ? { hi: edge } : { lo: edge }
+    if (endsBelow && integer === min) {
+      if (!costing.allowIndexUnion) return undefined
+      secondaryInterval = pointInterval(intValue(min))
+    } else {
+      // An edge admitting its domain limit admits every non-NULL key.
+      const limit = endsBelow ? max : min
+      if ((endsBelow ? integer < limit : integer > limit) || (integer === limit && !inclusive)) {
+        const edge = { v: intValue(integer), inclusive }
+        secondaryInterval = endsBelow ? { hi: edge } : { lo: edge }
+      }
     }
   }
-  if (!optimizerEnabled(env, 'index_merge') || !optimizerEnabled(env, 'index_merge_sort_union')) return undefined
-  const secondaryRange = keyRanges([secondaryInterval], column)?.[0]?.range
+  if (!optimizerEnabled(env, 'index_merge')) return undefined
+  const keyed = keyRanges([secondaryInterval], column)?.[0]
+  const secondaryRange = keyed?.range
   if (secondaryRange?.from === undefined) return undefined
+  const rowIdOrdered = keyed!.point && optimizerEnabled(env, 'index_merge_union')
+  if (!rowIdOrdered && !optimizerEnabled(env, 'index_merge_sort_union')) return undefined
   const { stats, coveringScan } = costing
-  // This reader models an in-memory sort. Leave space per row ID for the sort tree.
+  // Keep this merge within the existing range budget for an in-memory Sort Union.
   const limit = Math.min(stats.rows - 2, Math.floor(sortBufferBytes(env) / 64) - 1)
   if (limit < 1) return undefined
   const secondaryRows = Math.max(1, costing.count(secondary.name, secondaryRange, limit))
@@ -345,13 +353,14 @@ function sortUnionAccess(def: TableDef, alias: string, where: Expression | undef
   const primaryRows = Math.max(1, costing.count(primary.name, pkRange, stats.rows - secondaryRows - 1))
   if (primaryRows + secondaryRows >= stats.rows) return undefined
   const reads = rangeCost(stats, { ...costing.shape(secondary), covering: true }, 1, secondaryRows) +
-    rangeCost(stats, { ...costing.shape(primary), covering: false }, 1, primaryRows)
-  if (reads + sortUnionCost(stats, secondaryRows) >= rangeBaseline(stats, coveringScan && costing.shape(coveringScan).recordBytes)) return undefined
+    rangeCost(stats, { ...costing.shape(primary), covering: rowIdOrdered }, 1, primaryRows)
+  if (reads + indexUnionCost(stats, primaryRows, secondaryRows, rowIdOrdered) >=
+      rangeBaseline(stats, coveringScan && costing.shape(coveringScan).recordBytes)) return undefined
   return {
     index: primary.name, ranges: [pkRange], over: describeIntervals([upper ? { hi: edge } : { lo: edge }], pk.name),
-    sortUnion: {
+    indexUnion: {
       index: secondary.name, range: secondaryRange, over: describeIntervals([secondaryInterval], column.name, true),
-      bound: encodeKey(key.values, [keyPartOf(pk.type, pk.nullable)]), primaryFirst,
+      bound: encodeKey(key.values, [keyPartOf(pk.type, pk.nullable)]), ordered: rowIdOrdered, primaryFirst,
     },
   }
 }

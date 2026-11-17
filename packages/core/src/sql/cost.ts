@@ -453,14 +453,15 @@ export function rangeBaseline(t: TableStatistics, coveringRecordBytes: number | 
   return Math.min(scan, accessCost(indexScanCost(t.rows, coveringRecordBytes), t.rows))
 }
 
-/** Row-ID comparisons and a cached sweep for an in-memory Sort Union. */
-export function sortUnionCost(t: TableStatistics, secondary: number): number {
+/** Estimated sweep and row-ID comparisons for two bounded index merge arms. */
+export function indexUnionCost(t: TableStatistics, primary: number, secondary: number, rowIdOrdered: boolean): number {
+  const rows = rowIdOrdered ? primary + secondary - Math.trunc(primary * secondary / t.rows) : secondary
   const blocks = t.pages * (PAGE_BYTES / 4096)
-  const occupied = Math.max(1, blocks * (1 - (1 - 1 / blocks) ** secondary))
+  const occupied = Math.max(1, blocks * (1 - (1 - 1 / blocks) ** rows))
   // Two comparisons per tree level sum to twice log2((rows + 1)!).
-  const n = secondary + 1
-  const insertion = Math.log2(2 * Math.PI * n) / 2 + n * Math.log2(n / Math.E)
-  return PAGE_READ * occupied + 0.05 * (secondary + 2 * insertion)
+  const n = rows + 1
+  const comparisons = rowIdOrdered ? rows : rows + 2 * (Math.log2(2 * Math.PI * n) / 2 + n * Math.log2(n / Math.E))
+  return PAGE_READ * occupied + 0.05 * comparisons
 }
 
 /** How an index is read for a range: through the clustered key, alone because it covers, or a secondary index with a row fetched for each entry. */

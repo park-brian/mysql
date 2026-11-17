@@ -93,3 +93,37 @@ test('ranged access retains reverse range order without claiming whole-reader re
   assert.deepEqual(events, [{ ...second, reverse: true }, 'close', { ...first, reverse: true }, 'close'])
   assert.deepEqual(access.ranges, [first, second])
 })
+
+test('an ordered union closes the active scan on return without opening the second one', () => {
+  const trx = {} as Trx
+  const boundary = Uint8Array.of(4)
+  const bound = { values: [boundary], inclusive: true }
+  const secondary = { from: bound, to: bound }
+  for (const primaryUpper of [true, false]) {
+    const primary = primaryUpper ? { to: bound } : { from: bound }
+    const events: string[] = []
+    const table = {
+      def: { columns: [] },
+      *indexScan(index: string, range: KeyRange, gotTrx: Trx | undefined, mode: string | undefined): ReturnType<Table['indexScan']> {
+        assert.equal(gotTrx, trx)
+        assert.equal(mode, undefined)
+        assert.equal(range, index === 'PRIMARY' ? primary : secondary)
+        events.push('open ' + index)
+        try {
+          const ids = index === 'PRIMARY' ? (primaryUpper ? [1, 2, 3] : [6, 7]) : [1, 3, 6]
+          for (const n of ids) yield [Uint8Array.of(n), []]
+        } finally { events.push('close ' + index) }
+      },
+    } as unknown as Table
+    const access = { index: 'PRIMARY', ranges: [primary], indexUnion: {
+      index: 'by_g', range: secondary, over: '(g = 4)', bound: boundary, ordered: true, primaryFirst: true,
+    } }
+    const rows = accessRows(table, access, trx)
+    const first = primaryUpper ? 'PRIMARY' : 'by_g'
+    assert.deepEqual(rows.next().value?.id, Uint8Array.of(1))
+    assert.deepEqual(events, ['open ' + first])
+    rows.return(undefined)
+    assert.deepEqual(events, ['open ' + first, 'close ' + first])
+    assert.deepEqual([...accessRows(table, access, trx)].map(({ id }) => id[0]), primaryUpper ? [1, 2, 3, 6] : [1, 3, 6, 7])
+  }
+})
