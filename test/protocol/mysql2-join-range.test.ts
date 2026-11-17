@@ -269,3 +269,59 @@ test('buffered and repeated range joins close reads under LIMIT and stream cance
     } finally { await db.end() }
   }
 })
+
+test('a reversed indexed BETWEEN arm leaves the named point range and its residual', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'join_range_between396'
+  try {
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,grp INT,amt DECIMAL(6,2),UNIQUE KEY by_name(name),KEY by_grp(grp)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE lt(n INT PRIMARY KEY,t VARCHAR(10) COLLATE utf8mb4_bin) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO p VALUES (1,'Bob',2,NULL),(2,'al',4,NULL),(3,'b',3,263.08),(4,'éva',NULL,58.31)")
+    await conn.query("INSERT INTO lt VALUES (1,'x'),(3,NULL),(5,'green'),(7,'red'),(9,'cy')")
+    await conn.query('ANALYZE TABLE p,lt')
+    const prefix = 'SELECT p.amt AS amount,lt.t,COUNT(*) AS total,MAX(lt.n)-MIN(p.grp) AS spread FROM lt LEFT JOIN p'
+    const membership = "p.name IN ('ann','ann')"
+    const between = 'p.grp BETWEEN 5.5 AND 2'
+    const sql = (filter: string, hint = '') => `${prefix} ${hint} ON lt.n >= p.id WHERE ${filter} GROUP BY p.amt,lt.t ORDER BY 1,2,3,4`
+    const expression = `${membership} OR ${between}`
+    const namedPoint = /Index range scan on p using by_name over \(name = 'ann'\)/
+    for (const method of ['query', 'execute'] as const) {
+      const explain = async (filter: string, hint = ''): Promise<string> => {
+        const text = 'EXPLAIN FORMAT=TREE ' + sql(filter, hint)
+        const [rows] = method === 'query' ? await conn.query<mysql.RowDataPacket[]>(text) : await conn.execute<mysql.RowDataPacket[]>(text)
+        return String(rows[0]?.EXPLAIN)
+      }
+      for (const filter of [expression, `${between} OR ${membership}`]) {
+        const plan = await explain(filter)
+        assert.match(plan, namedPoint)
+        assert.match(plan, /Filter[^\n]*\n\s*-> Index range scan on p using by_name/)
+      }
+      assert.doesNotMatch(await explain(expression, 'IGNORE INDEX (by_grp)'), namedPoint)
+      const options = { sql: sql(expression), rowsAsArray: true }
+      const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+      assert.deepEqual(rows, [])
+      assert.deepEqual(fields.map((f) => [f.name, f.columnType]), [['amount', 246], ['t', 253], ['total', 8], ['spread', 8]])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+    }
+
+    const text = sql(`${membership} OR p.grp BETWEEN ? AND ?`)
+    const statement = await conn.prepare(text)
+    try {
+      assert.deepEqual((await statement.execute([5.5, 2]))[0], [])
+      await conn.query("INSERT INTO p VALUES (5,'ann',3,4.39)")
+      const joined = [['cy', 6], ['green', 2], ['red', 4]] as const
+      assert.deepEqual((await statement.execute([5.5, 2]))[0], joined.map(([t, spread]) => ({ amount: '4.39', t, total: 1, spread })))
+      await conn.query('UPDATE p SET grp=NULL WHERE id=5')
+      assert.deepEqual((await statement.execute([5.5, 2]))[0], joined.map(([t]) => ({ amount: '4.39', t, total: 1, spread: null })))
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      const [ordered] = await statement.execute([2, 5.5])
+      assert.ok(Array.isArray(ordered))
+      assert.equal(ordered.length, 12)
+    } finally { conn.unprepare(text) }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})

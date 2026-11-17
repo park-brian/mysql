@@ -51,7 +51,7 @@ import { chooseStrategy } from './group.ts'
 import { clusteredIndex, forwardKeyPart, indexPartMatchesColumn, indexParts, leadingIndex, singleRefIndex, uniquePoint } from './indexes.ts'
 import { accessRows, distinct, sort as sortRows, type SortKey } from './operators.ts'
 import { neverEqual, rejectsNullExtension } from './optimize.ts'
-import { fractionalIntBound } from './ranges.ts'
+import { pruneImpossibleOr, fractionalIntBound } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
 import { equalSlots, unknownColumnError, safeIndex, safeResolve, TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
 
@@ -1139,6 +1139,7 @@ function rangeCosting(t: FromTable, settings: LeafSettings, env: Env, quote = fa
   const statistics = settings.statistics
   let stats: TableStatistics | undefined
   return {
+    hasIndexHints: t.indexHints !== undefined,
     // Read only when a range is weighed: on a table just written, statistics are recomputed.
     get stats() {
       return (stats ??= statistics(def, table))
@@ -1594,13 +1595,6 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], compile: (e
     classes.union(l.slot, r.slot)
   }
   const isNullOfNotNull = (e: Expression): boolean => e.kind === NODE.UNARY && e.op === 'IS NULL' && resolve(e.operand)?.column.nullable === false
-  const possible = (e: Expression): Expression => {
-    if (e.kind !== NODE.BINARY || logicalShortCircuit(e.op) !== true) return e
-    const left = possible(e.left)
-    const right = possible(e.right)
-    if (isNullOfNotNull(left)) return isNullOfNotNull(right) ? e : right
-    return isNullOfNotNull(right) ? left : { ...e, left, right }
-  }
   const per = new Map<ColumnDef, Expression>()
   let inferred: InferredRange | undefined
   const constant = (x: Expression | undefined): boolean => x !== undefined && !someNode(x, (node) => {
@@ -1608,7 +1602,7 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], compile: (e
     return kind === NODE.COLUMN || kind === NODE.SUBQUERY || kind === NODE.PLACEHOLDER || kind === NODE.VARIABLE || undefined
   })
   for (const { e: raw } of conditions) {
-    const e = possible(raw)
+    const e = pruneImpossibleOr(raw, isNullOfNotNull)
     let first: ReturnType<typeof resolve>
     const subject = (x: Expression): boolean => {
       const resolved = resolve(x)

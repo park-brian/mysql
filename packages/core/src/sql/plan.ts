@@ -52,7 +52,7 @@ import {
 } from '@myjs/types'
 import type { Compiled, Env } from './compile.ts'
 import { rangeBaseline, rangeCost, type RangeShape, type RangeRead } from './cost.ts'
-import { intersect, normalize, rangeOf, significantCharPadding, type Constant, type Interval, type RangeSet, type RangeValue } from './ranges.ts'
+import { impossibleBetween, intersect, normalize, pointInterval, pruneImpossibleOr, rangeOf, significantCharPadding, type Constant, type Interval, type RangeSet, type RangeValue } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
 import { forwardKeyColumn, uniquePoint } from './indexes.ts'
 import { columnIndex } from './scope.ts'
@@ -256,6 +256,8 @@ export interface RangeCosting {
   readonly quote?: boolean
   /** FORCE INDEX excludes the table-scan cost for an eligible unordered read. */
   readonly forceRange?: boolean | undefined
+  /** Whether a written index hint can change which keys provide a range. */
+  readonly hasIndexHints?: boolean
   readonly stats: TableStatistics
   /** The existing range price inputs for one index. */
   shape(index: IndexDef): RangeShape
@@ -277,13 +279,30 @@ export interface RangeCosting {
 function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expression[], env: Env, costing: RangeCosting, known?: Constant, inferred?: InferredRange, indexes = def.indexes): Access | undefined {
   const value = (e: Expression): Value | undefined => (e.kind === NODE.PLACEHOLDER && e.index >= env.params.length ? undefined : isConstant(e) ? constantValue(e, env) : known?.(e))
   const candidates: { readonly index: IndexDef; readonly column: ColumnDef; readonly intervals: Interval[]; readonly keyed: { readonly range: KeyRange; readonly point: boolean }[]; readonly shape: RangeShape; readonly empty: boolean | undefined; readonly implied: ImpliedRange | undefined }[] = []
-  for (const index of keyOrder(def, indexes)) {
+  const eligible = keyOrder(def, indexes)
+  const indexedColumn = (subject: Expression): ColumnDef | undefined => {
+    const column = tableColumn(subject, def, alias)
+    return column !== undefined && eligible.some((index) => forwardKeyColumn(def, index) === column) ? column : undefined
+  }
+  const simplify = known === undefined && !costing.hasIndexHints
+    ? (e: Expression) => pruneImpossibleOr(e, (arm) => impossibleBetween(arm, indexedColumn, value))
+    : undefined
+  const storedBounds = known === undefined && conjuncts.length === 1
+  for (const index of eligible) {
     const column = forwardKeyColumn(def, index)
     if (column === undefined) continue
     let set: RangeSet = 'all'
     let implied: ImpliedRange | undefined
+    const isColumn = (e: Expression) => tableColumn(e, def, alias)?.name === column.name
     for (const c of conjuncts) {
-      const range = rangeOf(c, (e) => tableColumn(e, def, alias)?.name === column.name, column, value, known === undefined && conjuncts.length === 1)
+      let range = rangeOf(c, isColumn, column, value, storedBounds)
+      if (range === 'all' && index.kind !== 'primary' && column.type.type === FIELD_TYPE.VAR_STRING) {
+        const predicate = simplify?.(c)
+        if (predicate !== undefined && predicate !== c) {
+          const points = rangeOf(predicate, isColumn, column, value)
+          if (points !== 'all' && points.length > 0 && points.every((i) => i !== 'null' && i.lo !== undefined && i.lo === i.hi)) range = points
+        }
+      }
       if (c === inferred?.condition && range !== 'all' && inferred.column === column) implied = inferred
       set = intersect(set, range)
     }
@@ -337,9 +356,7 @@ function describeTextPoints(points: readonly KeyRange[], column: ColumnDef): str
   const t = column.type
   if (points.length < 2 || t.type !== FIELD_TYPE.VAR_STRING || t.collationId === undefined || t.collationId === CHARSET_BINARY) return undefined
   return describeIntervals(points.map(({ from }) => {
-    const v = decodeField(from!.values[0]!, t) as RangeValue
-    const endpoint = { v, inclusive: true }
-    return { lo: endpoint, hi: endpoint }
+    return pointInterval(decodeField(from!.values[0]!, t) as RangeValue)
   }), column.name)
 }
 

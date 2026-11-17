@@ -24,6 +24,13 @@ export type RangeSet = readonly Interval[] | 'all'
 
 const ALL_VALUES: Interval = {}
 
+export function pointInterval(v: RangeValue): Interval {
+  const endpoint = { v, inclusive: true }
+  return { lo: endpoint, hi: endpoint }
+}
+
+const numericRange = (type: number): boolean => integerBytes(type) !== undefined || type === FIELD_TYPE.NEWDECIMAL || type === FIELD_TYPE.DECIMAL
+
 /** CHAR storage drops trailing spaces that a NO PAD comparison still sees. */
 export function significantCharPadding(v: Value, { type }: ColumnDef): boolean {
   return type.type === FIELD_TYPE.STRING && v?.kind === 'string' && v.v.endsWith(' ') && type.collationId !== undefined &&
@@ -43,7 +50,7 @@ function constantFor(e: Expression, column: ColumnDef, value: Constant): RangeVa
       proof(() => decodeCollation(encodeCollation(v.v, collationId), collationId)) !== v.v) return undefined
     return { ...v, collationId }
   }
-  if (integerBytes(type) || type === FIELD_TYPE.NEWDECIMAL || type === FIELD_TYPE.DECIMAL) return v.kind === 'int' || v.kind === 'decimal' ? v : undefined
+  if (numericRange(type)) return v.kind === 'int' || v.kind === 'decimal' ? v : undefined
   return undefined
 }
 
@@ -62,6 +69,35 @@ export function fractionalIntBound(v: Value | undefined): boolean {
   return BigInt.asIntN(32, rounded) === rounded
 }
 
+/** An indexed BETWEEN with exact written bounds whose comparison cannot hold. */
+export function impossibleBetween(x: Expression, indexed: (e: Expression) => ColumnDef | undefined, value: Constant): boolean {
+  if (x.kind !== NODE.BINARY || x.op !== 'BETWEEN') return false
+  const column = indexed(x.left)
+  const high = x.extra as Expression
+  if (!column || !numericRange(column.type.type)) return false
+  const literal = (bound: Expression): RangeValue | null | undefined => {
+    if (signedOperand(bound).kind !== NODE.LITERAL) return undefined
+    const v = constantFor(bound, column, value)
+    return v === null && !nullLiteral(bound) ? undefined : v
+  }
+  const a = literal(x.right)
+  const b = literal(high)
+  if (a === undefined || b === undefined) return false
+  // MySQL keeps the arm with a negative upper endpoint on an unsigned key.
+  // When only one endpoint is NULL, the same guard applies to the other one.
+  if (column.type.unsigned && compareValues(b ?? a, intValue(0n)) === -1) return false
+  return a === null || b === null || compareValues(a, b) === 1
+}
+
+/** Keep the admissible arms of a positive disjunction for range planning. */
+export function pruneImpossibleOr(e: Expression, impossible: (e: Expression) => boolean): Expression {
+  if (e.kind !== NODE.BINARY || logicalShortCircuit(e.op) !== true) return e
+  const left = pruneImpossibleOr(e.left, impossible)
+  const right = pruneImpossibleOr(e.right, impossible)
+  if (impossible(left)) return impossible(right) ? e : right
+  return impossible(right) ? left : left === e.left && right === e.right ? e : { ...e, left, right }
+}
+
 export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, column: ColumnDef, value: Constant, storedBounds = false): RangeSet {
   if (e.kind === NODE.UNARY && (e.op === 'IS NULL' || e.op === 'IS NOT NULL') && isColumn(e.operand)) return e.op === 'IS NULL' ? (column.nullable ? ['null'] : []) : [ALL_VALUES]
   if (e.kind !== NODE.BINARY) return 'all'
@@ -72,7 +108,6 @@ export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, col
     if (!disjunction) return intersect(left, right)
     return left === 'all' || right === 'all' ? 'all' : [...left, ...right]
   }
-  const point = (v: RangeValue): Interval => ({ lo: { v, inclusive: true }, hi: { v, inclusive: true } })
   const onLeft = isColumn(e.left)
   if (e.op === 'BETWEEN' && onLeft) {
     const a = constantFor(e.right, column, value)
@@ -98,7 +133,7 @@ export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, col
     for (const item of items) {
       const v = constantFor(item, column, value)
       if (v === undefined || (v === null && negated)) return 'all'
-      if (v !== null && (!negated || !significantCharPadding(v, column))) points.push(point(v))
+      if (v !== null && (!negated || !significantCharPadding(v, column))) points.push(pointInterval(v))
     }
     if (!negated) return points
     const out: Interval[] = []
@@ -122,7 +157,7 @@ export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, col
   switch (op) {
     case '=':
     case '<=>':
-      return [point(v)]
+      return [pointInterval(v)]
     case '<':
       return [{ hi: { v, inclusive: false } }]
     case '<=':

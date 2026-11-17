@@ -2778,25 +2778,28 @@ that compare equal. Full Docker verification passes 1,853 tests, seeded
 fuzzing, 10,000 crash points, package and real-client smoke, and all seven
 pinned corpora. Parser, core and facade measure 44,945, 334,289 and
 334,220 bytes gzipped within the existing caps. Native delete-marked range
-estimates and the named range in case 11:15 remain open. In that case a
-reversed fractional `BETWEEN` on another column prevents the range
-chooser from using a text index for the other arm of the `OR`.
+estimates remain open.
 
-**M5.49 named range with an impossible `BETWEEN` arm, in progress.**
+**M5.49 named range with an impossible `BETWEEN` arm, verified.**
 In case 11:15, MySQL 8.4.11 uses the one-point name range and still
 evaluates the original `OR` filter. The native probe requires an eligible
 leading index on the `BETWEEN` column. An ignored, invisible, absent or
-non-leading key leaves the original access choice. The prototype repairs
-the captured plan and preserves every other outcome in the 300-case
-replay. The candidate admits ordinary unhinted secondary `VARCHAR`
-point ranges with exact written numeric or NULL bounds on a complete,
-ascending first part of another visible index. The unsigned
+non-leading key leaves the original access choice. The relational replay
+reaches 2,152 of 2,248 matching plans, up from 2,151, and preserves every
+other outcome in the 300 scripts. MyJS admits ordinary unhinted secondary
+`VARCHAR` point ranges with exact written numeric or NULL bounds on a
+complete, ascending first part of another visible index. The unsigned
 negative-bound cases retain their original access.
 Two probes repair 1,600 plans and 76 row orders across 12,800 outcomes,
 with every earlier match retained. The focused test passes through both
 protocols, including NULLs, index hints and writes after preparation.
+The 138 fresh semijoin observations match their earlier results. Full
+Docker verification passes 1,854 tests, seeded fuzzing, 10,000 crash
+points, package and real-client smoke, and all seven pinned corpora.
+Parser, core and facade measure 44,507, 334,335 and 334,258 bytes gzipped
+within the existing caps.
 Prepared bound conversions, warning-producing expressions and broader
-range shapes need their own proofs. Full Docker verification is pending.
+range shapes need their own proofs.
 
 **M2.3 zero runs in internal charset encodings, verified.** The shared
 codec records absolute zeroes directly in the 24 byte-to-code-point
