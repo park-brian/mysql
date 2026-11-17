@@ -114,11 +114,11 @@ function compiled(pattern: string, flags: IcuFlags): IcuPattern & { readonly re:
   return c
 }
 
-const collationOf = (v: Exclude<Value, null>) => (v.kind === 'string' ? v.collationId : v.kind === 'bytes' ? CHARSET_BINARY : undefined)
+const collationOf = (v: Value) => (v?.kind === 'string' ? v.collationId : v?.kind === 'bytes' ? CHARSET_BINARY : undefined)
 const nameOf = (id: number) => (id === CHARSET_BINARY ? 'binary' : requireCollationInfo(id).name)
 
 /** The first string collation, with 3995 for mixed binary and text operands. */
-function pairCollation(a: Exclude<Value, null>, b: Exclude<Value, null>, fn: string): number {
+function pairCollation(a: Value, b: Exclude<Value, null>, fn: string): number {
   const x = collationOf(a)
   const y = collationOf(b)
   if (x !== undefined && y !== undefined && (x === CHARSET_BINARY) !== (y === CHARSET_BINARY)) {
@@ -131,22 +131,23 @@ function pairCollation(a: Exclude<Value, null>, b: Exclude<Value, null>, fn: str
 const textOf = (v: Exclude<Value, null>): string => (v.kind === 'bytes' ? decodeCharset(v.v, 'latin1') : toText(v))
 
 /** The engine's pattern for `pattern` over `subject`. */
-function regexpFor(subject: Exclude<Value, null>, pattern: Exclude<Value, null>, type: MatchType | undefined, fn: string): IcuPattern & { readonly re: RegExp } {
+function regexpFor(subject: Value, pattern: Exclude<Value, null>, type: MatchType | undefined, fn: string): IcuPattern & { readonly re: RegExp } {
   const base = pairCollation(subject, pattern, fn)
-  const collation = subject.kind === 'string' && pattern.kind === 'string' ? aggregateCollation(subject, pattern) : base
+  const collation = subject?.kind === 'string' && pattern.kind === 'string' ? aggregateCollation(subject, pattern) : base
   const text = textOf(pattern)
   if (text === '' || text.includes('[[:<:]]') || text.includes('[[:>:]]')) throw illegal()
   const shape = shapeOf(text)
   if (shape.depth >= 100) throw sqlError('ER_REGEXP_INTERNAL_ERROR', 'Internal error in the regular expression library.')
   const c = compiled(text, { i: type?.i ?? nameOf(collation).endsWith('_ci'), m: type?.m ?? false, s: type?.s ?? false, d: type?.d ?? false })
-  if (shape.nested && [...textOf(subject)].length > RUNAWAY_LENGTH) throw sqlError('ER_REGEXP_TIME_OUT', 'Timeout exceeded in regular expression match.')
+  if (shape.nested && subject !== null && [...textOf(subject)].length > RUNAWAY_LENGTH) throw sqlError('ER_REGEXP_TIME_OUT', 'Timeout exceeded in regular expression match.')
   return c
 }
 
 /** Whether `subject` matches `pattern`, as REGEXP_LIKE has it; NULL in, NULL out. */
 export function regexpLike(subject: Value, pattern: Value, type: MatchType | undefined): boolean | null {
-  if (subject === null || pattern === null) return null
+  if (pattern === null) return null
   const { re } = regexpFor(subject, pattern, type, 'regexp_like')
+  if (subject === null) return null
   re.lastIndex = 0
   return re.test(textOf(subject))
 }

@@ -338,8 +338,21 @@ Full Docker verification passes 1,874 tests, all nine size gates, seeded
 fuzzing, 10,000 crash points, package and client smoke and all seven pinned
 corpora, including 1,737 coercion warning counts. Parser, core and facade
 measure 44,526, 334,323 and 334,266 gzipped bytes. The relational score
-stays at 2,158 of 2,248. Full Unicode folding, dot-all over CRLF and
-constant-pattern validation on NULL inputs remain open.
+stays at 2,158 of 2,248. Full Unicode folding and dot-all over CRLF
+remain open.
+
+**M5.10 REGEXP pattern validation on NULL subjects, verified.** The
+infix operators and `REGEXP_LIKE` validate a non-NULL pattern when a row
+is evaluated, even if the subject is NULL. NULL pattern or match-type
+arguments and a projection skipped by `LIMIT 0` retain their native
+behavior. Both protocols gain ten exact outcomes in the 468-observation
+study. The retained test covers an empty and malformed pattern and a
+nullable column. Full Docker verification passes 1,882 tests, all nine
+size gates, seeded fuzzing, 10,000 crash points, package and client smoke
+and all seven pinned corpora, including 1,737 coercion warning counts.
+Parser, core and facade measure 44,906, 334,321 and 334,245 gzipped bytes.
+The relational score stays at 2,158 of 2,248. Argument validation in the
+other regex search functions remains open.
 
 **M5.2 packed field type merge table, verified.** The generator stores
 one triangle of the matrix and emits an exception for each ordered pair
@@ -1708,7 +1721,7 @@ all 2,184 native commands and local preservation checks. Source proofs cover
 a63ca2c, whose full pinned-reference Docker gate and all eleven required CI jobs
 passed. This closes the bounded function batch checkpoint, not M5.10: totals remain 144/190 and M5 42/53.
 
-**M5.47 refresh, repair in progress:** fresh MySQL 8.4.11 results are identical
+**M5.47 materialization refresh, earlier checkpoint.** Fresh MySQL 8.4.11 results are identical
 to the historical native answers: the materialization matrix now agrees on all
 144/144 commands and the threshold matrix on all 2,160/2,160. Current base controls
 agree on 288/288, fresh controls on 337/352 complete outcomes with 340 matching
@@ -11322,7 +11335,7 @@ older controls and 2,124/2,248 plans are unchanged, floor 2,118. Core/facade
 are 334,283/334,201 B gzipped. All eleven required jobs in preceding FirstMatch
 CI run 38503905854 pass. Selected materialization admission remains next and M5.47 remains partial.
 
-**Next bounded MaterializeLookup contract (implementation in progress):**
+**Earlier bounded MaterializeLookup contract.**
 Admit only positive IN over one unhinted, nontemporary base outer table and one
 unfiltered inner base table, with one exact integer column on each side and a
 complete ascending single-column covering secondary inner index. Keep the

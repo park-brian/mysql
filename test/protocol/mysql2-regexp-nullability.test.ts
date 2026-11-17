@@ -32,6 +32,19 @@ test('M5.10: REGEXP_LIKE reports nullable operands in its result flags', async (
       assert.deepEqual(fields.map((f) => [f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet]),
         [129, 129, 128, 128, 128, 128].map((flags) => [8, 1, flags, 0, 63]), method)
       assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], method)
+      const read = (statement: string) => method === 'query' ? conn.query(statement) : conn.execute(statement)
+      for (const [statement, errno, sqlMessage] of [
+        ["SELECT REGEXP_LIKE(NULL, '')", 3685, 'Illegal argument to a regular expression.'],
+        ["SELECT NULL NOT RLIKE '('", 3691, 'Mismatched parenthesis in regular expression.'],
+        ["SELECT n REGEXP '(' FROM t WHERE id=2", 3691, 'Mismatched parenthesis in regular expression.'],
+      ] as const) {
+        await conn.query('DO 0')
+        await assert.rejects(read(statement), { errno, sqlState: 'HY000', sqlMessage })
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [['Error', errno, sqlMessage]])
+      }
+      assert.deepEqual((await read("SELECT REGEXP_LIKE(NULL, '(', NULL), NULL REGEXP NULL"))[0], [[null, null]])
+      assert.deepEqual((await read("SELECT NULL NOT RLIKE '(' LIMIT 0"))[0], [])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
     }
   } finally {
     await conn.query('DROP DATABASE IF EXISTS ' + schema)
