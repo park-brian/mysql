@@ -1385,11 +1385,12 @@ function toOp(node: Node, conditions: readonly Placed[], settings: LeafSettings,
   const derived = innerTable?.derived
   const indexed = innerTable !== undefined && keys !== undefined && (materialized === 'lookup' ||
     (derived !== undefined && !innerTable.lateral && derived.merged !== true && derived.constant !== true))
-  // Inner equalities belong to the join; other spanning conditions filter its output.
-  const on = node.left ? spanning : spanning.filter((c) => equalitySides(c.e, outerAliases, innerAliases, scope) !== undefined)
+  const semi = settings.firstMatch?.enabled === true && settings.firstMatch.alias === innerTable?.alias
+  // A FirstMatch probe stops only after a pair passes its join conditions.
+  const on = node.left || semi
+    ? spanning : spanning.filter((c) => equalitySides(c.e, outerAliases, innerAliases, scope) !== undefined)
   const anti = node.left && !materialized && !indexed && innerTable !== undefined && node.outer.kind === 'leaf' &&
     above.length === 1 && testsNullExtension(above[0]!.e, innerTable, scope) && spanning.some(({ e }) => equalitySides(e, outerAliases, innerAliases, scope) !== undefined)
-  const semi = settings.firstMatch?.enabled === true && settings.firstMatch.alias === innerTable?.alias
   return filterOp(buildJoinOp(semi ? 'semi' : anti ? 'anti' : node.left, node.innerSlots, outer, inner, on, keys, indexed ? innerTable : undefined, materialized, settings.weedout), node.left ? above : spanning.filter((c) => !on.includes(c)))
 }
 

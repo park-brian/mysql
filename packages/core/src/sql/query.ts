@@ -1369,7 +1369,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   if (any && (limitOrLock || hasLeadingKey(outerDef, outerField.parts[1]!))) return undefined
   let residual: Extract<Expression, { kind: typeof NODE.BINARY }> | undefined
   let operand: Expression | undefined
-  let compoundBound: Expression | undefined
+  let compoundArm: typeof residual
   let text = false
   let strategy: 'filteredHash' | 'filteredMaterial' | 'weedout' | 'BETWEEN' | 'NOT IN' | 'OR' | 'parentRange' | undefined
   if (extra?.kind === NODE.BINARY && extra.op === 'OR') {
@@ -1405,10 +1405,10 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
         if (left.op === '<=>' && right.op === 'BETWEEN' && integerLiteral(right.right) &&
           integerLiteral(high) && right.right.value > high.value) {
           text = textBesideColumn(left.left, left.right)
-          compoundBound = right.left
-        } else if (fanoutFilter && member && left.op === '<=' && integerLiteral(left.right) && wildcardLike(right)) {
+          compoundArm = right
+        } else if (member && left.op === '<=' && integerLiteral(left.right) && wildcardLike(right)) {
           text = textBesideColumn(right.left, right.right)
-          compoundBound = left.left
+          compoundArm = left
           operand = right.left
         }
         if (!text) return undefined
@@ -1444,15 +1444,13 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     const field = operand && tableColumn(operand, def, innerAlias)
     const signedInt = signedIntColumn(field)
     const parentRange = strategy === 'parentRange'
-    const compoundScan = strategy === 'filteredMaterial'
-    const signedMembership = (member: ColumnDef | undefined) =>
-      signedPrimaryMembership(outerDef, tableColumn(outerField, outerDef, outerAlias), member)
-    if (compoundScan) {
-      const bound = compoundBound && tableColumn(compoundBound, def, innerAlias)
+    const parent = tableColumn(outerField, outerDef, outerAlias)
+    if (compoundArm) {
+      const bound = tableColumn(compoundArm.left, def, innerAlias)
       if (!field || indexedColumn(def, field.name) || !signedIntColumn(bound) ||
-        (wildcardLike(residual?.right) ? !bound.nullable : bound.nullable || !singlePrimary(def, bound))) return undefined
+        (compoundArm.op === '<=' ? !bound.nullable : bound.nullable || !singlePrimary(def, bound))) return undefined
     } else if (parentRange) {
-      if (!signedMembership(field)) return undefined
+      if (!signedPrimaryMembership(outerDef, parent, field)) return undefined
     } else if (strategy && (!signedInt || (strategy === 'OR' ? !field.nullable : !singlePrimary(def, field)))) return undefined
     if (any && (hasLeadingKey(def, innerColumn) || from.access(run.env).index !== undefined)) return undefined
     let nullTest: typeof notNull
@@ -1494,9 +1492,9 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
         strategy = 'weedout'
       }
     }
-    const fanoutOff = !fanoutFilter && scanOnly && (compoundScan || strategy === 'weedout' && !text) &&
-      signedMembership(tableColumn(innerField, def, innerAlias))
-    if (!fanoutFilter && compoundScan && !fanoutOff) return undefined
+    const fanoutOff = !fanoutFilter && scanOnly && (compoundArm || strategy === 'weedout' && !text) &&
+      signedPrimaryMembership(outerDef, parent, tableColumn(innerField, def, innerAlias))
+    if (!fanoutFilter && compoundArm && !fanoutOff) return undefined
 
     // Keep the outer table's slots first: its logical scope remains the SELECT's scope.
     const alternative = planFrom([outer, inner], fromContext(run), predicate)
@@ -1511,10 +1509,12 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
       !someNode([node.items, q.orderBy], (n) => (n as Expression).kind === NODE.SUBQUERY || undefined), strategy, fanoutOff)
     if (innerFirst === undefined || (scanOnly && innerFirst && !ordersOuter && exists)) return undefined
     // MySQL substitutes the first field of an equality class after join ordering.
-    const outerType = !innerFirst && nullTest ? tableColumn(outerField, outerDef, outerAlias)?.type : undefined
+    const outerType = !innerFirst && nullTest ? parent?.type : undefined
     const preserve = nullTest && outerType?.type === key.type.field && (outerType.unsigned === true) === key.type.unsigned
       ? { ...nullTest, operand: outerField } : undefined
-    return { from: alternative, where: preserve ? and(equality, preserve) : predicate, outerLoop: !any && !innerFirst && !scanOnly, preserve }
+    const pairFilter = fanoutOff && !innerFirst && compoundArm?.op === '<='
+      ? { ...residual!, left: { ...compoundArm, left: outerField } } : preserve
+    return { from: alternative, where: pairFilter ? and(equality, pairFilter) : predicate, outerLoop: !any && !innerFirst && !scanOnly, preserve }
   })
 }
 

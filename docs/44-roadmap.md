@@ -2648,9 +2648,9 @@ and unpacking. The differential checks preserve 36,340 decimal results
 and diagnostics and 294,560 column layouts and widths. Parser/core/facade
 measure 45,567/334,346/334,263 B gzipped within the existing caps.
 
-The no-buffer nested loop, outer-first materialized lookup, and
-fanout-off disjunctions remain open under M5.47. The separate decimal
-write gap where scale equals precision is recorded under M2.10.
+The no-buffer nested loop and outer-first materialized lookup remain
+open under M5.47. The two verified disjunctions are described below.
+The equal-scale decimal write repair is recorded under M2.10.
 
 **M2.10 equal-precision and equal-scale decimal writes, verified.**
 `DECIMAL(p,p)` has no integer group. The writer packs the fraction at
@@ -2688,9 +2688,24 @@ in the three fresh seeds still agree.
 The parser, core, and facade measure 45,567, 334,338, and 334,265 bytes
 gzipped under the existing caps.
 
-The `LIKE` disjunction still needs separate handling. In the outer-first
-hash plan, MySQL substitutes the equal parent key into the `<=` arm
-and evaluates the result on each candidate pair before FirstMatch stops.
+**M5.47 wildcard disjunction with fanout filtering disabled, verified.**
+The same ordered positive `IN` proof admits `member <= integer OR label
+LIKE pattern` with an unindexed, session-collated `VARCHAR` and a plain
+literal pattern starting with `%` or `_`. The outer-first hash semijoin
+builds from the whole child table. It substitutes the equal parent key
+into the `<=` arm and checks the disjunction on each candidate pair before
+FirstMatch stops. The inner-first materialized scan evaluates the written
+disjunction before building its membership keys.
+Both protocols match MySQL 8.4.11 across rejected duplicates followed by a
+qualifying row, key and label changes, and the transition from hash to
+materialization. The pinned audits repair 772 of 48,096 outcomes, including
+26 with an unsigned child primary key apart from the signed membership key.
+The other 47,324 outcomes and 80,640 additional structural controls are
+unchanged. The committed relational ledger and all 138 matching fresh
+observations are unchanged.
+The parser, core, and facade measure 45,567, 334,357, and 334,266 bytes
+gzipped within the existing caps. The no-buffer nested loop and outer-first
+materialized lookup remain open for these disjunctions.
 
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.
