@@ -365,7 +365,7 @@ function sortUnionAccess(def: TableDef, alias: string, where: Expression | undef
  * point one; its cost `rangeCost`. Indexes are tried in the server's key order
  * and a later one wins only if strictly cheaper.
  */
-function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expression[], env: Env, costing: RangeCosting, known?: Constant, inferred?: InferredRange, indexes = def.indexes): Access | undefined {
+export function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expression[], env: Env, costing: RangeCosting, known?: Constant, inferred?: InferredRange, indexes = def.indexes): Access | undefined {
   const value = (e: Expression): Value | undefined => (e.kind === NODE.PLACEHOLDER && e.index >= env.params.length ? undefined : isConstant(e) ? constantValue(e, env) : known?.(e))
   const candidates: { readonly index: IndexDef; readonly column: ColumnDef; readonly intervals: Interval[]; readonly keyed: { readonly range: KeyRange; readonly point: boolean }[]; readonly shape: RangeShape; readonly empty: boolean | undefined; readonly implied: ImpliedRange | undefined }[] = []
   const eligible = keyOrder(def, indexes)

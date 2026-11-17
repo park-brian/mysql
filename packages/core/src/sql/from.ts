@@ -35,7 +35,7 @@
 // physical range and exact point equality already enforce it.
 import { notSupported, proof, wrongUsage } from './errors.ts'
 import { FIELD_TYPE } from '@myjs/bytes'
-import { isNotEqual, REVERSE_COMPARISON, and, integerLiteral, isOrderedComparison, logicalShortCircuit, operandPairs, rewriteExpression, someNode, tableAlias } from './ast.ts'
+import { isNotEqual, REVERSE_COMPARISON, and, integerLiteral, isOrderedComparison, logicalShortCircuit, operandPairs, rewriteExpression, signedOperand, someNode, tableAlias } from './ast.ts'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, type Expression, type IndexHint, type QueryExpression, type TableReference } from '@myjs/parser'
@@ -43,7 +43,7 @@ import { messages, sqlError } from '@myjs/protocol'
 import { integerBytes, truth, type ColumnType, type Value } from '@myjs/types'
 import { compatibleEqualityKeys, type Compiled, type Env, type Row, type Scope } from './compile.ts'
 import { coveringScan, filterPlan, indexLookup, lookupMaterialized, materialize, planNode, scanMaterialized, tableScan, wrap, type PlanNode } from './explain.ts'
-import { FULL_SCAN, chooseAccess, constantValue, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type InferredRange, type OuterColumn, type RangeCosting } from './plan.ts'
+import { FULL_SCAN, chooseAccess, constantValue, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, rangeAccess, splitAnd, type Access, type InferredRange, type OuterColumn, type RangeCosting } from './plan.ts'
 import { ROW_EVALUATE, bestAccess, floorFilter, indexScanCost, joinOrder, materializedAntijoinWins, membershipCost, type Candidate, type FirstMatch, type KeyChoice, type Positioned, type RangeRead } from './cost.ts'
 import { rowKey, valueKey } from './keys.ts'
 import { fulltextOf } from './fulltext.ts'
@@ -1418,15 +1418,19 @@ function localOnRange(table: FromTable, conditions: readonly Placed[], settings:
   const hints = indexHints && indexHintEligibility(def, alias, indexHints, env, false, 'JOIN')
   if (hints?.JOIN?.length === 0) return undefined
   for (const { e } of conditions) {
-    if (e.kind !== NODE.BINARY || e.op !== 'NOT IN' || e.right.kind !== NODE.ROW || e.right.items.length !== 2) continue
+    if (e.kind !== NODE.BINARY || (e.op !== 'IN' && e.op !== 'NOT IN') || e.right.kind !== NODE.ROW || e.right.items.length !== 2) continue
     const column = columnOf(table, e.left, settings.scope)
-    if (column?.type.type !== FIELD_TYPE.LONG || column.type.unsigned) continue
-    const [first, second] = e.right.items
-    if (!integerLiteral(first) || second?.kind !== NODE.LITERAL || !fractionalIntBound(constantValue(second, env))) continue
-    // A signed integer key cannot equal the fraction. The scan stores only
-    // the integer exclusion; the original ON filter still checks each row read.
-    const range = chooseAccess(def, alias, { ...e, op: '<>', right: first }, env, undefined, rangeCosting(table, settings, env))
-    if (range.ranges?.length === 2) return range
+    if (column?.type.type !== FIELD_TYPE.LONG) continue
+    let predicate = e
+    if (e.op === 'NOT IN') {
+      const [first, second] = e.right.items
+      if (column.type.unsigned || !integerLiteral(first) || second?.kind !== NODE.LITERAL || !fractionalIntBound(constantValue(second, env))) continue
+      // A signed integer key cannot equal the fraction. Keep the written ON filter.
+      predicate = { ...e, op: '<>', right: first }
+    } else if (!e.right.items.every((item) => integerLiteral(signedOperand(item)))) continue
+    const costing = rangeCosting(table, settings, env)
+    const range = costing && rangeAccess(def, alias, [predicate], env, costing)
+    if (range?.ranges?.length === 2) return range
   }
   return undefined
 }

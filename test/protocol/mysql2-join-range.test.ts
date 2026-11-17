@@ -885,3 +885,49 @@ test('an integer NOT IN pair with a written NULL can use the clustered key', asy
     await conn.end(); await db?.end()
   }
 })
+
+test('a LEFT hash build reads two primary points and null-extends unmatched probes', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'join_range_points422'
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE p(i INT PRIMARY KEY,k INT NOT NULL,v INT) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO p VALUES(1,1,11),(2,2,12),(3,3,13),(4,11,14)')
+    await conn.query('ANALYZE TABLE p')
+    for (const [type, first, flags] of [['INT', -2, 4096], ['INT UNSIGNED', 1, 4128]] as const) {
+      await conn.query(`CREATE TABLE c(n ${type} PRIMARY KEY,k INT,v INT) STATS_AUTO_RECALC=0`)
+      await conn.query('INSERT INTO c VALUES ?', [Array.from({ length: 12 }, (_, i) => {
+        const n = first + i
+        return [n, i === 0 || n === 4 ? 1 : i % 3 + 1, n + 20]
+      })])
+      await conn.query('ANALYZE TABLE c')
+      const sql = `SELECT p.i,c.n,c.v FROM p LEFT JOIN c ON p.k=c.k AND c.n IN (4,${first}) ORDER BY p.i,c.n`
+      const firstRow = [1, first, first + 20]
+      const before = [firstRow, [1, 4, 24], [2, null, null], [3, null, null], [4, null, null]]
+      const after = [firstRow, [2, 4, 104], [3, null, null], [4, null, null]]
+      const options = { sql, rowsAsArray: true }
+      for (const method of ['query', 'execute'] as const) {
+        const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+        assert.deepEqual(rows, before)
+        assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.flags, f.characterSet]), [
+          ['i', 3, 4097, 63], ['n', 3, flags, 63], ['v', 3, 0, 63],
+        ])
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+        const explain = 'EXPLAIN FORMAT=TREE ' + sql
+        const [tree] = method === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
+        assert.match(String(tree[0]?.EXPLAIN), /Left hash join/)
+        assert.ok(String(tree[0]?.EXPLAIN).includes(`Index range scan on c using PRIMARY over (n = ${first}) OR (n = 4)`))
+      }
+      await conn.query('UPDATE c SET k=2,v=104 WHERE n=4')
+      assert.deepEqual((await conn.execute(options))[0], after)
+      await conn.query("SET optimizer_switch='default,block_nested_loop=off'")
+      assert.deepEqual((await conn.execute(options))[0], after)
+      await conn.query("SET optimizer_switch='default'")
+      await conn.query('DROP TABLE c')
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
