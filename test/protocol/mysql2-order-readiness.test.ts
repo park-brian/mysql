@@ -192,8 +192,19 @@ test('prepared NULL offsets and write limits rebind as zero', async () => {
       assert.deepEqual(rows, expected)
       assert.deepEqual(fields.map((field) => [field.name, field.columnType]), [['id', 3]])
     }
+    const all = [[1], [2], [3]]
+    for (const bytes of [false, true]) {
+      for (const [prefix, count, offset] of [['2.9', 2, 2], ['3e-1', 3, 3], ['.7', 0, 0], ['-1', 3, 3]] as const) {
+        const bound = bytes ? Buffer.from(prefix) : prefix
+        assert.deepEqual((await conn.execute(select, [bound, 0]))[0], all.slice(0, count))
+        assert.deepEqual((await conn.execute(select, [2, bound]))[0], all.slice(offset, offset + 2))
+      }
+    }
+    for (const invalid of [-1, 1.5]) {
+      await assert.rejects(conn.execute(select, [invalid, 0]), { errno: 1210 })
+    }
     for (const sql of ['UPDATE t SET v=99 ORDER BY id LIMIT ?', 'DELETE FROM t ORDER BY id LIMIT ?']) {
-      for (const [limit, affected] of [[null, 0], [1, 1], [null, 0]] as const) {
+      for (const [limit, affected] of [[null, 0], [1, 1], ['2.9', 2], [null, 0], [Buffer.from('-1'), 3]] as const) {
         await conn.beginTransaction()
         const [result] = await conn.execute<mysql.ResultSetHeader>(sql, [limit])
         assert.equal(result.affectedRows, affected)

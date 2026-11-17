@@ -12,7 +12,7 @@
 import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type IndexHint, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, PreparedStatement, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
-import { MAX_UNSIGNED, MIN_SIGNED, compareValues, extremeAccumulator, intValue, integerRange, numericPrefix, roundedIntegerText, storageWidth, terminalIntegerValue, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
+import { MAX_UNSIGNED, MIN_SIGNED, compareValues, extremeAccumulator, intValue, integerRange, isText, numericPrefix, roundedIntegerText, storageWidth, terminalIntegerValue, toInteger, truth, valInt, withoutHex, type Condition, type Value } from '@myjs/types'
 import { appendConditions, compile, constantNode, isComparison, literalPredicate, membershipReader, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, textBesideColumn, withOuterRow, writtenFalse, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
@@ -3346,9 +3346,12 @@ export function limitValue(run: Run, e: Expression): number {
     : compile(e, compileContext(run, EMPTY_SCOPE, 'LIMIT')).eval([], run.env)
   if (!v) return 0
   // Invalid representations and negative counts have the same argument error.
-  const n = (v.kind === 'double' && !Number.isInteger(v.v)) || v.kind === 'decimal' || v.kind === 'datetime' || v.kind === 'time' ? -1n : toInteger(v)
-  if (n < 0n) throw wrongArgumentsError(e.kind === NODE.PLACEHOLDER ? 'mysqld_stmt_execute' : 'LIMIT')
-  return Math.min(Number.MAX_SAFE_INTEGER, Number(n))
+  const invalid = (v.kind === 'double' && !Number.isInteger(v.v)) || v.kind === 'decimal' || v.kind === 'datetime' || v.kind === 'time'
+  const n = invalid ? -1n : valInt(v)
+  if (n < 0n && !isText(v)) throw wrongArgumentsError(e.kind === NODE.PLACEHOLDER ? 'mysqld_stmt_execute' : 'LIMIT')
+  // Negative text prefixes are unsigned counts above the engine's safe bound.
+  const maximum = Number.MAX_SAFE_INTEGER
+  return n < 0n ? maximum : Math.min(maximum, Number(n))
 }
 
 /** The statement's column definitions, for its resultset and for `COM_STMT_PREPARE`. */
