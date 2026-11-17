@@ -294,11 +294,11 @@ function sortUnionAccess(def: TableDef, alias: string, where: Expression | undef
   const left = conditionOf(where.left, def, alias, undefined, env)
   const right = conditionOf(where.right, def, alias, undefined, env)
   const primaryFirst = left?.column === pk
-  const [comparison, lower] = primaryFirst ? [left, right] : [right, left]
+  const [comparison, secondaryCondition] = primaryFirst ? [left, right] : [right, left]
   if (comparison?.column !== pk || !isOrderedComparison(comparison.op)) return undefined
   const present = primaryFirst ? where.right : where.left
-  const greater = lower?.op === '>' || lower?.op === '>='
-  const column = greater ? lower.column
+  const ordered = secondaryCondition !== undefined && isOrderedComparison(secondaryCondition.op)
+  const column = ordered ? secondaryCondition.column
     : present.kind === NODE.UNARY && present.op === 'IS NOT NULL' ? tableColumn(present.operand, def, alias) : undefined
   if (!column?.nullable || column.type.type !== FIELD_TYPE.LONG) return undefined
   const keys = indexes.filter((key) => forwardKeyColumn(def, key) === column)
@@ -312,21 +312,27 @@ function sortUnionAccess(def: TableDef, alias: string, where: Expression | undef
   const upper = comparison.op.startsWith('<')
   const pkRange = upper ? { to: key } : { from: key }
   let secondaryInterval: Interval = {}
-  if (greater) {
-    const value = constantValue(lower.constants[0]!, env)
+  if (ordered) {
+    const value = constantValue(secondaryCondition.constants[0]!, env)
     if (value?.kind !== 'int' && value?.kind !== 'decimal') return undefined
-    let inclusive = lower.op === '>='
+    const endsBelow = secondaryCondition.op.startsWith('<')
+    let inclusive = secondaryCondition.op.endsWith('=')
     let v = value
     if (value.kind === 'decimal') {
-      // On an integer column either inequality above a fraction starts after its floor.
-      const scale = 10n ** BigInt(value.scale)
-      const fraction = value.v % scale
-      v = intValue(value.v / scale - (fraction < 0n ? 1n : 0n))
-      inclusive &&= fraction === 0n
+      // A fractional lower edge starts past its floor, and an upper edge ends before its ceiling.
+      const { integer, fractional } = integerEndpoint(value, endsBelow)
+      v = intValue(integer)
+      inclusive &&= !fractional
     }
-    // A lower edge admitting the minimum admits every non-NULL key.
-    const minimum = integerRange(column.type)!.min
-    if (v.v > minimum || (v.v === minimum && !inclusive)) secondaryInterval = { lo: { v, inclusive } }
+    const { min, max } = integerRange(column.type)!
+    // The empty or one-value domain at the minimum needs a different plan.
+    if (endsBelow && v.v <= min) return undefined
+    // An edge admitting its domain limit admits every non-NULL key.
+    const limit = endsBelow ? max : min
+    if ((endsBelow ? v.v < limit : v.v > limit) || (v.v === limit && !inclusive)) {
+      const edge = { v, inclusive }
+      secondaryInterval = endsBelow ? { hi: edge } : { lo: edge }
+    }
   }
   const secondaryRange = keyRanges([secondaryInterval], column)?.[0]?.range
   if (secondaryRange?.from === undefined) return undefined
@@ -344,7 +350,7 @@ function sortUnionAccess(def: TableDef, alias: string, where: Expression | undef
   return {
     index: primary.name, ranges: [pkRange], over: describeIntervals([upper ? { hi: edge } : { lo: edge }], pk.name),
     sortUnion: {
-      index: secondary.name, range: secondaryRange, over: describeIntervals([secondaryInterval], column.name),
+      index: secondary.name, range: secondaryRange, over: describeIntervals([secondaryInterval], column.name, true),
       bound: encodeKey(key.values, [keyPartOf(pk.type, pk.nullable)]), primaryFirst,
     },
   }
@@ -446,7 +452,7 @@ function describeTextPoints(points: readonly KeyRange[], column: ColumnDef): str
 }
 
 /** Intervals as EXPLAIN writes a range: `(2 < grp <= 5) OR (grp = 7)`, `(NULL < grp)`, `(grp = NULL)`. */
-function describeIntervals(intervals: readonly Interval[], name: string): string {
+function describeIntervals(intervals: readonly Interval[], name: string, nullLower = false): string {
   const text = (v: RangeValue): string => {
     if (v.kind === 'string') return `'${v.v.replace(/'/g, "''")}'`
     return v.kind === 'decimal' ? renderDecimal(v) : String(v.v)
@@ -456,11 +462,19 @@ function describeIntervals(intervals: readonly Interval[], name: string): string
       if (i === 'null') return `(${name} = NULL)`
       const { lo, hi } = i
       if (lo?.inclusive && hi?.inclusive && compareValues(lo.v, hi.v) === 0) return `(${name} = ${text(lo.v)})`
-      const lower = lo ? `${text(lo.v)} ${lo.inclusive ? '<=' : '<'} ` : hi ? '' : 'NULL < '
+      const lower = lo ? `${text(lo.v)} ${lo.inclusive ? '<=' : '<'} ` : hi && !nullLower ? '' : 'NULL < '
       const upper = hi ? ` ${hi.inclusive ? '<=' : '<'} ${text(hi.v)}` : ''
       return `(${lower}${name}${upper})`
     })
     .join(' OR ')
+}
+
+/** The integer next to an exact numeric endpoint in the requested direction. */
+function integerEndpoint(v: Exclude<RangeValue, { readonly kind: 'string' }>, ceil: boolean) {
+  const scale = v.kind === 'decimal' ? 10n ** BigInt(v.scale) : 1n
+  const fraction = v.v % scale
+  const adjustment = ceil ? (fraction > 0n ? 1n : 0n) : (fraction < 0n ? -1n : 0n)
+  return { integer: v.v / scale + adjustment, fractional: fraction !== 0n }
 }
 
 /**
@@ -475,16 +489,8 @@ function keyRanges(intervals: readonly Interval[], column: ColumnDef): { readonl
   const side = (b: { readonly v: RangeValue; readonly inclusive: boolean }, lower: boolean): KeyBound | 'empty' | 'open' | undefined => {
     let { v, inclusive } = b
     if (range !== undefined && v.kind !== 'string') {
-      const scale = v.kind === 'decimal' ? 10n ** BigInt(v.scale) : 1n
-      const raw = v.v
-      let n = raw / scale
-      const fraction = raw % scale !== 0n
-      // Toward the interval's inside: BigInt division truncates toward zero.
-      if (fraction) {
-        if (lower && raw > 0n) n += 1n
-        if (!lower && raw < 0n) n -= 1n
-        inclusive = true
-      }
+      const { integer: n, fractional } = integerEndpoint(v, lower)
+      inclusive ||= fractional
       if (n > range.max) return lower ? 'empty' : 'open'
       if (n < range.min) return lower ? 'open' : 'empty'
       v = intValue(n, n > MAX_SIGNED)

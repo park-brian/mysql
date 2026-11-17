@@ -733,3 +733,58 @@ test('a nullable signed or unsigned INT minimum can supply a whole non-NULL merg
     await conn.end(); await db?.end()
   }
 })
+
+test('Sort Union uses the non-NULL upper range of a nullable INT index', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'index_merge_upper412'
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    for (const [type, low, edge, decimal, maximum] of [
+      ['INT', -6, -5, '-5.5', 2147483647],
+      ['INT UNSIGNED', 1, 2, '1.5', 4294967295],
+    ] as const) {
+      await conn.query(`CREATE TABLE t(id INT PRIMARY KEY,g ${type},n INT,KEY by_g(g)) STATS_AUTO_RECALC=0`)
+      await conn.query('INSERT INTO t VALUES ?', [Array.from({ length: 30 }, (_, i) => [
+        i + 1, i === 0 || i === 29 ? low : i === 1 ? maximum : i === 2 ? edge : null, i,
+      ])])
+      await conn.query('ANALYZE TABLE t')
+      const select = 'SELECT id,g,n FROM t WHERE '
+      for (const [predicate, ids, limit] of [
+        [`${decimal} > g OR id>27`, [1, 28, 29, 30], `(NULL < g < ${edge})`],
+        [`id>27 OR g<${maximum}`, [1, 3, 28, 29, 30], `(NULL < g < ${maximum})`],
+        [`g<=${maximum} OR id>27`, [1, 2, 3, 28, 29, 30], '(NULL < g)'],
+      ] as const) for (const method of ['query', 'execute'] as const) {
+        const read = (sql: string) => method === 'query' ? conn.query<mysql.RowDataPacket[]>(sql) : conn.execute<mysql.RowDataPacket[]>(sql)
+        const sql = select + predicate
+        const [rows] = await read(sql)
+        assert.deepEqual(rows.map((r) => r.id), ids)
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+        const [explain] = await read('EXPLAIN FORMAT=TREE ' + sql)
+        const tree = String(explain[0]?.EXPLAIN)
+        assert.match(tree, /Sort-deduplicate by row ID/)
+        assert.ok(tree.includes('using by_g over ' + limit))
+      }
+
+      const prepared = select + 'id>27 OR g < ?'
+      const statement = await conn.prepare(prepared)
+      const ids = async (bound: string) => {
+        const [rows] = await statement.execute([mysql.TypedParameter.NEWDECIMAL(bound)])
+        return (rows as mysql.RowDataPacket[]).map((r) => r.id)
+      }
+      try {
+        assert.deepEqual(await ids(decimal), [1, 28, 29, 30])
+        await conn.query('UPDATE t SET g=? WHERE id=1', [edge])
+        await conn.query('UPDATE t SET g=? WHERE id=5', [low])
+        assert.deepEqual(await ids(decimal), [5, 28, 29, 30])
+        assert.deepEqual(await ids(String(maximum + 1)), [1, 2, 3, 5, 28, 29, 30])
+      } finally {
+        conn.unprepare(prepared)
+      }
+      await conn.query('DROP TABLE t')
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
