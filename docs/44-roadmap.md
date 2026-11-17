@@ -2782,6 +2782,32 @@ estimates and the named range in case 11:15 remain open. In that case a
 reversed fractional `BETWEEN` on another column prevents the range
 chooser from using a text index for the other arm of the `OR`.
 
+**M5.49 named range with an impossible `BETWEEN` arm, in progress.**
+In case 11:15, MySQL 8.4.11 uses the one-point name range and still
+evaluates the original `OR` filter. The native probe requires an eligible
+leading index on the `BETWEEN` column. An ignored, invisible, absent or
+non-leading key leaves the original access choice. The prototype repairs
+the captured plan and preserves every other outcome in the 300-case
+replay. The candidate admits ordinary unhinted secondary `VARCHAR`
+point ranges with exact written numeric or NULL bounds on a complete,
+ascending first part of another visible index. The unsigned
+negative-bound cases retain their original access.
+Two probes repair 1,600 plans and 76 row orders across 12,800 outcomes,
+with every earlier match retained. The focused test passes through both
+protocols, including NULLs, index hints and writes after preparation.
+Prepared bound conversions, warning-producing expressions and broader
+range shapes need their own proofs. Full Docker verification is pending.
+
+**M2.3 zero runs in internal charset encodings, verified.** The shared
+codec records absolute zeroes directly in the 24 byte-to-code-point
+tables. All 22,528 decoded entries across the encoding and weight tables
+were checked. The public packed weights, registry and protocol widths
+retain their exact bytes. Full Docker verification passes 1,853 tests,
+seeded fuzzing, 10,000 crash points, package and real-client smoke, and
+all seven pinned corpora. Charset, parser, core and facade measure
+17,272, 44,507, 334,061 and 333,992 bytes gzipped within the existing
+caps.
+
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.
 Grouping, DISTINCT and byte readers now see the same result collation.

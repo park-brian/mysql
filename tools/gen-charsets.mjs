@@ -524,17 +524,22 @@ check(weightOf(0x00df) === weightOf(0x0073), 'gen-charsets: general_ci must fold
 // latin1_swedish_ci is Swedish: the umlauts sort *after* z, which is the point.
 check(byteWeightsOf(8)[0xe4] > byteWeightsOf(8)[0x7a], 'gen-charsets: latin1_swedish_ci must sort a-umlaut after z')
 
-// Delta-plus-run. A run is `[count*]delta`, the delta signed hex and relative
-// to the identity weight, so an unfolded stretch of Unicode is one run of zeros
-// and a 26-letter case fold is one run of -20.
-const runs = (values, base) => {
+// `[count*]delta` encodes a run relative to identity. Only the internal
+// charset encoding tables can also use `[count]=` for absolute zeroes.
+const runs = (values, base, zeroRuns = false) => {
   const out = []
   let i = 0
   while (i < values.length) {
     const d = values[i] - (base + i)
     let n = 1
     while (i + n < values.length && values[i + n] - (base + i + n) === d) n++
-    const hex = (d < 0 ? '-' : '') + Math.abs(d).toString(16)
+    if (zeroRuns && n === 1 && values[i] === 0) {
+      while (values[i + n] === 0) n++
+      out.push(n === 1 ? '=' : `${n}=`)
+      i += n
+      continue
+    }
+    const hex = d.toString(16)
     out.push(n === 1 ? hex : `${n}*${hex}`)
     i += n
   }
@@ -750,7 +755,7 @@ check(
 
 const encodingLines = [...charsetToUni]
   .sort(([a], [b]) => (a < b ? -1 : 1))
-  .map(([cs, table]) => `${cs} ${runs(table, 0)}`)
+  .map(([cs, table]) => `${cs} ${runs(table, 0, true)}`)
   .join('\n')
 
 writeFileSync(
@@ -765,10 +770,9 @@ was a real bug: on a runtime without full ICU, \`new TextDecoder('windows-1252')
 succeeds and silently behaves as ISO-8859-1, so MySQL's latin1 decoded 0x80 to
 U+0080 rather than the euro sign and no error was raised anywhere.
 
-Format: \`<charset> <256 code points>\`, delta-plus-run against the byte value
-itself — the same codec and the same \`expandRuns\` decoder the weight tables
-use. The ASCII half of every one of these tables is identity, so it collapses
-to a single run.
+Format: \`<charset> <runs for 256 code points>\`. Relative runs are the same
+as the weight tables. \`[count]=\` encodes absolute zeroes. The identity ASCII
+half fits in one relative run.
 
 \`tis620\` is deliberately absent: MySQL leaves its struct's \`tab_to_uni\` null
 and reads the table through a custom handler, so it stays on \`TextDecoder\`.`,
@@ -783,7 +787,7 @@ export const ENCODING_TABLE_SOURCE_SHA256 =
 /**
  * \`charset code-points\`, one single-byte charset per line.
  *
- * Delta-plus-run, the same codec \`collations/weights.ts\` uses.
+ * Delta-plus-run with additional zero runs.
  */
 export const PACKED_CHARSET_TO_UNI = ${packed(encodingLines)}
 `,

@@ -9,10 +9,12 @@
 // acceptance assertion.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
 import fc from 'fast-check'
 import {
   CharsetError,
+  PACKED_BYTE_WEIGHTS,
   PACKED_UNICASE_WEIGHTS,
   WEIGHT_TABLE_SOURCE_SHA256,
   COLLATION_TABLE_SOURCE_SHA256,
@@ -129,6 +131,10 @@ test('M2.5: the weight tables carry the same source hash as the registry', () =>
   // One parse, one pin: if the two ever differ the generator emitted them from
   // different fetches, and the id -> table mapping cannot be trusted.
   assert.equal(WEIGHT_TABLE_SOURCE_SHA256, COLLATION_TABLE_SOURCE_SHA256)
+  // The public packed strings retain their format when internal encodings change.
+  const sha256 = (packed: string): string => createHash('sha256').update(packed).digest('hex')
+  assert.equal(sha256(PACKED_BYTE_WEIGHTS), 'daef33f539eb3d37e8a74ada3841695031d2a7191dc40eed046789a1b0ca73f9')
+  assert.equal(sha256(PACKED_UNICASE_WEIGHTS), 'bcd8dac3b270fdd15555dd6ecef8f96e942f31193e0e433d6e43a44f916786ec')
 })
 
 test('M2.6: every weighted id resolves, and its pad unit is the weight of a space', () => {

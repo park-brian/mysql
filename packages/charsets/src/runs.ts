@@ -1,4 +1,4 @@
-// The delta-plus-run codec every generated table in this package uses.
+// The run codec shared by the generated weight and encoding tables.
 //
 // Shared rather than duplicated for the same reason `collations/utf8.ts` is:
 // three generated files are encoded with it, and a second copy would
@@ -18,16 +18,17 @@ import { corruptTable } from './errors.ts'
  *
  * A run is `[count*]delta`, the delta signed hex and relative to the identity
  * value — so an unfolded stretch of Unicode is one run of zeros, a 26-letter
- * case fold is one run of `-20`, and the ASCII half of a charset table is a
- * single `128*0`.
+ * case fold is one run of `-20`, and `128*0` encodes an identity ASCII half.
+ * Charset encoding tables can also use `[count]=` for absolute zeroes.
  */
 export function expandRuns(spec: string, base: number, length: number): number[] {
   const out: number[] = []
   for (const run of spec.split(',')) {
-    const star = run.indexOf('*')
-    const count = star === -1 ? 1 : Number(run.slice(0, star))
-    const delta = Number.parseInt(star === -1 ? run : run.slice(star + 1), 16)
-    for (let i = 0; i < count; i++) out.push(base + out.length + delta)
+    const zero = run.endsWith('=')
+    const end = zero ? run.length - 1 : run.indexOf('*')
+    const count = end <= 0 ? 1 : Number(run.slice(0, end))
+    const delta = zero ? 0 : Number.parseInt(run.slice(end + 1), 16)
+    for (let i = 0; i < count; i++) out.push(zero ? 0 : base + out.length + delta)
   }
   if (out.length !== length) throw corruptTable(`packed table has ${out.length} entries, not ${length}`)
   return out
