@@ -298,7 +298,8 @@ function indexUnionAccess(def: TableDef, alias: string, where: Expression | unde
   if (comparison?.column !== pk || !isOrderedComparison(comparison.op)) return undefined
   const present = primaryFirst ? where.right : where.left
   const ordered = secondaryCondition !== undefined && isOrderedComparison(secondaryCondition.op)
-  const column = ordered ? secondaryCondition.column
+  const nullPoint = costing.allowIndexUnion && secondaryCondition?.op === 'IS NULL'
+  const column = ordered || nullPoint ? secondaryCondition.column
     : present.kind === NODE.UNARY && present.op === 'IS NOT NULL' ? tableColumn(present.operand, def, alias) : undefined
   if (!column?.nullable || column.type.type !== FIELD_TYPE.LONG) return undefined
   const keys = indexes.filter((key) => forwardKeyColumn(def, key) === column)
@@ -311,7 +312,7 @@ function indexUnionAccess(def: TableDef, alias: string, where: Expression | unde
   if (!key) return undefined
   const upper = comparison.op.startsWith('<')
   const pkRange = upper ? { to: key } : { from: key }
-  let secondaryInterval: Interval = {}
+  let secondaryInterval: Interval = nullPoint ? 'null' : {}
   if (ordered) {
     const value = constantValue(secondaryCondition.constants[0]!, env)
     if (value?.kind !== 'int' && value?.kind !== 'decimal') return undefined
@@ -434,11 +435,11 @@ export function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Ex
     const limit = Math.ceil(best / minRowCost)
     if (limit < c.keyed.length) continue
     // Cost the same range even when its stored endpoints let us skip the dive.
-    // A unique key's point estimates one row. Other ranges cost at least one row.
+    // A unique key's non-NULL point estimates one row. Other ranges cost at least one row.
     const unique = uniquePoint(c.index, c.column)
     let rows = 0
     for (const { range, point } of c.keyed) {
-      const estimated = c.empty || (point ? unique : skipDive && range.to?.values[0] !== null)
+      const estimated = c.empty || (range.to?.values[0] !== null && (point ? unique : skipDive))
       rows += estimated ? 1 : Math.max(1, costing.count(c.index.name, range, limit - rows + 1))
       if (rows > limit) break
     }
@@ -492,7 +493,7 @@ function integerEndpoint(v: Exclude<RangeValue, { readonly kind: 'string' }>, ce
  * value where it converts exactly, an integer column's bound rounded outward
  * (`< 5.5` reads up to 5, `> 5.5` from 6); `undefined` when a bound converts
  * neither way. Values are non-NULL, so a range with no lower bound starts
- * after the NULLs. `point` marks a range of one non-NULL value.
+ * after the NULLs. `point` marks a range constrained to one key value.
  */
 function keyRanges(intervals: readonly Interval[], column: ColumnDef): { readonly range: KeyRange; readonly point: boolean }[] | undefined {
   const range = integerRange(column.type)
@@ -510,7 +511,7 @@ function keyRanges(intervals: readonly Interval[], column: ColumnDef): { readonl
   const out: { range: KeyRange; point: boolean }[] = []
   for (const i of intervals) {
     if (i === 'null') {
-      out.push({ range: pointRange(NULL_KEY), point: false })
+      out.push({ range: pointRange(NULL_KEY), point: true })
       continue
     }
     const from = i.lo === undefined ? 'open' : side(i.lo, true)

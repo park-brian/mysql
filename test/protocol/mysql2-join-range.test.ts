@@ -946,11 +946,16 @@ test('an ordered row-ID union keeps ascending IDs and the statement snapshot on 
     for (const [type, comparison, endpoint] of [
       ['INT', '<=', -2147483648], ['INT UNSIGNED', '<=', 0],
       ['INT', '>=', 2147483647], ['INT UNSIGNED', '>=', 4294967295],
+      ['INT', 'IS NULL', null], ['INT UNSIGNED', 'IS NULL', null],
     ] as const) {
       await conn.query(`CREATE TABLE t(id INT PRIMARY KEY,g ${type},v INT,KEY by_g(g)) STATS_AUTO_RECALC=0`)
-      await conn.query('INSERT INTO t VALUES ?', [Array.from({ length: 30 }, (_, i) => [i + 1, i === 0 || i === 29 ? endpoint : i % 3 ? 20 : null, i])])
+      const stored = Array.from({ length: 30 }, (_, i) => {
+        const middle = endpoint === null || i % 3 !== 0 ? 20 : null
+        return [i + 1, i === 0 || i === 29 ? endpoint : middle, i]
+      })
+      await conn.query('INSERT INTO t VALUES ?', [stored])
       await conn.query('ANALYZE TABLE t')
-      const suffix = ` OR g ${comparison} ${endpoint}`
+      const suffix = endpoint === null ? ` OR g ${comparison}` : ` OR g ${comparison} ${endpoint}`
       const lower = 'SELECT id,g,v FROM t WHERE id > 27' + suffix
       const upper = 'SELECT id,g,v FROM t WHERE id < 4' + suffix
 
@@ -971,7 +976,7 @@ test('an ordered row-ID union keeps ascending IDs and the statement snapshot on 
             const plan = String(tree[0]?.EXPLAIN)
             assert.ok(plan.includes(title))
             if (title === 'Deduplicate rows sorted by row ID') {
-              assert.ok(plan.includes(`using by_g over (g = ${endpoint})`))
+              assert.ok(plan.includes(`using by_g over (g = ${endpoint ?? 'NULL'})`))
               assert.ok(!plan.includes('Clustered primary key (scanned separately)'))
             }
           }
