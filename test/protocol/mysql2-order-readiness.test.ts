@@ -5,12 +5,13 @@ import mysql from 'mysql2'
 import { MySQL } from '@myjs/core'
 import { observeCommand } from './packet-observation.ts'
 import unlimited from './fixtures/diagnostics/order-readiness.json' with { type: 'json' }
-
+import having from './fixtures/diagnostics/order-readiness-having.json' with { type: 'json' }
 import bounded from './fixtures/diagnostics/bounded-order-readiness.json' with { type: 'json' }
 import offset from './fixtures/diagnostics/offset-projection.json' with { type: 'json' }
 
 for (const { reference, database, count, limited } of [
   { reference: unlimited, database: 'readiness154', count: 750, limited: false },
+  { reference: having, database: 'readiness154_having', count: 18, limited: false },
   { reference: bounded, database: 'readiness155', count: 1341, limited: true },
   { reference: offset, database: 'offset156', count: 2601, limited: true },
 ]) test(`${database}: row-dependent ${limited ? 'bounded' : 'unlimited'} sorts preserve optimization, fill and projection phases`, async () => {
@@ -64,8 +65,7 @@ for (const { reference, database, count, limited } of [
 })
 
 test('written HAVING cannot borrow ordinary reader-construction readiness', async () => {
-  // Native3593 admission is a separate open gap (order-readiness-having.json).
-  // This policy control permits that future repair while catching premature headers.
+  // HAVING window admission fails before an ordinary source publishes headers.
   const db = await MySQL.open(':memory:')
   const raw = mysql.createConnection({ stream: db.createStream(), user: 'root' })
   const conn = raw.promise()

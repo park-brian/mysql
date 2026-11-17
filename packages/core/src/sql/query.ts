@@ -633,7 +633,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
       from.filter(node.where, resolved.read, semijoins ? (e) => semijoinNode(run, e) : undefined)
     }
   }
-  const having = node.having === undefined || neverNullTest(node.having) ? undefined : resolveCondition(run, compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'), substituteAliases(node.having, items), limitCount).predicates
+  const having = !node.having || neverNullTest(node.having) ? undefined : resolveCondition(run, compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'), substituteAliases(node.having, items), limitCount).predicates
   const orderCtx = compileContext(run, lookup, 'order clause', windows)
   const base = !windowed && having === undefined && unhintedBase(q, node) ? source : undefined
   const initialize: Compiled[] = []
@@ -1622,9 +1622,10 @@ function selectNumber(run: Run, q: QueryExpression): number {
   return queryTokens(run).filter((t) => t.start <= at && queryWord(t) === 'SELECT').length
 }
 
-/** `IS NOT NULL` of an aggregate that is never NULL — COUNT and the BIT_ aggregates — which the server folds to TRUE and drops (8.4.11: no Filter). */
+/** MySQL folds these non-window aggregate NULL tests. Window calls still need clause validation. */
 function neverNullTest(e: Expression): boolean {
-  return e.kind === NODE.UNARY && e.op === 'IS NOT NULL' && e.operand.kind === NODE.CALL && ['COUNT', 'BIT_AND', 'BIT_OR', 'BIT_XOR'].includes(nativeCallName(e.operand))
+  return e.kind === NODE.UNARY && e.op === 'IS NOT NULL' && e.operand.kind === NODE.CALL &&
+    e.operand.over === undefined && ['COUNT', 'BIT_AND', 'BIT_OR', 'BIT_XOR'].includes(nativeCallName(e.operand))
 }
 
 /** Whether the WHERE equals a single-column PRIMARY or NOT NULL UNIQUE key to an uncorrelated scalar subquery. */
@@ -2691,7 +2692,7 @@ function planGrouped(
   // HAVING sees the select list's aliases, its columns and the keys; a column
   // that is none of those is 1054 even when the table has it (8.4.11).
   let having: readonly Pick<Compiled, 'eval'>[] | undefined
-  if (node.having !== undefined && !neverNullTest(node.having)) {
+  if (node.having && !neverNullTest(node.having)) {
     const havingScope = selectedOnly(lookup, selectItems, keys.flatMap((k) => (k.index === undefined ? [] : [k.index])), node.having)
     having = resolveCondition(run, postCtx('having clause', havingScope), substituteAliases(node.having, selectItems), limitCount).predicates
   }
