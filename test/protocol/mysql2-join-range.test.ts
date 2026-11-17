@@ -795,9 +795,9 @@ test('an impossible INT comparison leaves a clustered range and keeps the writte
   try {
     await conn.query(`CREATE DATABASE ${schema}`)
     await conn.query(`USE ${schema}`)
-    for (const [type, minimum] of [['INT', -2147483648], ['INT UNSIGNED', 0]] as const) {
+    for (const [type, minimum, maximum] of [['INT', -2147483648, 2147483647], ['INT UNSIGNED', 0, 4294967295]] as const) {
       await conn.query(`CREATE TABLE t(id INT PRIMARY KEY,g ${type},n INT,KEY by_g(g)) STATS_AUTO_RECALC=0`)
-      await conn.query('INSERT INTO t VALUES ?', [Array.from({ length: 30 }, (_, i) => [i + 1, i === 0 ? minimum : null, i])])
+      await conn.query('INSERT INTO t VALUES ?', [Array.from({ length: 30 }, (_, i) => [i + 1, i === 0 ? minimum : i === 1 ? maximum : null, i])])
       await conn.query('ANALYZE TABLE t')
       const select = 'SELECT id,g,n FROM t WHERE '
       for (const switches of ['default', 'default,index_merge=off', 'default,index_merge_sort_union=off']) {
@@ -805,6 +805,8 @@ test('an impossible INT comparison leaves a clustered range and keeps the writte
         for (const predicate of [
           `g < ${minimum} OR id > 27`,
           `27 < id OR ${minimum - 1}.5 >= g`,
+          `g > ${maximum} OR id > 27`,
+          `27 < id OR ${maximum}.5 <= g`,
         ]) for (const method of ['query', 'execute'] as const) {
           const read = (sql: string) => method === 'query' ? conn.query<mysql.RowDataPacket[]>(sql) : conn.execute<mysql.RowDataPacket[]>(sql)
           const sql = select + predicate
@@ -817,20 +819,18 @@ test('an impossible INT comparison leaves a clustered range and keeps the writte
       }
       await conn.query("SET optimizer_switch='default'")
 
-      const prepared = select + '? > g OR id > 27 ORDER BY id'
-      const statement = await conn.prepare(prepared)
-      const ids = async (bound: number) => {
-        const [rows] = await statement.execute([mysql.TypedParameter.NEWDECIMAL(String(bound))])
-        return (rows as mysql.RowDataPacket[]).map((r) => r.id)
+      const readPrepared = async (comparison: string, boundary: number) => {
+        const prepared = select + comparison + ' OR id > 27 ORDER BY id'
+        const [rows] = await conn.execute<mysql.RowDataPacket[]>(prepared, [mysql.TypedParameter.NEWDECIMAL(String(boundary))])
+        return rows.map((r) => r.id)
       }
-      try {
-        assert.deepEqual(await ids(minimum), [28, 29, 30])
-        await conn.query('DELETE FROM t WHERE id=29')
-        assert.deepEqual(await ids(minimum), [28, 30])
-        assert.deepEqual(await ids(minimum + 1), [1, 28, 30])
-      } finally {
-        conn.unprepare(prepared)
-      }
+      assert.deepEqual(await readPrepared('? > g', minimum), [28, 29, 30])
+      assert.deepEqual(await readPrepared('? < g', maximum), [28, 29, 30])
+      await conn.query('DELETE FROM t WHERE id=29')
+      assert.deepEqual(await readPrepared('? > g', minimum), [28, 30])
+      assert.deepEqual(await readPrepared('? < g', maximum), [28, 30])
+      assert.deepEqual(await readPrepared('? > g', minimum + 1), [1, 28, 30])
+      assert.deepEqual(await readPrepared('? < g', maximum - 1), [2, 28, 30])
       await conn.query('DROP TABLE t')
     }
   } finally {

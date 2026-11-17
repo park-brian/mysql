@@ -319,13 +319,13 @@ function sortUnionAccess(def: TableDef, alias: string, where: Expression | undef
     const { integer, fractional } = integerEndpoint(value, endsBelow)
     const inclusive = !fractional && secondaryCondition.op.endsWith('=')
     const { min, max } = integerRange(column.type)!
-    if (endsBelow && integer <= min) {
+    const endpoint = endsBelow ? min : max
+    if ((endsBelow ? integer < min : integer > max) || (integer === endpoint && !inclusive)) {
       // An impossible arm leaves only the primary comparison as an access path.
-      if (costing.allowSortUnion && (integer < min || !inclusive)) {
-        return rangeAccess(def, alias, [primaryFirst ? where.left : where.right], env, costing)
-      }
-      return undefined
+      return costing.allowSortUnion
+        ? rangeAccess(def, alias, [primaryFirst ? where.left : where.right], env, costing) : undefined
     }
+    if (endsBelow && integer === min) return undefined
     // An edge admitting its domain limit admits every non-NULL key.
     const limit = endsBelow ? max : min
     if ((endsBelow ? integer < limit : integer > limit) || (integer === limit && !inclusive)) {
