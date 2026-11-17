@@ -236,6 +236,14 @@ const materializedScan = `Sort
                                 Table scan on ch
             Single-row index lookup on pa using PRIMARY`
 
+const materializedLookup = `Nested loop inner join
+    Covering index scan on pa using name
+    Single-row index lookup on <subquery2> using <auto_distinct_key>
+        Materialize with deduplication
+            Filter
+                Filter
+                    Table scan on ch`
+
 const hashBuild = `Sort
     Stream results
         Hash semijoin
@@ -309,11 +317,17 @@ const fanoutOffDisjunctions = [
 ] as const
 
 for (const { name, predicate, hash, last, writes } of fanoutOffDisjunctions) {
-  test(`an ordered ${name} disjunction chooses hash or materialization with fanout filtering off`, async () => {
+  test(`an ordered ${name} disjunction chooses hash, materialized scan or keyed lookup with fanout filtering off`, async () => {
     const { db, conn } = await looseScanConnection()
     const schema = `fanout_${name}_semijoin`
     const sql = `SELECT name FROM pa WHERE id IN (SELECT pa_id FROM ch WHERE ${predicate}) ORDER BY 1`
-    const read = (names: readonly string[], plan: string = hash) => readSemijoin(conn, schema, sql, names, plan, { flags: 4097, charset: 255 })
+    const read = (names: readonly string[], plan: string = hash) =>
+      readSemijoin(conn, schema, sql, names, plan, { flags: plan === materializedLookup ? 20485 : 4097, charset: 255 })
+    const readLookup = async (names: readonly string[]) => {
+      await conn.query("SET optimizer_switch='firstmatch=off'")
+      await read(names, materializedLookup)
+      await conn.query("SET optimizer_switch='firstmatch=on'")
+    }
     try {
       await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
       await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
@@ -326,10 +340,12 @@ for (const { name, predicate, hash, last, writes } of fanoutOffDisjunctions) {
       await conn.query('ANALYZE TABLE pa,ch')
       await conn.query("SET optimizer_switch='condition_fanout_filter=off'")
       await read(['dee'])
+      await readLookup(['dee'])
       for (const [statements, names] of writes) {
         for (const statement of statements) await conn.query(statement)
         await read(names)
       }
+      await readLookup(last)
       await conn.query('DELETE FROM ch WHERE id >= 4')
       await conn.query('ANALYZE TABLE pa,ch')
       await read(last, materializedScan)

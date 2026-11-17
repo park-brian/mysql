@@ -2648,8 +2648,9 @@ and unpacking. The differential checks preserve 36,340 decimal results
 and diagnostics and 294,560 column layouts and widths. Parser/core/facade
 measure 45,567/334,346/334,263 B gzipped within the existing caps.
 
-The no-buffer nested loop and outer-first materialized lookup remain
-open under M5.47. The two verified disjunctions are described below.
+For this fractional predicate, the unbuffered nested loop and outer-first
+materialized lookup remain open under M5.47. The two verified disjunctions
+are described below.
 The equal-scale decimal write repair is recorded under M2.10.
 
 **M2.10 equal-precision and equal-scale decimal writes, verified.**
@@ -2704,8 +2705,21 @@ The other 47,324 outcomes and 80,640 additional structural controls are
 unchanged. The committed relational ledger and all 138 matching fresh
 observations are unchanged.
 The parser, core, and facade measure 45,567, 334,357, and 334,266 bytes
-gzipped within the existing caps. The no-buffer nested loop and outer-first
-materialized lookup remain open for these disjunctions.
+gzipped within the existing caps.
+
+**M5.47 keyed materialization with fanout filtering disabled.** The two
+ordered disjunctions can use the existing outer-first MaterializeLookup
+when it wins the cost search. The child build evaluates its written filter
+and deduplicates the non-NULL keys. It initializes on the first parent
+probe. Parent ordering comes from its index or a sort before the lookup.
+Both wire protocols exercise the keyed plan before and after writes, then
+switch back to hash and to the inner-first materialized scan. The pinned
+audits repair 378 of 48,936 outcomes and preserve the other 48,558. The
+80,640 additional structural controls are unchanged, and all captured
+membership plans in the committed relational ledger agree. All 138
+observations in the three fresh seeds also agree. The parser, core, and
+facade measure 45,567, 334,360, and 334,261 bytes gzipped within the
+existing caps. The unbuffered nested-loop variants remain open.
 
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.

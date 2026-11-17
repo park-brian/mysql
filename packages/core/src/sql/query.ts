@@ -1512,9 +1512,10 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     const outerType = !innerFirst && nullTest ? parent?.type : undefined
     const preserve = nullTest && outerType?.type === key.type.field && (outerType.unsigned === true) === key.type.unsigned
       ? { ...nullTest, operand: outerField } : undefined
-    const pairFilter = fanoutOff && !innerFirst && compoundArm?.op === '<='
+    const outerLoop = !any && !innerFirst && (!scanOnly || alternative.usesLookup(innerAlias))
+    const pairFilter = fanoutOff && !innerFirst && !outerLoop && compoundArm?.op === '<='
       ? { ...residual!, left: { ...compoundArm, left: outerField } } : preserve
-    return { from: alternative, where: pairFilter ? and(equality, pairFilter) : predicate, outerLoop: !any && !innerFirst && !scanOnly, preserve }
+    return { from: alternative, where: pairFilter ? and(equality, pairFilter) : predicate, outerLoop, preserve }
   })
 }
 
