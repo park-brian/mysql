@@ -240,7 +240,10 @@ const LIBRARY: ReadonlySet<string> = new Set([
 function libraryCall(name: string, args: readonly Compiled[], callName: string, ctx: CompileContext) {
   // The numeric functions read text as a double, warning as they go (1292).
   const integers = READS_INTEGER[name]
-  const xs = READS_DOUBLE.has(name) && args[0] !== undefined ? [asNumber(args[0], 'DOUBLE'), ...args.slice(1)] : integers !== undefined ? args.map((a, i) => (integers.includes(i) ? asNumber(a, 'INTEGER') : a)) : args
+  const xs = args.map((a, i) => {
+    if (i === 0 && READS_DOUBLE.has(name)) return asNumber(a, 'DOUBLE')
+    return integers?.includes(i) ? asNumber(a, 'INTEGER') : a
+  })
   const conn = ctx.connectionCollation
   return { xs, conn, arity: nativeArity(callName, xs.length) }
 }

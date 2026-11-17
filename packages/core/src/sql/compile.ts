@@ -12,7 +12,7 @@
 // unknown function in a selected schema is ER_SP_DOES_NOT_EXIST; a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, equalBytes, type MysqlTime } from '@myjs/bytes'
-import { logicalShortCircuit, nativeCallName, queryBody, signedOperand, someNode } from './ast.ts'
+import { isNotEqual, logicalShortCircuit, nativeCallName, queryBody, signedOperand, someNode } from './ast.ts'
 import { notSupported, proof } from './errors.ts'
 import { resolveCollation } from './collation.ts'
 import { decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
@@ -1302,10 +1302,12 @@ function unary(op: string, a: Compiled, constant: false | Expression, ctx: Compi
   }
 }
 
+const different = (c: number): boolean => c !== 0
+
 const COMPARISONS: Readonly<Record<string, (c: number) => boolean>> = {
   '=': (c) => c === 0,
-  '<>': (c) => c !== 0,
-  '!=': (c) => c !== 0,
+  '<>': different,
+  '!=': different,
   '<': (c) => c < 0,
   '<=': (c) => c <= 0,
   '>': (c) => c > 0,
@@ -2028,7 +2030,7 @@ function rowComparison(op: string, left: Expression, right: Expression, ctx: Com
   sameShape(a, b)
   const nullSafe = op === '<=>'
   const test = COMPARISONS[op] as (c: number) => boolean
-  const mode = nullSafe ? 'nullSafe' : op === '=' || op === '<>' || op === '!=' ? 'equality' : 'order'
+  const mode = nullSafe ? 'nullSafe' : op === '=' || isNotEqual(op) ? 'equality' : 'order'
   return {
     eval: (r, env) => {
       const c = compareShapes(a, b, r, env, mode)

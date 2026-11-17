@@ -120,3 +120,6 @@ export function signedOperand(e: Expression, plus?: '+'): Expression {
   while (e.kind === NODE.UNARY && (e.op === '-' || e.op === plus)) e = e.operand
   return e
 }
+
+/** Both spellings of an ordinary inequality. */
+export const isNotEqual = (op: string): boolean => op === '<>' || op === '!='

@@ -35,7 +35,7 @@
 // physical range and exact point equality already enforce it.
 import { notSupported, proof, wrongUsage } from './errors.ts'
 import { FIELD_TYPE } from '@myjs/bytes'
-import { REVERSE_COMPARISON, and, integerLiteral, isOrderedComparison, logicalShortCircuit, operandPairs, rewriteExpression, someNode, tableAlias } from './ast.ts'
+import { isNotEqual, REVERSE_COMPARISON, and, integerLiteral, isOrderedComparison, logicalShortCircuit, operandPairs, rewriteExpression, someNode, tableAlias } from './ast.ts'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, type Expression, type IndexHint, type QueryExpression, type TableReference } from '@myjs/parser'
@@ -548,8 +548,9 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     // A FROM of one table has no join to plan.
     if (tree.node.kind === 'leaf') planned ??= { node: tree.node, positions: NONE, lookups: NO_ALIASES, on: NONE, dynamic: NO_ALIASES }
     const env = ctx.env
+    // Range predicates bind one qualified slot and retain fixed operands.
     const rangeOf = (t: FromTable, conditions: readonly Weighed[]): RangeEstimate | undefined =>
-      env === undefined ? undefined : rangeEstimate(t, conditions, (e) => ctx.compileOn(e, preliminary.restrict(new Set([t.alias]))), env, settings)
+      env === undefined ? undefined : rangeEstimate(t, conditions, (e) => ctx.compileOn(e, preliminary), env, settings)
     planned ??= planJoins(tree.node, whereParts.map((e) => ({ e, aliases: aliasesOf(e, scope) })), settings, straight ? undefined : lookupAfter, rangeOf, sort, materialization, optimizerEnabled(env, 'duplicateweedout'))
     settings.lookups = planned.lookups
     settings.dynamic = planned.dynamic
@@ -690,6 +691,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       if (filteredScan && (!primary || (materialized && materialized !== 'scan'))) return undefined
       // Indexed LooseScan retains PRIMARY identity; weedout retains physical outer identity.
       const loose = !materialized && innerFirst && settings.loose && (node.lookup ? primary : settings.buffered)
+      // The fractional list is verified only for the selected covering LooseScan.
+      if ((residual as { readonly op?: string } | undefined)?.op === 'NOT IN' && (!loose || !firstMatch.enabled)) return undefined
       if (!loose) delete settings.loose
       if (!materialized && !loose && innerFirst && (filteredScan ? optimizerEnabled(ctx.env, 'duplicateweedout') : residual === undefined)) settings.weedout = inner
       if (materialized || loose || settings.weedout) {
@@ -721,7 +724,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         if (e.kind === NODE.UNARY) return e.op === 'IS NOT NULL' && notNull(e.operand) !== undefined
         if (e.kind !== NODE.BINARY) return false
         if (logicalShortCircuit(e.op) === true) return alwaysTrue(e.left) || alwaysTrue(e.right)
-        if (e.op !== '<>' && e.op !== '!=') return false
+        if (!isNotEqual(e.op)) return false
         const l = notNull(e.left)
         return l !== undefined ? neverEqual(l, e.right) : neverEqual(notNull(e.right), e.left)
       }
@@ -1721,7 +1724,7 @@ function filterEffect(t: FromTable, stats: TableStatistics, available: ReadonlyS
     if (like) estimate = filteredScan ? Math.fround(0.1111) : 1 / 9
     else if (isOrderedComparison(op)) estimate = filteredScan ? Math.fround(0.3333) : 1 / 3
     const kept = atLeast(estimate)
-    return op === '<>' || op === '!=' || op === 'NOT LIKE' ? negateFilter(kept) : kept
+    return isNotEqual(op) || op === 'NOT LIKE' ? negateFilter(kept) : kept
   }
 }
 

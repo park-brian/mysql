@@ -15,6 +15,49 @@ async function looseScanConnection() {
   return { db, conn }
 }
 
+test('a covering LooseScan costs a fractional NOT IN primary residual', async () => {
+  const { db, conn } = await looseScanConnection()
+  const schema = 'fractional_loosescan379'
+  const sql = 'SELECT name FROM pa WHERE id IN (SELECT pa_id FROM ch WHERE ch.id NOT IN (6, 0.5)) ORDER BY 1'
+  const options = { sql, rowsAsArray: true }
+  const explain = `EXPLAIN FORMAT=TREE ${sql}`
+  const expectedPlan = `Sort
+    Stream results
+        Nested loop inner join
+            Remove duplicates from input sorted on pa_id
+                Filter
+                    Covering index scan on ch using pa_id
+            Single-row index lookup on pa using PRIMARY`
+  const read = async (names: readonly string[]) => {
+    for (const api of ['query', 'execute'] as const) {
+      const [rows, fields] = api === 'query' ? await conn.query(options) : await conn.execute(options)
+      assert.deepEqual(rows, names.map((name) => [name]), api)
+      assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]),
+        [['name', 253, 48, 4097, 0, 224, schema, 'pa', 'pa', 'name']], api)
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], api)
+      const [plan] = api === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
+      assert.equal(planSkeleton(plan[0]?.EXPLAIN), expectedPlan, api)
+    }
+  }
+  try {
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE pa(id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,name VARCHAR(12) NOT NULL,grp INT,amt DECIMAL(6,2),UNIQUE KEY(name),KEY(grp)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,pa_id INT,label VARCHAR(10),qty INT NOT NULL,KEY(pa_id)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO pa(name,grp,amt) VALUES ('Mo',NULL,165.82),('al',2,214.05),('cy',2,-10.35),('dee',3,230.97),('ann',NULL,296.50)")
+    await conn.query("INSERT INTO ch(pa_id,label,qty) VALUES (NULL,'zoë',0),(6,'green',4),(5,'green',6),(5,'Blue',3),(1,'cy',3),(3,NULL,0),(4,'cy',2),(1,'cy',4)")
+    await conn.query('ANALYZE TABLE pa,ch')
+    await read(['ann', 'dee', 'Mo'])
+    await conn.query('UPDATE ch SET pa_id=2 WHERE id=7')
+    await read(['al', 'ann', 'Mo'])
+    await conn.query('UPDATE ch SET pa_id=4 WHERE id=7')
+    await read(['ann', 'dee', 'Mo'])
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
+
 test('an ordered EXISTS costs a noncovering materialized scan and indexed weedout', async () => {
   const { db, conn } = await looseScanConnection()
   const schema = 'filtered_semijoin356'

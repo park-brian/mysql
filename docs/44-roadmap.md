@@ -2454,12 +2454,22 @@ scripts retain their complete outcomes, including the existing 2,140 of
 2,248 matching plans. Parser/core/facade measure 45,614/334,313/334,258 B
 gzipped within the existing caps.
 
-Resume M5.47 with a positive integer semijoin whose covering child has a
-signed single-column `PRIMARY` key and a direct `NOT IN (integer,
-fractional DECIMAL)` condition on that key. The pinned trace for seed
-2026111602, case 296, statement 16 shows that the row estimate from a rejected
-primary range still contributes to filtering. Use the existing independent
-range estimate and keep reversed lists and disabled strategy cases open.
+**M5.47 covering LooseScan with a fractional primary `NOT IN`, verified.**
+An unbounded, nonlocking positive integer semijoin can use the covering
+LooseScan chosen by the existing planner when the child has a signed
+single-column `INT PRIMARY` key and a written integer followed by an
+in-range fractional decimal in the key's `NOT IN` list. The original
+predicate filters the covering read. The independent primary range estimate
+still contributes to filtering when another read wins, as in seed 2026111602,
+case 296, statement 16. Both wire protocols match MySQL 8.4.11 for plans,
+fields, rows and warnings across writes. The pinned audits fix 559 of 19,456
+outcomes and preserve the rest, including the reversed lists and disabled
+FirstMatch or LooseScan cases. The committed ledger retains 2,140 of 2,248
+matching plans, and the three fresh seeds improve from 130 to 131 of 138.
+Parser/core/facade measure 45,614/334,348/334,265 B gzipped within the
+existing caps. Reversed lists, other strategies, limited reads and the child
+locking boundary remain open. Continue with the primary fractional `BETWEEN`
+residual in case 183, statement 15.
 
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.

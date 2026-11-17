@@ -45,18 +45,17 @@ import {
   parseDecimal,
   renderDecimal,
   stringValue,
-  textOf,
   keyPartOf,
   parseDateTime,
   type Value,
 } from '@myjs/types'
 import type { Compiled, Env } from './compile.ts'
 import { rangeBaseline, rangeCost, type RangeShape, type RangeRead } from './cost.ts'
-import { intersect, normalize, rangeOf, type Constant, type Interval, type RangeSet } from './ranges.ts'
+import { intersect, normalize, rangeOf, type Constant, type Interval, type RangeSet, type RangeValue } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
 import { forwardKeyColumn, uniquePoint } from './indexes.ts'
 import { columnIndex } from './scope.ts'
-import { REVERSE_COMPARISON, logicalShortCircuit, signedOperand } from './ast.ts'
+import { isNotEqual, REVERSE_COMPARISON, logicalShortCircuit, signedOperand } from './ast.ts'
 import { byteKey } from './keys.ts'
 import { proof } from './errors.ts'
 
@@ -161,7 +160,7 @@ function conditionOf(e: Expression, def: TableDef, alias: string, outer: OuterCo
     return left === undefined ? undefined : { column: left, op: 'IN', constants: e.right.items }
   }
   if (e.op === 'BETWEEN' && left !== undefined && equalBounds(e, env, left)) return { column: left, op: '=', constants: [e.right] }
-  const op = e.op === '<>' || e.op === '!=' ? undefined : REVERSE_COMPARISON[e.op] as Op | undefined
+  const op = isNotEqual(e.op) ? undefined : REVERSE_COMPARISON[e.op] as Op | undefined
   if (op === undefined) return undefined
   if (left !== undefined && constant(e.right)) return { column: left, op: e.op as Op, constants: [e.right] }
   const right = tableColumn(e.right, def, alias)
@@ -326,10 +325,9 @@ const pointRange = (bound: KeyBound): KeyRange => ({ from: bound, to: bound })
 
 /** Intervals as EXPLAIN writes a range: `(2 < grp <= 5) OR (grp = 7)`, `(NULL < grp)`, `(grp = NULL)`. */
 function describeIntervals(intervals: readonly Interval[], name: string): string {
-  const text = (v: Exclude<Value, null>): string => {
-    if (v.kind === 'int' || v.kind === 'double') return String(v.v)
-    if (v.kind === 'decimal') return renderDecimal(v)
-    return v.kind === 'string' ? `'${textOf(v).replace(/'/g, "''")}'` : '?'
+  const text = (v: RangeValue): string => {
+    if (v.kind === 'string') return `'${v.v.replace(/'/g, "''")}'`
+    return v.kind === 'decimal' ? renderDecimal(v) : String(v.v)
   }
   return intervals
     .map((i) => {

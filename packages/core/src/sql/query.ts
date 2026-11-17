@@ -20,7 +20,7 @@ import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, c
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { accessRows, distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { EMPTY_KEY_RANGES, constantValue, equalBounds, isConstant, optimizerEnabled, pointAccess, splitAnd, tableColumn, type Access } from './plan.ts'
-import { and, columnRefs, integerLiteral, isOrderedComparison, logicalShortCircuit, nativeCallName, nullLiteral, operandPairs, queryBody, rewriteExpression, someNode, tableAlias, withoutUnaryPlus } from './ast.ts'
+import { isNotEqual, and, columnRefs, integerLiteral, isOrderedComparison, logicalShortCircuit, nativeCallName, nullLiteral, operandPairs, queryBody, rewriteExpression, someNode, tableAlias, withoutUnaryPlus } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, proof, wrongArgumentsError } from './errors.ts'
 import { clusteredIndex, forwardKeyPart, indexPartMatchesColumn, indexParts, leadingIndex, singleRefIndex } from './indexes.ts'
@@ -28,7 +28,7 @@ import { collationInfoByName, encodeCollation } from '@myjs/charsets'
 import { ambiguousColumnError, unknownColumnError, requireSchema, safeIndex, safeResolve, TableScope, columnIndex as indexOfColumn } from './scope.ts'
 import { holdsRead, indexRecordBytes, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type HintAdmission, type JoinCondition } from './from.ts'
 import { dependentMembershipAccess, membershipCost, ROW_EVALUATE, type RangeRead } from './cost.ts'
-import { fractionalNullList } from './ranges.ts'
+import { fractionalIntBound, fractionalNullList } from './ranges.ts'
 import { firstKey, rowKey, valueKey } from './keys.ts'
 import { coveringScan, filterNode, filterPlan, indexLookup, lookupMaterialized, materialize, planNode, tableScan, wrap, type PlanNode } from './explain.ts'
 import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts'
@@ -1352,22 +1352,32 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   const innerColumn = innerField.parts[1]!.toLowerCase()
   const outerDef = from.single!.def
   const notNull = any && extra?.kind === NODE.UNARY && extra.op === 'IS NOT NULL' ? extra : undefined
-  if (any && (q.limit || q.locking || hasLeadingKey(outerDef, outerField.parts[1]!))) return undefined
+  const limitOrLock = q.limit || q.locking
+  if (any && (limitOrLock || hasLeadingKey(outerDef, outerField.parts[1]!))) return undefined
   let residual: Extract<Expression, { kind: typeof NODE.BINARY }> | undefined
   let text = false
   if (extra !== undefined && !notNull) {
-    if (any || extra.kind !== NODE.BINARY || extra.right.kind !== NODE.LITERAL) return undefined
+    if (any || extra.kind !== NODE.BINARY) return undefined
     const field = qualify(extra.left, innerAlias)
     if (field === undefined) return undefined
-    text = !exists && textBesideColumn(field, extra.right) && (isOrderedComparison(extra.op) ||
-      (wildcardLike(extra) && optimizerEnabled(run.env, 'condition_fanout_filter')))
-    if (!text && (!isComparison(extra.op) || !numberLiteral(extra.right))) return undefined
+    const right = extra.right
+    if (right.kind === NODE.LITERAL) {
+      text = !exists && textBesideColumn(field, right) && (isOrderedComparison(extra.op) ||
+        (wildcardLike(extra) && optimizerEnabled(run.env, 'condition_fanout_filter')))
+      if (!text && (!isComparison(extra.op) || !numberLiteral(right))) return undefined
+    } else if (exists || limitOrLock || extra.op !== 'NOT IN' || right.kind !== NODE.ROW || right.items.length !== 2 ||
+      !integerLiteral(right.items[0]!) || right.items[1]!.kind !== NODE.LITERAL ||
+      !fractionalIntBound(constantValue(right.items[1]!, run.env))) return undefined
     residual = { ...extra, left: field }
   }
   const equality: Expression = { kind: NODE.BINARY, op: '=', left: innerField, right: outerField, at: where.at }
   return proof(() => {
     const def = nonTemporaryDefinition(run, inner.table)
     if (def === undefined) return undefined
+    if (residual?.op === 'NOT IN') {
+      const field = tableColumn(residual.left, def, innerAlias)
+      if (field?.type.type !== FIELD_TYPE.LONG || field.type.unsigned === true || !def.indexes.some((i) => i.kind === 'primary' && i.parts.length === 1 && i.parts[0]!.column === field.name)) return undefined
+    }
     if (any && (hasLeadingKey(def, innerColumn) || from.access(run.env).index !== undefined)) return undefined
     let nullTest: typeof notNull
     if (notNull) {
@@ -1392,7 +1402,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     const ordersOuter = sortBy === outerAlias
     if ((any || scanOnly) && hasGenerated(def, outerDef)) return undefined
     if (scanOnly) {
-      if ((!ordersOuter && (!exists || q.orderBy !== undefined)) || q.limit !== undefined || q.locking !== undefined || !singleRefIndex(index) ||
+      if ((!ordersOuter && (!exists || q.orderBy !== undefined)) || limitOrLock || !singleRefIndex(index) ||
         def.indexes.some((i) => holdsRead(def, i, innerRead))) return undefined
       if (!text && (!exists || residual?.op !== '>' || !integerLiteral(residual.right))) return undefined
     }
@@ -3171,7 +3181,7 @@ function resolveCondition(run: Run, ctx: CompileContext, condition: Expression |
  * position, so no two are the same.
  */
 function pinOf(cond: Expression, column: ColumnDef, columnOf: (e: Expression) => ColumnDef | undefined, env: Env): string | undefined {
-  if (cond.kind === NODE.UNARY && cond.op === 'NOT' && cond.operand.kind === NODE.BINARY && (cond.operand.op === '<>' || cond.operand.op === '!=')) {
+  if (cond.kind === NODE.UNARY && cond.op === 'NOT' && cond.operand.kind === NODE.BINARY && isNotEqual(cond.operand.op)) {
     return pinOf({ ...cond.operand, op: '=' }, column, columnOf, env)
   }
   if (cond.kind !== NODE.BINARY) return undefined

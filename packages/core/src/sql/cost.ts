@@ -297,12 +297,12 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     const ab = a.keyDependent.has(b.alias)
     const ba = b.keyDependent.has(a.alias)
     if (ab !== ba) return ab ? 1 : -1
-    return a.found - b.found || candidates.indexOf(a) - candidates.indexOf(b)
+    // A stable sort retains declaration order when estimates tie.
+    return a.found - b.found
   })
   let best: { readonly cost: number; readonly plan: Positioned[] } | undefined
   const plan: Step[] = []
   let driving: Step | undefined
-  const available = (c: Candidate, remaining: ReadonlySet<string>): boolean => remaining.has(c.alias)
   const place = (c: Candidate): Positioned => {
     // A bounded two-table LooseScan retains the later lookup's original read cost.
     let placed = c.place(plan.map((p) => p.alias === driving?.alias ? driving! : p))
@@ -368,7 +368,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
   // The unique-key tables after the one just placed, each joined in turn while it costs what the one before did (`eq_ref_extension_by_limited_search`).
   const extendByUniqueKeys = (remaining: Set<string>): Set<string> => {
     for (const c of sorted) {
-      if (!available(c, remaining) || !plan.some((p) => c.keyDependent.has(p.alias))) continue
+      if (!remaining.has(c.alias) || !plan.some((p) => c.keyDependent.has(p.alias))) continue
       const placed = place(c)
       const previous = plan.at(-1) as Step
       if (!(placed.lookup && almostEqual(placed.read, previous.read) && almostEqual(placed.fetched, previous.fetched))) continue
@@ -390,7 +390,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     let bestCost = Infinity
     let extended: Set<string> | undefined
     for (const c of sorted) {
-      if (!available(c, remaining) || extended?.has(c.alias)) continue
+      if (!remaining.has(c.alias) || extended?.has(c.alias)) continue
       const placed = place(c)
       const next = step(plan.at(-1), placed)
       // Native heuristic pruning uses the original driver, before LooseScan fanout.

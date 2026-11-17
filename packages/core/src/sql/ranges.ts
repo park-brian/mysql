@@ -13,6 +13,8 @@ import { REVERSE_COMPARISON, logicalShortCircuit, nullLiteral, signedOperand } f
 /** A constant's value while planning — a literal, or a bound `?` — or `undefined` for anything else. */
 export type Constant = (e: Expression) => Value | undefined
 
+export type RangeValue = Extract<Value, { readonly kind: 'int' | 'decimal' | 'string' }>
+
 /** One interval of a column's values, or the NULL point. An absent bound is unbounded. */
 export type Interval = { readonly lo?: Bound; readonly hi?: Bound; readonly empty?: boolean } | 'null'
 /** The values a condition admits: some intervals, or everything (`'all'`) when it does not restrict the column. */
@@ -21,12 +23,11 @@ export type RangeSet = readonly Interval[] | 'all'
 const ALL_VALUES: Interval = {}
 
 /** A constant brought to the column's comparison, or `undefined` when the two do not compare as the column's type. */
-function constantFor(e: Expression, column: ColumnDef, value: Constant): Value | undefined {
+function constantFor(e: Expression, column: ColumnDef, value: Constant): RangeValue | null | undefined {
   const v = value(e)
   if (v === undefined || v === null) return v
-  const text = column.type.collationId !== undefined && column.type.collationId !== CHARSET_BINARY
-  if (text) return v.kind === 'string' ? { ...v, collationId: column.type.collationId as number, coercibility: 2 } : undefined
-  const { type } = column.type
+  const { type, collationId } = column.type
+  if (collationId !== undefined && collationId !== CHARSET_BINARY) return v.kind === 'string' ? { ...v, collationId, coercibility: 2 } : undefined
   if (integerBytes(type) || type === FIELD_TYPE.NEWDECIMAL || type === FIELD_TYPE.DECIMAL) return v.kind === 'int' || v.kind === 'decimal' ? v : undefined
   return undefined
 }
@@ -36,12 +37,13 @@ export function fractionalNullList(items: readonly Expression[], column: ColumnD
   if (items.length !== 2 || !column.nullable || column.type.type !== FIELD_TYPE.LONG || column.type.unsigned === true) return false
   const [first, second] = items
   const other = nullLiteral(first) ? second : nullLiteral(second) ? first : undefined
-  if (other === undefined || signedOperand(other).kind !== NODE.LITERAL) return false
-  const fraction = value(other)
-  if (fraction?.kind !== 'decimal' || fraction.v % 10n ** BigInt(fraction.scale) === 0n) return false
-  // MySQL tries storing the literal in the INT field first. A rounded
-  // value outside the field's range keeps the full read.
-  const rounded = toInteger(fraction)
+  return other !== undefined && signedOperand(other).kind === NODE.LITERAL && fractionalIntBound(value(other))
+}
+
+/** A fractional decimal whose stored value stays within signed INT bounds. */
+export function fractionalIntBound(v: Value | undefined): boolean {
+  if (v?.kind !== 'decimal' || v.v % 10n ** BigInt(v.scale) === 0n) return false
+  const rounded = toInteger(v)
   return BigInt.asIntN(32, rounded) === rounded
 }
 
@@ -55,7 +57,7 @@ export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, col
     if (!disjunction) return intersect(left, right)
     return left === 'all' || right === 'all' ? 'all' : [...left, ...right]
   }
-  const point = (v: Exclude<Value, null>): Interval => ({ lo: { v, inclusive: true }, hi: { v, inclusive: true } })
+  const point = (v: RangeValue): Interval => ({ lo: { v, inclusive: true }, hi: { v, inclusive: true } })
   const onLeft = isColumn(e.left)
   if (e.op === 'BETWEEN' && onLeft) {
     const a = constantFor(e.right, column, value)
@@ -143,7 +145,7 @@ function meet(x: Interval, y: Interval): Interval | undefined {
   return { lo, hi }
 }
 
-type Bound = { readonly v: Exclude<Value, null>; readonly inclusive: boolean } | undefined
+type Bound = { readonly v: RangeValue; readonly inclusive: boolean } | undefined
 
 /** The tighter of two lower bounds (`dir` 1) or upper bounds (`dir` -1). */
 function tighter(a: Bound, b: Bound, dir: 1 | -1): Bound {
