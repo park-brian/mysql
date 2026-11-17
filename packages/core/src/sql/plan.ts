@@ -86,7 +86,7 @@ export interface Access {
     readonly index: string
     readonly range: KeyRange
     readonly over: string
-    readonly upper: Uint8Array
+    readonly bound: Uint8Array
     readonly primaryFirst: boolean
   }
   /** Table cardinality for a noncovering text range's ordering competitor. */
@@ -283,29 +283,49 @@ export interface RangeCosting {
   count(index: string, range: KeyRange, limit: number): number
 }
 
-/** Merge one nullable secondary non-NULL range and one exclusive signed INT primary range. */
+/** Merge one nullable INT secondary range and one signed INT primary range. */
 function sortUnionAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, costing: RangeCosting, indexes: readonly IndexDef[]): Access | undefined {
   if (!costing.allowSortUnion || def.engine !== 'native' || where?.kind !== NODE.BINARY || !logicalShortCircuit(where.op) ||
     !optimizerEnabled(env, 'index_merge') || !optimizerEnabled(env, 'index_merge_sort_union')) return undefined
-  const primaryFirst = where.left.kind !== NODE.UNARY
-  const [comparison, present] = primaryFirst ? [where.left, where.right] : [where.right, where.left]
-  if (comparison.kind !== NODE.BINARY || comparison.op !== '<' || !isConstant(comparison.right) ||
-    present.kind !== NODE.UNARY || present.op !== 'IS NOT NULL') return undefined
   const primary = indexes.find((key) => key.kind === 'primary')
   if (primary?.parts.length !== 1) return undefined
   const pk = forwardKeyColumn(def, primary)
-  if (pk?.type.type !== FIELD_TYPE.LONG || pk.type.unsigned || tableColumn(comparison.left, def, alias) !== pk) return undefined
-  const column = tableColumn(present.operand, def, alias)
+  if (pk?.type.type !== FIELD_TYPE.LONG || pk.type.unsigned) return undefined
+  const primaryFirst = where.left.kind === NODE.BINARY && tableColumn(where.left.left, def, alias) === pk
+  const [comparison, present] = primaryFirst ? [where.left, where.right] : [where.right, where.left]
+  if (comparison.kind !== NODE.BINARY || !isOrderedComparison(comparison.op) ||
+    !isConstant(comparison.right) || tableColumn(comparison.left, def, alias) !== pk) return undefined
+  const greater = present.kind === NODE.BINARY && (present.op === '>' || present.op === '>=') && isConstant(present.right)
+  const operand = greater ? present.left : present.kind === NODE.UNARY && present.op === 'IS NOT NULL' ? present.operand : undefined
+  const column = operand && tableColumn(operand, def, alias)
   if (!column?.nullable || column.type.type !== FIELD_TYPE.LONG) return undefined
   const keys = indexes.filter((key) => forwardKeyColumn(def, key) === column)
   const secondary = keys[0]
   if (keys.length !== 1 || !singleRefIndex(secondary)) return undefined
   const bound = constantValue(comparison.right, env)
   if (bound?.kind !== 'int') return undefined
-  const to = encodeBound(bound, pk, false)
-  if (!to) return undefined
-  const pkRange = { to }
-  const secondaryRange = { from: { ...NULL_KEY, inclusive: false } }
+  const edge = { v: bound, inclusive: comparison.op.endsWith('=') }
+  const key = encodeBound(bound, pk, edge.inclusive)
+  if (!key) return undefined
+  const upper = comparison.op.startsWith('<')
+  const pkRange = upper ? { to: key } : { from: key }
+  let secondaryInterval: Interval = {}
+  if (greater) {
+    const value = constantValue(present.right, env)
+    if (value?.kind !== 'int' && value?.kind !== 'decimal') return undefined
+    let inclusive = present.op === '>='
+    let v = value
+    if (value.kind === 'decimal') {
+      // On an integer column either inequality above a fraction starts after its floor.
+      const scale = 10n ** BigInt(value.scale)
+      const fraction = value.v % scale
+      v = intValue(value.v / scale - (fraction < 0n ? 1n : 0n))
+      inclusive &&= fraction === 0n
+    }
+    secondaryInterval = { lo: { v, inclusive } }
+  }
+  const secondaryRange = keyRanges([secondaryInterval], column)?.[0]?.range
+  if (secondaryRange?.from === undefined || (greater && secondaryRange.from.values[0] === null)) return undefined
   const { stats, coveringScan } = costing
   // This reader models an in-memory sort. Leave space per row ID for the sort tree.
   const limit = Math.min(stats.rows - 2, Math.floor(sortBufferBytes(env) / 64) - 1)
@@ -318,10 +338,10 @@ function sortUnionAccess(def: TableDef, alias: string, where: Expression | undef
     rangeCost(stats, { ...costing.shape(primary), covering: false }, 1, primaryRows)
   if (reads + sortUnionCost(stats, secondaryRows) >= rangeBaseline(stats, coveringScan && costing.shape(coveringScan).recordBytes)) return undefined
   return {
-    index: primary.name, ranges: [pkRange], over: `(${pk.name} < ${bound.v})`,
+    index: primary.name, ranges: [pkRange], over: describeIntervals([upper ? { hi: edge } : { lo: edge }], pk.name),
     sortUnion: {
-      index: secondary.name, range: secondaryRange, over: `(NULL < ${column.name})`,
-      upper: encodeKey(to.values, [keyPartOf(pk.type, pk.nullable)]), primaryFirst,
+      index: secondary.name, range: secondaryRange, over: describeIntervals([secondaryInterval], column.name),
+      bound: encodeKey(key.values, [keyPartOf(pk.type, pk.nullable)]), primaryFirst,
     },
   }
 }

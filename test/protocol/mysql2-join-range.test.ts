@@ -547,3 +547,53 @@ test('a single-table Sort Union reads secondary row IDs before its separate prim
     await conn.end(); await db?.end()
   }
 })
+
+test('Sort Union compares signed primary endpoints and floors fractional secondary cutoffs', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'index_merge_bounds404'
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,g INT,amt INT,KEY by_g(g)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO t VALUES (-6,8,1),(-5,-3,2),(-4,-2,3),(-3,-4,4),(-2,NULL,5),(-1,-4,6),(0,8,7),(1,NULL,8),(2,-3,9),(3,-2,10),(4,NULL,11),(5,8,12)')
+    await conn.query('ANALYZE TABLE t')
+
+    const sql = 'SELECT id,g,amt FROM t WHERE '
+    for (const [predicate, ids, clustered, secondary] of [
+      ['id > 0 OR g > 5.5', [-6, 0, 1, 2, 3, 4, 5], '(0 < id)', '(5 < g)'],
+      ['id >= 0 OR g >= 5.5', [-6, 0, 1, 2, 3, 4, 5], '(0 <= id)', '(5 < g)'],
+      ['g > 5.5 OR id < 0', [0, 5, -6, -5, -4, -3, -2, -1], '(id < 0)', '(5 < g)'],
+      ['g > 5.5 OR id <= 0', [5, -6, -5, -4, -3, -2, -1, 0], '(id <= 0)', '(5 < g)'],
+      ['id > 2 OR g >= -2.5', [-6, -4, 0, 3, 4, 5], '(2 < id)', '(-3 < g)'],
+    ] as const) for (const method of ['query', 'execute'] as const) {
+      const read = (text: string) => method === 'query' ? conn.query<mysql.RowDataPacket[]>(text) : conn.execute<mysql.RowDataPacket[]>(text)
+      const [rows] = await read(sql + predicate)
+      assert.deepEqual(rows.map((row) => row.id), ids)
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      const [tree] = await read('EXPLAIN FORMAT=TREE ' + sql + predicate)
+      const description = String(tree[0]?.EXPLAIN)
+      assert.ok(description.includes('Sort-deduplicate by row ID'))
+      assert.ok(description.includes('using PRIMARY over ' + clustered))
+      assert.ok(description.includes('using by_g over ' + secondary))
+    }
+
+    const prepared = sql + 'id > 2 OR g > ?'
+    const statement = await conn.prepare(prepared)
+    try {
+      const { NEWDECIMAL } = mysql.TypedParameter
+      const rowsFor = async (value: string) => {
+        const [rows] = await statement.execute([NEWDECIMAL(value)])
+        return (rows as mysql.RowDataPacket[]).map((row) => row.id)
+      }
+      assert.deepEqual(await rowsFor('5.5'), [-6, 0, 3, 4, 5])
+      await conn.query('UPDATE t SET g=-2 WHERE id=-5')
+      assert.deepEqual(await rowsFor('-2.5'), [-6, -5, -4, 0, 3, 4, 5])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+    } finally {
+      conn.unprepare(prepared)
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})

@@ -30,9 +30,13 @@ export function* accessRows(table: Table, access: Access, trx?: Trx, current?: b
   const mode = current ? 'current' : undefined
   if (sortUnion) {
     const ids: RowId[] = []
+    const primary = ranges![0]!
+    const bound = primary.from ?? primary.to!
     // The primary range reads its own rows last, under the same statement view.
     for (const [id] of table.indexScan(sortUnion.index, sortUnion.range, trx, mode)) {
-      if (compareBytes(id, sortUnion.upper) >= 0) ids.push(id)
+      const order = compareBytes(id, sortUnion.bound)
+      const inPrimary = order === 0 ? bound.inclusive : primary.from === undefined ? order < 0 : order > 0
+      if (!inPrimary) ids.push(id)
     }
     for (const id of ids.sort(compareBytes)) {
       const fields = table.get(id, trx, mode)
