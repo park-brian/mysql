@@ -2719,7 +2719,22 @@ audits repair 378 of 48,936 outcomes and preserve the other 48,558. The
 membership plans in the committed relational ledger agree. All 138
 observations in the three fresh seeds also agree. The parser, core, and
 facade measure 45,567, 334,360, and 334,261 bytes gzipped within the
-existing caps. The unbuffered nested-loop variants remain open.
+existing caps.
+
+**M5.47 indexed FirstMatch with join buffering disabled.** The two
+bounded disjunctions can use the selected outer-first child index lookup
+when both `condition_fanout_filter` and `block_nested_loop` are disabled.
+The exact signed key equality holds for each candidate before the written
+child disjunction is checked. FirstMatch stops at the first qualifying
+candidate. If the cost search selects the keyed materialization, the
+existing build and parent ordering apply under the same switches.
+The MySQL 8.4.11 audits repair 600 of 40,320 outcomes, including 492 indexed
+semijoins and 108 keyed materializations. The other 39,720 outcomes and
+105,216 structural and switch controls are unchanged, as is the committed
+relational ledger. All 138 observations in three fresh seeds still agree.
+The parser, core, and facade measure 45,567, 334,359, and 334,261 bytes
+gzipped within the existing caps.
+Other unbuffered loops and broader predicate shapes remain open.
 
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.

@@ -630,7 +630,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     orderGroupsFirst(keys) {
       if (keys.length === 0 || keys.some((k) => k.expr.kind !== NODE.COLUMN || k.compiled.type.kind === 'json')) return undefined
       const plan = joinPlan()
-      if (plan === undefined || plan.node.kind !== 'join') return undefined
+      if (plan?.node.kind !== 'join') return undefined
       let node: Node = plan.node
       while (node.kind === 'join') {
         if (node.left || node.inner.kind !== 'leaf' || node.lookup === undefined || !plan.lookups.has(node.inner.table.alias) || plan.dynamic.has(node.inner.table.alias) || settings.constants?.has(node.inner.table.alias)) return undefined
@@ -659,9 +659,9 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const filteredScan = !index && residual !== undefined
       const buffered = !index && !filteredScan
       const compoundScan = strategy === 'filteredMaterial'
-      const legacy = fanoutOff && settings.buffered
+      const legacy = fanoutOff && (settings.buffered || compoundScan)
       const canBuffer = settings.buffered && optimizerEnabled(ctx.env, 'condition_fanout_filter')
-      if ((fanoutOff && compoundScan && !settings.buffered) || (buffered && !canBuffer)) return undefined
+      if (buffered && !canBuffer) return undefined
       const firstMatch = { alias, enabled: optimizerEnabled(ctx.env, 'firstmatch'), filteredScan, fanoutFilter: !legacy }
       if (index && optimizerEnabled(ctx.env, 'loosescan')) settings.loose = { alias, index, key, competeRange: strategy === 'BETWEEN' }
       // A primary BETWEEN competes with materialization on its first search.
@@ -674,16 +674,20 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         }
       }
       if (residual === undefined || filteredScan || strategy === 'BETWEEN') settings.firstMatch = firstMatch
-      const materialization = materializationEligible && settings.firstMatch !== undefined && optimizerEnabled(ctx.env, 'materialization')
+      const materialization = materializationEligible && settings.firstMatch && optimizerEnabled(ctx.env, 'materialization')
       let plan = joinPlan(materialization)
       const probe = plan?.positions[1]
       const probesMember = probe?.alias === alias
       // Filtered materialization keeps the child predicate in its keyed build.
       if (legacy && probesMember && (probe.lookup || !firstMatch.enabled || plan?.dynamic.has(alias))) {
         if (compoundScan) {
-          if (settings.materialized !== 'lookup') return undefined
-          delete settings.firstMatch
-          return false
+          if (probe.lookup === 'materialized') {
+            delete settings.firstMatch
+            return false
+          }
+          // The actual point read proves the signed membership equality before its filter.
+          if (!settings.buffered && probe.lookup === true && firstMatch.enabled && plan?.node.kind === 'join' && plan.node.lookup) return false
+          return undefined
         }
         // Other unsupported outer-first lookups leave the previous weedout search available.
         firstMatch.fanoutFilter = true
@@ -709,7 +713,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       if (filteredScan) {
         // A constant residual cannot request a range based on the probe.
         if (!innerFirst) {
-          const hash = firstMatch.fanoutFilter ? strategy === 'filteredHash' && canBuffer : probesMember
+          const hash = firstMatch.fanoutFilter ? strategy === 'filteredHash' && canBuffer : settings.buffered && probesMember
           if (!hash || !firstMatch.enabled || materialized || node.lookup) return undefined
           return false
         }
@@ -1087,7 +1091,7 @@ interface LeafSettings {
 function leafAccess(t: FromTable, settings: LeafSettings, env: Env): Access {
   const access = chosenAccess(t, settings, env)
   const order = orderFor(t, settings)
-  if (order !== undefined && t.def !== undefined) {
+  if (order && t.def) {
     const clustered = clusteredIndex(t.def)?.name === order.index
     const same = clustered ? access.index === undefined : access.index === order.index
     const whole = clustered ? FULL_SCAN : { index: order.index }
@@ -1361,8 +1365,8 @@ function toOp(node: Node, conditions: readonly Placed[], settings: LeafSettings,
   if (node.left) for (const c of node.on) (within(c.aliases, innerAliases) ? toInner : spanning).push(c)
   const outer = toOp(node.outer, toOuter, settings, ctx, preliminary)
   // An outer join whose ON can never hold, its inner tables NULL-complemented without a read (8.4.11).
-  if (node.left && innerAliases.size > 0 && [...innerAliases].every((a) => settings.nullTables?.has(a) === true)) return filterOp(outer, above)
-  const keyHeld = node.left && innerTable !== undefined ? settings.outerConstants?.get(innerTable.alias) : undefined
+  if (node.left && settings.nullTables && within(innerAliases, settings.nullTables)) return filterOp(outer, above)
+  const keyHeld = node.left && innerTable ? settings.outerConstants?.get(innerTable.alias) : undefined
   if (keyHeld !== undefined && innerTable !== undefined) return filterOp(constantRowOp(outer, innerTable, node.innerSlots, toInner, spanning, settings, keyHeld), above)
   if (!node.left && (outer.hidden || innerTable && settings.hidden?.has(innerTable.alias))) {
     return constJoinOp(outer, toOp(node.inner, toInner, settings, ctx, preliminary), node.innerSlots, spanning)
@@ -1387,15 +1391,15 @@ function toOp(node: Node, conditions: readonly Placed[], settings: LeafSettings,
   const keys = hashKeys(spanning, outerAliases, innerAliases, scope, (e) => ctx.compileOn(e, joinScope))
   // Automatic derived indexes and MaterializeLookup build on the inner side.
   const derived = innerTable?.derived
-  const indexed = innerTable !== undefined && keys !== undefined && (materialized === 'lookup' ||
-    (derived !== undefined && !innerTable.lateral && derived.merged !== true && derived.constant !== true))
+  const autoIndex = innerTable && keys && (materialized === 'lookup' ||
+    (derived && !innerTable.lateral && derived.merged !== true && derived.constant !== true)) ? innerTable : undefined
   const semi = settings.firstMatch?.enabled && settings.firstMatch.alias === innerTable?.alias
   // A FirstMatch probe stops only after a pair passes its join conditions.
   const pairs = node.left || semi
   const on = pairs ? spanning : spanning.filter((c) => equalitySides(c.e, outerAliases, innerAliases, scope) !== undefined)
-  const anti = node.left && !materialized && !indexed && innerTable !== undefined && node.outer.kind === 'leaf' &&
+  const anti = node.left && !materialized && !autoIndex && innerTable !== undefined && node.outer.kind === 'leaf' &&
     above.length === 1 && testsNullExtension(above[0]!.e, innerTable, scope) && spanning.some(({ e }) => equalitySides(e, outerAliases, innerAliases, scope) !== undefined)
-  return filterOp(buildJoinOp(semi ? 'semi' : anti ? 'anti' : node.left, node.innerSlots, outer, inner, on, keys, indexed ? innerTable : undefined, materialized, settings.weedout), pairs ? above : spanning.filter((c) => !on.includes(c)))
+  return filterOp(buildJoinOp(semi ? 'semi' : anti ? 'anti' : node.left, node.innerSlots, outer, inner, on, keys, autoIndex, materialized, settings.weedout), pairs ? above : spanning.filter((c) => !on.includes(c)))
 }
 
 // --- the cost model's choices (M5.7) -----------------------------------------------

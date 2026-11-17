@@ -244,6 +244,11 @@ const materializedLookup = `Nested loop inner join
                 Filter
                     Table scan on ch`
 
+const indexedFirstMatch = `Nested loop semijoin
+    Covering index scan on pa using name
+    Filter
+        Index lookup on ch using pa_id`
+
 const hashBuild = `Sort
     Stream results
         Hash semijoin
@@ -321,12 +326,20 @@ for (const { name, predicate, hash, last, writes } of fanoutOffDisjunctions) {
     const { db, conn } = await looseScanConnection()
     const schema = `fanout_${name}_semijoin`
     const sql = `SELECT name FROM pa WHERE id IN (SELECT pa_id FROM ch WHERE ${predicate}) ORDER BY 1`
-    const read = (names: readonly string[], plan: string = hash) =>
-      readSemijoin(conn, schema, sql, names, plan, { flags: plan === materializedLookup ? 20485 : 4097, charset: 255 })
+    const read = (names: readonly string[], plan: string = hash) => {
+      const lookup = plan === materializedLookup || plan === indexedFirstMatch
+      return readSemijoin(conn, schema, sql, names, plan, { flags: lookup ? 20485 : 4097, charset: 255 })
+    }
     const readLookup = async (names: readonly string[]) => {
       await conn.query("SET optimizer_switch='firstmatch=off'")
       await read(names, materializedLookup)
       await conn.query("SET optimizer_switch='firstmatch=on'")
+    }
+    const readUnbuffered = async (names: readonly string[]) => {
+      await conn.query("SET optimizer_switch='block_nested_loop=off'")
+      await read(names, indexedFirstMatch)
+      await readLookup(names)
+      await conn.query("SET optimizer_switch='block_nested_loop=on'")
     }
     try {
       await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
@@ -341,11 +354,13 @@ for (const { name, predicate, hash, last, writes } of fanoutOffDisjunctions) {
       await conn.query("SET optimizer_switch='condition_fanout_filter=off'")
       await read(['dee'])
       await readLookup(['dee'])
+      await readUnbuffered(['dee'])
       for (const [statements, names] of writes) {
         for (const statement of statements) await conn.query(statement)
         await read(names)
       }
       await readLookup(last)
+      await readUnbuffered(last)
       await conn.query('DELETE FROM ch WHERE id >= 4')
       await conn.query('ANALYZE TABLE pa,ch')
       await read(last, materializedScan)
