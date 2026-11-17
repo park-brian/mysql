@@ -6,9 +6,9 @@
 // reads anyway (D-65).
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { decodeCollation, encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import type { ColumnDef } from '@myjs/engine'
+import type { ColumnDef, KeyBound } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
-import { COERCIBILITY, charsetOfCollation, compareValues, intValue, integerBytes, integerRange, toInteger, type Value } from '@myjs/types'
+import { COERCIBILITY, charsetOfCollation, compareValues, encodeField, intValue, integerBytes, integerRange, toInteger, type Value } from '@myjs/types'
 import { REVERSE_COMPARISON, isNotEqual, logicalShortCircuit, nullLiteral, signedOperand } from './ast.ts'
 import { proof } from './errors.ts'
 
@@ -23,6 +23,10 @@ export type Interval = { readonly lo?: Bound; readonly hi?: Bound; readonly empt
 export type RangeSet = readonly Interval[] | 'all'
 
 const ALL_VALUES: Interval = {}
+
+export function encodeBound(v: Value, column: ColumnDef, inclusive: boolean): KeyBound | undefined {
+  return proof(() => ({ values: [encodeField(v, column, { strict: true, row: 1, warnings: 0 })], inclusive }))
+}
 
 export function pointInterval(v: RangeValue): Interval {
   const endpoint = { v, inclusive: true }
@@ -69,24 +73,29 @@ export function fractionalIntBound(v: Value | undefined): boolean {
   return BigInt.asIntN(32, rounded) === rounded
 }
 
-/** An indexed BETWEEN with exact written bounds whose comparison cannot hold. */
+/** An indexed BETWEEN with exact endpoints that cannot make its comparison true. */
 export function impossibleBetween(x: Expression, indexed: (e: Expression) => ColumnDef | undefined, value: Constant): boolean {
   if (x.kind !== NODE.BINARY || x.op !== 'BETWEEN') return false
   const column = indexed(x.left)
   const high = x.extra as Expression
   if (!column || !numericRange(column.type.type)) return false
-  const parameters = x.right.kind === NODE.PLACEHOLDER && high.kind === NODE.PLACEHOLDER
   const exact = (bound: Expression): RangeValue | null | undefined => {
-    if (!parameters && signedOperand(bound).kind !== NODE.LITERAL) return undefined
+    const parameter = bound.kind === NODE.PLACEHOLDER
+    if (!parameter && signedOperand(bound).kind !== NODE.LITERAL) return undefined
     const v = constantFor(bound, column, value)
-    return v === null && !nullLiteral(bound) ? undefined : v
+    return v === null && !parameter && !nullLiteral(bound) ? undefined : v
   }
   const a = exact(x.right)
   const b = exact(high)
   if (a === undefined || b === undefined) return false
-  // MySQL keeps the arm with a negative upper endpoint on an unsigned key.
-  // When only one endpoint is NULL, the same guard applies to the other one.
-  if (column.type.unsigned && compareValues(b ?? a, intValue(0n)) === -1) return false
+  const prepared = x.right.kind === NODE.PLACEHOLDER || high.kind === NODE.PLACEHOLDER
+  if (prepared && a === null) return true
+  const endpoint = b ?? a
+  if (compareValues(endpoint, intValue(0n)) === -1) {
+    if (column.type.unsigned) return false
+    // A negative lower bound may round below the key domain before the upper NULL is considered.
+    if (prepared && b === null) return !!encodeBound(endpoint, column, true)
+  }
   return a === null || b === null || compareValues(a, b) === 1
 }
 

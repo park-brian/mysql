@@ -410,3 +410,45 @@ test('a three-row primary range beats a covering scan and supplies its own order
     await conn.end(); await db?.end()
   }
 })
+
+test('prepared NULL BETWEEN bounds use the negative lower endpoint only when it fits the key', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'join_range_null399'
+  try {
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,grp DECIMAL(5,2),amt INT,UNIQUE KEY by_name(name),KEY by_grp(grp)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO p VALUES (1,'Bob',2,101),(2,'al',4,102),(3,'b',3,103),(4,'éva',NULL,104),(5,'ann',3,105)")
+    await conn.query('ANALYZE TABLE p')
+    const sql = "SELECT id,amt FROM p WHERE name IN ('ann','ann') OR grp BETWEEN ? AND ? ORDER BY id"
+    const explain = 'EXPLAIN FORMAT=TREE ' + sql
+    const statement = await conn.prepare(sql)
+    const description = await conn.prepare(explain)
+    const { NEWDECIMAL, NULL } = mysql.TypedParameter
+    const namedPoint = /Index range scan on p using by_name over \(name = 'ann'\)/
+    try {
+      for (const [bounds, point] of [
+        [[NEWDECIMAL('-999.995'), NULL()], false],
+        [[NEWDECIMAL('-999.99'), NULL()], true],
+        [[NULL(), NEWDECIMAL('-999.995')], true],
+        [[NULL(), NULL()], true],
+      ] as const) {
+        assert.deepEqual((await statement.execute([...bounds]))[0], [{ id: 5, amt: 105 }])
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+        const [tree] = await description.execute([...bounds])
+        assert.equal(namedPoint.test(String((tree as mysql.RowDataPacket[])[0]?.EXPLAIN)), point)
+      }
+      await conn.query('UPDATE p SET amt=205 WHERE id=5')
+      assert.deepEqual((await statement.execute([NEWDECIMAL('5.5'), NULL()]))[0], [{ id: 5, amt: 205 }])
+      const mixed = sql.replace('? AND ?', '-999.99 AND ?')
+      const [tree] = await conn.execute<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + mixed, [NULL()])
+      assert.match(String(tree[0]?.EXPLAIN), namedPoint)
+    } finally {
+      conn.unprepare(sql)
+      conn.unprepare(explain)
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})

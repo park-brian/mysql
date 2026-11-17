@@ -2810,8 +2810,8 @@ above `2^53`, DECIMAL markers, forward and NULL rebinds, and writes after
 preparation. Around `2^53`, mixed DECIMAL and DOUBLE bounds can make
 MySQL 8.4.11 omit rows in its indexed plan that its forced table scan and
 projected predicate accept. The regression uses the native scan for that
-comparison. Mixed precision and mixed literal and marker ranges remain
-open. A broader NULL-marker prototype repairs 102 plans and matches all
+comparison. Mixed precision remains open. A broader NULL-marker
+prototype repairs 102 plans and matches all
 320 NULL-boundary outcomes, including lower endpoints that clip to the
 smallest stored key. It exceeded the caps at this point. Full Docker
 verification of the exact pair passes 1,855 tests, seeded fuzzing,
@@ -2836,13 +2836,36 @@ tests, seeded fuzzing, 10,000 crash points, package and real-client smoke,
 and all seven pinned corpora. Parser, core and facade measure 44,507,
 334,297 and 334,229 bytes gzipped within the existing caps.
 
-**M5.49 NULL and mixed prepared `BETWEEN` bounds, open.** The prototype
-admits exact values and NULL markers alongside written bounds. A negative
-lower value that rounds below the smallest stored key keeps the original
-access. The prototype shares the existing key encoder for that proof.
-It fits the existing size caps and repairs 376 plans in 1,367 pinned
-observations. Full Docker verification is underway in isolation. Mixed
-DECIMAL and DOUBLE comparisons remain open.
+**M5.49 NULL and mixed prepared `BETWEEN` bounds, verified.** MyJS admits
+exact values and NULL markers alongside written bounds. A negative lower
+value that rounds below the smallest stored key keeps the original
+access. The existing key encoder checks that boundary. The retained test
+distinguishes `-999.995` from `-999.99` in `DECIMAL(5,2)` and also covers
+a written bound with a NULL marker. The pinned audits repair 376 plans
+in 1,367 observations and match every one of the 320 NULL-boundary
+outcomes. Earlier matching results, fields, diagnostics and plans are
+preserved. Full Docker verification passes 1,857 tests, seeded fuzzing,
+10,000 crash points, package and real-client smoke, and all seven pinned
+corpora. The captured 300 scripts, 138 fresh semijoin observations and
+12,800 earlier range observations are unchanged. Parser, core and facade
+measure 44,507, 334,332 and 334,261 bytes gzipped within the existing caps.
+Mixed DECIMAL and DOUBLE comparisons remain open.
+
+**M5.49 index merge with a primary range, open.** Captured case 91:12
+uses `Sort-deduplicate by row ID` for `grp IS NOT NULL OR id < 3`.
+MySQL 8.4.11 sorts and deduplicates secondary matches by row ID, leaves
+primary-range matches out of that set and scans that range separately.
+The plan lists the children in predicate order. A 4,320-case probe
+observes 728 sort-deduplicate plans across cardinalities, hints and
+optimizer switches. Case 219:13 also needs a join-side merge. Physical
+selection, row lifetime and the remaining index-merge shapes stay open.
+
+**M2.19 compact Unicode weight pages, open.** The bundle-space prototype
+uses repeated weights in the eleven internal pages and restores the
+public Unicode weight string in its original format. The 2,816 decoded
+weights, public packed strings and generator provenance match byte for
+byte. The warm check saves 863 bytes in core and 877 in the facade
+without changing caps. Full Docker verification remains ahead.
 
 **M2.3 zero runs in internal charset encodings, verified.** The shared
 codec records absolute zeroes directly in the 24 byte-to-code-point

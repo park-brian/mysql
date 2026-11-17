@@ -38,7 +38,6 @@ import {
   compareValues,
   decodeField,
   doubleValue,
-  encodeField,
   encodeKey,
   intValue,
   integerRange,
@@ -52,7 +51,7 @@ import {
 } from '@myjs/types'
 import type { Compiled, Env } from './compile.ts'
 import { PAGE_READ, ROW_EVALUATE, rangeBaseline, rangeCost, type RangeShape, type RangeRead } from './cost.ts'
-import { impossibleBetween, intersect, normalize, pointInterval, pruneImpossibleOr, rangeOf, significantCharPadding, type Constant, type Interval, type RangeSet, type RangeValue } from './ranges.ts'
+import { encodeBound, impossibleBetween, intersect, normalize, pointInterval, pruneImpossibleOr, rangeOf, significantCharPadding, type Constant, type Interval, type RangeSet, type RangeValue } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
 import { forwardKeyColumn, forwardKeyPart, uniquePoint } from './indexes.ts'
 import { columnIndex } from './scope.ts'
@@ -406,7 +405,7 @@ function keyRanges(intervals: readonly Interval[], column: ColumnDef): { readonl
       if (n < range.min) return lower ? 'open' : 'empty'
       v = intValue(n, n > MAX_SIGNED)
     } else if (!exact(v, column)) return undefined
-    return bound(v, column, inclusive)
+    return encodeBound(v, column, inclusive)
   }
   const out: { range: KeyRange; point: boolean }[] = []
   for (const i of intervals) {
@@ -441,10 +440,6 @@ export function keyOrder(def: TableDef, indexes = def.indexes): IndexDef[] {
     return i.parts.every((p) => def.columns.find((c) => c.name === p.column)?.nullable === false) ? 1 : 2
   }
   return indexes.filter((i) => i.invisible !== true).sort((a, b) => rank(a) - rank(b))
-}
-
-function bound(v: Value, column: ColumnDef, inclusive: boolean): KeyBound | undefined {
-  return proof(() => ({ values: [encodeField(v, column, { strict: true, row: 1, warnings: 0 })], inclusive }))
 }
 
 /**
@@ -489,7 +484,7 @@ function pointRanges(column: ColumnDef, conditions: readonly Condition[], outer:
       const v = c.op === 'IS NULL' ? null : evaluate(c.constants[0] as Expression)
       // Separate bounds keep this a range in the plan description.
       if (v === null && column.nullable) return [{ from: NULL_KEY, to: { ...NULL_KEY } }]
-      const b = v === undefined || v === null || !exact(v, column) ? undefined : bound(v, column, true)
+      const b = v === undefined || v === null || !exact(v, column) ? undefined : encodeBound(v, column, true)
       if (b !== undefined) return [pointRange(b)]
       continue
     }
@@ -505,7 +500,7 @@ function pointRanges(column: ColumnDef, conditions: readonly Condition[], outer:
       const part = keyPartOf(column.type, true)
       const points = new Map<string, KeyBound>()
       for (const v of values as Value[]) {
-        const b = bound(v, column, true)
+        const b = encodeBound(v, column, true)
         if (b === undefined) return false
         points.set(byteKey(encodeKey(b.values, [part])), b)
       }
@@ -522,7 +517,7 @@ function primaryRange(index: IndexDef, column: ColumnDef, conditions: readonly C
     if (!isOrderedComparison(c.op)) continue
     const v = evaluate(c.constants[0] as Expression)
     if (v === undefined || !exact(v, column)) continue
-    const b = bound(v, column, c.op === '<=' || c.op === '>=')
+    const b = encodeBound(v, column, c.op === '<=' || c.op === '>=')
     if (b === undefined) continue
     if (c.op === '>' || c.op === '>=') range.from ??= b
     else range.to ??= b
@@ -538,7 +533,7 @@ function primaryRange(index: IndexDef, column: ColumnDef, conditions: readonly C
  */
 export function pointAccess(index: IndexDef, column: ColumnDef, v: Value): Access | undefined {
   if (!exact(v, column)) return undefined
-  const b = bound(v, column, true)
+  const b = encodeBound(v, column, true)
   return b === undefined ? undefined : { index: index.name, ranges: [pointRange(b)] }
 }
 
