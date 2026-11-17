@@ -951,7 +951,8 @@ test('an ordered row-ID union keeps ascending IDs and the statement snapshot on 
       ['TINYINT', '=', -7], ['TINYINT UNSIGNED', '>=', 255],
       ['SMALLINT', 'IS NULL', null], ['SMALLINT UNSIGNED', '=', 7, '7.0 = g'],
       ['MEDIUMINT', '<=', -8388608], ['MEDIUMINT UNSIGNED', '>=', 16777215],
-      ['BIGINT', '<=', -9223372036854775808n, 'g <= -9223372036854775808.0'], ['BIGINT UNSIGNED', '>=', 18446744073709551615n],
+      ['BIGINT', '<=', -9223372036854775808n, 'g <= -9223372036854775808.0'],
+      ['BIGINT', '<=', -9223372036854775808n], ['BIGINT UNSIGNED', '>=', 18446744073709551615n],
     ] as const) {
       await conn.query(`CREATE TABLE t(id INT PRIMARY KEY,g ${type},v INT,KEY by_g(g)) STATS_AUTO_RECALC=0`)
       const stored = Array.from({ length: 30 }, (_, i) => {
@@ -1003,6 +1004,41 @@ test('an ordered row-ID union keeps ascending IDs and the statement snapshot on 
     await writer?.end(); await conn.end(); await db?.end()
   }
 })
+
+test('indexed signed literals preserve the exact rows beyond the BIGINT boundary', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'signed_literal_ranges529'
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,i BIGINT,d DECIMAL(22,0),KEY by_i(i),KEY by_d(d)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO t VALUES (1,-9223372036854775807,-9223372036854775809),(2,-9223372036854775808,-9223372036854775808),(3,7,7),(4,NULL,NULL),(5,9223372036854775807,9223372036854775809)')
+    await conn.query('ANALYZE TABLE t')
+    const cases = [
+      ['i = -9223372036854775808', [2]],
+      ['i <=> -9223372036854775808', [2]],
+      ['i >= -9223372036854775809', [1, 2, 3, 5]],
+      ['i IN (-9223372036854775809, 7)', [3]],
+      ['i <=> -NULL', [4]],
+      ['d <=> -9223372036854775809', [1]],
+      ['d IN (-9223372036854775809, 7)', [1, 3]],
+      ['d BETWEEN -9223372036854775809 AND -9223372036854775808', [1, 2]],
+      ['d = -(-9223372036854775809)', [5]],
+    ] as const
+    for (const method of ['query', 'execute'] as const) {
+      for (const [condition, ids] of cases) {
+        const sql = 'SELECT id FROM t WHERE ' + condition + ' ORDER BY id'
+        const [rows] = method === 'query' ? await conn.query<mysql.RowDataPacket[]>(sql) : await conn.execute<mysql.RowDataPacket[]>(sql)
+        assert.deepEqual(rows.map(({ id }) => id), ids, condition)
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      }
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
+
 
 test('an unhinted ordered primary read is covering when the key holds every read column', async () => {
   const { db, conn } = await rangeConnection()

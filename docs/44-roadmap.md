@@ -290,8 +290,22 @@ and both clustered range directions. Full Docker verification passes 1,879
 tests, all nine size gates, seeded fuzzing, 10,000 crash points, package and
 client smoke and all seven pinned corpora, including 1,737 coercion warning
 counts. Parser, core and facade measure 44,526, 334,344 and 334,265 gzipped
-bytes. The relational score stays at 2,158 of 2,248. Bare negative literals
-at and below the BIGINT minimum and broader ordered union plans remain open.
+bytes. The relational score stays at 2,158 of 2,248. Broader ordered union
+plans remain open.
+
+**M5.49 signed literals at and beyond the BIGINT minimum, verified.**
+The range planner keeps an exact signed integer or an integral DECIMAL
+when negation crosses the BIGINT boundary. A missing key interval cannot
+appear beside a surviving range in EXPLAIN. All 480 standalone pinned
+observations match for rows, metadata and warnings, including 220 corrected
+result sets. The studies gain 48 of 480 and 272 of 3,584 complete matches
+without losing a previous complete match. The retained tests cover bare
+and DECIMAL bounds, both protocols and real SQL NULL. Full Docker
+verification passes 1,880 tests, all nine size gates, seeded fuzzing,
+10,000 crash points, package and client smoke and all seven pinned corpora,
+including 1,737 coercion warning counts. Parser, core and facade measure
+44,526, 334,334 and 334,260 gzipped bytes. The relational score stays at
+2,158 of 2,248. Several standalone multipoint plan labels remain open.
 
 **M5.10 `REGEXP_LIKE` result nullability, verified.** The regex binder
 uses the operands' nullability for the scalar result field. Both

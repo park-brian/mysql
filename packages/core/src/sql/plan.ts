@@ -34,8 +34,10 @@ import type { ColumnDef, IndexDef, KeyBound, KeyRange, TableDef } from '@myjs/en
 import { NODE, type Expression } from '@myjs/parser'
 import {
   MAX_SIGNED,
+  MIN_SIGNED,
   bytesValue,
   compareValues,
+  decimalValue,
   decodeField,
   doubleValue,
   encodeKey,
@@ -110,6 +112,12 @@ export const FULL_SCAN: Access = {}
 export const EMPTY_KEY_RANGES: readonly KeyRange[] = []
 
 type Op = '=' | '<=>' | '<' | '<=' | '>' | '>=' | 'IN' | 'IS NULL' | 'IS NOT NULL'
+
+interface KeyedInterval {
+  readonly interval: Interval
+  readonly range: KeyRange
+  readonly point: boolean
+}
 
 interface Condition {
   readonly column: ColumnDef
@@ -381,7 +389,7 @@ function indexUnionAccess(def: TableDef, alias: string, where: Expression | unde
  */
 export function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expression[], env: Env, costing: RangeCosting, known?: Constant, inferred?: InferredRange, indexes = def.indexes): Access | undefined {
   const value = (e: Expression): Value | undefined => (e.kind === NODE.PLACEHOLDER && e.index >= env.params.length ? undefined : isConstant(e) ? constantValue(e, env) : known?.(e))
-  const candidates: { readonly index: IndexDef; readonly column: ColumnDef; readonly intervals: Interval[]; readonly keyed: { readonly range: KeyRange; readonly point: boolean }[]; readonly shape: RangeShape; readonly empty: boolean | undefined; readonly implied: ImpliedRange | undefined }[] = []
+  const candidates: { readonly index: IndexDef; readonly column: ColumnDef; readonly intervals: Interval[]; readonly keyed: readonly KeyedInterval[]; readonly shape: RangeShape; readonly empty: boolean | undefined; readonly implied: ImpliedRange | undefined }[] = []
   const eligible = keyOrder(def, indexes)
   const indexedColumn = (subject: Expression): ColumnDef | undefined => {
     const column = tableColumn(subject, def, alias)
@@ -415,7 +423,9 @@ export function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Ex
     const keyed = keyRanges(intervals, column)
     if (keyed === undefined) continue
     const first = intervals[0]
-    candidates.push({ index, column, intervals, keyed, shape: costing.shape(index), empty: first === 'null' ? undefined : first?.empty, implied })
+    // EXPLAIN describes the intervals that could be encoded as key ranges.
+    const bounds = keyed.length && keyed.length < intervals.length ? keyed.map((k) => k.interval) : intervals
+    candidates.push({ index, column, intervals: bounds, keyed, shape: costing.shape(index), empty: first === 'null' ? undefined : first?.empty, implied })
   }
   // No range at all reads no statistics.
   if (candidates.length === 0) return undefined
@@ -499,7 +509,7 @@ function integerEndpoint(v: Exclude<RangeValue, { readonly kind: 'string' }>, ce
  * neither way. Values are non-NULL, so a range with no lower bound starts
  * after the NULLs. `point` marks a range constrained to one key value.
  */
-function keyRanges(intervals: readonly Interval[], column: ColumnDef): { readonly range: KeyRange; readonly point: boolean }[] | undefined {
+function keyRanges(intervals: readonly Interval[], column: ColumnDef): KeyedInterval[] | undefined {
   const range = integerRange(column.type)
   const side = (b: { readonly v: RangeValue; readonly inclusive: boolean }, lower: boolean): KeyBound | 'empty' | 'open' | undefined => {
     let { v, inclusive } = b
@@ -512,10 +522,10 @@ function keyRanges(intervals: readonly Interval[], column: ColumnDef): { readonl
     } else if (!exact(v, column)) return undefined
     return encodeBound(v, column, inclusive)
   }
-  const out: { range: KeyRange; point: boolean }[] = []
+  const out: KeyedInterval[] = []
   for (const i of intervals) {
     if (i === 'null') {
-      out.push({ range: pointRange(NULL_KEY), point: true })
+      out.push({ interval: i, range: pointRange(NULL_KEY), point: true })
       continue
     }
     const from = i.lo === undefined ? 'open' : side(i.lo, true)
@@ -528,7 +538,7 @@ function keyRanges(intervals: readonly Interval[], column: ColumnDef): { readonl
     const key: { from?: KeyBound; to?: KeyBound } = {}
     if (lower !== undefined) key.from = lower
     if (to !== 'open') key.to = to
-    out.push({ range: key, point })
+    out.push({ interval: i, range: key, point })
   }
   return out
 }
@@ -650,7 +660,11 @@ export function constantValue(e: Expression, env: Env): Value | undefined {
     case NODE.UNARY: {
       const v = constantValue(e.operand, env)
       if (v === undefined || v === null) return v
-      if (v.kind === 'int') return v.unsigned && v.v > MAX_SIGNED ? null : intValue(-v.v)
+      if (v.kind === 'int') {
+        // A signed literal can cross the BIGINT range without becoming NULL.
+        const n = -v.v
+        return n < MIN_SIGNED || n > MAX_SIGNED ? decimalValue(n, 0) : intValue(n)
+      }
       if (v.kind === 'decimal') return { ...v, v: -v.v }
       if (v.kind === 'double') return doubleValue(-v.v)
       return undefined
