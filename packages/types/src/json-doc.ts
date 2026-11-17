@@ -24,7 +24,7 @@
 // was read off 8.4.11 (tools/capture-json.mjs, M5.21).
 import { fromUtf8, utf8 } from './utf8.ts'
 import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
-import { compareBytes, MyjsError, renderMysqlDateTime, renderMysqlTime } from '@myjs/bytes'
+import { FIELD_TYPE, compareBytes, MyjsError, renderMysqlDateTime, renderMysqlTime } from '@myjs/bytes'
 import { decodeDecimal, encodeDecimal } from './decimal.ts'
 import { invalidJson } from './errors.ts'
 import { JSON_TYPE, compareJsonKeys, isInlined, varint, writeVarint } from './json.ts'
@@ -479,9 +479,6 @@ export function compareJson(a: JsonDoc, b: JsonDoc): number {
 // is MySQL's packed int64 (`TIME_to_longlong_*_packed`); anything else is the
 // bytes it came with.
 
-/** `FIELD_TYPE`s custom data carries, from `include/field_types.h`. */
-const F = { DATE: 10, TIME: 11, DATETIME: 12, TIMESTAMP: 7, NEWDECIMAL: 246 } as const
-
 export function packDateTime(v: MysqlDateTime): bigint {
   const ymd = BigInt(((v.year * 13 + v.month) << 5) | v.day)
   const hms = BigInt((v.hour << 12) | (v.minute << 6) | v.second)
@@ -576,16 +573,16 @@ function piece(doc: JsonDoc): Piece {
       payload[0] = precision
       payload[1] = doc.v.scale
       payload.set(bin, 2)
-      return custom(F.NEWDECIMAL, payload)
+      return custom(FIELD_TYPE.NEWDECIMAL, payload)
     }
     case 'date':
-      return custom(F.DATE, int64Bytes(packDateTime(doc.v)))
+      return custom(FIELD_TYPE.DATE, int64Bytes(packDateTime(doc.v)))
     case 'datetime':
-      return custom(F.DATETIME, int64Bytes(packDateTime(doc.v)))
+      return custom(FIELD_TYPE.DATETIME, int64Bytes(packDateTime(doc.v)))
     case 'timestamp':
-      return custom(F.TIMESTAMP, int64Bytes(packDateTime(doc.v)))
+      return custom(FIELD_TYPE.TIMESTAMP, int64Bytes(packDateTime(doc.v)))
     case 'time':
-      return custom(F.TIME, int64Bytes(packTime(doc.v)))
+      return custom(FIELD_TYPE.TIME, int64Bytes(packTime(doc.v)))
     case 'opaque':
       return custom(doc.field, doc.v)
     case 'array':
@@ -710,20 +707,20 @@ function decodeAt(type: number, body: Uint8Array): JsonDoc {
         return new DataView(payload.buffer, payload.byteOffset, 8).getBigInt64(0, true)
       }
       switch (field) {
-        case F.NEWDECIMAL: {
+        case FIELD_TYPE.NEWDECIMAL: {
           need(payload, 0, 2)
           const precision = payload[0] as number
           const scale = payload[1] as number
           const text = decodeDecimal(payload.subarray(2), precision, scale)
           return { t: 'decimal', v: parseDecimal(text) }
         }
-        case F.DATE:
+        case FIELD_TYPE.DATE:
           return { t: 'date', v: unpackDateTime(packed()) }
-        case F.DATETIME:
+        case FIELD_TYPE.DATETIME:
           return { t: 'datetime', v: unpackDateTime(packed()) }
-        case F.TIMESTAMP:
+        case FIELD_TYPE.TIMESTAMP:
           return { t: 'timestamp', v: unpackDateTime(packed()) }
-        case F.TIME:
+        case FIELD_TYPE.TIME:
           return { t: 'time', v: unpackTime(packed()) }
         default:
           return { t: 'opaque', field, v: payload.slice() }

@@ -8,7 +8,7 @@
 // logarithm of a non-positive number is NULL with 3020.
 import { deparse, type CallNode } from '@myjs/parser'
 import { doubleValue, intValue, toDouble, valueOutOfRange } from '@myjs/types'
-import { asNumber, compile, raise, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
+import { asNumber, compile, raise, readNonNull, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { doubleType, intType } from './meta.ts'
 import { nativeArity, unregistered } from './registry.ts'
 import { intReader } from './string-functions.ts'
@@ -32,11 +32,7 @@ export const MATH_FUNCTIONS: ReadonlySet<string> = new Set([
 
 /** A double argument read with its 1292. */
 function doubleReader(c: Compiled): (r: Row, env: Env) => number | null {
-  const n = asNumber(c, 'DOUBLE')
-  return (r, env) => {
-    const v = n.eval(r, env)
-    return v === null ? null : toDouble(v)
-  }
+  return readNonNull(asNumber(c, 'DOUBLE').eval, toDouble)
 }
 
 function invalidLogarithm(env: Env): null {
@@ -56,9 +52,7 @@ export function mathFunction(name: string, e: CallNode, ctx: CompileContext): Co
       arity(1)
       const x = intReader(xs[0] as Compiled)
       return {
-        eval: (r, env) => {
-          const n = x(r, env)
-          if (n === null) return null
+        eval: readNonNull(x, (n) => {
           let u = BigInt.asUintN(64, n)
           let c = 0n
           while (u > 0n) {
@@ -66,7 +60,7 @@ export function mathFunction(name: string, e: CallNode, ctx: CompileContext): Co
             u >>= 1n
           }
           return intValue(c)
-        },
+        }),
         type: intType(21, (xs[0] as Compiled).type.nullable),
       }
     }
@@ -81,13 +75,11 @@ export function mathFunction(name: string, e: CallNode, ctx: CompileContext): Co
     arity(1)
     const x = doubleReader(xs[0] as Compiled)
     return {
-      eval: (r, env) => {
-        const v = x(r, env)
-        if (v === null) return null
+      eval: readNonNull(x, (v, env) => {
         const out = f(v, env)
         if (out === null) return null
         return checked ? checkedDouble(out) : doubleValue(out)
-      },
+      }),
       type: doubleType(nullable),
     }
   }

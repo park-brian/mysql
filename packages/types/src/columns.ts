@@ -12,6 +12,7 @@
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { decimalBinSize } from './decimal.ts'
+import { integerBytes } from './encode.ts'
 import { TypeError_, unsupportedType } from './errors.ts'
 import { declaredKeyWidth, type KeyPart } from './keys.ts'
 import { bitBinSize, enumBinSize, setBinSize } from './strings.ts'
@@ -29,34 +30,14 @@ export interface ColumnType extends ColumnMeta {
 
 const isBinary = (t: ColumnType): boolean => t.collationId === undefined || t.collationId === CHARSET_BINARY
 
-const STRING_TYPES: ReadonlySet<number> = new Set([
-  FIELD_TYPE.STRING,
-  FIELD_TYPE.VAR_STRING,
-  FIELD_TYPE.VARCHAR,
-  FIELD_TYPE.TINY_BLOB,
-  FIELD_TYPE.BLOB,
-  FIELD_TYPE.MEDIUM_BLOB,
-  FIELD_TYPE.LONG_BLOB,
-])
-
-const BLOB_TYPES: ReadonlySet<number> = new Set([FIELD_TYPE.TINY_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB])
-
 /**
  * The bytes a value of this type always takes in a record, or `undefined` when
  * it varies. Every number comes from the codec that writes the value.
  */
 export function storageWidth(t: ColumnType): number | undefined {
+  const integer = integerBytes(t.type)
+  if (integer !== undefined) return integer
   switch (t.type) {
-    case FIELD_TYPE.TINY:
-      return 1
-    case FIELD_TYPE.SHORT:
-      return 2
-    case FIELD_TYPE.INT24:
-      return 3
-    case FIELD_TYPE.LONG:
-      return 4
-    case FIELD_TYPE.LONGLONG:
-      return 8
     case FIELD_TYPE.FLOAT:
       return 4
     case FIELD_TYPE.DOUBLE:
@@ -130,11 +111,11 @@ export function keyPartOf(t: ColumnType, nullable: boolean, options: KeyPartOpti
   const descending = options.descending === true ? { descending: true } : {}
   if (t.type === FIELD_TYPE.JSON) throw jsonUsedAsKey()
   if (t.type === FIELD_TYPE.GEOMETRY) throw unsupportedType('a spatial index')
-  if (!STRING_TYPES.has(t.type)) {
+  const blob = Number.isInteger(t.type) && t.type >= FIELD_TYPE.TINY_BLOB && t.type <= FIELD_TYPE.BLOB
+  if (!blob && t.type !== FIELD_TYPE.STRING && t.type !== FIELD_TYPE.VAR_STRING && t.type !== FIELD_TYPE.VARCHAR) {
     if (prefix !== undefined) throw wrongSubKey()
     return { kind: t.type === FIELD_TYPE.FLOAT || t.type === FIELD_TYPE.DOUBLE ? 'float' : 'bytes', nullable, ...descending }
   }
-  const blob = BLOB_TYPES.has(t.type)
   if (blob && prefix === undefined) throw blobKeyWithoutLength()
   if (prefix !== undefined && (prefix <= 0 || (!blob && t.length !== undefined && prefix > t.length))) throw wrongSubKey()
   const length = prefix ?? t.length ?? 1

@@ -169,7 +169,7 @@ export interface Env {
 /** Keep original wire bindings with their execution, outside decoded values. */
 export const parameterBindings = new WeakMap<readonly Value[], readonly Parameter[]>()
 
-export function readNonNull(read: Compiled['eval'], convert: (value: Exclude<Value, null>, env: Env) => Value): Compiled['eval'] {
+export function readNonNull<T, U>(read: (row: Row, env: Env) => T | null, convert: (value: T, env: Env) => U): (row: Row, env: Env) => U | null {
   return (r, env) => {
     const value = read(r, env)
     return value === null ? null : convert(value, env)

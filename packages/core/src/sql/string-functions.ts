@@ -78,6 +78,7 @@ import {
   literalConcat,
   printedArgument,
   raise,
+  readNonNull,
   rowNumber,
   sourceText,
   warnedText,
@@ -775,14 +776,9 @@ function myDoubleRound(value: number, places: bigint, truncate: boolean): number
 
 type Row = Parameters<Compiled['eval']>[0]
 
-/** A value's bytes, as a digest or BIT_LENGTH counts them: text in its charset, a number as its text. */
-
 /** An integer argument read with its 1292, as `val_int` reads it. */
 export function intReader(c: Compiled): (r: Row, env: Env) => bigint | null {
-  const n = asNumber(c, 'INTEGER')
-  return (r, env) => {
-    const v = n.eval(r, env)
-    if (v === null) return null
+  return readNonNull(asNumber(c, 'INTEGER').eval, (v, env) => {
     // Empty text is no integer either, here (8.4.11: CHAR('') warns).
     if ((v.kind === 'string' && v.ordinal === undefined && v.v.trim() === '') || (v.kind === 'bytes' && v.hex !== true && v.v.every((b) => b === 0x20))) raise(env, 1292, `Truncated incorrect INTEGER value: '${warnedText(v)}'`)
     // A double is `rint`-ed, halves to even (8.4.11: CHAR(2.5e0) is 0x02).
@@ -794,7 +790,7 @@ export function intReader(c: Compiled): (r: Row, env: Env) => bigint | null {
     // Fields round independently of sql_mode; computed TIME readers honor truncation.
     if (v.kind === 'time') return v.integer ?? toInteger(timeValue(v.v, 0, modeOf(env.session.sqlMode).truncateFractional))
     return valInt(v)
-  }
+  })
 }
 
 /** An argument's width in characters, which a binary result counts too (8.4.11: ELT and MAKE_SET over bytes). */

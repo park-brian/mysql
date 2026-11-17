@@ -74,7 +74,7 @@ import {
   type TimeValue,
   type Value,
 } from '@myjs/types'
-import { asNumber, compile, constantNode, raise, rowNumber, timeCast, type Compiled, type CompileContext, type Env, constantEnv } from './compile.ts'
+import { asNumber, compile, readNonNull, constantNode, raise, rowNumber, timeCast, type Compiled, type CompileContext, type Env, constantEnv } from './compile.ts'
 import { dateAdd } from './interval.ts'
 import { charWidth, datetimeType, decimalType, intType, stringType, type ResultType } from './meta.ts'
 import { nativeArity, unregistered } from './registry.ts'
@@ -214,11 +214,7 @@ function temporalPrecision(c: Compiled, constant: Value | undefined, time = fals
 
 /** An integer argument as `val_int` reads it, 1292 for text that is not one. */
 function intReader(c: Compiled): (r: Row, env: Env) => bigint | null {
-  const n = asNumber(c, 'INTEGER')
-  return (r, env) => {
-    const v = n.eval(r, env)
-    return v === null ? null : toInteger(v)
-  }
+  return readNonNull(asNumber(c, 'INTEGER').eval, toInteger)
 }
 
 /** The broken-down value DATE_FORMAT writes from a datetime. */

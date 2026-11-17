@@ -225,6 +225,60 @@ test('an ordered IN can weed out an unindexed fractional comparison over a table
   }
 })
 
+const materializedScan = `Sort
+    Stream results
+        Nested loop inner join
+            Filter
+                Table scan on <subquery2>
+                    Materialize with deduplication
+                        Filter
+                            Filter
+                                Table scan on ch
+            Single-row index lookup on pa using PRIMARY`
+
+test('an ordered fractional IN chooses between hash and materialization with fanout filtering off', async () => {
+  const { db, conn } = await looseScanConnection()
+  const schema = 'fanout_fractional_semijoin'
+  const sql = 'SELECT name FROM pa WHERE id IN (SELECT pa_id FROM ch WHERE ch.qty <= 0.5) ORDER BY 1'
+  const hash = `Sort
+    Stream results
+        Hash semijoin
+            Covering index scan on pa using name
+            Hash
+                Filter
+                    Table scan on ch`
+  const read = (names: readonly string[], plan = hash) => readSemijoin(conn, schema, sql, names, plan, { flags: 4097, charset: 255 })
+  try {
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,pa_id INT,qty INT NOT NULL,KEY(pa_id)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO pa VALUES (1,'zoë'),(2,'dee'),(3,'ann')")
+    await conn.query('INSERT INTO ch VALUES (1,2,0),(2,2,1),(3,2,2),(4,2,3),(5,NULL,0),(6,2,1)')
+    await conn.query('ANALYZE TABLE pa,ch')
+    await conn.query("SET optimizer_switch='condition_fanout_filter=off'")
+    await read(['dee'])
+    await conn.query('INSERT INTO ch VALUES (7,1,0)')
+    await read(['dee', 'zoë'])
+    await conn.query('UPDATE ch SET pa_id=NULL WHERE id=1')
+    await conn.query('INSERT INTO ch VALUES (8,1,0)')
+    await read(['zoë'])
+    await conn.query('UPDATE ch SET qty=2 WHERE id=7')
+    await read(['zoë'])
+    await conn.query('DELETE FROM ch WHERE id IN (2,3,5,6,7)')
+    await conn.query('ANALYZE TABLE pa,ch')
+    await read(['zoë'], materializedScan)
+    await conn.query("SET optimizer_switch='materialization=off'")
+    await read(['zoë'])
+    await conn.query("SET optimizer_switch='materialization=on,firstmatch=off'")
+    await read(['zoë'], materializedScan)
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
+
 const materializedDisjunctions = [
   {
     schema: 'mat_inverted_range',
@@ -262,17 +316,7 @@ for (const { schema, predicate, parents, children, initial, writes } of material
   test(`ordered IN materializes the noncovering disjunction ${predicate}`, async () => {
     const { db, conn } = await looseScanConnection()
     const sql = `SELECT name FROM pa WHERE id IN (SELECT pa_id FROM ch WHERE ${predicate}) ORDER BY 1`
-    const plan = `Sort
-    Stream results
-        Nested loop inner join
-            Filter
-                Table scan on <subquery2>
-                    Materialize with deduplication
-                        Filter
-                            Filter
-                                Table scan on ch
-            Single-row index lookup on pa using PRIMARY`
-    const read = (names: readonly string[]) => readSemijoin(conn, schema, sql, names, plan, { flags: 4097, charset: 255 })
+    const read = (names: readonly string[]) => readSemijoin(conn, schema, sql, names, materializedScan, { flags: 4097, charset: 255 })
     try {
       await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
       await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)

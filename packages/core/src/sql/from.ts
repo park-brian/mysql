@@ -160,7 +160,7 @@ export interface FromPlan {
   /** Sort the first table before its indexed joins expand or discard rows. */
   sortFirst(alias: string, keys: readonly SortKey[]): void
   /** Select a bounded integer semijoin; return whether its physical order is inner-first. */
-  integerSemijoin(alias: string, index: IndexDef | undefined, key: Compiled, residual: Expression | undefined, materializationEligible: boolean, strategy?: 'filteredHash' | 'filteredMaterial' | 'weedout' | 'NOT IN' | 'BETWEEN' | 'OR' | 'parentRange'): boolean | undefined
+  integerSemijoin(alias: string, index: IndexDef | undefined, key: Compiled, residual: Expression | undefined, materializationEligible: boolean, strategy?: 'filteredHash' | 'filteredMaterial' | 'weedout' | 'NOT IN' | 'BETWEEN' | 'OR' | 'parentRange', fanoutOff?: boolean): boolean | undefined
   /**
    * The columns the query reads of each table (`'all'` for one read whole).
    * A table no condition chooses an access path for is read through the
@@ -629,13 +629,6 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     },
     orderGroupsFirst(keys) {
       if (keys.length === 0 || keys.some((k) => k.expr.kind !== NODE.COLUMN || k.compiled.type.kind === 'json')) return undefined
-      const aliases = new Set<string>()
-      for (const key of keys) {
-        const own = aliasesOf(key.expr, scope)
-        if (own === undefined) return undefined
-        for (const alias of own) aliases.add(alias)
-      }
-      if (!this.sortsFirst(aliases)) return undefined
       const plan = joinPlan()
       if (plan === undefined || plan.node.kind !== 'join') return undefined
       let node: Node = plan.node
@@ -643,25 +636,31 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         if (node.left || node.inner.kind !== 'leaf' || node.lookup === undefined || !plan.lookups.has(node.inner.table.alias) || plan.dynamic.has(node.inner.table.alias) || settings.constants?.has(node.inner.table.alias)) return undefined
         node = node.outer
       }
-      if (node.table.def === undefined || settings.constants?.has(node.table.alias) || settings.hidden?.has(node.table.alias)) return undefined
-      const candidate = chooseStrategy(node.table.def, keys.map((k) => columnOf(node.table, k.expr, scope)?.name), false, true).index
+      const { table } = node
+      if (table.def === undefined || table.derived?.joined === true || settings.constants?.has(table.alias) || settings.hidden?.has(table.alias)) return undefined
+      for (const key of keys) {
+        const own = aliasesOf(key.expr, scope)
+        if (own === undefined || (own.size !== 0 && (own.size !== 1 || !own.has(table.alias)))) return undefined
+      }
+      const candidate = chooseStrategy(table.def, keys.map((k) => columnOf(table, k.expr, scope)?.name), false, true).index
       // A non-covering secondary scan competes with a scan and sort by cost; leave that choice open.
-      const clustered = candidate !== undefined && clusteredIndex(node.table.def)?.name === candidate
-      const index = clustered || settings.covering.get(node.table.alias) === candidate ? candidate : undefined
-      if (index === undefined) this.sortFirst(node.table.alias, keys.map((k) => ({ expr: k.compiled, desc: false })))
-      else this.readInOrder(index, true, false, node.table.alias)
+      const clustered = candidate !== undefined && clusteredIndex(table.def)?.name === candidate
+      const index = clustered || settings.covering.get(table.alias) === candidate ? candidate : undefined
+      if (index === undefined) this.sortFirst(table.alias, keys.map((k) => ({ expr: k.compiled, desc: false })))
+      else this.readInOrder(index, true, false, table.alias)
       return index === undefined ? 'sort' : 'index'
     },
     sortFirst(alias, keys) {
       settings.firstSort = { alias, keys }
     },
-    integerSemijoin(alias, index, key, residual, materializationEligible, strategy) {
+    integerSemijoin(alias, index, key, residual, materializationEligible, strategy, fanoutOff) {
       // A noncovering residual can feed either a clustered lookup or a hash build.
       const filteredScan = !index && residual !== undefined
       const buffered = !index && !filteredScan
       const canBuffer = settings.buffered && optimizerEnabled(ctx.env, 'condition_fanout_filter')
       if (buffered && !canBuffer) return undefined
-      const firstMatch = { alias, enabled: optimizerEnabled(ctx.env, 'firstmatch'), filteredScan }
+      // Use the legacy scan estimate for the bounded ordered fractional candidate.
+      const firstMatch = { alias, enabled: optimizerEnabled(ctx.env, 'firstmatch'), filteredScan, fanoutFilter: !fanoutOff || !settings.buffered }
       if (index && optimizerEnabled(ctx.env, 'loosescan')) settings.loose = { alias, index, key, competeRange: strategy === 'BETWEEN' }
       // A primary BETWEEN competes with materialization on its first search.
       if (strategy !== 'BETWEEN' && residual !== undefined && materializationEligible && index) {
@@ -673,7 +672,15 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         }
       }
       if (residual === undefined || filteredScan || strategy === 'BETWEEN') settings.firstMatch = firstMatch
-      const plan = joinPlan(materializationEligible && settings.firstMatch !== undefined && optimizerEnabled(ctx.env, 'materialization'))
+      const materialization = materializationEligible && settings.firstMatch !== undefined && optimizerEnabled(ctx.env, 'materialization')
+      let plan = joinPlan(materialization)
+      const probe = plan?.positions[1]
+      // An unsupported outer-first lookup leaves the previous weedout search available.
+      if (!firstMatch.fanoutFilter && probe?.alias === alias && (probe.lookup || !firstMatch.enabled || plan?.dynamic.has(alias))) {
+        firstMatch.fanoutFilter = true
+        planned = undefined
+        plan = joinPlan(materialization)
+      }
       if (plan === undefined) return undefined
       const node = plan.node
       if (node.kind !== 'join' || node.left || node.outer.kind !== 'leaf' || node.inner.kind !== 'leaf') return undefined
@@ -693,13 +700,14 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       if (filteredScan) {
         // A constant residual cannot request a range based on the probe.
         if (!innerFirst) {
-          if (strategy !== 'filteredHash' || !canBuffer || !firstMatch.enabled || materialized || node.lookup) return undefined
+          const hash = firstMatch.fanoutFilter ? strategy === 'filteredHash' && canBuffer : !plan.dynamic.has(alias)
+          if (!hash || !firstMatch.enabled || materialized || node.lookup) return undefined
           return false
         }
         if (!primary) return undefined
-        // The bounded noncovering fractional case admits only weedout.
+        // The fanout-off estimate can also select a materialized scan.
         if (materialized) {
-          if (materialized !== 'scan' || strategy === 'weedout') return undefined
+          if (materialized !== 'scan' || strategy === 'weedout' && firstMatch.fanoutFilter) return undefined
           return true
         }
         if (strategy === 'filteredMaterial' || !optimizerEnabled(ctx.env, 'duplicateweedout')) return undefined
@@ -1051,7 +1059,7 @@ interface LeafSettings {
   /** LooseScan removes adjacent equal integer keys after the inner filter. */
   loose?: { readonly alias: string; readonly index: IndexDef; readonly key: Compiled; readonly competeRange?: boolean }
   /** Logical inner and FirstMatch availability for admitted semijoins; undefined keeps unmodeled residual costs. */
-  firstMatch?: FirstMatch
+  firstMatch?: FirstMatch & { readonly fanoutFilter?: boolean }
   /** Whether scanned joins may buffer their inner side. */
   buffered: boolean
   /** Bounded lazy lookup, eager hash scan or eager nested loop. */
@@ -1328,6 +1336,7 @@ function toOp(node: Node, conditions: readonly Placed[], settings: LeafSettings,
     return settings.hidden?.has(node.table.alias) === true ? { ...op, hidden: true } : op
   }
   const { materialized, scope } = settings
+  const innerTable = node.inner.kind === 'leaf' ? node.inner.table : undefined
   const outerAliases = leafAliases(node.outer)
   const innerAliases = leafAliases(node.inner)
   // An inner join's ON is its WHERE; an outer join's ON may go down only into the side it nulls.
@@ -1344,24 +1353,23 @@ function toOp(node: Node, conditions: readonly Placed[], settings: LeafSettings,
   const outer = toOp(node.outer, toOuter, settings, ctx, preliminary)
   // An outer join whose ON can never hold, its inner tables NULL-complemented without a read (8.4.11).
   if (node.left && innerAliases.size > 0 && [...innerAliases].every((a) => settings.nullTables?.has(a) === true)) return filterOp(outer, above)
-  const keyHeld = node.left && node.inner.kind === 'leaf' ? settings.outerConstants?.get(node.inner.table.alias) : undefined
-  if (keyHeld !== undefined && node.inner.kind === 'leaf') return filterOp(constantRowOp(outer, node.inner.table, node.innerSlots, toInner, spanning, settings, keyHeld), above)
-  if (!node.left && (outer.hidden === true || (node.inner.kind === 'leaf' && settings.hidden?.has(node.inner.table.alias) === true))) {
+  const keyHeld = node.left && innerTable !== undefined ? settings.outerConstants?.get(innerTable.alias) : undefined
+  if (keyHeld !== undefined && innerTable !== undefined) return filterOp(constantRowOp(outer, innerTable, node.innerSlots, toInner, spanning, settings, keyHeld), above)
+  if (!node.left && (outer.hidden === true || (innerTable !== undefined && settings.hidden?.has(innerTable.alias) === true))) {
     return constJoinOp(outer, toOp(node.inner, toInner, settings, ctx, preliminary), node.innerSlots, spanning)
   }
   if (hasLateral(node.inner)) {
     const inner = toOp(node.inner, toInner, settings, ctx, preliminary)
     return filterOp(nestedJoinOp(node, outer, inner, spanning), above)
   }
-  if (node.inner.kind === 'leaf' && settings.dynamic?.has(node.inner.table.alias) === true) {
-    const t = node.inner.table
+  if (innerTable !== undefined && settings.dynamic?.has(innerTable.alias) === true) {
     const outerScope = slotScope(preliminary, outerAliases)
     const known = (e: Expression): Compiled | undefined => within(aliasesOf(e, scope), outerAliases) ? ctx.compileOn(e, outerScope) : undefined
-    return filterOp(indexedJoinOp(node, outer, t, undefined, [...toInner, ...spanning], settings, known), above)
+    return filterOp(indexedJoinOp(node, outer, innerTable, undefined, [...toInner, ...spanning], settings, known), above)
   }
-  if (!node.left && node.inner.kind === 'leaf' && settings.constants?.has(node.inner.table.alias) === true) return constantRowOp(outer, node.inner.table, node.innerSlots, toInner, spanning, settings)
-  if (node.lookup !== undefined && node.inner.kind === 'leaf' && settings.lookups?.has(node.inner.table.alias) !== false && materialized !== 'lookup') {
-    return filterOp(weedoutOp(indexedJoinOp(node, outer, node.inner.table, node.lookup, [...toInner, ...spanning], settings), settings.weedout), above)
+  if (!node.left && innerTable !== undefined && settings.constants?.has(innerTable.alias) === true) return constantRowOp(outer, innerTable, node.innerSlots, toInner, spanning, settings)
+  if (node.lookup !== undefined && innerTable !== undefined && settings.lookups?.has(innerTable.alias) !== false && materialized !== 'lookup') {
+    return filterOp(weedoutOp(indexedJoinOp(node, outer, innerTable, node.lookup, [...toInner, ...spanning], settings), settings.weedout), above)
   }
   const repeated = settings.buffered === false && !materialized
   const inner = toOp(node.inner, repeated ? [...toInner, ...spanning] : toInner, settings, ctx, preliminary)
@@ -1369,14 +1377,15 @@ function toOp(node: Node, conditions: readonly Placed[], settings: LeafSettings,
   const joinScope = slotScope(preliminary, new Set([...outerAliases, ...innerAliases]))
   const keys = hashKeys(spanning, outerAliases, innerAliases, scope, (e) => ctx.compileOn(e, joinScope))
   // Automatic derived indexes and MaterializeLookup build on the inner side.
-  const d = node.inner.kind === 'leaf' ? node.inner.table : undefined
-  const indexed = d !== undefined && keys !== undefined && (materialized === 'lookup' || (d.derived !== undefined && !d.lateral && d.derived.merged !== true && d.derived.constant !== true))
+  const derived = innerTable?.derived
+  const indexed = innerTable !== undefined && keys !== undefined && (materialized === 'lookup' ||
+    (derived !== undefined && !innerTable.lateral && derived.merged !== true && derived.constant !== true))
   // Inner equalities belong to the join; other spanning conditions filter its output.
   const on = node.left ? spanning : spanning.filter((c) => equalitySides(c.e, outerAliases, innerAliases, scope) !== undefined)
-  const anti = node.left && !materialized && !indexed && d !== undefined && node.outer.kind === 'leaf' &&
-    above.length === 1 && testsNullExtension(above[0]!.e, d, scope) && spanning.some(({ e }) => equalitySides(e, outerAliases, innerAliases, scope) !== undefined)
-  const semi = d !== undefined && settings.firstMatch?.enabled === true && settings.firstMatch.alias === d.alias
-  return filterOp(buildJoinOp(semi ? 'semi' : anti ? 'anti' : node.left, node.innerSlots, outer, inner, on, keys, indexed ? d : undefined, materialized, settings.weedout), node.left ? above : spanning.filter((c) => !on.includes(c)))
+  const anti = node.left && !materialized && !indexed && innerTable !== undefined && node.outer.kind === 'leaf' &&
+    above.length === 1 && testsNullExtension(above[0]!.e, innerTable, scope) && spanning.some(({ e }) => equalitySides(e, outerAliases, innerAliases, scope) !== undefined)
+  const semi = settings.firstMatch?.enabled === true && settings.firstMatch.alias === innerTable?.alias
+  return filterOp(buildJoinOp(semi ? 'semi' : anti ? 'anti' : node.left, node.innerSlots, outer, inner, on, keys, indexed ? innerTable : undefined, materialized, settings.weedout), node.left ? above : spanning.filter((c) => !on.includes(c)))
 }
 
 // --- the cost model's choices (M5.7) -----------------------------------------------
@@ -1676,9 +1685,11 @@ function placeTable(t: FromTable, lookup: EqRef | undefined, prefix: readonly Po
           keyFrom: new Set([...(aliasesOf(lookup.condition, scope) ?? [])].filter((a) => a !== t.alias)),
         }
   const coveredByAnyIndex = def.indexes.some((i) => holdsRead(def, i, read))
-  const constant = stats.rows < 1 ? 1 : floorFilter(filter(NO_ALIASES), stats.rows, stats.rows)
+  const fanout = settings.firstMatch?.fanoutFilter !== false
+  // Without the fanout filter, MySQL estimates a scan keeps 75% if a preceding ref condition exists.
+  const constant = !fanout ? (key === undefined ? 1 : 0.75) : stats.rows < 1 ? 1 : floorFilter(filter(NO_ALIASES), stats.rows, stats.rows)
   const access = bestAccess({ stats, coveredByAnyIndex, constantFilter: constant, range: range?.range }, prefix, key, rowBytes(prefix, settings), settings.buffered)
-  const kept = access.lookup
+  const kept = !fanout ? 1 : access.lookup
     ? access.fetched < 1
       ? 1
       : floorFilter(filter(before, lookup?.column), stats.rows, access.fetched)

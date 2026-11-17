@@ -1158,6 +1158,11 @@ function signedIntColumn(column: ColumnDef | undefined): column is ColumnDef & {
   return column?.type.type === FIELD_TYPE.LONG && !column.type.unsigned
 }
 
+/** The parent primary key and its nullable child member are both signed INT. */
+function signedPrimaryMembership(def: TableDef, parent: ColumnDef | undefined, member: ColumnDef | undefined): boolean {
+  return signedIntColumn(parent) && !parent.nullable && singlePrimary(def, parent) !== undefined && signedIntColumn(member) && member.nullable
+}
+
 /** BIT and YEAR have their own comparison representations rather than exact integer keys. */
 function exactInteger(c: { readonly type: ResultType }): boolean {
   return c.type.kind === 'int' && c.type.field !== FIELD_TYPE.BIT && c.type.field !== FIELD_TYPE.YEAR
@@ -1444,7 +1449,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
         (wildcardLike(residual?.right) ? !bound.nullable : bound.nullable || !singlePrimary(def, bound))) return undefined
     } else if (parentRange) {
       const parent = tableColumn(outerField, outerDef, outerAlias)
-      if (!signedInt || !field.nullable || !signedIntColumn(parent) || parent.nullable || !singlePrimary(outerDef, parent)) return undefined
+      if (!signedPrimaryMembership(outerDef, parent, field)) return undefined
     } else if (strategy && (!signedInt || (strategy === 'OR' ? !field.nullable : !singlePrimary(def, field)))) return undefined
     if (any && (hasLeadingKey(def, innerColumn) || from.access(run.env).index !== undefined)) return undefined
     let nullTest: typeof notNull
@@ -1470,6 +1475,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     const scanOnly = index !== undefined && !holdsRead(def, index, innerRead)
     if (text && (!scanOnly || !sessionVarchar(field, run))) return undefined
     if ((any || scanOnly) && hasGenerated(def, outerDef)) return undefined
+    let fanoutOff = false
     if (scanOnly) {
       if ((!ordersOuter && q.orderBy !== undefined) || limitOrLock || !singleRefIndex(index) ||
         def.indexes.some((i) => holdsRead(def, i, innerRead))) return undefined
@@ -1484,6 +1490,11 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
         // A noncovering fractional comparison can feed the selected weedout scan.
         if (residual?.op !== '<=' || !signedInt || indexedColumn(def, field.name) || !fractionalIntBound(constantValue(residual.right, run.env))) return undefined
         strategy = 'weedout'
+        if (!optimizerEnabled(run.env, 'condition_fanout_filter')) {
+          const parent = tableColumn(outerField, outerDef, outerAlias)
+          const member = tableColumn(innerField, def, innerAlias)
+          fanoutOff = signedPrimaryMembership(outerDef, parent, member)
+        }
       }
     }
 
@@ -1497,7 +1508,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     alternative.reads(read)
     alternative.sortedBy(sortBy, keep)
     const innerFirst = alternative.integerSemijoin(innerAlias, scanOnly ? undefined : index, key, innerResidual,
-      !someNode([node.items, q.orderBy], (n) => (n as Expression).kind === NODE.SUBQUERY || undefined), strategy)
+      !someNode([node.items, q.orderBy], (n) => (n as Expression).kind === NODE.SUBQUERY || undefined), strategy, fanoutOff)
     if (innerFirst === undefined || (scanOnly && innerFirst && !ordersOuter && exists)) return undefined
     // MySQL substitutes the first field of an equality class after join ordering.
     const outerType = !innerFirst && nullTest ? tableColumn(outerField, outerDef, outerAlias)?.type : undefined

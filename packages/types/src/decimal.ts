@@ -27,13 +27,11 @@ export const MAX_DECIMAL_SCALE = 30
 
 /** Bytes a `DECIMAL(precision, scale)` occupies, per doc 24's `decimalBinSize`. */
 export function decimalBinSize(precision: number, scale: number): number {
-  const intg = precision - scale
-  return (
-    Math.floor(intg / DIG_PER_DEC1) * 4 +
-    (DIG2BYTES[intg % DIG_PER_DEC1] as number) +
-    Math.floor(scale / DIG_PER_DEC1) * 4 +
-    (DIG2BYTES[scale % DIG_PER_DEC1] as number)
-  )
+  return partBytes(precision - scale) + partBytes(scale)
+}
+
+function partBytes(digits: number): number {
+  return Math.floor(digits / DIG_PER_DEC1) * 4 + (DIG2BYTES[digits % DIG_PER_DEC1] as number)
 }
 
 function checkShape(precision: number, scale: number): void {
@@ -81,6 +79,20 @@ function getBE(bytes: Uint8Array, at: number, width: number): number {
   return v
 }
 
+/** Integer digits have a leading partial group. Fraction digits have a trailing one. */
+function eachGroup(digits: number, at: number, leading: boolean, visit: (offset: number, width: number, first: number, end: number) => void): number {
+  const lead = leading ? digits % DIG_PER_DEC1 : 0
+  for (let first = 0; first < digits;) {
+    const count = first === 0 && lead > 0 ? lead : Math.min(DIG_PER_DEC1, digits - first)
+    const width = DIG2BYTES[count] as number
+    const end = first + count
+    visit(at, width, first, end)
+    at += width
+    first = end
+  }
+  return at
+}
+
 /**
  * `decimal2bin`. The value arrives as a string because D-15 says DECIMAL is a
  * string at the driver boundary and because a double cannot represent
@@ -92,32 +104,10 @@ export function encodeDecimal(text: string, precision: number, scale: number): U
   const { negative, intg, frac } = parse(text, precision, scale)
   const out = new Uint8Array(decimalBinSize(precision, scale))
 
-  let at = 0
-  // Integer part: a leading partial group, then full 9-digit groups.
-  const intgLead = intg.length % DIG_PER_DEC1
-  if (intgLead > 0) {
-    const width = DIG2BYTES[intgLead] as number
-    putBE(out, at, width, Number(intg.slice(0, intgLead)))
-    at += width
-  }
-  for (let i = intgLead; i < intg.length; i += DIG_PER_DEC1) {
-    putBE(out, at, 4, Number(intg.slice(i, i + DIG_PER_DEC1)))
-    at += 4
-  }
-  // Fractional part: full groups first, then a trailing partial group.
-  const fracFull = Math.floor(scale / DIG_PER_DEC1) * DIG_PER_DEC1
-  for (let i = 0; i < fracFull; i += DIG_PER_DEC1) {
-    putBE(out, at, 4, Number(frac.slice(i, i + DIG_PER_DEC1)))
-    at += 4
-  }
-  const fracTail = scale - fracFull
-  if (fracTail > 0) {
-    const width = DIG2BYTES[fracTail] as number
-    // A partial trailing group is left-aligned: `.1234` at scale 4 is 1234,
-    // not 0.1234 scaled. The digits are already exactly `fracTail` long.
-    putBE(out, at, width, Number(frac.slice(fracFull)))
-    at += width
-  }
+  const write = (digits: string, at: number, length: number, leading: boolean): number =>
+    eachGroup(length, at, leading, (offset, width, first, end) => putBE(out, offset, width, Number(digits.slice(first, end))))
+  const fractionAt = write(intg, 0, intg.length, true)
+  write(frac, fractionAt, scale, false)
 
   // Step 5: invert every byte for a negative value. Step 6: flip the top bit,
   // so unsigned `memcmp` puts negatives first.
@@ -141,31 +131,14 @@ export function decodeDecimal(bytes: Uint8Array, precision: number, scale: numbe
   buf[0] = (buf[0] as number) ^ 0x80
   if (negative) for (let i = 0; i < buf.length; i++) buf[i] = (buf[i] as number) ^ 0xff
 
-  let at = 0
   let intg = ''
-  const intgDigits = precision - scale
-  const intgLead = intgDigits % DIG_PER_DEC1
-  if (intgLead > 0) {
-    const width = DIG2BYTES[intgLead] as number
-    intg += String(getBE(buf, at, width)).padStart(intgLead, '0')
-    at += width
-  }
-  for (let i = intgLead; i < intgDigits; i += DIG_PER_DEC1) {
-    intg += String(getBE(buf, at, 4)).padStart(DIG_PER_DEC1, '0')
-    at += 4
-  }
-
+  const at = eachGroup(precision - scale, 0, true, (offset, width, first, end) => {
+    intg += String(getBE(buf, offset, width)).padStart(end - first, '0')
+  })
   let frac = ''
-  const fracFull = Math.floor(scale / DIG_PER_DEC1) * DIG_PER_DEC1
-  for (let i = 0; i < fracFull; i += DIG_PER_DEC1) {
-    frac += String(getBE(buf, at, 4)).padStart(DIG_PER_DEC1, '0')
-    at += 4
-  }
-  const fracTail = scale - fracFull
-  if (fracTail > 0) {
-    const width = DIG2BYTES[fracTail] as number
-    frac += String(getBE(buf, at, width)).padStart(fracTail, '0')
-  }
+  eachGroup(scale, at, false, (offset, width, first, end) => {
+    frac += String(getBE(buf, offset, width)).padStart(end - first, '0')
+  })
 
   const whole = intg === '' ? '0' : intg.replace(/^0+(?=\d)/, '')
   const sign = negative ? '-' : ''

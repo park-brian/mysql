@@ -2623,6 +2623,35 @@ M5.47 remains partial. Compare the outer-first hash semijoin with
 materialization when `condition_fanout_filter` is disabled. Keep stale
 range estimates under M5.49 and the explicit-zero insert mode under M5.8.
 
+**M5.47 fractional membership with fanout filtering disabled, verified.**
+An ordered, unbounded, nonlocking positive `IN` with a noncovering
+fractional `<=` on an unindexed signed `INT` can use the selected outer-first
+hash semijoin or an inner-first materialized scan. The bounded case has a
+signed single-column parent primary key and a nullable signed `INT` child
+membership key. With the fanout filter disabled, a scan estimates all rows
+without a preceding ref condition and 75% with one. The costed search
+keeps the original weedout path available when the selected outer-first
+strategy would need an indexed probe.
+
+The regression checks both wire protocols across writes, duplicate
+keys, a NULL rekey, and the switch between hashing and materialization.
+The pinned audits repair 644 of 33,024 complete outcomes and preserve
+the other 32,380 plus 58,368 index, type, and membership controls.
+The committed 300-script relational ledger and all 138 matching
+observations from the three fresh seeds are unchanged.
+
+Scalar readers share NULL propagation. Join construction binds the
+inner leaf once, and the grouped path proves the driver order in one pass.
+Catalog metadata uses the integer width table and JSON uses the shared
+field codes. The decimal codec uses one digit group traversal for packing
+and unpacking. The differential checks preserve 36,340 decimal results
+and diagnostics and 294,560 column layouts and widths. Parser/core/facade
+measure 45,567/334,346/334,263 B gzipped within the existing caps.
+
+The no-buffer nested loop, outer-first materialized lookup, and
+fanout-off disjunctions remain open under M5.47. The separate decimal
+write gap where scale equals precision is recorded under M2.10.
+
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.
 Grouping, DISTINCT and byte readers now see the same result collation.
@@ -8685,7 +8714,7 @@ they ran (E-12).
 | M2.7 | `utf8mb4_0900_ai_ci` (UCA 9.0.0, NO PAD), lazily loaded | charsets | [29](./29-charsets-and-collations.md) | M2.20 | ☑ | `'a' = 'a '` is false — and, because UCA expands where `general_ci` folds, sharp s equals `'ss'` here and cannot under `general_ci`. The differential check against a real 8.4 is the M2.21 fixture and is now **met**: 12 captured `WEIGHT_STRING` vectors, including the Han implicit weight `FB40CE00` and the Hangul decomposition `3BF53C73`, agree with our tables byte for byte |
 | M2.8 | Integer transform: big-endian, sign bit flipped unless unsigned | types | [24](./24-column-encodings.md) | M0.3, M2.16 | ☑ | doc 24's four worked `INT` lines reproduce byte for byte |
 | M2.9 | FLOAT and DOUBLE: little-endian IEEE-754, compared **numerically** | types | [24](./24-column-encodings.md) | M2.8 | ☑ | the ordering property test knows these are the exception and does not assert `memcmp` |
-| M2.10 | `decimal2bin` | types | [24](./24-column-encodings.md) | M2.8 | ☑ | `DECIMAL(14,4) 1234567890.1234 → 81 0D FB 38 D2 04 D2`, and its negative |
+| M2.10 | `decimal2bin` | types | [24](./24-column-encodings.md) | M2.8 | ☑ | `DECIMAL(14,4) 1234567890.1234 → 81 0D FB 38 D2 04 D2`, and its negative. **Open write gap (2026-11-17).** With equal precision and scale, an extra integer-zero group shifts or drops fractional digits. Both wire protocols reproduce the difference against 8.4.11 for `DECIMAL(2,2)` and `DECIMAL(11,11)`. Existing stored bytes can no longer supply the dropped digits. |
 | M2.11 | Temporal family: DATETIME2, TIMESTAMP2, TIME2, DATE, YEAR, plus the legacy decoders | types | [24](./24-column-encodings.md) | M2.8 | ☑ | `DATETIMEF_INT_OFS` and `year*13 + month` are right; all fractional widths round-trip |
 | M2.12 | ENUM and SET (forced unsigned, **no** sign flip), BIT, CHAR/VARCHAR/BINARY padding | types | [24](./24-column-encodings.md) | M2.8 | ☑ | ENUM indexes are 1-based; `CHAR` latin1 space-pads, `BINARY` zero-pads |
 | M2.13 | Binary JSON codec | types | [28](./28-json-binary.md) | M2.11, M2.12, M2.24 | ☑ | small/large switches per container; key order is length-then-bytes; `custom-data` reaches back into `decodeStorageValue`. Two things the property test found: a stored `__proto__` key was prototype pollution reachable from a table row, and `-0` must stay a double because `float8store` keeps its sign |

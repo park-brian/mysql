@@ -23,15 +23,13 @@ import { requireCollationInfo } from '@myjs/charsets'
 import { clusteredIndexOf, type ColumnDef, type EngineName, type IndexDef, type TableSpec } from '@myjs/engine'
 import { BINARY_DEPRECATION, KEY, NODE, NO_SQL_MODE, deparse, type ColumnDefinition, type CreateTableNode, type DataType, type KeyDefinition, type SqlMode } from '@myjs/parser'
 import { fromUtf8, messages, sqlError } from '@myjs/protocol'
-import type { ColumnType } from '@myjs/types'
+import { integerBytes, type ColumnType } from '@myjs/types'
 import { checkFulltext, type FulltextDef } from './fulltext.ts'
 import { checkGenerated, checkGeneratedDefault } from './generated.ts'
 import { isBlobField, NATIONAL_DEPRECATION, UTF8MB3_DEPRECATION } from './meta.ts'
 import { resolveCollation } from './collation.ts'
 
 export { resolveCollation } from './collation.ts'
-
-const INTEGER_CODES: ReadonlySet<number> = new Set([FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.INT24, FIELD_TYPE.LONG, FIELD_TYPE.LONGLONG])
 
 const INEXACT_CODES: ReadonlySet<number> = new Set([FIELD_TYPE.FLOAT, FIELD_TYPE.DOUBLE, FIELD_TYPE.NEWDECIMAL, FIELD_TYPE.DECIMAL])
 
@@ -59,7 +57,7 @@ export function columnDeprecations(c: ColumnDefinition): Deprecation[] {
   const out: Deprecation[] = []
   const form = (message: string) => out.push({ code: 1681, message })
   if (t.zerofill === true) form(DEPRECATED.zerofill)
-  if (INTEGER_CODES.has(code) && t.length !== undefined) form(DEPRECATED.width)
+  if (integerBytes(code) !== undefined && t.length !== undefined) form(DEPRECATED.width)
   if ((code === FIELD_TYPE.FLOAT || code === FIELD_TYPE.DOUBLE) && t.scale !== undefined) form(DEPRECATED.digits)
   if (INEXACT_CODES.has(code) && t.unsigned === true && t.zerofill !== true) form(DEPRECATED.unsigned)
   // The charset's, in the order the definition meets them (8.4.11).
@@ -422,7 +420,7 @@ export function column(c: ColumnDefinition, tableCollation: number, inPrimary: b
   if (c.comment !== undefined) attributes['comment'] = c.comment
   if (declaration.zerofill === true) attributes['zerofill'] = true
   // BOOL and BOOLEAN are TINYINT(1), width and all.
-  if (INTEGER_CODES.has(code) && (declaration.length !== undefined || declaration.boolean === true)) attributes['width'] = declaration.length ?? 1
+  if (integerBytes(code) !== undefined && (declaration.length !== undefined || declaration.boolean === true)) attributes['width'] = declaration.length ?? 1
   return {
     name: c.name,
     type,
