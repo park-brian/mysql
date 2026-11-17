@@ -51,7 +51,7 @@ import {
   type Value,
 } from '@myjs/types'
 import type { Compiled, Env } from './compile.ts'
-import { rangeBaseline, rangeCost, type RangeShape, type RangeRead } from './cost.ts'
+import { PAGE_READ, ROW_EVALUATE, rangeBaseline, rangeCost, type RangeShape, type RangeRead } from './cost.ts'
 import { impossibleBetween, intersect, normalize, pointInterval, pruneImpossibleOr, rangeOf, significantCharPadding, type Constant, type Interval, type RangeSet, type RangeValue } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
 import { forwardKeyColumn, forwardKeyPart, uniquePoint } from './indexes.ts'
@@ -330,7 +330,9 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
   const skipDive = forceRange && indexes.length === 1
   let chosen: Access | undefined
   for (const c of candidates) {
-    const limit = mostRows((rows) => rangeCost(t, c.shape, c.keyed.length, rows), best)
+    // Bound the dive by costs every row incurs. Price the measured range below.
+    const minRowCost = c.shape.clustered || c.shape.covering ? ROW_EVALUATE : PAGE_READ + ROW_EVALUATE
+    const limit = Math.ceil(best / minRowCost)
     if (limit < c.keyed.length) continue
     // Cost the same range even when its stored endpoints let us skip the dive.
     // A unique key's point estimates one row. Other ranges cost at least one row.
@@ -342,7 +344,9 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
       if (rows > limit) break
     }
     if (rows > limit) continue
-    best = rangeCost(t, c.shape, c.keyed.length, rows)
+    const cost = rangeCost(t, c.shape, c.keyed.length, rows)
+    if (!(cost < best)) continue
+    best = cost
     chosen = access(c, rows)
   }
   return chosen
@@ -374,25 +378,6 @@ function describeIntervals(intervals: readonly Interval[], name: string): string
       return `(${lower}${name}${upper})`
     })
     .join(' OR ')
-}
-
-/** The most rows a read costing `cost` may take and still cost less than `best`, or -1 when even none would not. */
-function mostRows(cost: (rows: number) => number, best: number): number {
-  if (!(cost(0) < best)) return -1
-  let lo = 0
-  let hi = 1
-  while (cost(hi) < best) {
-    lo = hi
-    hi *= 2
-    if (hi > 2 ** 52) return Number.MAX_SAFE_INTEGER
-  }
-  // cost(lo) < best <= cost(hi)
-  while (hi - lo > 1) {
-    const mid = Math.floor((lo + hi) / 2)
-    if (cost(mid) < best) lo = mid
-    else hi = mid
-  }
-  return lo
 }
 
 /**

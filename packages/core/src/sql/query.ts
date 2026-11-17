@@ -681,7 +681,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   // At a one-record cost difference, prefer the order over a live dive that can miss a native delete-marked slot.
   const reconsider = base && prefer && range && allRows !== undefined &&
     PAGE_READ * Math.min(allRows, Math.max(1, Math.trunc(keep * allRows / range.rows))) < range.cost + PAGE_READ + ROW_EVALUATE
-  const ordered = source !== undefined && !deduplicated && !windowed && anti?.kind !== 'hash' && match === undefined && keys.length > 0 && (read!.ranges === undefined || (base && allRows !== undefined))
+  const ordered = source !== undefined && !deduplicated && !windowed && anti?.kind !== 'hash' && match === undefined && keys.length > 0 && (read!.ranges === undefined || (base && (allRows !== undefined || read!.index === 'PRIMARY')))
     ? orderingIndex(source, order, items, lookup, read!.index, read!.ranges === undefined ? prefer : !!reconsider, from!) : undefined
   if (ordered) from!.readInOrder(ordered.index.name, read!.ranges !== undefined && ordered.index.name !== read!.index, ordered.reverse, source!.alias)
   // A pinned complete PRIMARY point binds ORDER but needs none of its readers.

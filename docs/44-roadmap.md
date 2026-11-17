@@ -2813,21 +2813,36 @@ projected predicate accept. The regression uses the native scan for that
 comparison. Mixed precision and mixed literal and marker ranges remain
 open. A broader NULL-marker prototype repairs 102 plans and matches all
 320 NULL-boundary outcomes, including lower endpoints that clip to the
-smallest stored key. It exceeds the size caps. Full Docker verification
-of the exact pair passes 1,855 tests, seeded fuzzing, 10,000 crash points,
-package and real-client smoke, and all seven pinned corpora. The 300
+smallest stored key. It exceeded the caps at this point. Full Docker
+verification of the exact pair passes 1,855 tests, seeded fuzzing,
+10,000 crash points, package and real-client smoke, and all seven
+pinned corpora. The 300
 captured scripts, 138 fresh semijoin observations and 12,800 earlier
 range observations are unchanged. Parser, core and facade measure
 44,507, 334,336 and 334,260 bytes gzipped within the existing caps.
 
-**M5.49 clustered range cost and order, open.** The two-row estimate can
-cost more than the three-row estimate. A probe against MySQL 8.4.11
-reproduces this with four rows, a primary range and a covering secondary
-index. The candidate bounds the dive by unavoidable per-row costs,
-then prices the measured range. A selected primary range can also supply
-its own order. The 3,816-case audit repairs 1,216 plans and 16 row orders
-without losing a previous match. Full Docker verification is underway
-in an isolated snapshot.
+**M5.49 clustered range cost and order, verified.** The two-row
+estimate can cost more than the three-row estimate. A probe against
+MySQL 8.4.11 reproduces this with four rows, a primary range and a
+covering secondary index. MyJS bounds the dive by unavoidable
+per-row costs, then prices the measured range. An ordinary unhinted read
+can use the selected primary range's order when the existing binding
+and direction checks hold. The 3,816-case audit repairs 1,216 plans and
+16 row orders without losing a previous match. The counted probe visits
+at most eight extra index entries per workload during planning. The 300
+captured scripts, 138 fresh semijoin observations and 12,800 earlier
+range observations are unchanged. Full Docker verification passes 1,856
+tests, seeded fuzzing, 10,000 crash points, package and real-client smoke,
+and all seven pinned corpora. Parser, core and facade measure 44,507,
+334,297 and 334,229 bytes gzipped within the existing caps.
+
+**M5.49 NULL and mixed prepared `BETWEEN` bounds, open.** The prototype
+admits exact values and NULL markers alongside written bounds. A negative
+lower value that rounds below the smallest stored key keeps the original
+access. The prototype shares the existing key encoder for that proof.
+It fits the existing size caps and repairs 376 plans in 1,367 pinned
+observations. Full Docker verification is underway in isolation. Mixed
+DECIMAL and DOUBLE comparisons remain open.
 
 **M2.3 zero runs in internal charset encodings, verified.** The shared
 codec records absolute zeroes directly in the 24 byte-to-code-point

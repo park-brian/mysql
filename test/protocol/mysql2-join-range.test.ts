@@ -373,3 +373,40 @@ test('two exact prepared BETWEEN bounds retain precision when pricing the named 
     await conn.end(); await db?.end()
   }
 })
+
+test('a three-row primary range beats a covering scan and supplies its own order', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'join_range_cost398'
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,n INT,KEY by_n(n)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO t VALUES (1,4),(2,3),(3,2),(4,1)')
+    await conn.query('ANALYZE TABLE t')
+    for (const [order, expectedPlan, values] of [
+      ['', 'Filter\n    Index range scan on t using PRIMARY over', [3,2,1]],
+      ['ORDER BY id DESC', 'Filter\n    Index range scan on t using PRIMARY over', [1,2,3]],
+      ['ORDER BY n', 'Sort\n    Filter\n        Index range scan on t using PRIMARY over', [1,2,3]],
+    ] as const) {
+      const sql = `SELECT n FROM t WHERE id > 1 ${order}`
+      for (const method of ['query','execute'] as const) {
+        const options = { sql, rowsAsArray: true }
+        const [rows] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+        assert.deepEqual(rows, values.map((n) => [n]))
+        const explain = 'EXPLAIN FORMAT=TREE ' + sql
+        const [tree] = method === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
+        assert.equal(planSkeleton(tree[0]?.EXPLAIN), expectedPlan)
+      }
+    }
+    const expression = "SELECT CAST(CONCAT(n,'x') AS SIGNED) AS value FROM t WHERE id > 1 ORDER BY id DESC LIMIT 1 OFFSET 1"
+    for (const method of ['query','execute'] as const) {
+      const [rows] = method === 'query' ? await conn.query(expression) : await conn.execute(expression)
+      assert.deepEqual(rows, [{ value: 2 }])
+      const [warnings] = await conn.query<mysql.RowDataPacket[]>('SHOW WARNINGS')
+      assert.deepEqual(warnings.map((w) => w.Code), [1292])
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
