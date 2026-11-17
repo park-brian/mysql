@@ -73,6 +73,13 @@ export const APPROXIMATE_CHARSETS: readonly string[] = ['cp932', 'gb2312']
 const decoders = new Map<string, TextDecoder>()
 const encoder = new TextEncoder()
 
+/** Diagnostic bytes: printable ASCII retained, other bytes as upper-case escapes. */
+export function escapedBytes(bytes: Uint8Array): string {
+  let text = ''
+  for (const byte of bytes) text += byte >= 32 && byte < 127 ? String.fromCharCode(byte) : '\\x' + byte.toString(16).toUpperCase().padStart(2, '0')
+  return text
+}
+
 /** Error text keeps complete UTF-8 characters and replaces each truncated byte. */
 export function utf8ErrorLabel(text: string, limit: number): string {
   const { read, written } = encoder.encodeInto(text, new Uint8Array(limit))

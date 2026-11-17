@@ -808,10 +808,3 @@ function chosenOf(x: Compiled, result: ResultType): (v: Exclude<Value, null>, en
 export function hexOf(b: Uint8Array): string {
   return hex(b).toUpperCase()
 }
-
-/** Diagnostic bytes: printable ASCII retained, other bytes as upper-case escapes. */
-export function escapedBytes(bytes: Uint8Array): string {
-  let text = ''
-  for (const byte of bytes) text += byte >= 32 && byte < 127 ? String.fromCharCode(byte) : '\\x' + byte.toString(16).toUpperCase().padStart(2, '0')
-  return text
-}

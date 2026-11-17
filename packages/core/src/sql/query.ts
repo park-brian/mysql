@@ -16,7 +16,7 @@ import { MAX_UNSIGNED, MIN_SIGNED, compareValues, extremeAccumulator, intValue, 
 import { appendConditions, compile, constantNode, isComparison, literalPredicate, membershipReader, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, textBesideColumn, withOuterRow, writtenFalse, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
-import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, copiedLength, intType, type ResultType } from './meta.ts'
+import { EMPTY_NAMES, columnDefinition, columnResultType, copiedLength, intType, type ResultType } from './meta.ts'
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { accessRows, distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { EMPTY_KEY_RANGES, constantValue, equalBounds, isConstant, optimizerEnabled, pointAccess, sortBufferBytes, splitAnd, tableColumn, type Access } from './plan.ts'
@@ -24,7 +24,7 @@ import { isNotEqual, and, columnRefs, integerLiteral, isOrderedComparison, logic
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, proof, wrongArgumentsError } from './errors.ts'
 import { clusteredIndex, forwardKeyPart, indexPartMatchesColumn, indexParts, leadingIndex, singleRefIndex } from './indexes.ts'
-import { collationInfoByName, encodeCollation } from '@myjs/charsets'
+import { collationInfoByName } from '@myjs/charsets'
 import { ambiguousColumnError, unknownColumnError, requireSchema, safeIndex, safeResolve, TableScope, columnIndex as indexOfColumn } from './scope.ts'
 import { holdsRead, indexRecordBytes, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type HintAdmission, type JoinCondition } from './from.ts'
 import { dependentMembershipAccess, membershipCost, PAGE_READ, ROW_EVALUATE, type RangeRead } from './cost.ts'
@@ -43,7 +43,6 @@ import type { Trx } from '@myjs/engine'
 import { isTemporary, type CatalogApi } from './temporary.ts'
 import { modeOf } from './mode.ts'
 import { finish } from './session.ts'
-import { escapedBytes } from './builtins.ts'
 
 /** Everything one statement execution needs. */
 export interface Run {
@@ -2534,15 +2533,7 @@ function selectName(entry: SelectEntry, scope: TableScope | undefined): string {
 /** A result column's name: its alias, a bare column's name as written, a string literal's value, else its source text. */
 function itemName(item: SelectNode['items'][number], text: string | undefined): string {
   const e = item.expr
-  if (item.alias !== undefined) {
-    // String aliases require utf8mb3; identifier-alias admission remains M5.1.
-    const astral = /[\u{10000}-\u{10FFFF}]/u.exec(item.alias)
-    if (astral !== null) {
-      const bytes = escapedBytes(encodeCollation(astral[0], CHARSET_UTF8MB4_BIN))
-      throw sqlError('ER_CANNOT_CONVERT_STRING', `Cannot convert string '${bytes}' from utf8mb4 to utf8mb3`)
-    }
-    return item.alias
-  }
+  if (item.alias !== undefined) return item.alias
   // A name made from the expression has such a character as '?'.
   const made = e.kind === NODE.COLUMN ? e.parts.at(-1)! : e.kind === NODE.LITERAL && e.type === 'string' ? (e.value as string) : text ?? (e.kind === NODE.LITERAL ? String(e.value) : e.kind)
   return made.replace(/[\u{10000}-\u{10FFFF}]/gu, '?')

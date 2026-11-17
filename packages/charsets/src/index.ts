@@ -21,6 +21,7 @@ export {
   decodeCharset,
   encodeCharset,
   utf8ErrorLabel,
+  escapedBytes,
   decodeCollation,
   encodeCollation,
   rejectsLatin1Substitute,

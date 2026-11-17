@@ -240,3 +240,55 @@ for (const multipleStatements of [false, true]) test('parser histories honor neg
     await db?.end()
   }
 })
+
+test('supplementary aliases convert before source binding and publish prepare warnings once', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const raw = mysql.createConnection(db === undefined
+    ? { host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+    : { stream: db.createStream(), user: 'root' })
+  const conn = raw.promise()
+  const schema = 'supplementary_alias_553'
+  const warning = ['Warning', 1300, "Cannot convert string 'a\\xF0\\x9F\\x98\\x80b' from utf8mb4 to utf8mb3"]
+  const warnings = async () => (await conn.query<mysql.RowDataPacket[]>({ sql: 'SHOW WARNINGS', rowsAsArray: true }))[0]
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY)')
+    await conn.query('INSERT INTO t VALUES (2),(1)')
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+    for (const [mode, name] of [['', '`a😀b`'], ['', 'a😀b'], ['ANSI_QUOTES', '"a😀b"']] as const) {
+      await conn.query('SET sql_mode=?', [mode])
+      const sql = `SELECT id AS ${name} FROM t ORDER BY ${name} DESC`
+      const [rows, fields] = await conn.query<mysql.RowDataPacket[]>(sql)
+      assert.deepEqual(rows, [{ 'a?b': 2 }, { 'a?b': 1 }])
+      assert.deepEqual(fields.map(({ name, orgName }) => [name, orgName]), [['a?b', 'id']])
+      assert.deepEqual(await warnings(), [warning, warning])
+      const statement = await conn.prepare(sql)
+      try {
+        assert.deepEqual(await warnings(), [warning, warning])
+        const [executed] = await statement.execute([])
+        assert.deepEqual(executed, rows)
+        assert.deepEqual(await warnings(), [])
+      } finally {
+        await statement.close()
+      }
+    }
+    const conversion = "Cannot convert string '\\xC3\\xA5\\xF0\\x9F\\x98\\x80...' from utf8mb4 to utf8mb3"
+    for (const method of ['query', 'execute'] as const) {
+      const read = (sql: string) => method === 'query' ? conn.query(sql) : conn.execute(sql)
+      const badAlias = "SELECT id AS 'å😀漢' FROM missing"
+      await conn.query('DO 0')
+      await assert.rejects(read(badAlias), { errno: 3854, sqlState: 'HY000', sqlMessage: conversion })
+      assert.deepEqual(await warnings(), [['Error', 3854, conversion]])
+      const missing = `Table '${schema}.missing' doesn't exist`
+      await conn.query('DO 0')
+      await assert.rejects(read('SELECT id AS `a😀b` FROM missing'), { errno: 1146, sqlState: '42S02', sqlMessage: missing })
+      assert.deepEqual(await warnings(), [warning, ['Error', 1146, missing]])
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})

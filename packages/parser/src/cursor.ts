@@ -9,6 +9,7 @@
 // Composition rather than inheritance, because the two parsers share a position
 // and nothing else: precedence climbing and DDL have no common shape worth
 // modelling as a base class.
+import { encodeCharset, escapedBytes } from '@myjs/charsets'
 import { ParseError, parseError, tooDeep, type ParseCondition } from './errors.ts'
 import { RESERVED } from './keywords.ts'
 import { TOKEN, keywordText, type Token } from './tokens.ts'
@@ -254,7 +255,7 @@ export class Cursor {
    */
   expectIdentifier(): string {
     if (!this.atIdentifier()) this.fail()
-    return this.take().text
+    return this.identifierName(this.take().text)
   }
 
   /**
@@ -264,7 +265,19 @@ export class Cursor {
   expectNamePart(): string {
     const t = this.peek()
     if (t.kind !== TOKEN.IDENTIFIER) this.fail()
-    return this.take().text
+    return this.identifierName(this.take().text)
+  }
+
+  /** An identifier or string alias is converted to the system charset before binding. */
+  identifierName(text: string, stringAlias = false): string {
+    const name = text.replace(/[\u{10000}-\u{10FFFF}]/gu, '?')
+    if (name === text) return text
+    const bytes = encodeCharset(text, 'utf8mb4')
+    const label = escapedBytes(bytes.subarray(0, 6)) + (bytes.length > 6 ? '...' : '')
+    const message = "Cannot convert string '" + label + "' from utf8mb4 to utf8mb3"
+    if (stringAlias) throw new ParseError('ER_CANNOT_CONVERT_STRING', message, { errno: 3854, sqlState: 'HY000' })
+    this.warn(1300, message, 'construction')
+    return name
   }
 
   /** `t` or `db.t`. */

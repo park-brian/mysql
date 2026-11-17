@@ -30,7 +30,7 @@
 //   - GREATEST and LEAST take the type CASE would, and compare in it.
 import { notSupported, proof } from './errors.ts'
 import { CHARSET_BINARY, expectTyped, equalBytes } from '@myjs/bytes'
-import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
+import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, escapedBytes, requireCollationInfo } from '@myjs/charsets'
 import { NODE, type CallNode, type Expression } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
 import {
@@ -63,7 +63,7 @@ import {
   type Value,
   valueBytes,
 } from '@myjs/types'
-import { escapedBytes, hexOf } from './builtins.ts'
+import { hexOf } from './builtins.ts'
 import { byteKey } from './keys.ts'
 import {
   readArguments,

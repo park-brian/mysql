@@ -383,7 +383,7 @@ class QueryParser {
     // a syntax error on a real 8.4. Found by the census's expected-failure
     // accounting, which saw twenty of them in `alias.test` accepted.
     if (expr.kind === NODE.COLUMN && expr.parts[expr.parts.length - 1] === '*') return { expr }
-    const alias = this.#alias()
+    const alias = this.#alias(true)
     return alias === undefined ? { expr } : { expr, alias }
   }
 
@@ -392,10 +392,14 @@ class QueryParser {
    * what stops `FROM t JOIN u` reading `JOIN` as `t`'s alias. A string is an
    * alias too, in either form: `SELECT 1 'one'`.
    */
-  #alias(): string | undefined {
+  #alias(select = false): string | undefined {
     const c = this.#c
-    if (c.takeWord('AS')) return c.peek().kind === TOKEN.STRING ? c.take().text : c.expectIdentifier()
-    return c.atIdentifier() || c.peek().kind === TOKEN.STRING ? c.take().text : undefined
+    const required = c.takeWord('AS')
+    if (c.peek().kind === TOKEN.STRING) {
+      const text = c.take().text
+      return select ? c.identifierName(text, true) : text
+    }
+    return required || c.atIdentifier() ? c.expectIdentifier() : undefined
   }
 
   #groupBy(): GroupBy {
