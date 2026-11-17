@@ -1472,9 +1472,11 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     }
     const predicate = and(equality, residual ?? nullTest)
     let candidates = def.indexes.filter((i) => i.kind === 'index' && i.invisible !== true && indexPartMatchesColumn(i.parts[0], innerColumn))
-    // Either direction keeps equal leading keys adjacent in a forward scan.
-    // Competing keys and ordered limits with FirstMatch still need separate costing.
-    if (candidates.length > 1 || (q.orderBy !== undefined && q.limit !== undefined && optimizerEnabled(run.env, 'firstmatch'))) {
+    // An unfiltered inner scan of the membership key can use its shortest covering index.
+    if (candidates.length > 1 && !exists && !any && extra === undefined && q.orderBy === undefined &&
+      !limitOrLock && optimizerEnabled(run.env, 'loosescan')) {
+      candidates = [candidates.reduce((best, key) => indexRecordBytes(def, key) < indexRecordBytes(def, best) ? key : best)]
+    } else if (candidates.length > 1 || (q.orderBy !== undefined && q.limit !== undefined && optimizerEnabled(run.env, 'firstmatch'))) {
       candidates = candidates.filter((i) => !i.parts[0]!.descending)
     }
     const index = candidates.length === 1 ? candidates[0] : candidates.find((i) => i.parts.length === 1)

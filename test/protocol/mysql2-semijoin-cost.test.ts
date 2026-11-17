@@ -50,3 +50,61 @@ test('semijoin costs select LooseScan for captures 149/248 and FirstMatch under 
     await db?.end()
   }
 })
+
+test('plain integer membership picks a narrow covering LooseScan key in declaration order', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection(db === undefined
+    ? { host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+    : { stream: db.createStream(), user: 'root' })
+  const schema = 'semi_competing_covering'
+  try {
+    if (host !== undefined) assert.equal(String((await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS v'))[0][0]!.v).split('-')[0], '8.4.11')
+    await conn.query('CREATE DATABASE ' + schema)
+    await conn.query('USE ' + schema)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,label VARCHAR(16) NOT NULL) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO p VALUES (1,'b'),(2,'a'),(3,'c'),(4,'d'),(5,'e')")
+    const layouts = [
+      ['KEY a(pid), KEY b(pid DESC)', 'a'],
+      ['KEY b(pid DESC), KEY a(pid)', 'b'],
+      ['KEY a(pid,qty), KEY b(pid DESC)', 'b'],
+      ['KEY a(pid DESC,qty), KEY b(pid DESC,extra)', 'b'],
+    ] as const
+    const sql = 'SELECT id,label FROM p WHERE id IN (SELECT pid FROM c)'
+    for (const [keys, index] of layouts) {
+      await conn.query('CREATE TABLE c(id INT PRIMARY KEY,pid INT,qty INT,extra TINYINT,' + keys + ') STATS_AUTO_RECALC=0')
+      await conn.query('INSERT INTO c VALUES (1,1,5,2),(2,1,1,4),(3,3,6,6),(4,NULL,2,8),(5,8,1,0)')
+      await conn.query('ANALYZE TABLE p,c')
+      for (const mode of ['default', 'firstmatch=off', 'loosescan=off']) {
+        await conn.query("SET optimizer_switch='default'")
+        if (mode !== 'default') await conn.query('SET optimizer_switch=?', [mode])
+        for (const method of ['query', 'execute'] as const) {
+          const read = (sql: string) => method === 'query'
+            ? conn.query<mysql.RowDataPacket[]>({ sql, rowsAsArray: true })
+            : conn.execute<mysql.RowDataPacket[]>({ sql, rowsAsArray: true })
+          const [rows] = await read(sql)
+          assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+          const [planRows] = await read('EXPLAIN FORMAT=TREE ' + sql)
+          const plan = planSkeleton(planRows[0]?.[0])
+          if (mode === 'loosescan=off') {
+            assert.equal(plan.includes('Remove duplicates from input sorted'), false)
+            assert.deepEqual(rows.map((row) => row[0]).sort((a, b) => a - b), [1, 3])
+          } else {
+            assert.ok(plan.includes('Remove duplicates from input sorted on ' + index), plan)
+            assert.ok(plan.includes('Covering index scan on c using ' + index), plan)
+            assert.deepEqual(rows, index === 'a' ? [[1, 'b'], [3, 'c']] : [[3, 'c'], [1, 'b']])
+          }
+          if (method === 'execute') {
+            conn.unprepare(sql)
+            conn.unprepare('EXPLAIN FORMAT=TREE ' + sql)
+          }
+        }
+      }
+      await conn.query('DROP TABLE c')
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS ' + schema)
+    await conn.end()
+    await db?.end()
+  }
+})
