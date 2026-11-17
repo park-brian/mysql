@@ -20,6 +20,27 @@ const be = (n: number, width = 4) => {
   return out
 }
 
+test('a B-tree scan keeps its resume key when callers change returned keys', async () => {
+  const store = Store.create(...await freshFiles(), { frames: 32 })
+  const tree = store.createTree()
+  const other = store.createTree()
+  for (let i = 0; i < 32; i++) tree.put(be(i), new Uint8Array(160).fill(i))
+  assert.ok(tree.height() > 1)
+
+  for (const reverse of [false, true]) for (const write of [false, true]) {
+    const visited: number[] = []
+    for (const [key, value] of tree.entries({ from: be(8), to: be(24), reverse })) {
+      assert.deepEqual(key, be(value[0]!))
+      visited.push(value[0]!)
+      key.fill(reverse ? 0 : 0xff)
+      if (write && visited.length === 1) other.put(be(Number(reverse)), be(1))
+    }
+    const expected = Array.from({ length: 16 }, (_, i) => reverse ? 23 - i : i + 8)
+    assert.deepEqual(visited, expected, `reverse=${reverse}, intervening write=${write}`)
+  }
+  verifyStore(store)
+})
+
 test('prepared upsert descends once and releases read pins before preparing bytes', async () => {
   const store = Store.create(...await freshFiles(), { frames: 32 })
   const tree = store.createTree({ schemaVersion: 1, upgrade: (v) => v })

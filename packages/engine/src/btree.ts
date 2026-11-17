@@ -264,10 +264,9 @@ export class BTree {
         return reverse ? ip.leftSibling(p) : ip.rightSibling(p)
       }, 0)
       seen = journal.commits
-      for (const entry of batch) {
-        past = entry[0]
-        yield entry
-      }
+      // The scan owns its resume key. Each returned key is caller-owned.
+      if (batch.length > 0) past = batch[batch.length - 1]![0].slice()
+      for (const entry of batch) yield entry
       if (done) return
     }
   }
