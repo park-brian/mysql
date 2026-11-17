@@ -839,7 +839,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       sort = alias === undefined ? undefined : { alias, limit }
     },
     readInOrder(index, force, reverse, alias) {
-      const indexes = joinIndexes ?? eligibleIndexes?.[force ? 'GROUP BY' : 'ORDER BY']
+      // An unhinted read can use any declared key that holds its columns.
+      const indexes = only?.indexHints === undefined ? only?.def?.indexes : joinIndexes ?? eligibleIndexes?.[force ? 'GROUP BY' : 'ORDER BY']
       const covering = single && indexes?.some(
         (key) => key.name === index && holdsRead(single.def, key, readOf(settings, single.alias)),
       )

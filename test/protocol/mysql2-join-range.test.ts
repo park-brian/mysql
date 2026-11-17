@@ -989,3 +989,33 @@ test('an ordered row-ID union keeps ascending IDs and the statement snapshot on 
     await writer?.end(); await conn.end(); await db?.end()
   }
 })
+
+test('an unhinted ordered primary read is covering when the key holds every read column', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'ordered_primary_cover432'
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,g INT,payload INT) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO t VALUES (1,2,10),(2,1,20),(3,2,30)')
+    await conn.query('ANALYZE TABLE t')
+    const check = async (sql: string, ids: readonly number[], label: string) => {
+      for (const method of ['query', 'execute'] as const) {
+        const read = (stmt: string) => method === 'query' ? conn.query<mysql.RowDataPacket[]>(stmt) : conn.execute<mysql.RowDataPacket[]>(stmt)
+        const [rows] = await read(sql)
+        assert.deepEqual(rows.map((row) => row.id), ids)
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+        const [explain] = await read('EXPLAIN FORMAT=TREE ' + sql)
+        assert.equal(planSkeleton(explain[0]?.EXPLAIN), `${label} on t using PRIMARY`)
+      }
+    }
+    await check('SELECT DISTINCT id FROM t WHERE id <> 1.5 ORDER BY 1 DESC', [3, 2, 1], 'Covering index scan')
+    await check('SELECT id,payload FROM t ORDER BY 1 DESC', [3, 2, 1], 'Index scan')
+    await conn.query('ALTER TABLE t ADD KEY by_g(g)')
+    await conn.query('ANALYZE TABLE t')
+    await check('SELECT DISTINCT id FROM t IGNORE INDEX FOR JOIN (PRIMARY) WHERE id <> 1.5 ORDER BY id', [1, 2, 3], 'Index scan')
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
