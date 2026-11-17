@@ -7,14 +7,14 @@
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import type { ColumnDef } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
-import { compareValues, integerBytes, toInteger, type Value } from '@myjs/types'
+import { compareValues, intValue, integerBytes, integerRange, toInteger, type Value } from '@myjs/types'
 import { REVERSE_COMPARISON, logicalShortCircuit, nullLiteral, signedOperand } from './ast.ts'
 
 /** A constant's value while planning — a literal, or a bound `?` — or `undefined` for anything else. */
 export type Constant = (e: Expression) => Value | undefined
 
 /** One interval of a column's values, or the NULL point. An absent bound is unbounded. */
-export type Interval = { readonly lo?: Bound; readonly hi?: Bound } | 'null'
+export type Interval = { readonly lo?: Bound; readonly hi?: Bound; readonly empty?: boolean } | 'null'
 /** The values a condition admits: some intervals, or everything (`'all'`) when it does not restrict the column. */
 export type RangeSet = readonly Interval[] | 'all'
 
@@ -45,7 +45,7 @@ export function fractionalNullList(items: readonly Expression[], column: ColumnD
   return BigInt.asIntN(32, rounded) === rounded
 }
 
-export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, column: ColumnDef, value: Constant): RangeSet {
+export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, column: ColumnDef, value: Constant, storedBounds = false): RangeSet {
   if (e.kind === NODE.UNARY && (e.op === 'IS NULL' || e.op === 'IS NOT NULL') && isColumn(e.operand)) return e.op === 'IS NULL' ? (column.nullable ? ['null'] : []) : [ALL_VALUES]
   if (e.kind !== NODE.BINARY) return 'all'
   const disjunction = logicalShortCircuit(e.op)
@@ -61,8 +61,17 @@ export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, col
     const a = constantFor(e.right, column, value)
     const b = constantFor(e.extra as Expression, column, value)
     if (a === undefined || b === undefined) return 'all'
-    if (a === null || b === null || (a.kind === 'int' && b.kind === 'int' && compareValues(a, b) === 1)) return []
-    return [{ lo: { v: a, inclusive: true }, hi: { v: b, inclusive: true } }]
+    if (a === null || b === null || (a.kind === 'int' && b.kind === 'int' && a.v > b.v)) return []
+    const domain = storedBounds && integerRange(column.type)
+    let empty = false
+    if (domain) {
+      // MySQL compares the original decimals with the stored integer bounds.
+      // Adjacent stored bounds still form a range, even when both are exclusive.
+      const low = toInteger(a)
+      const high = toInteger(b)
+      empty = high >= domain.min && low <= domain.max && (compareValues(a, intValue(high)) === 1 || compareValues(b, intValue(low)) === -1)
+    }
+    return [{ lo: { v: a, inclusive: true }, hi: { v: b, inclusive: true }, empty }]
   }
   if ((e.op === 'IN' || e.op === 'NOT IN') && onLeft && e.right.kind === NODE.ROW) {
     const items = e.right.items
@@ -85,11 +94,10 @@ export function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, col
     out.push(lo === undefined ? ALL_VALUES : { lo })
     return out
   }
-  if (!onLeft && !isColumn(e.right)) return 'all'
-  const op = onLeft ? e.op : REVERSE_COMPARISON[e.op] ?? e.op
-  const other = onLeft ? e.right : e.left
-  if (!(op in REVERSE_COMPARISON)) return 'all'
-  const v = constantFor(other, column, value)
+  const reverse = REVERSE_COMPARISON[e.op]
+  if (reverse === undefined || !onLeft && !isColumn(e.right)) return 'all'
+  const op = onLeft ? e.op : reverse
+  const v = constantFor(onLeft ? e.right : e.left, column, value)
   if (v === undefined) return 'all'
   if (v === null) return op === '<=>' && column.nullable ? ['null'] : []
   switch (op) {

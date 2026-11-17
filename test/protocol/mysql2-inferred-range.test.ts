@@ -141,7 +141,7 @@ test('nullable INT with a fractional NOT IN list skips NULL keys when the range 
   }
 })
 
-test('inverted integer BETWEEN bounds skip index dives in both protocols', async () => {
+test('integer BETWEEN rejects inverted and excluded stored bounds without index dives', async () => {
   const { db, conn } = await rangeConnection()
   const schema = 'inverted_between375'
   const range = /Covering index range scan on c using by_g over/
@@ -175,6 +175,10 @@ test('inverted integer BETWEEN bounds skip index dives in both protocols', async
       const cases = [
         ['g BETWEEN 3 AND 2', [], zero],
         ['g BETWEEN -2 AND -3', [], zero],
+        ['g BETWEEN 5.5 AND 5.9', [], zero],
+        ['g BETWEEN -5.9 AND -5.5', [], zero],
+        ['g BETWEEN .4 AND .9', [], range],
+        ['g BETWEEN 2147483647.1 AND 2147483647.9', [], range],
         ['g BETWEEN 2 AND 3', [[2]], range],
         ['g BETWEEN 5.5 AND 6', hasSix ? [[6]] : [], range],
       ] as const

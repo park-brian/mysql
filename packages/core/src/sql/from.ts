@@ -1083,7 +1083,7 @@ function rangeCosting(t: FromTable, settings: LeafSettings, env: Env, quote = fa
     shape: (i) => ({ clustered: i === clustered, covering: holdsRead(def, i, read), recordBytes: indexRecordBytes(def, i), minRecordBytes }),
     coveringScan: cover === undefined ? undefined : def.indexes.find((i) => i.name === cover),
     count(index, range, limit) {
-      return countRows(accessRows(table, { index, ranges: [range] }, env.trx), limit)
+      return countRows(table.indexScan(index, range, env.trx), limit)
     },
   }
 }

@@ -2433,6 +2433,21 @@ endpoints that MySQL rounds to an excluded key. The existing adjacent and
 out-of-domain endpoint plans and nested strategy selection still need their
 own checks.
 
+**M5.49 stored integer `BETWEEN` bounds, verified.** For a direct
+indexed `BETWEEN`, the range optimizer compares the original values to their
+stored integer endpoints. When those endpoints exclude every key, the reader
+skips the estimation dive and returns an empty range after normal index
+ranking. A plain SELECT reports `Zero rows`. The original filter, field
+metadata and grouped access choices are preserved. Both wire protocols
+agree with MySQL 8.4.11 across writes, including the adjacent and out-of-domain
+controls. Three pinned audits fix 134 of 1,868 outcomes and preserve the rest,
+including signed and unsigned endpoints from `TINYINT` through `BIGINT`.
+All 2,560 nested outcomes are unchanged. Point access now uses key priority
+directly, and the uncosted primary range retains its first encodable bounds.
+Parser/core/facade measure 45,614/334,339/334,264 B gzipped within the existing
+caps. Grouped empty-plan labels, text and bound-marker conversions, and
+nested strategy costing remain open.
+
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.
 Grouping, DISTINCT and byte readers now see the same result collation.

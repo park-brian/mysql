@@ -91,6 +91,8 @@ export interface Access {
 }
 
 export const FULL_SCAN: Access = {}
+/** An empty read proved by the stored integer bounds of a direct BETWEEN. */
+export const EMPTY_KEY_RANGES: readonly KeyRange[] = []
 
 type Op = '=' | '<=>' | '<' | '<=' | '>' | '>=' | 'IN' | 'IS NULL'
 
@@ -179,16 +181,11 @@ function exact(v: Value, c: ColumnDef): boolean {
     case FIELD_TYPE.DATE:
     case FIELD_TYPE.DATETIME:
     case FIELD_TYPE.TIMESTAMP: {
-      // Exact only if the column holds every digit of it: a bound rounded to
-      // the column's precision would move an exclusive `<` past a row (found
-      // by review: `dt < ?` bound to 12:00:00.500 on a DATETIME(0)).
-      const fits = (us: number): boolean => us % 10 ** (6 - (t.decimals ?? 0)) === 0
-      if (v.kind === 'datetime') return t.type === FIELD_TYPE.DATE ? v.type === 'DATE' : fits(v.v.microsecond)
-      if (v.kind !== 'string') return false
-      const p = parseDateTime(v.v)
-      if (p === undefined) return false
-      if (t.type === FIELD_TYPE.DATE) return !p.hasTime
-      return fits(p.v.microsecond)
+      // A key bound must not move when stored at the column's precision.
+      const parsed = v.kind === 'string' ? parseDateTime(v.v) : undefined
+      if (t.type === FIELD_TYPE.DATE) return v.kind === 'datetime' ? v.type === 'DATE' : parsed?.hasTime === false
+      const micros = v.kind === 'datetime' ? v.v.microsecond : parsed?.v.microsecond
+      return micros !== undefined && micros % 10 ** (6 - (t.decimals ?? 0)) === 0
     }
     case FIELD_TYPE.STRING:
     case FIELD_TYPE.VAR_STRING:
@@ -212,27 +209,34 @@ function exact(v: Value, c: ColumnDef): boolean {
 export function chooseAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, outer?: OuterColumn, costing?: RangeCosting, inferred?: InferredRange, indexes = def.indexes): Access {
   const conjuncts = splitAnd(inferred?.condition, splitAnd(where))
   const conditions = conjuncts.flatMap((e) => conditionOf(e, def, alias, outer, env) ?? [])
-  if (costing !== undefined) {
-    // A key read by points stays one (`ref`); otherwise the range optimizer's choice.
-    return scoredAccess(def, conditions, env, outer, indexes, 3) ?? rangeAccess(def, alias, conjuncts, env, costing, undefined, inferred, indexes) ?? FULL_SCAN
-  }
-  return scoredAccess(def, conditions, env, outer, indexes) ?? FULL_SCAN
+  const read = conditionAccess(def, conditions, env, outer, indexes, costing === undefined)
+  return read ?? (costing && rangeAccess(def, alias, conjuncts, env, costing, undefined, inferred, indexes)) ?? FULL_SCAN
 }
 
-/** Shared candidate order and scoring; a minimum of 3 admits only point reads. */
-function scoredAccess(def: TableDef, conditions: readonly Condition[], env: Env, outer: OuterColumn | undefined, indexes: readonly IndexDef[], minimum = 0): Access | undefined {
-  if (conditions.length === 0) return undefined
-  let best: { access: Access; score: number } | undefined
-  // Invisible indexes stay enforced but are never access candidates.
-  for (const index of indexes.slice().sort((a, b) => (a.kind === 'primary' ? -1 : 0) - (b.kind === 'primary' ? -1 : 0))) {
+/** Points win first, with the primary or clustered key preferred among them. */
+function conditionAccess(def: TableDef, conditions: readonly Condition[], env: Env, outer: OuterColumn | undefined, indexes: readonly IndexDef[], allowRange: boolean): Access | undefined {
+  if (!conditions.length) return undefined
+  const evaluate: Constant = (e) => proof(() => {
+    const o = outer?.(e)
+    return o === undefined ? constantValue(e, env) : o.eval([], env)
+  })
+  const unresolved = env.outer === undefined ? outer : undefined
+  let point: Access | undefined
+  let range: Access | undefined
+  for (const index of indexes) {
     const column = forwardKeyColumn(def, index)
     if (column === undefined) continue
-    const access = accessFor(index, column, conditions.filter((c) => c.column === column), env, outer)
-    if (access === undefined || access.score < minimum) continue
-    const score = access.score + (index.kind === 'primary' || def.clustered === index.name ? 0.5 : 0)
-    if (best === undefined || score > best.score) best = { access: access.access, score }
+    const eligible = conditions.filter((c) => c.column === column)
+    const points = pointRanges(column, eligible, unresolved, evaluate)
+    if (points) {
+      const access = { index: index.name, ranges: points }
+      if (index.kind === 'primary') return access
+      if (point === undefined || index.name === def.clustered) point = access
+    } else if (points === undefined && allowRange && index.kind === 'primary') {
+      range = primaryRange(index, column, eligible, evaluate)
+    }
   }
-  return best?.access
+  return point ?? range
 }
 
 /**
@@ -270,14 +274,14 @@ export interface RangeCosting {
  */
 function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expression[], env: Env, costing: RangeCosting, known?: Constant, inferred?: InferredRange, indexes = def.indexes): Access | undefined {
   const value = (e: Expression): Value | undefined => (e.kind === NODE.PLACEHOLDER && e.index >= env.params.length ? undefined : isConstant(e) ? constantValue(e, env) : known?.(e))
-  const candidates: { readonly index: IndexDef; readonly column: ColumnDef; readonly intervals: Interval[]; readonly keyed: { readonly range: KeyRange; readonly point: boolean }[]; readonly shape: RangeShape; readonly implied: ImpliedRange | undefined }[] = []
+  const candidates: { readonly index: IndexDef; readonly column: ColumnDef; readonly intervals: Interval[]; readonly keyed: { readonly range: KeyRange; readonly point: boolean }[]; readonly shape: RangeShape; readonly empty: boolean | undefined; readonly implied: ImpliedRange | undefined }[] = []
   for (const index of keyOrder(def, indexes)) {
     const column = forwardKeyColumn(def, index)
     if (column === undefined) continue
     let set: RangeSet = 'all'
     let implied: ImpliedRange | undefined
     for (const c of conjuncts) {
-      const range = rangeOf(c, (e) => tableColumn(e, def, alias)?.name === column.name, column, value)
+      const range = rangeOf(c, (e) => tableColumn(e, def, alias)?.name === column.name, column, value, known === undefined && conjuncts.length === 1)
       if (c === inferred?.condition && range !== 'all' && inferred.column === column) implied = inferred
       set = intersect(set, range)
     }
@@ -285,13 +289,14 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
     const intervals = normalize(set)
     const keyed = keyRanges(intervals, column)
     if (keyed === undefined) continue
-    candidates.push({ index, column, intervals, keyed, shape: costing.shape(index), implied })
+    const first = intervals[0]
+    candidates.push({ index, column, intervals, keyed, shape: costing.shape(index), empty: first === 'null' ? undefined : first?.empty, implied })
   }
   // No range at all reads no statistics.
   if (candidates.length === 0) return undefined
   const { stats: t, coveringScan, forceRange } = costing
   let best = rangeBaseline(t, coveringScan && costing.shape(coveringScan).recordBytes, forceRange)
-  const access = (c: (typeof candidates)[number], rows?: number): Access => ({ index: c.index.name, ranges: c.keyed.map((k) => k.range), over: describeIntervals(c.intervals, c.column.name), implied: c.implied, quote: rows === undefined ? undefined : { index: c.index.name, rows, cost: best } })
+  const access = (c: (typeof candidates)[number], rows?: number): Access => ({ index: c.index.name, ranges: c.empty ? EMPTY_KEY_RANGES : c.keyed.map((k) => k.range), over: describeIntervals(c.intervals, c.column.name), implied: c.implied, quote: rows === undefined ? undefined : { index: c.index.name, rows, cost: best } })
   // One range that wins even reading every row needs no count: no other is weighed against it.
   const only = candidates.length === 1 ? candidates[0] : undefined
   if (!costing.quote && only !== undefined && rangeCost(t, only.shape, only.keyed.length, t.rows) < best) return access(only)
@@ -301,11 +306,12 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
   for (const c of candidates) {
     const limit = mostRows((rows) => rangeCost(t, c.shape, c.keyed.length, rows), best)
     if (limit < c.keyed.length) continue
-    // A unique key's point is one row without a dive; any other range, its rows, at least one.
+    // Cost the same range even when its stored endpoints let us skip the dive.
+    // A unique key's point estimates one row. Other ranges cost at least one row.
     const unique = uniquePoint(c.index, c.column)
     let rows = 0
     for (const { range, point } of c.keyed) {
-      const estimated = point ? unique : skipDive && range.to?.values[0] !== null
+      const estimated = c.empty || (point ? unique : skipDive && range.to?.values[0] !== null)
       rows += estimated ? 1 : Math.max(1, costing.count(c.index.name, range, limit - rows + 1))
       if (rows > limit) break
     }
@@ -451,26 +457,21 @@ function exactNumber(t: Exclude<Value, null> | Compiled['type'], c: ColumnDef): 
 /** A bound no row is read by: a plan's lookup by a value it does not have yet (see `exactType`). */
 const UNBOUND: KeyBound = { values: [], inclusive: true }
 
-function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Condition[], env: Env, outer: OuterColumn | undefined): { access: Access; score: number } | undefined {
-  const clustered = index.kind === 'primary'
-  const read = (ranges: readonly KeyRange[], score = 3) => ({ access: { index: index.name, ranges }, score })
-  for (const c of conditions) {
-    // An outer column with no outer row to read: a lookup by type, for EXPLAIN.
-    const o = c.op === '=' && env.outer === undefined ? outer?.(c.constants[0] as Expression) : undefined
-    if (o !== undefined) return exactType(o.type, column) ? read([pointRange(UNBOUND)]) : undefined
+/** False rejects the index. Undefined leaves its inequalities eligible. */
+function pointRanges(column: ColumnDef, conditions: readonly Condition[], outer: OuterColumn | undefined, evaluate: Constant): KeyRange[] | false | undefined {
+  if (outer) for (const c of conditions) {
+    if (c.op !== '=') continue
+    const bound = outer(c.constants[0]!)
+    if (bound !== undefined) return exactType(bound.type, column) && [pointRange(UNBOUND)]
   }
-  const evaluate = (e: Expression): Value | undefined => proof(() => {
-    const o = outer?.(e)
-    return o === undefined ? constantValue(e, env) : o.eval([], env)
-  })
   for (const c of conditions) {
     if (c.op === 'IS NULL' || c.op === '<=>') {
       // NULL-safe: `= v` for a value, IS NULL for NULL — a key read either way.
       const v = c.op === 'IS NULL' ? null : evaluate(c.constants[0] as Expression)
       // Separate bounds keep this a range in the plan description.
-      if (v === null && column.nullable) return read([{ from: NULL_KEY, to: { values: [null], inclusive: true } }])
+      if (v === null && column.nullable) return [{ from: NULL_KEY, to: { ...NULL_KEY } }]
       const b = v === undefined || v === null || !exact(v, column) ? undefined : bound(v, column, true)
-      if (b !== undefined) return read([pointRange(b)])
+      if (b !== undefined) return [pointRange(b)]
       continue
     }
     if (c.op === '=' || c.op === 'IN') {
@@ -486,28 +487,30 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
       const points = new Map<string, KeyBound>()
       for (const v of values as Value[]) {
         const b = bound(v, column, true)
-        if (b === undefined) return undefined
+        if (b === undefined) return false
         points.set(byteKey(encodeKey(b.values, [part])), b)
       }
-      const ranges = [...points.entries()].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)).map(([, b]) => pointRange(b))
-      return read(ranges)
+      const ranges = [...points.keys()].sort().map((key) => pointRange(points.get(key)!))
+      return ranges
     }
   }
-  // A range, on the clustered index only (see the header).
-  if (!clustered) return undefined
-  let from: KeyBound | undefined
-  let to: KeyBound | undefined
+  return undefined
+}
+
+/** Without the cost model, only the primary key can use inequality bounds. */
+function primaryRange(index: IndexDef, column: ColumnDef, conditions: readonly Condition[], evaluate: Constant): Access | undefined {
+  const range: { from?: KeyBound; to?: KeyBound } = {}
   for (const c of conditions) {
     if (c.op === 'IN' || c.op === '=' || c.op === '<=>' || c.op === 'IS NULL') continue
     const v = evaluate(c.constants[0] as Expression)
     if (v === undefined || !exact(v, column)) continue
     const b = bound(v, column, c.op === '<=' || c.op === '>=')
-    if (c.op === '>' || c.op === '>=') from ??= b
-    else to ??= b
+    if (b === undefined) continue
+    if (c.op === '>' || c.op === '>=') range.from ??= b
+    else range.to ??= b
   }
-  if (from === undefined && to === undefined) return undefined
   // A lower bound alone still skips the NULLs a clustered key cannot hold anyway.
-  return read([{ ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }) }], from !== undefined && to !== undefined ? 2 : 1)
+  return range.from === undefined && range.to === undefined ? undefined : { index: index.name, ranges: [range] }
 }
 
 /**

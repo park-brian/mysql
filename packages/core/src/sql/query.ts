@@ -19,7 +19,7 @@ import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, copiedLength, intType, type ResultType } from './meta.ts'
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { accessRows, distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
-import { constantValue, equalBounds, isConstant, optimizerEnabled, pointAccess, splitAnd, tableColumn, type Access } from './plan.ts'
+import { EMPTY_KEY_RANGES, constantValue, equalBounds, isConstant, optimizerEnabled, pointAccess, splitAnd, tableColumn, type Access } from './plan.ts'
 import { and, columnRefs, integerLiteral, isOrderedComparison, logicalShortCircuit, nativeCallName, nullLiteral, operandPairs, queryBody, rewriteExpression, someNode, tableAlias, withoutUnaryPlus } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, proof, wrongArgumentsError } from './errors.ts'
@@ -666,6 +666,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   const deduplicate = node.distinct === true && (source === undefined || !distinctKey(source.def, items, lookup, true))
   // An ORDER BY the index the table is read by already gives: read in its order, and nothing to sort.
   const read = source && from!.access(run.env)
+  const emptyRange = !deduplicated && !windowed && read?.ranges === EMPTY_KEY_RANGES
   const constant = from === undefined ||
     (source !== undefined && (facts?.constTable === true || subqueryPinsKey(source.def, source.alias, node.where, from!.scope))) ||
     from.tables.every((t) => constants.has(t.alias) || t.derived?.constant === true)
@@ -749,7 +750,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
     },
     explain() {
       // An empty result the optimizer proves is no plan at all.
-      if (facts?.impossible === true || provedEmpty(run, from, node, keep)) return NO_ROWS_PLAN
+      if (emptyRange || facts?.impossible === true || provedEmpty(run, from, node, keep)) return NO_ROWS_PLAN
       // A constant table is read while planning: its row, if the WHERE holds of it, is all there is to fetch.
       // An uncorrelated scalar subquery a unique key equals is evaluated while planning too, so it pins the key (8.4.11).
       if (from !== undefined && constant) {
