@@ -225,7 +225,7 @@ export function chooseAccess(def: TableDef, alias: string, where: Expression | u
   const conditions = conjuncts.flatMap((e) => conditionOf(e, def, alias, outer, env) ?? [])
   const read = conditionAccess(def, conditions, env, outer, indexes, costing === undefined)
   return read ?? (costing && (rangeAccess(def, alias, conjuncts, env, costing, undefined, inferred, indexes) ??
-    sortUnionAccess(def, alias, where, env, costing, indexes))) ?? FULL_SCAN
+    sortUnionAccess(def, alias, inferred?.condition ?? (costing.allowSortUnion ? where : undefined), env, costing, indexes))) ?? FULL_SCAN
 }
 
 /** Points win first, with the primary or clustered key preferred among them. */
@@ -285,7 +285,7 @@ export interface RangeCosting {
 
 /** Merge one nullable INT secondary range and one signed INT primary range. */
 function sortUnionAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, costing: RangeCosting, indexes: readonly IndexDef[]): Access | undefined {
-  if (!costing.allowSortUnion || def.engine !== 'native' || where?.kind !== NODE.BINARY || !logicalShortCircuit(where.op) ||
+  if (def.engine !== 'native' || where?.kind !== NODE.BINARY || !logicalShortCircuit(where.op) ||
     !optimizerEnabled(env, 'index_merge') || !optimizerEnabled(env, 'index_merge_sort_union')) return undefined
   const primary = indexes.find((key) => key.kind === 'primary')
   if (primary?.parts.length !== 1) return undefined

@@ -416,7 +416,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
       else if (node.groupBy && !node.groupBy.rollup && node.where === undefined && !needsSortedGroups(node.items)) hintScope = 'GROUP BY'
     }
   }
-  let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run, on), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'), hints, hintScope)
+  const joinSortUnion = !grouped && q.locking === undefined && run.parent === undefined
+  let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run, on), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'), hints, hintScope, joinSortUnion)
   if (from && on?.rounded) from.rounded = on.rounded
   run.admitQuery?.(q, true)
   const scope = from?.scope

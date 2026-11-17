@@ -294,7 +294,7 @@ function indexHintEligibility(def: TableDef, alias: string, hints: readonly Inde
 
 /** The written FROM, as a plan: its scope, and how to read it. */
 /** `straight` is SELECT STRAIGHT_JOIN: the tables joined in the order written. */
-export function planFrom(refs: readonly TableReference[], ctx: FromContext, where?: Expression, straightJoin = false, hints?: HintAdmission, hintScope?: IndexHint['for']): FromPlan {
+export function planFrom(refs: readonly TableReference[], ctx: FromContext, where?: Expression, straightJoin = false, hints?: HintAdmission, hintScope?: IndexHint['for'], joinSortUnion?: boolean): FromPlan {
   const whereParts = splitAnd(where)
   // First pass: the tables, in order, with whether an outer join can null them.
   interface Pending {
@@ -537,7 +537,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   const single = only?.def !== undefined && only.table !== undefined ? only as NonNullable<FromPlan['single']> : undefined
 
   // The physical tree: built once the WHERE is placed (`filter`), or without one.
-  const settings: LeafSettings = { covering, read: new Map(), inferred: new Map(), chosen: new WeakMap(), scope, tables: byAlias, outer, where, eligibleIndexes, statistics: ctx.statistics, buffered: optimizerEnabled(ctx.env, 'block_nested_loop') }
+  const settings: LeafSettings = { covering, read: new Map(), inferred: new Map(), chosen: new WeakMap(), scope, tables: byAlias, outer, where, eligibleIndexes, statistics: ctx.statistics, joinSortUnion, buffered: optimizerEnabled(ctx.env, 'block_nested_loop') }
   // The join order and each join's access: the cost model's, over the WHERE's conjuncts, once the columns read are known (M5.7).
   // The index lookup into `t` after the tables in `before`, by the WHERE or an ON.
   const lookupAfter = (t: FromTable, before: ReadonlySet<string>, conditions: readonly Expression[]): EqRef | undefined => {
@@ -1033,9 +1033,10 @@ type Materialization = false | 'lookup' | 'scan' | 'loop'
 /** How the FROM's base tables are read: what the WHERE is, what covers them, and an order asked for. */
 interface LeafSettings {
   allowSortUnion?: boolean
+  readonly joinSortUnion?: boolean | undefined
   readonly eligibleIndexes?: HintEligibility | undefined
   where?: Expression | undefined
-  /** Proven integer-equality range predicates, shared by costing and physical reads. */
+  /** Necessary access predicates inferred from the written WHERE or ON. */
   readonly inferred: Map<string, InferredRange>
   /** A STRAIGHT_JOIN's const tables past its first non-const one, joined as constant rows (`constants`). */
   constants?: ReadonlySet<string>
@@ -1512,7 +1513,17 @@ function planJoins(root: Node, where: readonly Weighed[], settings: LeafSettings
       node = joinNode(node, { kind: 'leaf', table: t }, slotsOf(t), lookup)
       before.add(p.alias)
     }
-    return finish(node, order, on)
+    const plan = finish(node, order, on)
+    const probe = order[1]
+    // Inner hash joins build on the first table and probe the second.
+    if (settings.joinSortUnion && settings.buffered && !settings.firstMatch && leaves.length === 2 &&
+      where.length === 0 && conditions.length === 1 && probe?.lookup === false &&
+      leaves.every((t) => t.def?.engine === 'native' && !t.indexHints) &&
+      candidates.some((c) => c.alias === first && c.rows === 1)) {
+      const condition = joinUnionCondition(conditions[0]!.e, settings)
+      if (condition !== undefined) settings.inferred.set(probe.alias, { condition })
+    }
+    return plan
   }
   if (!hasLookup) return finish(root, NONE, [])
   const positions: Positioned[] = []
@@ -1550,6 +1561,22 @@ function planJoins(root: Node, where: readonly Weighed[], settings: LeafSettings
     }
     walk(node)
     return { node, positions, lookups, on, dynamic }
+  }
+}
+
+/** Project one necessary local range from each arm, preserving the written OR order. */
+function joinUnionCondition(e: Expression, settings: LeafSettings): Expression | undefined {
+  if (e.kind !== NODE.BINARY || !logicalShortCircuit(e.op)) return undefined
+  for (const [arm, other] of operandPairs(e)) {
+    if (arm.kind !== NODE.BINARY || logicalShortCircuit(arm.op) !== false) continue
+    for (const [equality, comparison] of operandPairs(arm)) {
+      if (equality.kind !== NODE.BINARY || equality.op !== '=') continue
+      const a = columnSource(equality.left, settings)
+      const b = columnSource(equality.right, settings)
+      if (a?.column.type.type === FIELD_TYPE.LONG && b?.column.type.type === FIELD_TYPE.LONG && a.table !== b.table) {
+        return { ...e, left: arm === e.left ? comparison : other, right: arm === e.left ? other : comparison }
+      }
+    }
   }
 }
 

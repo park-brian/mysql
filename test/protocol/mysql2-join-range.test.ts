@@ -597,3 +597,78 @@ test('Sort Union compares signed primary endpoints and floors fractional seconda
     await conn.end(); await db?.end()
   }
 })
+
+test('the probe of an inner hash join uses its Sort Union and retains the written ON', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'index_merge_join406'
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,grp INT,UNIQUE KEY by_name(name),KEY by_g(grp)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE c(id INT PRIMARY KEY,pa_id INT,KEY by_p(pa_id)) STATS_AUTO_RECALC=0')
+    const parents = Array.from({ length: 30 }, (_, i) => [i + 1, 'name' + String(i + 1).padStart(2, '0'), [0, 5, 29].includes(i) ? 8 : i % 3 ? i % 5 : null])
+    await conn.query('INSERT INTO p VALUES ?', [parents])
+    await conn.query('INSERT INTO c VALUES (1,29)')
+    await conn.query('ANALYZE TABLE p,c')
+
+    const select = 'SELECT DISTINCT p.name,c.pa_id FROM c JOIN p ON '
+    const predicate = 'c.pa_id=p.id AND p.id>27 OR p.grp>5.5'
+    const primary = '                    Clustered primary key\n                        Index range scan on p using PRIMARY over'
+    const secondary = '                    Index range scan on p using by_g over'
+    const plan = (children: string) => `Table scan on <temporary>
+    Temporary table with deduplication
+        Filter
+            Inner hash join
+${children}
+                Hash
+                    Covering index scan on c using by_p`
+    const merge = (first: string, second: string) => plan('                Sort-deduplicate by row ID\n' + first + '\n' + second)
+    for (const [on, names, expected, disabled] of [
+      [predicate, ['name01', 'name06', 'name29', 'name30'], merge(primary, secondary), false],
+      ['p.grp>5.5 OR p.id>27 AND p.id=c.pa_id', ['name01', 'name06', 'name29', 'name30'], merge(secondary, primary), false],
+      ['p.grp>5.5 OR p.id>27 AND p.grp=c.pa_id', ['name01', 'name06', 'name30'], merge(secondary, primary), false],
+      [predicate, ['name01', 'name06', 'name29', 'name30'], plan('                Table scan on p'), true],
+    ] as const) {
+      if (disabled) await conn.query("SET optimizer_switch='default,index_merge=off'")
+      for (const method of ['query', 'execute'] as const) {
+        const read = (sql: string) => method === 'query' ? conn.query({ sql, rowsAsArray: true }) : conn.execute({ sql, rowsAsArray: true })
+        const [rows, fields] = await read(select + on)
+        assert.deepEqual(rows, names.map((name) => [name, 29]))
+        assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
+          ['name', 253, 48, 4097, 0, 224, schema, 'p', 'p', 'name'],
+          ['pa_id', 3, 11, 0, 0, 63, schema, 'c', 'c', 'pa_id'],
+        ])
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+        const [rowsOfPlan] = await read('EXPLAIN FORMAT=TREE ' + select + on)
+        const description = String((rowsOfPlan as unknown[][])[0]?.[0])
+        assert.equal(planSkeleton(description), expected)
+        if (!disabled) {
+          assert.match(description, /using PRIMARY over \(27 < id\)/)
+          assert.match(description, /using by_g over \(5 < grp\)/)
+        }
+      }
+    }
+
+    await conn.query("SET optimizer_switch='default'")
+    const prepared = select + 'c.pa_id=p.id AND p.id>27 OR p.grp>?'
+    const statement = await conn.prepare(prepared)
+    const { NEWDECIMAL } = mysql.TypedParameter
+    try {
+      assert.deepEqual((await statement.execute([NEWDECIMAL('5.5')]))[0], [
+        { name: 'name01', pa_id: 29 }, { name: 'name06', pa_id: 29 }, { name: 'name29', pa_id: 29 }, { name: 'name30', pa_id: 29 },
+      ])
+      await conn.query('UPDATE c SET pa_id=NULL')
+      await conn.query('UPDATE p SET grp=8 WHERE id=2')
+      assert.deepEqual((await statement.execute([NEWDECIMAL('5.5')]))[0], [
+        { name: 'name01', pa_id: null }, { name: 'name02', pa_id: null }, { name: 'name06', pa_id: null }, { name: 'name30', pa_id: null },
+      ])
+      assert.deepEqual((await statement.execute([NEWDECIMAL('8')]))[0], [])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+    } finally {
+      conn.unprepare(prepared)
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
