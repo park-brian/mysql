@@ -30,6 +30,40 @@ async function outcome(conn: mysql.Connection, sql: string, method: 'query' | 'e
   return [rows, fields(columns as mysql.FieldPacket[]), warnings]
 }
 
+test('M2.10: DECIMAL columns preserve fractional digits when scale equals precision', async () => {
+  const { db, conn } = await connect()
+  const schema = 'decimal_no_integer_digits'
+  const columns = [
+    ['id', 3, 11, 20483, 0, 63, schema, 't', 't', 'id'],
+    ['d', 246, 4, 20485, 2, 63, schema, 't', 't', 'd'],
+    ['e', 246, 13, 4097, 11, 63, schema, 't', 't', 'e'],
+  ]
+  const read = async (where: string, rows: readonly (readonly (number | string)[])[]) => {
+    const sql = `SELECT id,d,e FROM t ${where} ORDER BY d`
+    for (const api of ['query', 'execute'] as const) {
+      assert.deepEqual(await outcome(conn, sql, api), [rows, columns, []], api)
+    }
+  }
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,d DECIMAL(2,2) NOT NULL,e DECIMAL(11,11) NOT NULL,UNIQUE KEY(d))')
+    await conn.query('INSERT INTO t VALUES (1,0.12,0.12345678901)')
+    await conn.execute('INSERT INTO t VALUES (2,?,?)', ['-0.11', '-0.12345678901'])
+    await read('WHERE d >= -0.11', [[2, '-0.11', '-0.12345678901'], [1, '0.12', '0.12345678901']])
+    await assert.rejects(conn.query('INSERT INTO t VALUES (3,0.12,0)'), { errno: 1062 })
+    await assert.rejects(conn.execute('INSERT INTO t VALUES (3,?,0)', [1]), { errno: 1264 })
+    await conn.execute('UPDATE t SET d=?,e=? WHERE id=2', ['-0.05', '-0.00000000001'])
+    await read('WHERE d IN (-0.05,0.12)', [[2, '-0.05', '-0.00000000001'], [1, '0.12', '0.12345678901']])
+    await conn.query('DELETE FROM t WHERE d=0.12')
+    await read('WHERE d IN (-0.05,0.12)', [[2, '-0.05', '-0.00000000001']])
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end()
+    await db?.end()
+  }
+})
+
 test('DECIMAL readers preserve column, CONCAT and literal diagnostic ownership', async () => {
   const { db, conn } = await connect()
   const values = [""," ","abc","123x","123.45x","123e1x","123.45e1x",".5x","-0.5x","abc1","+x1",".x1","--1","NaN1"]

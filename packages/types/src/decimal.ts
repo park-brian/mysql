@@ -51,15 +51,13 @@ function parse(text: string, precision: number, scale: number): { negative: bool
   if (frac.length > scale) frac = frac.slice(0, scale)
   frac = frac.padEnd(scale, '0')
   const intgDigits = precision - scale
-  if (intg.replace(/^0+(?=\d)/, '').length > intgDigits && intg !== '0') {
-    throw outOfRange(`decimal(${precision},${scale})`, text)
-  }
-  if (intgDigits === 0 && intg !== '0') throw outOfRange(`decimal(${precision},${scale})`, text)
+  if (intg !== '0' && intg.length > intgDigits) throw outOfRange(`decimal(${precision},${scale})`, text)
   // MySQL has no negative zero in DECIMAL: `-0.00` stores as `0.00`. Without
   // this, two values that compare equal would have different bytes, and a
   // unique index could hold both.
   const allZero = !/[1-9]/.test(intg + frac)
-  return { negative: negative && !allZero, intg: intg.padStart(intgDigits, '0'), frac }
+  // A scale equal to the precision leaves no integer group in the record.
+  return { negative: negative && !allZero, intg: intgDigits === 0 ? '' : intg.padStart(intgDigits, '0'), frac }
 }
 
 /**

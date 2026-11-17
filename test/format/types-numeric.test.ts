@@ -220,6 +220,22 @@ test('M2.10: MySQL has no negative zero in DECIMAL', () => {
   assert.equal(decodeDecimal(encodeDecimal('-0', 10, 0), 10, 0), '0')
 })
 
+test('M2.10: equal precision and scale use only fractional groups', () => {
+  // Clustered record bytes from MySQL 8.4.11 after FLUSH TABLES FOR EXPORT.
+  const samples = [
+    [2, '0.12', [0x8c]],
+    [2, '-0.11', [0x74]],
+    [11, '0.12345678901', [0x87, 0x5b, 0xcd, 0x15, 0x01]],
+    [11, '-0.12345678901', [0x78, 0xa4, 0x32, 0xea, 0xfe]],
+  ] as const
+  for (const [scale, value, bytes] of samples) {
+    const packed = Uint8Array.from(bytes)
+    assert.deepEqual(encodeDecimal(value, scale, scale), packed)
+    assert.equal(decodeDecimal(packed, scale, scale), value)
+  }
+  assert.deepEqual(encodeDecimal('-0.00', 2, 2), encodeDecimal('0.00', 2, 2))
+})
+
 test('M2.10: a bad shape or a non-numeric literal is a typed error', () => {
   assert.throws(() => encodeDecimal('1', 0, 0), MyjsTypeError)
   assert.throws(() => encodeDecimal('1', 66, 0), MyjsTypeError)

@@ -132,7 +132,7 @@ The worked example from `decimal.cc`, `DECIMAL(14,4)`:
 
 ```
 value  1234567890.1234
-groups          1 | 234567890 | 123400000
+groups          1 | 234567890 | 1234
                 ^   ^           ^
              1 digit  9 digits    4 digits (scale=4)
 bytes        01   0D FB 38 D2    04 D2
@@ -140,6 +140,17 @@ flip MSB  →  81   0D FB 38 D2    04 D2       (7 bytes total)
 
 value -1234567890.1234  →  7E F2 04 C7 2D FB 2D
 ```
+
+When precision equals scale, the stored integer part has zero digits.
+The first byte belongs to the fractional part and carries the sign bit.
+MySQL 8.4.11 writes these bytes in the clustered records.
+
+| Type | Value | Stored bytes |
+|---|---:|---|
+| `DECIMAL(2,2)` | `0.12` | `8C` |
+| `DECIMAL(2,2)` | `-0.11` | `74` |
+| `DECIMAL(11,11)` | `0.12345678901` | `87 5B CD 15 01` |
+| `DECIMAL(11,11)` | `-0.12345678901` | `78 A4 32 EA FE` |
 
 `DECIMAL(65,30)` is the maximum. This encoding is worth implementing exactly:
 it is used identically in `.ibd` files and in binlog row images.
