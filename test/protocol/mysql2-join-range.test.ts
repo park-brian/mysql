@@ -325,3 +325,51 @@ test('a reversed indexed BETWEEN arm leaves the named point range and its residu
     await conn.end(); await db?.end()
   }
 })
+
+test('two exact prepared BETWEEN bounds retain precision when pricing the named point range', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'join_range_bounds397'
+  try {
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,grp BIGINT,amt INT,UNIQUE KEY by_name(name),KEY by_grp(grp)) STATS_AUTO_RECALC=0')
+    await conn.query(`INSERT INTO p VALUES (1,'Bob',2,101),(2,'al',4,102),(3,'b',3,103),(4,'éva',NULL,104),(5,'ann',3,105),
+      (6,'rounded',9007199254740992,106),(7,'next',9007199254740993,107),(8,'other',9007199254740994,108)`)
+    await conn.query('ANALYZE TABLE p')
+    const sql = "SELECT id,amt FROM p WHERE name IN ('ann','ann') OR grp BETWEEN ? AND ? ORDER BY id"
+    const explain = 'EXPLAIN FORMAT=TREE ' + sql
+    const statement = await conn.prepare(sql)
+    const description = await conn.prepare(explain)
+    const { DOUBLE, LONGLONG, NEWDECIMAL, NULL } = mysql.TypedParameter
+    try {
+      const rows = [{ id: 5, amt: 105 }]
+      for (const bounds of [
+        [LONGLONG('9007199254740993'), LONGLONG('9007199254740992')],
+        [NEWDECIMAL('5.5'), NEWDECIMAL('2.0')],
+      ]) {
+        assert.deepEqual((await statement.execute(bounds))[0], rows)
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+        const [tree] = await description.execute(bounds)
+        assert.match(String((tree as mysql.RowDataPacket[])[0]?.EXPLAIN), /Index range scan on p using by_name over \(name = 'ann'\)/)
+      }
+      await conn.query('UPDATE p SET grp=NULL,amt=205 WHERE id=5')
+      assert.deepEqual((await statement.execute([LONGLONG(2), LONGLONG(5)]))[0], [
+        { id: 1, amt: 101 }, { id: 2, amt: 102 }, { id: 3, amt: 103 }, { id: 5, amt: 205 },
+      ])
+      assert.deepEqual((await statement.execute([LONGLONG(5), NULL()]))[0], [{ id: 5, amt: 205 }])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+
+      // The native indexed plan can discard rows accepted by its comparison.
+      const comparison = db === undefined ? sql.replace('FROM p', 'FROM p IGNORE INDEX(by_grp,by_name)') : sql
+      assert.deepEqual((await conn.execute(comparison, [NEWDECIMAL('9007199254740993'), DOUBLE(9007199254740992)]))[0], [
+        { id: 5, amt: 205 }, { id: 6, amt: 106 }, { id: 7, amt: 107 },
+      ])
+    } finally {
+      conn.unprepare(sql)
+      conn.unprepare(explain)
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})

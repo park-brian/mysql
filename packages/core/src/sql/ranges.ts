@@ -29,7 +29,7 @@ export function pointInterval(v: RangeValue): Interval {
   return { lo: endpoint, hi: endpoint }
 }
 
-const numericRange = (type: number): boolean => integerBytes(type) !== undefined || type === FIELD_TYPE.NEWDECIMAL || type === FIELD_TYPE.DECIMAL
+const numericRange = (type: number) => integerBytes(type) || type === FIELD_TYPE.NEWDECIMAL || type === FIELD_TYPE.DECIMAL
 
 /** CHAR storage drops trailing spaces that a NO PAD comparison still sees. */
 export function significantCharPadding(v: Value, { type }: ColumnDef): boolean {
@@ -75,13 +75,14 @@ export function impossibleBetween(x: Expression, indexed: (e: Expression) => Col
   const column = indexed(x.left)
   const high = x.extra as Expression
   if (!column || !numericRange(column.type.type)) return false
-  const literal = (bound: Expression): RangeValue | null | undefined => {
-    if (signedOperand(bound).kind !== NODE.LITERAL) return undefined
+  const parameters = x.right.kind === NODE.PLACEHOLDER && high.kind === NODE.PLACEHOLDER
+  const exact = (bound: Expression): RangeValue | null | undefined => {
+    if (!parameters && signedOperand(bound).kind !== NODE.LITERAL) return undefined
     const v = constantFor(bound, column, value)
     return v === null && !nullLiteral(bound) ? undefined : v
   }
-  const a = literal(x.right)
-  const b = literal(high)
+  const a = exact(x.right)
+  const b = exact(high)
   if (a === undefined || b === undefined) return false
   // MySQL keeps the arm with a negative upper endpoint on an unsigned key.
   // When only one endpoint is NULL, the same guard applies to the other one.

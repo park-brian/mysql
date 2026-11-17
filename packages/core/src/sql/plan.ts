@@ -54,7 +54,7 @@ import type { Compiled, Env } from './compile.ts'
 import { rangeBaseline, rangeCost, type RangeShape, type RangeRead } from './cost.ts'
 import { impossibleBetween, intersect, normalize, pointInterval, pruneImpossibleOr, rangeOf, significantCharPadding, type Constant, type Interval, type RangeSet, type RangeValue } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
-import { forwardKeyColumn, uniquePoint } from './indexes.ts'
+import { forwardKeyColumn, forwardKeyPart, uniquePoint } from './indexes.ts'
 import { columnIndex } from './scope.ts'
 import { isNotEqual, REVERSE_COMPARISON, isOrderedComparison, logicalShortCircuit, signedOperand } from './ast.ts'
 import { byteKey } from './keys.ts'
@@ -282,7 +282,7 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
   const eligible = keyOrder(def, indexes)
   const indexedColumn = (subject: Expression): ColumnDef | undefined => {
     const column = tableColumn(subject, def, alias)
-    return column !== undefined && eligible.some((index) => forwardKeyColumn(def, index) === column) ? column : undefined
+    return column !== undefined && eligible.some((index) => forwardKeyPart(index)?.column === column.name) ? column : undefined
   }
   const simplify = known === undefined && !costing.hasIndexHints
     ? (e: Expression) => pruneImpossibleOr(e, (arm) => impossibleBetween(arm, indexedColumn, value))
@@ -293,7 +293,7 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
     if (column === undefined) continue
     let set: RangeSet = 'all'
     let implied: ImpliedRange | undefined
-    const isColumn = (e: Expression) => tableColumn(e, def, alias)?.name === column.name
+    const isColumn = (e: Expression) => tableColumn(e, def, alias) === column
     for (const c of conjuncts) {
       let range = rangeOf(c, isColumn, column, value, storedBounds)
       if (range === 'all' && index.kind !== 'primary' && column.type.type === FIELD_TYPE.VAR_STRING) {
@@ -355,9 +355,7 @@ const pointRange = (bound: KeyBound): KeyRange => ({ from: bound, to: bound })
 function describeTextPoints(points: readonly KeyRange[], column: ColumnDef): string | undefined {
   const t = column.type
   if (points.length < 2 || t.type !== FIELD_TYPE.VAR_STRING || t.collationId === undefined || t.collationId === CHARSET_BINARY) return undefined
-  return describeIntervals(points.map(({ from }) => {
-    return pointInterval(decodeField(from!.values[0]!, t) as RangeValue)
-  }), column.name)
+  return describeIntervals(points.map(({ from }) => pointInterval(decodeField(from!.values[0]!, t) as RangeValue)), column.name)
 }
 
 /** Intervals as EXPLAIN writes a range: `(2 < grp <= 5) OR (grp = 7)`, `(NULL < grp)`, `(grp = NULL)`. */

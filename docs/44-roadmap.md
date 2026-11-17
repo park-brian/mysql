@@ -2801,6 +2801,34 @@ within the existing caps.
 Prepared bound conversions, warning-producing expressions and broader
 range shapes need their own proofs.
 
+**M5.49 exact prepared `BETWEEN` pairs, verified.** The named point range
+can use two non-NULL markers bound as exact integers or DECIMAL values.
+The proof uses the complete first index part and retains the original
+runtime comparison. The 868-outcome audit repairs 60 plans with all
+earlier matches retained. The regression covers signed integer values
+above `2^53`, DECIMAL markers, forward and NULL rebinds, and writes after
+preparation. Around `2^53`, mixed DECIMAL and DOUBLE bounds can make
+MySQL 8.4.11 omit rows in its indexed plan that its forced table scan and
+projected predicate accept. The regression uses the native scan for that
+comparison. Mixed precision and mixed literal and marker ranges remain
+open. A broader NULL-marker prototype repairs 102 plans and matches all
+320 NULL-boundary outcomes, including lower endpoints that clip to the
+smallest stored key. It exceeds the size caps. Full Docker verification
+of the exact pair passes 1,855 tests, seeded fuzzing, 10,000 crash points,
+package and real-client smoke, and all seven pinned corpora. The 300
+captured scripts, 138 fresh semijoin observations and 12,800 earlier
+range observations are unchanged. Parser, core and facade measure
+44,507, 334,336 and 334,260 bytes gzipped within the existing caps.
+
+**M5.49 clustered range cost and order, open.** The two-row estimate can
+cost more than the three-row estimate. A probe against MySQL 8.4.11
+reproduces this with four rows, a primary range and a covering secondary
+index. The candidate bounds the dive by unavoidable per-row costs,
+then prices the measured range. A selected primary range can also supply
+its own order. The 3,816-case audit repairs 1,216 plans and 16 row orders
+without losing a previous match. Full Docker verification is underway
+in an isolated snapshot.
+
 **M2.3 zero runs in internal charset encodings, verified.** The shared
 codec records absolute zeroes directly in the 24 byte-to-code-point
 tables. All 22,528 decoded entries across the encoding and weight tables
