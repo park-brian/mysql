@@ -326,9 +326,9 @@ function indexUnionAccess(def: TableDef, alias: string, where: Expression | unde
       return costing.allowIndexUnion
         ? rangeAccess(def, alias, [primaryFirst ? where.left : where.right], env, costing) : undefined
     }
-    if (endsBelow && integer === min) {
+    if (integer === endpoint && (endsBelow || costing.allowIndexUnion)) {
       if (!costing.allowIndexUnion) return undefined
-      secondaryInterval = pointInterval(intValue(min))
+      secondaryInterval = pointInterval(intValue(endpoint))
     } else {
       // An edge admitting its domain limit admits every non-NULL key.
       const limit = endsBelow ? max : min

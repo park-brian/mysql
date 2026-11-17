@@ -943,11 +943,14 @@ test('an ordered row-ID union keeps ascending IDs and the statement snapshot on 
     await conn.query(`CREATE DATABASE ${schema}`)
     await conn.query(`USE ${schema}`)
     await writer.query(`USE ${schema}`)
-    for (const [type, minimum] of [['INT', -2147483648], ['INT UNSIGNED', 0]] as const) {
+    for (const [type, comparison, endpoint] of [
+      ['INT', '<=', -2147483648], ['INT UNSIGNED', '<=', 0],
+      ['INT', '>=', 2147483647], ['INT UNSIGNED', '>=', 4294967295],
+    ] as const) {
       await conn.query(`CREATE TABLE t(id INT PRIMARY KEY,g ${type},v INT,KEY by_g(g)) STATS_AUTO_RECALC=0`)
-      await conn.query('INSERT INTO t VALUES ?', [Array.from({ length: 30 }, (_, i) => [i + 1, i === 0 || i === 29 ? minimum : i % 3 ? 20 : null, i])])
+      await conn.query('INSERT INTO t VALUES ?', [Array.from({ length: 30 }, (_, i) => [i + 1, i === 0 || i === 29 ? endpoint : i % 3 ? 20 : null, i])])
       await conn.query('ANALYZE TABLE t')
-      const suffix = ` OR g <= ${minimum}`
+      const suffix = ` OR g ${comparison} ${endpoint}`
       const lower = 'SELECT id,g,v FROM t WHERE id > 27' + suffix
       const upper = 'SELECT id,g,v FROM t WHERE id < 4' + suffix
 
@@ -968,7 +971,7 @@ test('an ordered row-ID union keeps ascending IDs and the statement snapshot on 
             const plan = String(tree[0]?.EXPLAIN)
             assert.ok(plan.includes(title))
             if (title === 'Deduplicate rows sorted by row ID') {
-              assert.ok(plan.includes(`using by_g over (g = ${minimum})`))
+              assert.ok(plan.includes(`using by_g over (g = ${endpoint})`))
               assert.ok(!plan.includes('Clustered primary key (scanned separately)'))
             }
           }
@@ -977,7 +980,7 @@ test('an ordered row-ID union keeps ascending IDs and the statement snapshot on 
       await conn.query("SET optimizer_switch='default'")
       await conn.query('START TRANSACTION WITH CONSISTENT SNAPSHOT')
       await writer.query('UPDATE t SET g=20 WHERE id=1')
-      await writer.query('UPDATE t SET g=?,v=100 WHERE id=4', [minimum])
+      await writer.query('UPDATE t SET g=?,v=100 WHERE id=4', [endpoint])
       const ids = async () => (await conn.execute<mysql.RowDataPacket[]>(lower))[0].map((row) => row.id)
       assert.deepEqual(await ids(), [1, 28, 29, 30])
       await conn.query('COMMIT')
