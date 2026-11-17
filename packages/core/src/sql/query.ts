@@ -3331,21 +3331,22 @@ function orderKey(o: OrderItem, items: readonly { name: string; compiled: Compil
 /** Parse the count before the offset, preserving LIMIT error precedence. */
 function queryLimit(run: Run, q: QueryExpression): [count: number | undefined, offset: number] {
   const bound = q.limit
-  return bound === undefined ? [undefined, 0] : [limitValue(run, bound.count), bound.offset === undefined ? 0 : limitValue(run, bound.offset)]
+  return bound === undefined ? [undefined, 0] : [limitValue(run, bound.count), bound.offset ? limitValue(run, bound.offset) : 0]
 }
 
 /**
  * A `LIMIT` operand: a non-negative integer literal, or `?`. A bound `?` takes
- * what 8.4.11 takes — an integer, a whole double, or a string read as an
+ * NULL as zero, an integer, a whole double, or a string read as an
  * integer (`'x'` is 0 rows) — and a fractional double is ER_WRONG_ARGUMENTS
  * naming `mysqld_stmt_execute`, as the server words it.
  */
-export function limitValue(run: Run, e: Expression, what = 'LIMIT'): number {
+export function limitValue(run: Run, e: Expression): number {
   if (e.kind === NODE.PLACEHOLDER && run.params === undefined) return 0
-  const v = compile(e, compileContext(run, EMPTY_SCOPE, what)).eval([], run.env)
+  const v = compile(e, compileContext(run, EMPTY_SCOPE, 'LIMIT')).eval([], run.env)
+  if (!v) return 0
   // Invalid representations and negative counts have the same argument error.
-  const n = v === null || (v.kind === 'double' && !Number.isInteger(v.v)) || v.kind === 'decimal' || v.kind === 'datetime' || v.kind === 'time' ? -1n : toInteger(v)
-  if (n < 0n) throw wrongArgumentsError(e.kind === NODE.PLACEHOLDER ? 'mysqld_stmt_execute' : what)
+  const n = (v.kind === 'double' && !Number.isInteger(v.v)) || v.kind === 'decimal' || v.kind === 'datetime' || v.kind === 'time' ? -1n : toInteger(v)
+  if (n < 0n) throw wrongArgumentsError(e.kind === NODE.PLACEHOLDER ? 'mysqld_stmt_execute' : 'LIMIT')
   return Math.min(Number.MAX_SAFE_INTEGER, Number(n))
 }
 

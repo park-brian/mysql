@@ -7,14 +7,18 @@ import { observeCommand } from './packet-observation.ts'
 import unlimited from './fixtures/diagnostics/order-readiness.json' with { type: 'json' }
 import having from './fixtures/diagnostics/order-readiness-having.json' with { type: 'json' }
 import bounded from './fixtures/diagnostics/bounded-order-readiness.json' with { type: 'json' }
+import boundedOpen from './fixtures/diagnostics/bounded-order-readiness-open.json' with { type: 'json' }
 import offset from './fixtures/diagnostics/offset-projection.json' with { type: 'json' }
 
-for (const { reference, database, count, limited } of [
+const nullLimit = { ...boundedOpen, observations: boundedOpen.observations.filter((entry) => entry.family === 'limit_parameter') }
+
+for (const { reference, database, count, limited, label } of [
   { reference: unlimited, database: 'readiness154', count: 750, limited: false },
   { reference: having, database: 'readiness154_having', count: 18, limited: false },
   { reference: bounded, database: 'readiness155', count: 1341, limited: true },
+  { reference: nullLimit, database: 'readiness155', count: 18, limited: true, label: 'readiness155_null_limit' },
   { reference: offset, database: 'offset156', count: 2601, limited: true },
-]) test(`${database}: row-dependent ${limited ? 'bounded' : 'unlimited'} sorts preserve optimization, fill and projection phases`, async () => {
+]) test(`${label ?? database}: row-dependent ${limited ? 'bounded' : 'unlimited'} sorts preserve optimization, fill and projection phases`, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const transport = db === undefined ? connect({ host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), noDelay: true }) : db.createStream()
@@ -162,5 +166,40 @@ test('ordinary LIMIT closes its reader after OFFSET without truncating sort inpu
   } finally {
     await conn.end()
     await db.end()
+  }
+})
+
+test('prepared NULL offsets and write limits rebind as zero', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const transport = db === undefined ? connect({ host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), noDelay: true }) : db.createStream()
+  const conn = mysql.createConnection({ stream: transport, user: 'root', ...(db === undefined ? { password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' } : {}) }).promise()
+  await conn.connect()
+  try {
+    await conn.query('CREATE DATABASE prepared_null_limit')
+    await conn.query('USE prepared_null_limit')
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,v INT)')
+    await conn.query('INSERT INTO t VALUES(1,10),(2,20),(3,30)')
+    const select = { sql: 'SELECT id FROM t ORDER BY id LIMIT ? OFFSET ?', rowsAsArray: true }
+    for (const [count, offset, expected] of [[2, null, [[1], [2]]], [1, 1, [[2]]], [null, 1, []], [2, null, [[1], [2]]]] as const) {
+      const [rows, fields] = await conn.execute(select, [count, offset])
+      assert.deepEqual(rows, expected)
+      assert.deepEqual(fields.map((field) => [field.name, field.columnType]), [['id', 3]])
+    }
+    for (const sql of ['UPDATE t SET v=99 ORDER BY id LIMIT ?', 'DELETE FROM t ORDER BY id LIMIT ?']) {
+      for (const [limit, affected] of [[null, 0], [1, 1], [null, 0]] as const) {
+        await conn.beginTransaction()
+        const [result] = await conn.execute<mysql.ResultSetHeader>(sql, [limit])
+        assert.equal(result.affectedRows, affected)
+        assert.equal(result.warningStatus, 0)
+        await conn.rollback()
+      }
+    }
+    const [stored] = await conn.query({ sql: 'SELECT id,v FROM t ORDER BY id', rowsAsArray: true })
+    assert.deepEqual(stored, [[1, 10], [2, 20], [3, 30]])
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS prepared_null_limit')
+    await conn.end()
+    await db?.end()
   }
 })
