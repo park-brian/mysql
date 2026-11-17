@@ -120,11 +120,12 @@ test('M2.19: Q-04 — the packed general_ci table is a few KB, not a megabyte', 
   // The acceptance assertion, as a number. MySQL's source weights for this
   // collation are ~1.1 MB; the packed form here is the same data with its 245
   // identity pages elided and delta-plus-run inside the 11 that remain.
-  const raw = Buffer.byteLength(PACKED_UNICASE_WEIGHTS, 'utf8')
-  const gzip = gzipSync(Buffer.from(PACKED_UNICASE_WEIGHTS, 'utf8'), { level: 9 }).length
+  const weights = PACKED_UNICASE_WEIGHTS satisfies `0 97*0,${string}`
+  const raw = Buffer.byteLength(weights, 'utf8')
+  const gzip = gzipSync(Buffer.from(weights, 'utf8'), { level: 9 }).length
   assert.ok(raw < 20 * 1024, `packed general_ci weights are ${raw} bytes raw, budget 20480`)
   assert.ok(gzip < 10 * 1024, `packed general_ci weights are ${gzip} bytes gzipped, budget 10240`)
-  assert.equal(PACKED_UNICASE_WEIGHTS.split('\n').length, 11, '11 non-null pages of 256')
+  assert.equal(weights.split('\n').length, 11, '11 non-null pages of 256')
 })
 
 test('M2.5: the weight tables carry the same source hash as the registry', () => {

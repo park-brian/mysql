@@ -529,9 +529,9 @@ const usedByteTables = [...new Set(byteWeighted.map((c) => c.sortOrder))].sort()
 const byteLines = usedByteTables
   .map((name) => `${name.replace('sort_order_', '')} ${packRuns(byteTables.get(name), 0)}`)
   .join('\n')
-const unicaseLines = [...unicasePages.entries()]
+const unicaseLines = (repeats) => [...unicasePages.entries()]
   .sort((a, b) => a[0] - b[0])
-  .map(([page, weights]) => `${page.toString(16)} ${packRuns(weights, page << 8, 'absolute')}`)
+  .map(([page, weights]) => `${page.toString(16)} ${packRuns(weights, page << 8, repeats)}`)
   .join('\n')
 const lowerLines = [...lowerPages.entries()]
   .sort((a, b) => a[0] - b[0])
@@ -574,10 +574,10 @@ export const PACKED_BYTE_WEIGHTS = ${packed(byteLines)}
  * index in hex and the runs are relative to the code point or absolute.
  * An absent page is identity. A code point above 0xFFFF weighs 0xFFFD.
  */
-export const UNICASE_WEIGHT_RUNS = ${packed(unicaseLines)}
+export const UNICASE_WEIGHT_RUNS = ${packed(unicaseLines('absolute'))}
 
-/** The public weight pages in their original delta format. */
-export const PACKED_UNICASE_WEIGHTS = /* @__PURE__ */ relativePages(UNICASE_WEIGHT_RUNS)
+/** The public weight pages in their original delta format and literal type. */
+export const PACKED_UNICASE_WEIGHTS = /* @__PURE__ */ relativePages(UNICASE_WEIGHT_RUNS) as ${packed(unicaseLines())}
 
 /**
  * The same pages' \`tolower\` column, in the same format: what a \`MY_CS_LOWER_SORT\`

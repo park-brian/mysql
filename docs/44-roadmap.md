@@ -2871,6 +2871,14 @@ package and real-client smoke and all seven pinned corpora. Charset,
 parser, core and facade measure 16,540, 44,518, 333,469 and 333,384 bytes
 gzipped within the existing caps.
 
+**M2.19 exported Unicode weight type, verified.** The generator also emits
+the original literal type for the public export. The type check guards
+against widening to `string`, and the full-string hash still pins its
+value. The emitted JavaScript has the same executable code. Full Docker
+verification passes 1,857 tests, seeded fuzzing, 10,000 crash points and
+all seven pinned corpora. Core and facade measure 333,486 and 333,395
+bytes gzipped within the existing caps.
+
 **M2.3 zero runs in internal charset encodings, verified.** The shared
 codec records absolute zeroes directly in the 24 byte-to-code-point
 tables. All 22,528 decoded entries across the encoding and weight tables
