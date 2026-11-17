@@ -134,7 +134,8 @@ test('M2.5: the weight tables carry the same source hash as the registry', () =>
   assert.equal(WEIGHT_TABLE_SOURCE_SHA256, COLLATION_TABLE_SOURCE_SHA256)
   // The public packed strings retain their format when internal encodings change.
   const sha256 = (packed: string): string => createHash('sha256').update(packed).digest('hex')
-  assert.equal(sha256(PACKED_BYTE_WEIGHTS), 'daef33f539eb3d37e8a74ada3841695031d2a7191dc40eed046789a1b0ca73f9')
+  const byteWeights = PACKED_BYTE_WEIGHTS satisfies `armscii8_general_ci ${string}`
+  assert.equal(sha256(byteWeights), 'daef33f539eb3d37e8a74ada3841695031d2a7191dc40eed046789a1b0ca73f9')
   assert.equal(sha256(PACKED_UNICASE_WEIGHTS), 'bcd8dac3b270fdd15555dd6ecef8f96e942f31193e0e433d6e43a44f916786ec')
 })
 

@@ -26,7 +26,7 @@ import { comparePadded, memcmp } from './memcmp.ts'
 import { utf8CodePoints } from './utf8.ts'
 import { expandRuns } from '../runs.ts'
 import { corruptTable } from '../errors.ts'
-import { PACKED_BYTE_WEIGHTS, PACKED_UNICASE_LOWER, UNICASE_WEIGHT_RUNS, PACKED_WEIGHTED_COLLATIONS } from './weights.ts'
+import { BYTE_WEIGHT_RUNS, PACKED_UNICASE_LOWER, UNICASE_WEIGHT_RUNS, PACKED_WEIGHTED_COLLATIONS } from './weights.ts'
 
 /** Code points above `my_unicase_default`'s `maxchar` all weigh this. */
 const REPLACEMENT_WEIGHT = 0xfffd
@@ -36,7 +36,7 @@ let byteTables: Map<string, Uint8Array> | null = null
 function byteWeightTable(name: string): Uint8Array {
   if (byteTables === null) {
     byteTables = new Map()
-    for (const line of PACKED_BYTE_WEIGHTS.split('\n')) {
+    for (const line of BYTE_WEIGHT_RUNS.split('\n')) {
       const at = line.indexOf(' ')
       byteTables.set(line.slice(0, at), Uint8Array.from(expandRuns(line.slice(at + 1), 0, 256)))
     }

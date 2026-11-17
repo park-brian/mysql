@@ -360,9 +360,10 @@ test('D-36, D-66: @myjs/core carries the 8-bit tables now, and still not the UCA
   // still hold is D-36's real promise: the 48.6 KB of UCA weights load only
   // when a `_0900_` collation is asked for, so they are in no chunk the entry
   // point pulls in statically.
-  const { PACKED_BYTE_WEIGHTS } = await import('../../packages/charsets/src/collations/weights.ts')
+  const { BYTE_WEIGHT_RUNS } = await import('../../packages/charsets/src/collations/weights.ts')
   const { PACKED_UCA900_LEVEL1 } = await import('../../packages/charsets/src/collations/uca900.ts')
-  const legacy = PACKED_BYTE_WEIGHTS.slice(400, 500)
+  const legacy = BYTE_WEIGHT_RUNS.split('\n').find((line) => line.startsWith('latin1 '))
+  assert.ok(legacy && legacy.length >= 100, 'the probe must contain the internal Swedish weight table')
   const uca = PACKED_UCA900_LEVEL1.slice(1000, 1100)
   assert.equal(uca.length, 100, 'the probe must come from the middle of the real table')
 
@@ -385,6 +386,6 @@ test('D-36, D-66: @myjs/core carries the 8-bit tables now, and still not the UCA
   const entryText = result.outputFiles.find((f) => resolve(f.path) === resolve(found[0]))?.text ?? ''
   assert.ok(entryText.length > 0, 'the entry chunk is empty')
 
-  assert.ok(entryText.includes(legacy), 'the 8-bit tables are not in @myjs/core — then nothing in it can compare a latin1 string, and the probe is suspect')
+  assert.ok(entryText.includes(legacy), 'the core entry must include the internal Swedish weight table')
   assert.ok(!entryText.includes(uca), 'the UCA weights are in @myjs/core\'s entry chunk — the lazy boundary is broken')
 })

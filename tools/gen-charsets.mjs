@@ -526,8 +526,8 @@ check(weightOf(0x00df) === weightOf(0x0073), 'gen-charsets: general_ci must fold
 check(byteWeightsOf(8)[0xe4] > byteWeightsOf(8)[0x7a], 'gen-charsets: latin1_swedish_ci must sort a-umlaut after z')
 
 const usedByteTables = [...new Set(byteWeighted.map((c) => c.sortOrder))].sort()
-const byteLines = usedByteTables
-  .map((name) => `${name.replace('sort_order_', '')} ${packRuns(byteTables.get(name), 0)}`)
+const byteLines = (repeats) => usedByteTables
+  .map((name) => `${name.replace('sort_order_', '')} ${packRuns(byteTables.get(name), 0, repeats)}`)
   .join('\n')
 const unicaseLines = (repeats) => [...unicasePages.entries()]
   .sort((a, b) => a[0] - b[0])
@@ -555,7 +555,7 @@ writeFileSync(
     },
   })}
 
-import { relativePages } from '../runs.ts'
+import { relativeWeights } from '../runs.ts'
 
 /** SHA-256 over every source file's own hash — the same value the registry carries. */
 export const WEIGHT_TABLE_SOURCE_SHA256 =
@@ -564,10 +564,12 @@ export const WEIGHT_TABLE_SOURCE_SHA256 =
 /**
  * The 8-bit weight tables: \`name runs\`, one per line.
  *
- * A run is \`[count*]delta\` with a signed hex delta from the identity weight,
- * so the ASCII stretch of most tables is a single run.
+ * Runs can encode either deltas from identity or repeated absolute weights.
  */
-export const PACKED_BYTE_WEIGHTS = ${packed(byteLines)}
+export const BYTE_WEIGHT_RUNS = ${packed(byteLines('absolute'))}
+
+/** The public byte weights in their original delta format and literal type. */
+export const PACKED_BYTE_WEIGHTS = /* @__PURE__ */ relativeWeights(BYTE_WEIGHT_RUNS) as ${packed(byteLines())}
 
 /**
  * \`my_unicase_default\`'s non-null pages: \`page runs\`, one per line, the page
@@ -577,7 +579,7 @@ export const PACKED_BYTE_WEIGHTS = ${packed(byteLines)}
 export const UNICASE_WEIGHT_RUNS = ${packed(unicaseLines('absolute'))}
 
 /** The public weight pages in their original delta format and literal type. */
-export const PACKED_UNICASE_WEIGHTS = /* @__PURE__ */ relativePages(UNICASE_WEIGHT_RUNS) as ${packed(unicaseLines())}
+export const PACKED_UNICASE_WEIGHTS = /* @__PURE__ */ relativeWeights(UNICASE_WEIGHT_RUNS, true) as ${packed(unicaseLines())}
 
 /**
  * The same pages' \`tolower\` column, in the same format: what a \`MY_CS_LOWER_SORT\`

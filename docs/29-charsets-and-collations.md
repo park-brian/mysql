@@ -60,6 +60,10 @@ supplementary code points share weight `0xFFFD`. Relative and absolute runs
 pack the stored pages into 2,207 bytes, or 831 bytes gzipped. The public
 packed export retains its original 5,033-byte relative format.
 
+The 42 single-byte weight tables use the same run codec. The internal
+table text is 13,487 bytes, or 4,467 bytes gzipped. Both public weight
+exports keep their original relative bytes and TypeScript literal types.
+
 ### 3. `*_0900_*` — UCA-based collations
 
 The MySQL 8 default family, based on the Unicode Collation Algorithm with DUCET

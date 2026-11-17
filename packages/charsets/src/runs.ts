@@ -36,12 +36,12 @@ export function expandRuns(spec: string, base: number, length: number): number[]
   return out
 }
 
-/** Keep the exported Unicode weight pages in their original relative format. */
-export function relativePages(packed: string): string {
+/** Rebuild the public relative format for named byte tables or hex Unicode pages. */
+export function relativeWeights(packed: string, pages = false): string {
   return packed.split('\n').map((line) => {
     const at = line.indexOf(' ')
-    const page = line.slice(0, at)
-    const base = Number.parseInt(page, 16) << 8
-    return page + ' ' + packRuns(expandRuns(line.slice(at + 1), base, 256), base)
+    const name = line.slice(0, at)
+    const base = pages ? Number.parseInt(name, 16) << 8 : 0
+    return name + ' ' + packRuns(expandRuns(line.slice(at + 1), base, 256), base)
   }).join('\n')
 }
