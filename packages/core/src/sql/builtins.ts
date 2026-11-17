@@ -587,13 +587,14 @@ export function informationFunction(name: string, e: CallNode, ctx: CompileConte
 
 /** The REGEXP_ functions. */
 export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
-  if (!REGEXP_FUNCTIONS.has(name)) throw unregistered(name)
   const { args, arity, conn } = callOf(e, ctx)
   const like = name === 'REGEXP_LIKE'
   const instr = name === 'REGEXP_INSTR'
   const replace = name === 'REGEXP_REPLACE'
-  const max = like ? 3 : name === 'REGEXP_SUBSTR' ? 5 : 6
-  arity(replace ? 3 : 2, max)
+  const required = replace ? 3 : 2
+  const matchAt = like ? 2 : name === 'REGEXP_SUBSTR' ? 4 : instr || replace ? 5 : undefined
+  if (matchAt === undefined) throw unregistered(name)
+  arity(required, matchAt + 1)
   const xs = args()
   const [subject, pattern] = xs as [Compiled, Compiled, ...Compiled[]]
   const fn = name.toLowerCase()
@@ -602,12 +603,11 @@ export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): 
   if (text) aggregateCollations(types, fn, true)
 
   // A bare match-type or return-option marker is illegal after argument binding.
-  const matchAt = max - 1
-  const at = replace ? 3 : 2
-  if (e.args[matchAt]?.kind === NODE.PLACEHOLDER || (instr && e.args[at + 2]?.kind === NODE.PLACEHOLDER)) {
+  if (e.args[matchAt]?.kind === NODE.PLACEHOLDER || (instr && e.args[required + 2]?.kind === NODE.PLACEHOLDER)) {
     throw sqlError('ER_INVALID_PARAMETER_USE', "Invalid use of parameters in '?'")
   }
 
+  const nullable = xs.some((x) => x.type.nullable)
   if (like) {
     return {
       eval: (r, env) => {
@@ -616,14 +616,13 @@ export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): 
         const m = regexpLike(subject.eval(r, env), pattern.eval(r, env), mt === undefined ? undefined : matchType(toText(mt), fn))
         return m === null ? null : bool(m)
       },
-      type: boolType(true),
+      type: boolType(nullable),
     }
   }
 
   const collation = text ? aggregateTypes(types, conn) : subject.type.kind === 'bytes' ? CHARSET_BINARY : subject.type.kind === 'string' ? subject.type.collationId : conn
   // REGEXP_SUBSTR, and REGEXP_REPLACE of text, may be NULL whatever the
   // arguments; the others only when an argument may be (8.4.11).
-  const nullable = xs.some((x) => x.type.nullable)
   const type =
     instr
       ? intType(21, nullable)
@@ -638,9 +637,9 @@ export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): 
       const int = (i: number, fallback: bigint) => (v[i] === undefined ? fallback : toInteger(v[i] as Exclude<Value, null>))
       const option = v[matchAt]
       const mt = option === undefined ? undefined : matchType(toText(option), fn)
-      const search = { subject: v[0] as Exclude<Value, null>, pattern: v[1] as Exclude<Value, null>, position: int(at, 1n), occurrence: int(at + 1, replace ? 0n : 1n), type: mt }
+      const search = { subject: v[0] as Exclude<Value, null>, pattern: v[1] as Exclude<Value, null>, position: int(required, 1n), occurrence: int(required + 1, replace ? 0n : 1n), type: mt }
       if (instr) {
-        const ret = int(at + 2, 0n)
+        const ret = int(required + 2, 0n)
         if (ret !== 0n && ret !== 1n) throw sqlError('ER_WRONG_ARGUMENTS', 'Incorrect arguments to regexp_instr: return_option must be 1 or 0.')
         return intValue(regexpInstr(search, ret === 1n))
       }
