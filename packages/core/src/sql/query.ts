@@ -19,7 +19,7 @@ import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, copiedLength, intType, type ResultType } from './meta.ts'
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { accessRows, distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
-import { EMPTY_KEY_RANGES, constantValue, equalBounds, isConstant, optimizerEnabled, pointAccess, splitAnd, tableColumn, type Access } from './plan.ts'
+import { EMPTY_KEY_RANGES, constantValue, equalBounds, isConstant, optimizerEnabled, pointAccess, sortBufferBytes, splitAnd, tableColumn, type Access } from './plan.ts'
 import { isNotEqual, and, columnRefs, integerLiteral, isOrderedComparison, logicalShortCircuit, nativeCallName, nullLiteral, operandPairs, queryBody, rewriteExpression, someNode, tableAlias, withoutUnaryPlus } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, proof, wrongArgumentsError } from './errors.ts'
@@ -663,7 +663,10 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   // An outer field with the same name cannot supply a local UNIQUE key.
   const deduplicate = node.distinct === true && (source === undefined || !distinctKey(source.def, items, lookup, true))
   // An ORDER BY the index the table is read by already gives: read in its order, and nothing to sort.
-  const read = source && from!.access(run.env)
+  const merge = base && node.where && !locking && !node.distinct && run.parent === undefined
+  const mergeOrder = merge && q.limit && order[0] && sortExpression(order[0].expr, items)
+  const mergeColumn = mergeOrder && tableColumn(mergeOrder, base!.def, base!.alias)
+  const read = source && from!.access(run.env, merge && (!q.limit || !!mergeColumn && !leadingIndex(base!.def, mergeColumn, true)))
   const emptyRange = !deduplicated && !windowed && read?.ranges === EMPTY_KEY_RANGES
   const constant = from === undefined ||
     (source !== undefined && (facts?.constTable === true || subqueryPinsKey(source.def, source.alias, node.where, from!.scope))) ||
@@ -681,7 +684,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
   // At a one-record cost difference, prefer the order over a live dive that can miss a native delete-marked slot.
   const reconsider = base && prefer && range && allRows !== undefined &&
     PAGE_READ * Math.min(allRows, Math.max(1, Math.trunc(keep * allRows / range.rows))) < range.cost + PAGE_READ + ROW_EVALUATE
-  const ordered = source !== undefined && !deduplicated && !windowed && anti?.kind !== 'hash' && match === undefined && keys.length > 0 && (read!.ranges === undefined || (base && (allRows !== undefined || read!.index === 'PRIMARY')))
+  const ordered = source !== undefined && !deduplicated && !windowed && anti?.kind !== 'hash' && match === undefined && keys.length > 0 && (read!.ranges === undefined || (base && !read!.sortUnion && (allRows !== undefined || read!.index === 'PRIMARY')))
     ? orderingIndex(source, order, items, lookup, read!.index, read!.ranges === undefined ? prefer : !!reconsider, from!) : undefined
   if (ordered) from!.readInOrder(ordered.index.name, read!.ranges !== undefined && ordered.index.name !== read!.index, ordered.reverse, source!.alias)
   // A pinned complete PRIMARY point binds ORDER but needs none of its readers.
@@ -698,8 +701,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
     const width = keys.reduce((n, k) => n + 8 + Number(k.expr.type.nullable), 0)
       + columns.reduce((n, c) => n + (storageWidth(c.type) as number), 0)
       + Math.ceil(columns.filter((c) => c.nullable).length / 8)
-    const memory = Number(toInteger(run.state.systemVariable('sort_buffer_size', undefined, run.env.session) ?? intValue(262144n)))
-    buffer = { estimate: statisticsOf(source.def, source.table, run.catalog.store).rows, capacity: Math.floor(memory / (width + 8)) }
+    buffer = { estimate: statisticsOf(source.def, source.table, run.catalog.store).rows, capacity: Math.floor(sortBufferBytes(run.env) / (width + 8)) }
   }
 
   // Ordinary readers apply LIMIT after sorting and before SELECT evaluation.

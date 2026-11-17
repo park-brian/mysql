@@ -452,3 +452,98 @@ test('prepared NULL BETWEEN bounds use the negative lower endpoint only when it 
     await conn.end(); await db?.end()
   }
 })
+
+test('a single-table Sort Union reads secondary row IDs before its separate primary range', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'index_merge402'
+  const primary = '        Clustered primary key\n            Index range scan on t using PRIMARY over'
+  const secondary = '        Index range scan on t using by_g over'
+  const merge = (primaryFirst: boolean) => `Filter\n    Sort-deduplicate by row ID\n${primaryFirst ? primary + '\n' + secondary : secondary + '\n' + primary}`
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,g INT,amt DECIMAL(6,2),KEY by_g(g)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO t VALUES (-8,3,14),(-2,NULL,7),(-1,NULL,8),(0,NULL,5),(1,NULL,1),(2,8,3),(3,NULL,2),(4,NULL,6),(5,NULL,10),(6,1,4),(7,NULL,0),(8,NULL,9)')
+    await conn.query('ANALYZE TABLE t')
+
+    const sql = 'SELECT id,g,amt FROM t WHERE g IS NOT NULL OR id < 0'
+    const read = async (query: string, ids: readonly number[], expected: string) => {
+      for (const method of ['query', 'execute'] as const) {
+        const run = (sql: string) => method === 'query' ? conn.query<mysql.RowDataPacket[]>(sql) : conn.execute<mysql.RowDataPacket[]>(sql)
+        const [rows, fields] = await run(query)
+        assert.deepEqual(rows.map((row) => row.id), ids)
+        assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.decimals, f.characterSet]), [
+          ['id', 3, 0, 63], ['g', 3, 0, 63], ['amt', 246, 2, 63],
+        ])
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+        const [tree] = await run('EXPLAIN FORMAT=TREE ' + query)
+        assert.equal(planSkeleton(tree[0]?.EXPLAIN), expected)
+      }
+    }
+    await read(sql, [2, 6, -8, -2, -1], merge(false))
+    const reversed = sql.replace('g IS NOT NULL OR id < 0', 'id < 0 OR g IS NOT NULL')
+    await read(reversed, [2, 6, -8, -2, -1], merge(true))
+    await read(reversed + ' ORDER BY amt,id LIMIT 2', [2, 6], 'Limit\n    Sort\n' + merge(true).split('\n').map((line) => '        ' + line).join('\n'))
+
+    const scan = 'Filter\n    Table scan on t'
+    for (const setting of ['index_merge', 'index_merge_sort_union']) {
+      await conn.query('SET optimizer_switch = ?', ['default,' + setting + '=off'])
+      await read(sql, [-8, -2, -1, 2, 6], scan)
+    }
+    await conn.query("SET optimizer_switch = 'default'")
+    await read(sql.replace('FROM t', 'FROM t IGNORE INDEX (by_g)'), [-8, -2, -1, 2, 6], scan)
+
+    const prepared = sql.replace('id < 0', 'id < ?')
+    const statement = await conn.prepare(prepared)
+    try {
+      const { LONG } = mysql.TypedParameter
+      const [before] = await statement.execute([LONG(1)])
+      assert.deepEqual((before as mysql.RowDataPacket[]).map((row) => row.id), [2, 6, -8, -2, -1, 0])
+      await conn.query('UPDATE t SET g=NULL WHERE id=6')
+      await conn.query('UPDATE t SET g=1,amt=1.50 WHERE id=3')
+      const [after] = await statement.execute([LONG(0)])
+      assert.deepEqual((after as mysql.RowDataPacket[]).map((row) => row.id), [2, 3, -8, -2, -1])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      await read(sql, [2, 3, -8, -2, -1], merge(false))
+    } finally {
+      conn.unprepare(prepared)
+    }
+
+    if (db) {
+      // Change both branches after the secondary reader closes. Their row fetches
+      // must still use the snapshot that collected the secondary IDs.
+      const catalog = db.catalog!
+      const open = catalog.table.bind(catalog)
+      const writer = open(schema, 't')
+      const [first, , , , replacement, second] = [...writer.scan()]
+      assert.ok(first && replacement && second)
+      let changed = false
+      catalog.table = (s, name, trx) => {
+        const table = open(s, name, trx)
+        if (s !== schema || name !== 't') return table
+        const get = table.get.bind(table)
+        table.get = (id, transaction, mode) => {
+          if (!changed) {
+            assert.ok(transaction)
+            changed = true
+            for (const [key, fields] of [first, second]) writer.update(key, [fields[0]!, fields[1]!, replacement[1][2]!])
+          }
+          return get(id, transaction, mode)
+        }
+        return table
+      }
+      try {
+        const [rows] = await conn.query<mysql.RowDataPacket[]>(sql)
+        assert.equal(changed, true)
+        assert.deepEqual(rows.map((row) => [row.id, row.amt]), [[2, '3.00'], [3, '1.50'], [-8, '14.00'], [-2, '7.00'], [-1, '8.00']])
+      } finally {
+        catalog.table = open
+      }
+      const [fresh] = await conn.query<mysql.RowDataPacket[]>('SELECT amt FROM t WHERE id IN (-8,2) ORDER BY id')
+      assert.deepEqual(fresh.map((row) => row.amt), ['1.00', '1.00'])
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})

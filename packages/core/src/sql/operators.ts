@@ -26,8 +26,19 @@ export const decodeRow = (columns: readonly ColumnDef[], fields: readonly FieldB
 /** The rows an access path reads, in its order. */
 export function* accessRows(table: Table, access: Access, trx?: Trx, current?: boolean, ready?: () => void): Generator<ScannedRow> {
   const { columns } = table.def
-  const { index, ranges, reverse } = access
+  const { index, ranges, reverse, sortUnion } = access
   const mode = current ? 'current' : undefined
+  if (sortUnion) {
+    const ids: RowId[] = []
+    // The primary range reads its own rows last, under the same statement view.
+    for (const [id] of table.indexScan(sortUnion.index, sortUnion.range, trx, mode)) {
+      if (compareBytes(id, sortUnion.upper) >= 0) ids.push(id)
+    }
+    for (const id of ids.sort(compareBytes)) {
+      const fields = table.get(id, trx, mode)
+      if (fields !== undefined) yield { id, row: decodeRow(columns, fields) }
+    }
+  }
   const ordered = ranges === undefined ? [{ reverse: reverse === true }]
     : reverse === true ? [...ranges].reverse().map((r) => ({ ...r, reverse: true })) : ranges
   for (const range of ordered) {

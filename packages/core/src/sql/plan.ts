@@ -47,13 +47,14 @@ import {
   stringValue,
   keyPartOf,
   parseDateTime,
+  toInteger,
   type Value,
 } from '@myjs/types'
 import type { Compiled, Env } from './compile.ts'
-import { PAGE_READ, ROW_EVALUATE, rangeBaseline, rangeCost, type RangeShape, type RangeRead } from './cost.ts'
+import { PAGE_READ, ROW_EVALUATE, rangeBaseline, rangeCost, sortUnionCost, type RangeShape, type RangeRead } from './cost.ts'
 import { encodeBound, impossibleBetween, intersect, normalize, pointInterval, pruneImpossibleOr, rangeOf, significantCharPadding, type Constant, type Interval, type RangeSet, type RangeValue } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
-import { forwardKeyColumn, forwardKeyPart, uniquePoint } from './indexes.ts'
+import { forwardKeyColumn, forwardKeyPart, singleRefIndex, uniquePoint } from './indexes.ts'
 import { columnIndex } from './scope.ts'
 import { isNotEqual, REVERSE_COMPARISON, isOrderedComparison, logicalShortCircuit, signedOperand } from './ast.ts'
 import { byteKey } from './keys.ts'
@@ -63,6 +64,11 @@ import { proof } from './errors.ts'
 export function optimizerEnabled(env: Env | undefined, name: string): boolean {
   const setting = env?.state.systemVariable('optimizer_switch', undefined, env.session)
   return setting?.kind !== 'string' || !`,${setting.v},`.includes(`,${name}=off,`)
+}
+
+/** Available buffer for a sort, in bytes. */
+export function sortBufferBytes(env: Env): number {
+  return Number(toInteger(env.state.systemVariable('sort_buffer_size', undefined, env.session) ?? intValue(262144n)))
 }
 
 /** An inferred access condition, with source identity only for one proved integer bound. */
@@ -75,6 +81,14 @@ type ImpliedRange = Extract<InferredRange, { readonly column: ColumnDef }>
 
 /** How to read a table: an index and the ranges of it, in index order, or a full scan. */
 export interface Access {
+  /** One secondary range adds rows ahead of the clustered primary range. */
+  readonly sortUnion?: {
+    readonly index: string
+    readonly range: KeyRange
+    readonly over: string
+    readonly upper: Uint8Array
+    readonly primaryFirst: boolean
+  }
   /** Table cardinality for a noncovering text range's ordering competitor. */
   readonly orderRows?: number | undefined
   /** Range estimate from the same selection, when the optimizer measured it. */
@@ -210,7 +224,8 @@ export function chooseAccess(def: TableDef, alias: string, where: Expression | u
   const conjuncts = splitAnd(inferred?.condition, splitAnd(where))
   const conditions = conjuncts.flatMap((e) => conditionOf(e, def, alias, outer, env) ?? [])
   const read = conditionAccess(def, conditions, env, outer, indexes, costing === undefined)
-  return read ?? (costing && rangeAccess(def, alias, conjuncts, env, costing, undefined, inferred, indexes)) ?? FULL_SCAN
+  return read ?? (costing && (rangeAccess(def, alias, conjuncts, env, costing, undefined, inferred, indexes) ??
+    sortUnionAccess(def, alias, where, env, costing, indexes))) ?? FULL_SCAN
 }
 
 /** Points win first, with the primary or clustered key preferred among them. */
@@ -251,6 +266,8 @@ export function dynamicAccess(def: TableDef, alias: string, conjuncts: readonly 
 
 /** What the range optimizer weighs a table's ranges by (M5.7). */
 export interface RangeCosting {
+  /** The query has no early ordered-reader competitor. */
+  readonly allowSortUnion?: boolean | undefined
   /** Request selected-range row estimates alongside the physical access. */
   readonly quote?: boolean
   /** FORCE INDEX excludes the table-scan cost for an eligible unordered read. */
@@ -264,6 +281,49 @@ export interface RangeCosting {
   readonly coveringScan: IndexDef | undefined
   /** Count until more than `limit` rows are found: the server's index dives, exact on a small table. */
   count(index: string, range: KeyRange, limit: number): number
+}
+
+/** Merge one nullable secondary non-NULL range and one exclusive signed INT primary range. */
+function sortUnionAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, costing: RangeCosting, indexes: readonly IndexDef[]): Access | undefined {
+  if (!costing.allowSortUnion || def.engine !== 'native' || where?.kind !== NODE.BINARY || !logicalShortCircuit(where.op) ||
+    !optimizerEnabled(env, 'index_merge') || !optimizerEnabled(env, 'index_merge_sort_union')) return undefined
+  const primaryFirst = where.left.kind !== NODE.UNARY
+  const [comparison, present] = primaryFirst ? [where.left, where.right] : [where.right, where.left]
+  if (comparison.kind !== NODE.BINARY || comparison.op !== '<' || !isConstant(comparison.right) ||
+    present.kind !== NODE.UNARY || present.op !== 'IS NOT NULL') return undefined
+  const primary = indexes.find((key) => key.kind === 'primary')
+  if (primary?.parts.length !== 1) return undefined
+  const pk = forwardKeyColumn(def, primary)
+  if (pk?.type.type !== FIELD_TYPE.LONG || pk.type.unsigned || tableColumn(comparison.left, def, alias) !== pk) return undefined
+  const column = tableColumn(present.operand, def, alias)
+  if (!column?.nullable || column.type.type !== FIELD_TYPE.LONG) return undefined
+  const keys = indexes.filter((key) => forwardKeyColumn(def, key) === column)
+  const secondary = keys[0]
+  if (keys.length !== 1 || !singleRefIndex(secondary)) return undefined
+  const bound = constantValue(comparison.right, env)
+  if (bound?.kind !== 'int') return undefined
+  const to = encodeBound(bound, pk, false)
+  if (!to) return undefined
+  const pkRange = { to }
+  const secondaryRange = { from: { ...NULL_KEY, inclusive: false } }
+  const { stats, coveringScan } = costing
+  // This reader models an in-memory sort. Leave space per row ID for the sort tree.
+  const limit = Math.min(stats.rows - 2, Math.floor(sortBufferBytes(env) / 64) - 1)
+  if (limit < 1) return undefined
+  const secondaryRows = Math.max(1, costing.count(secondary.name, secondaryRange, limit))
+  if (secondaryRows > limit) return undefined
+  const primaryRows = Math.max(1, costing.count(primary.name, pkRange, stats.rows - secondaryRows - 1))
+  if (primaryRows + secondaryRows >= stats.rows) return undefined
+  const reads = rangeCost(stats, { ...costing.shape(secondary), covering: true }, 1, secondaryRows) +
+    rangeCost(stats, { ...costing.shape(primary), covering: false }, 1, primaryRows)
+  if (reads + sortUnionCost(stats, secondaryRows) >= rangeBaseline(stats, coveringScan && costing.shape(coveringScan).recordBytes)) return undefined
+  return {
+    index: primary.name, ranges: [pkRange], over: `(${pk.name} < ${bound.v})`,
+    sortUnion: {
+      index: secondary.name, range: secondaryRange, over: `(NULL < ${column.name})`,
+      upper: encodeKey(to.values, [keyPartOf(pk.type, pk.nullable)]), primaryFirst,
+    },
+  }
 }
 
 /**

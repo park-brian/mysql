@@ -199,7 +199,7 @@ export interface FromPlan {
   /** The FROM as 8.4.11's iterators (M5.44): the tree `rows` runs, as EXPLAIN shows it. */
   explain(env: Env): PlanNode
   /** How the one base table of a single-table FROM is read: what `rows` and `explain` read it by. */
-  access(env: Env): Access
+  access(env: Env, allowSortUnion?: boolean): Access
   /** The rows of the FROM, the WHERE applied; `ids` asks for each base table's row id too. */
   rows(trx: Trx | undefined, env: Env, options: { readonly locking: boolean; readonly ids?: boolean; readonly ready?: (() => void) | undefined }): Iterable<JoinedRow>
 }
@@ -845,7 +845,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       )
       settings.ordered = { index, force, reverse, alias, covering }
     },
-    access(env) {
+    access(env, allowSortUnion) {
+      if (allowSortUnion) settings.allowSortUnion = true
       return leafAccess(tables[0] as FromTable, settings, env)
     },
     explain(env) {
@@ -1031,6 +1032,7 @@ type Materialization = false | 'lookup' | 'scan' | 'loop'
 
 /** How the FROM's base tables are read: what the WHERE is, what covers them, and an order asked for. */
 interface LeafSettings {
+  allowSortUnion?: boolean
   readonly eligibleIndexes?: HintEligibility | undefined
   where?: Expression | undefined
   /** Proven integer-equality range predicates, shared by costing and physical reads. */
@@ -1139,6 +1141,7 @@ function rangeCosting(t: FromTable, settings: LeafSettings, env: Env, quote = fa
   const statistics = settings.statistics
   let stats: TableStatistics | undefined
   return {
+    allowSortUnion: settings.allowSortUnion,
     hasIndexHints: t.indexHints !== undefined,
     // Read only when a range is weighed: on a table just written, statistics are recomputed.
     get stats() {
@@ -1868,7 +1871,13 @@ function tableOp(t: FromTable, settings: LeafSettings, held?: Access): Op {
       // A secondary index that holds every column the query reads is read alone.
       const covering = settings.covering.get(t.alias) === access.index
       if (points && access.ranges.length === 1 && index !== undefined && index.kind !== 'primary') return indexLookup(t.alias, access.index, false, covering)
-      return planNode(`${covering ? 'Covering index' : 'Index'} range scan on ${t.alias} using ${access.index}${access.over === undefined ? '' : ` over ${access.over}`}`)
+      const range = (read: Access, covers?: boolean) =>
+        planNode(`${covers ? 'Covering index' : 'Index'} range scan on ${t.alias} using ${read.index}${read.over === undefined ? '' : ` over ${read.over}`}`)
+      const merge = access.sortUnion
+      if (!merge) return range(access, covering)
+      const primary = planNode('Clustered primary key (scanned separately)', [range(access)])
+      const secondary = range(merge)
+      return planNode('Sort-deduplicate by row ID', merge.primaryFirst ? [primary, secondary] : [secondary, primary])
     },
   }
 }
