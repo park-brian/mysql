@@ -2898,6 +2898,7 @@ function rowsOf(plan: SubqueryPlan, key: object, row: Row, env: Env): readonly (
  * nullable, while 8.4.11 reports a plain `(SELECT 1)` NOT NULL.
  */
 function scalarSubquery(e: SubqueryNode, ctx: CompileContext): Compiled {
+  if (queryBody(e.query).kind === QUERY.VALUES) throw notSupported('VALUES')
   const plan = planned(e, ctx)
   if (plan.columns.length !== 1) throw operandColumnsError(1)
   const t = (plan.columns[0] as { type: ResultType }).type

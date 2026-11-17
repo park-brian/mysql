@@ -10,13 +10,13 @@
 // name as written, else the expression's own source text — `SELECT 1+1`
 // returns a column called `1+1`, spaces and all, which only the text has.
 import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine'
-import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type IndexHint, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
+import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type IndexHint, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token, type ValuesNode } from '@myjs/parser'
 import { messages, sqlError, PreparedStatement, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { MAX_UNSIGNED, MIN_SIGNED, compareValues, extremeAccumulator, intValue, integerRange, isText, numericPrefix, roundedIntegerText, storageWidth, terminalIntegerValue, toInteger, truth, valInt, withoutHex, type Condition, type Value } from '@myjs/types'
 import { appendConditions, compile, constantNode, isComparison, literalPredicate, membershipReader, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, textBesideColumn, withOuterRow, writtenFalse, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
-import { EMPTY_NAMES, columnDefinition, columnResultType, copiedLength, intType, type ResultType } from './meta.ts'
+import { EMPTY_NAMES, NULL_TYPE, columnDefinition, columnResultType, copiedLength, intType, stringType, type ResultType } from './meta.ts'
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { accessRows, distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { EMPTY_KEY_RANGES, constantValue, equalBounds, isConstant, optimizerEnabled, pointAccess, sortBufferBytes, splitAnd, tableColumn, type Access } from './plan.ts'
@@ -378,9 +378,9 @@ export function planQuery(run: Run, q: QueryExpression, pending?: Condition[], h
     case QUERY.TABLE:
     case QUERY.SELECT: {
       const node: SelectNode = body.kind === QUERY.SELECT ? body : {
-        kind: QUERY.SELECT as typeof QUERY.SELECT,
-        items: [{ expr: { kind: NODE.COLUMN as typeof NODE.COLUMN, parts: ['*'], at: body.at } }],
-        from: [{ kind: REF.TABLE as typeof REF.TABLE, at: body.at, table: body.table }],
+        kind: QUERY.SELECT,
+        items: [{ expr: { kind: NODE.COLUMN, parts: ['*'], at: body.at } }],
+        from: [{ kind: REF.TABLE, at: body.at, table: body.table }],
         at: body.at,
       }
       return planSelect({ ...r, subqueries: [], clauses: { 'where clause': node.where, 'having clause': node.having } }, q, node, pending, hints)
@@ -392,13 +392,48 @@ export function planQuery(run: Run, q: QueryExpression, pending?: Condition[], h
       r.admitQuery?.(q, true)
       return pushed ? plan : orderedResult(r, q, plan)
     }
+    case QUERY.VALUES:
+      return planValues(r, q, body)
     case QUERY.SET_OPERATION: {
       const plan = planSetOperation(r, body)
       r.admitQuery?.(q, true)
       return orderedResult(r, q, plan)
     }
-    default:
-      throw notSupported(body.kind.toUpperCase())
+  }
+}
+
+function planValues(run: Run, q: QueryExpression, node: ValuesNode): SelectPlan {
+  const width = node.rows[0]!.length
+  if (width === 0) throw sqlError('ER_TABLE_VALUE_CONSTRUCTOR_MUST_HAVE_COLUMNS', 'Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement.')
+  const ctx = compileContext(run, run.parent ?? EMPTY_SCOPE, 'field list')
+  const items = node.rows.map((row, at) => {
+    if (row.length !== width) throw sqlError('ER_WRONG_VALUE_COUNT_ON_ROW', messages.wrongValueCount(at + 1))
+    return row.map((expr) => {
+      if (expr.kind === NODE.KEYWORD && expr.word === 'DEFAULT') throw sqlError('ER_TABLE_VALUE_CONSTRUCTOR_CANNOT_HAVE_DEFAULT', 'A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement.')
+      const compiled = compile(expr, ctx)
+      if (expr.kind === NODE.PLACEHOLDER && (compiled.type.kind === 'string' || compiled.type.kind === 'null')) {
+        return { ...compiled, type: stringType(16383, ctx.connectionCollation, true) }
+      }
+      return compiled
+    })
+  })
+  const columns = items[0]!.map((_, i) => {
+    const types = items.map((row) => row[i]!.type)
+    const type = types.every((t) => t.kind === 'null') ? NULL_TYPE : setOperationType(types, ctx.connectionCollation)
+    return { name: `column_${i}`, type: { ...type, temporary: false } }
+  })
+  // MySQL resolves a value constructor's ORDER BY without sorting its rows.
+  resultSortKeys(run, q, columns)
+  const [count, offset] = queryLimit(run, q)
+  const selected = q.limit === undefined ? items : items.slice(offset, count === undefined ? undefined : offset + count)
+  return {
+    columns,
+    locking: false,
+    explain: () => count === 0 ? NO_ROWS_PLAN : [wrap(q.limit !== undefined, 'Limit', planNode('Rows fetched before execution'))],
+    *rows(trx, given) {
+      const env = executionEnv(run, trx, given)
+      for (const row of selected) yield row.map((item) => item.eval([], env))
+    },
   }
 }
 
@@ -2318,6 +2353,23 @@ function setOperationNode(m: SetMembers, materialized: boolean): PlanNode {
   return tableScan(`<${m.op.toLowerCase()} temporary>`, planNode(how, children))
 }
 
+/** Resolve positional and named ordering against a query result. */
+function resultSortKeys(run: Run, q: QueryExpression, columns: SelectPlan['columns']): SortKey[] {
+  const scope = new TableScope([{ alias: '\u0000result', columns: columns }])
+  return (q.orderBy ?? []).map((o): SortKey => {
+    const e = o.expr
+    if (integerLiteral(e)) {
+      const n = Number(e.value as bigint)
+      if (n < 1 || n > columns.length) throw unknownColumnError(String(n), 'order clause')
+      return { expr: readSlot(n - 1, (columns[n - 1] as { type: ResultType }).type), desc: o.desc === true }
+    }
+    if (e.kind === NODE.COLUMN && e.parts.length >= 2) {
+      throw sqlError('ER_TABLENAME_NOT_ALLOWED_HERE', `Table '${e.parts.at(-2)}' from one of the SELECTs cannot be used in global ORDER clause`)
+    }
+    return { expr: compile(e, compileContext(run, scope, 'order clause')), desc: o.desc === true }
+  })
+}
+
 /**
  * A query's own ORDER BY and LIMIT over a result that is not a single SELECT's
  * — a set operation's, or a parenthesised query's. It sees only the result's
@@ -2325,24 +2377,12 @@ function setOperationNode(m: SetMembers, materialized: boolean): PlanNode {
  */
 function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan, holder?: () => readonly ResultType[], retainOrder = false): SelectPlan {
   if (q.orderBy === undefined && q.limit === undefined) return plan
-  const scope = new TableScope([{ alias: '\u0000result', columns: plan.columns }])
-  const keys = (q.orderBy ?? []).map((o): SortKey => {
-    const e = o.expr
-    if (integerLiteral(e)) {
-      const n = Number(e.value as bigint)
-      if (n < 1 || n > plan.columns.length) throw unknownColumnError(String(n), 'order clause')
-      return { expr: readSlot(n - 1, (plan.columns[n - 1] as { type: ResultType }).type), desc: o.desc === true }
-    }
-    if (e.kind === NODE.COLUMN && e.parts.length >= 2) {
-      throw sqlError('ER_TABLENAME_NOT_ALLOWED_HERE', `Table '${e.parts.at(-2)}' from one of the SELECTs cannot be used in global ORDER clause`)
-    }
-    return { expr: compile(e, compileContext(run, scope, 'order clause')), desc: o.desc === true }
-  })
+  const keys = resultSortKeys(run, q, plan.columns)
   // Eliminate unused ordering after admission; an enclosing LIMIT can need it.
   if (holder !== undefined && q.limit === undefined && !retainOrder) return plan
   const [limitCount, offset] = queryLimit(run, q)
   const stages: Stage[] = []
-  if (keys.length > 0) stages.push({ run: (rows, env) => sort(rows, keys, env), describe: (n) => planNode('Sort', n) })
+  if (keys.length > 0 && queryBody(q).kind !== QUERY.VALUES) stages.push({ run: (rows, env) => sort(rows, keys, env), describe: (n) => planNode('Sort', n) })
   if (q.limit) stages.push(limitStage(offset, limitCount))
   return {
     columns: plan.columns,

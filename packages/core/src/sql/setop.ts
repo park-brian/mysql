@@ -39,7 +39,7 @@ import { sqlError } from '@myjs/protocol'
 import { COERCIBILITY, bytesValue, intValue, plainValue, stringValue, toDateTime, toText, valueBytes, withoutHex, type Value } from '@myjs/types'
 import { aggregate, aggregateCollations, aggregateTypes, byteWidth, fieldValue } from './compile.ts'
 import { rowKey } from './keys.ts'
-import { charWidth, jsonAsText, jsonType, isNumber, promotesToBlob, stringType, type ResultType } from './meta.ts'
+import { charWidth, jsonAsText, jsonType, isNumber, maxOf, promotesToBlob, stringType, type ResultType } from './meta.ts'
 import { bitBytes } from './wire.ts'
 
 type Columns = readonly { readonly name: string; readonly type: ResultType }[]
@@ -74,7 +74,7 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
     // UNION's YEAR holder takes no part in integer field selection or signedness.
     const integers = live.filter((t) => t.field !== FIELD_TYPE.YEAR)
     const type = aggregate(integers.length === 0 ? live : integers, nullable, connectionCollation)
-    return done({ ...type, length: Math.max(...live.map((t) => t.length)), ...(type.field === FIELD_TYPE.YEAR ? { fieldFlags: COLUMN_FLAG.ZEROFILL } : {}) })
+    return done({ ...type, length: type.kind === 'decimal' ? type.length : maxOf(live, (t) => t.length), ...(type.field === FIELD_TYPE.YEAR ? { fieldFlags: COLUMN_FLAG.ZEROFILL } : {}) })
   }
   if (live.every(isNumber)) return done(aggregate(live, nullable, connectionCollation))
   if (live.every((t) => t.kind === 'datetime' || t.kind === 'time')) {
@@ -92,18 +92,18 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
   if (live.some((t) => t.blobBytes !== undefined || t.field === FIELD_TYPE.BLOB)) {
     // Computed BLOB widths already count bytes. Other branches are sized
     // in their own charset for binary output, or in the text holder's charset.
-    const bytes = Math.min(4294967295, Math.max(...live.map((t) => {
+    const bytes = Math.min(4294967295, maxOf(live, (t) => {
       const width = t.blobBytes ?? charWidth(t)
       if (t.blobBytes !== undefined && t.column === undefined) return width
       return width * requireCollationInfo(binary && t.kind === 'string' ? t.collationId : collationId).mbmaxlen
-    })))
+    }))
     return done({ ...stringType(bytes, collationId, nullable), field: FIELD_TYPE.BLOB, blobBytes: bytes })
   }
   const sameField = live.every((t) => t.field === FIELD_TYPE.STRING)
   // Binary: as wide as the widest branch in its own bytes — a string's
   // characters at its charset's widest, bytes as they are (8.4.11:
   // VARBINARY(10) UNION 'k' is 10, UNION a 13-character literal 52).
-  const width = Math.max(...live.map(binary ? byteWidth : charWidth))
+  const width = maxOf(live, binary ? byteWidth : charWidth)
   const text = stringType(width, collationId, nullable)
   return done(sameField ? { ...text, field: FIELD_TYPE.STRING } : text)
 }
