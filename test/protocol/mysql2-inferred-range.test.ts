@@ -206,3 +206,28 @@ test('integer BETWEEN rejects inverted and excluded stored bounds without index 
     await conn.end(); await db?.end()
   }
 })
+
+test('estimating an indexed join condition preserves its computed bound warning', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'range_warning_identity378'
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE pa(id INT PRIMARY KEY) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,pid INT,KEY(pid)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO pa VALUES (1),(2),(3)')
+    await conn.query('INSERT INTO ch VALUES (1,1),(2,2),(3,2),(4,3)')
+    await conn.query('ANALYZE TABLE pa,ch')
+    const sql = "SELECT pa.id,ch.id FROM pa JOIN ch ON pa.id=ch.pid WHERE ch.id=CONCAT('2','bad') ORDER BY pa.id,ch.id"
+    const options = { sql, rowsAsArray: true }
+    for (const method of ['query', 'execute'] as const) {
+      const [rows] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+      assert.deepEqual(rows, [[2, 2]])
+      const [warnings] = await conn.query({ sql: 'SHOW WARNINGS', rowsAsArray: true })
+      assert.deepEqual(warnings, [['Warning', 1292, "Truncated incorrect DOUBLE value: '2bad'"]])
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})

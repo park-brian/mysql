@@ -35,13 +35,13 @@
 // physical range and exact point equality already enforce it.
 import { notSupported, proof, wrongUsage } from './errors.ts'
 import { FIELD_TYPE } from '@myjs/bytes'
-import { REVERSE_COMPARISON, and, integerLiteral, isOrderedComparison, logicalShortCircuit, operandPairs, someNode, tableAlias } from './ast.ts'
+import { REVERSE_COMPARISON, and, integerLiteral, isOrderedComparison, logicalShortCircuit, operandPairs, rewriteExpression, someNode, tableAlias } from './ast.ts'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, type Expression, type IndexHint, type QueryExpression, type TableReference } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { integerBytes, truth, type ColumnType, type Value } from '@myjs/types'
-import { compatibleEqualityKeys, isComparison, type Compiled, type Env, type Row, type Scope } from './compile.ts'
+import { compatibleEqualityKeys, type Compiled, type Env, type Row, type Scope } from './compile.ts'
 import { coveringScan, filterPlan, indexLookup, lookupMaterialized, materialize, planNode, scanMaterialized, tableScan, wrap, type PlanNode } from './explain.ts'
 import { FULL_SCAN, chooseAccess, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type InferredRange, type OuterColumn, type RangeCosting } from './plan.ts'
 import { ROW_EVALUATE, bestAccess, floorFilter, indexScanCost, joinOrder, materializedAntijoinWins, membershipCost, type Candidate, type FirstMatch, type KeyChoice, type Positioned, type RangeRead } from './cost.ts'
@@ -1513,65 +1513,54 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], compile: (e
   }
   const per = new Map<ColumnDef, Expression>()
   let inferred: InferredRange | undefined
+  const constant = (x: Expression | undefined): boolean => x !== undefined && !someNode(x, (node) => {
+    const { kind } = node as Expression
+    return kind === NODE.COLUMN || kind === NODE.SUBQUERY || kind === NODE.PLACEHOLDER || kind === NODE.VARIABLE || undefined
+  })
   for (const { e: raw } of conditions) {
     const e = possible(raw)
     let first: ReturnType<typeof resolve>
-    const other = someNode(e, (node) => {
-      const n = node as Expression
-      if (n.kind === NODE.SUBQUERY || n.kind === NODE.PLACEHOLDER || n.kind === NODE.VARIABLE) return true
-      if (n.kind === NODE.COLUMN) {
-        const resolved = resolve(n)
-        if (resolved === undefined) return true
-        first ??= resolved
-        return resolved.slot !== first.slot
+    const subject = (x: Expression): boolean => {
+      const resolved = resolve(x)
+      if (resolved === undefined) return false
+      first ??= resolved
+      return resolved.slot === first.slot
+    }
+    // Bind the same source slot throughout the range before rewriting it for this table.
+    const sargable = (x: Expression): boolean => {
+      if (x.kind === NODE.UNARY) return (x.op === 'IS NULL' || x.op === 'IS NOT NULL') && subject(x.operand)
+      if (x.kind !== NODE.BINARY) return false
+      const { op, left, right } = x
+      if (logicalShortCircuit(op) !== undefined) return sargable(left) && sargable(right)
+      if (Object.hasOwn(REVERSE_COMPARISON, op)) return (subject(left) && constant(right)) || (subject(right) && constant(left))
+      if (!subject(left)) return false
+      switch (op) {
+        case 'BETWEEN':
+        case 'NOT BETWEEN':
+          return constant(right) && constant(x.extra as Expression)
+        case 'IN':
+        case 'NOT IN':
+          return right.kind === NODE.ROW && constant(right)
+        case 'LIKE':
+          return right.kind === NODE.LITERAL && typeof right.value === 'string' && !/^[%_]/.test(right.value) && x.extra === undefined
+        default:
+          return false
       }
-      return undefined
-    })
-    if (other || first === undefined) continue
+    }
+    if (!sargable(e) || first === undefined) continue
     const { slot: sourceSlot, column: source, table } = first
     const own = table.alias === t.alias
     const root = classes.root(sourceSlot)
     const size = classes.size(root)
     const target = own ? source : size > 1 ? def.columns.find((_, i) => classes.root(t.offset + i) === root) : undefined
     if (target === undefined || leadingIndex(def, target, true) === undefined) continue
-    const column: Expression = { kind: NODE.COLUMN, parts: [t.alias, target.name], at: e.at } as Expression
-    // Every column in this expression was resolved above to this one source.
-    const constant = (y: Expression | undefined): boolean => y !== undefined && aliasesOf(y, scope)?.size === 0
-    const sargable = (x: Expression): Expression | undefined => {
-      if (x.kind === NODE.UNARY) return (x.op === 'IS NULL' || x.op === 'IS NOT NULL') && x.operand.kind === NODE.COLUMN ? { ...x, operand: column } : undefined
-      if (x.kind !== NODE.BINARY) return undefined
-      const { op } = x
-      if (logicalShortCircuit(op) !== undefined) {
-        const a = sargable(x.left)
-        const b = sargable(x.right)
-        return a === undefined || b === undefined ? undefined : { ...x, left: a, right: b }
-      }
-      if (op === '<=>' || isComparison(op)) {
-        if (x.left.kind === NODE.COLUMN && constant(x.right)) return { ...x, left: column }
-        if (x.right.kind === NODE.COLUMN && constant(x.left)) return { ...x, right: column }
-        return undefined
-      }
-      if (x.left.kind !== NODE.COLUMN) return undefined
-      let eligible: boolean
-      switch (op) {
-        case 'BETWEEN':
-        case 'NOT BETWEEN':
-          eligible = constant(x.right) && constant(x.extra as Expression)
-          break
-        case 'IN':
-        case 'NOT IN':
-          eligible = x.right.kind === NODE.ROW && x.right.items.every(constant)
-          break
-        case 'LIKE':
-          eligible = x.right.kind === NODE.LITERAL && typeof x.right.value === 'string' && !/^[%_]/.test(x.right.value) && x.extra === undefined
-          break
-        default:
-          return undefined
-      }
-      return eligible ? { ...x, left: column } : undefined
-    }
-    const range = sargable(e)
-    if (range === undefined) continue
+    const column: Expression = { kind: NODE.COLUMN, parts: [t.alias, target.name], at: e.at }
+    const range = rewriteExpression(e, (node) => {
+      // Keep each original bound for the statement's conversion warning cache.
+      if (node.kind === NODE.UNARY) return { ...node, operand: column }
+      if (node.kind !== NODE.BINARY || logicalShortCircuit(node.op) !== undefined) return undefined
+      return node.left.kind === NODE.COLUMN ? { ...node, left: column } : { ...node, right: column }
+    })
     per.set(target, and(per.get(target), range))
     // columnOf resolves base tables only. A direct, non-nullable integer equality preserves this literal bound.
     const type = target.type

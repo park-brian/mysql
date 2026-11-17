@@ -48,7 +48,6 @@ import {
   textOf,
   keyPartOf,
   parseDateTime,
-  type StoreContext,
   type Value,
 } from '@myjs/types'
 import type { Compiled, Env } from './compile.ts'
@@ -322,7 +321,6 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
   return chosen
 }
 
-const EMPTY = new Uint8Array(0)
 const NULL_KEY: KeyBound = { values: [null], inclusive: true }
 const pointRange = (bound: KeyBound): KeyRange => ({ from: bound, to: bound })
 
@@ -402,7 +400,8 @@ function keyRanges(intervals: readonly Interval[], column: ColumnDef): { readonl
     if (from === undefined || to === undefined) return undefined
     if (from === 'empty' || to === 'empty') continue
     const lower = from === 'open' ? (column.nullable ? { values: [null], inclusive: false } : undefined) : from
-    const point = from !== 'open' && to !== 'open' && from.inclusive && to.inclusive && equalBytes(from.values[0] ?? EMPTY, to.values[0] ?? EMPTY)
+    // Present endpoints here encode one non-NULL value each.
+    const point = from !== 'open' && to !== 'open' && from.inclusive && to.inclusive && equalBytes(from.values[0]!, to.values[0]!)
     out.push({ range: { ...(lower === undefined ? {} : { from: lower }), ...(to === 'open' ? {} : { to }) }, point })
   }
   return out
@@ -422,10 +421,8 @@ export function keyOrder(def: TableDef, indexes = def.indexes): IndexDef[] {
   return indexes.filter((i) => i.invisible !== true).sort((a, b) => rank(a) - rank(b))
 }
 
-const ctx = (): StoreContext => ({ strict: true, row: 1, warnings: 0 })
-
 function bound(v: Value, column: ColumnDef, inclusive: boolean): KeyBound | undefined {
-  return proof(() => ({ values: [encodeField(v, column, ctx())], inclusive }))
+  return proof(() => ({ values: [encodeField(v, column, { strict: true, row: 1, warnings: 0 })], inclusive }))
 }
 
 /**

@@ -2252,8 +2252,8 @@ empty child and optimizer switches. Fresh case 104, statement 19 brings
 the seeds to 129 of 138. The committed ledger stays at 2,140 of 2,248 with
 the 2,118 floor. Parser/core/facade measure 45,611/334,316/334,242 B gzipped
 within the unchanged caps. Noncovering tests and other list profiles
-remain open. M5.49 removes the estimation dive for inverted integer
-`BETWEEN` bounds and keeps fractional endpoint costing open.
+remain open. See the M5.49 stored integer `BETWEEN` verification below
+for the separate endpoint repair.
 
 **M5.47 covering membership builds for fractional `NOT IN` lists, verified.**
 For a nullable signed `INT` in a one-page child, a direct NULL and
@@ -2409,8 +2409,7 @@ and preserves every other outcome. A separate 576-outcome literal audit
 fixes 160 more, and all 760 signed-boundary and magnitude outcomes agree.
 Parser/core/facade measure 45,611/334,360/334,265 B gzipped within the
 existing caps. The M5.47 covering membership repair above now uses this
-range's measured cost. Integral list items and fractional `BETWEEN` endpoint
-estimation remain open.
+range's measured cost. Integral list items remain open.
 
 **M5.49 inverted integer `BETWEEN` bounds, verified.** The range optimizer
 recognizes reversed integer endpoints before encoding keys or diving into
@@ -2418,9 +2417,8 @@ the index. Both wire protocols retain matching plans, rows, fields and
 warnings after writes. A counted regression confirms that the inverted
 interval performs zero index reads. The standalone and nested audits
 preserve all 2,758 outcomes. Parser/core/facade measure
-45,614/334,360/334,253 B gzipped within the existing caps. Fractional bounds
-whose stored endpoints exclude the only key and the choice of nested
-semijoin strategy remain open.
+45,614/334,360/334,253 B gzipped within the existing caps. The subsequent
+stored-endpoint verification covers the fractional cases.
 
 **M5.49 range-planner consolidation, verified.** The planner retains the
 resolved column in each condition and shares the numeric key compatibility
@@ -2428,10 +2426,7 @@ rules between known values and outer-column types. The clustered fallback
 keeps the first encodable bound on each side. The standalone and nested
 audits preserve all 2,758 outcomes, and the relational ledger stays at
 2,140 of 2,248 plans. Parser/core/facade measure 45,614/334,313/334,219 B
-gzipped within the existing caps. Continue with fractional `BETWEEN`
-endpoints that MySQL rounds to an excluded key. The existing adjacent and
-out-of-domain endpoint plans and nested strategy selection still need their
-own checks.
+gzipped within the existing caps.
 
 **M5.49 stored integer `BETWEEN` bounds, verified.** For a direct
 indexed `BETWEEN`, the range optimizer compares the original values to their
@@ -2447,6 +2442,24 @@ directly, and the uncosted primary range retains its first encodable bounds.
 Parser/core/facade measure 45,614/334,339/334,264 B gzipped within the existing
 caps. Grouped empty-plan labels, text and bound-marker conversions, and
 nested strategy costing remain open.
+
+**M5.47/M5.49 range-estimate binding, verified.** Join range estimation
+checks the predicate's shape and binds its one source column in the same
+walk. The shared expression rewriter substitutes the target column for the
+estimate and keeps the original bound operands for the conversion warning
+cache. Both wire protocols reproduce MySQL 8.4.11's single warning for
+equality against a computed text bound. Ordered comparisons with computed
+text still need separate warning-count verification. All 300 relational
+scripts retain their complete outcomes, including the existing 2,140 of
+2,248 matching plans. Parser/core/facade measure 45,614/334,313/334,258 B
+gzipped within the existing caps.
+
+Resume M5.47 with a positive integer semijoin whose covering child has a
+signed single-column `PRIMARY` key and a direct `NOT IN (integer,
+fractional DECIMAL)` condition on that key. The pinned trace for seed
+2026111602, case 296, statement 16 shows that the row estimate from a rejected
+primary range still contributes to filtering. Use the existing independent
+range estimate and keep reversed lists and disabled strategy cases open.
 
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.
