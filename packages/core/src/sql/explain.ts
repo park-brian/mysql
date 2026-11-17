@@ -39,7 +39,7 @@ export function indexLookup(alias: string, index: string, unique: boolean, cover
 export const wrap = (when: boolean, label: string, node: PlanNode): PlanNode => (when ? planNode(label, node) : node)
 
 export const filterNode = (input: PlanNode): PlanNode => planNode('Filter', input)
-export const filterPlan = (when: boolean, input: PlanNode): PlanNode => when ? filterNode(input) : input
+export const filterPlan = (when: boolean | undefined, input: PlanNode): PlanNode => when ? filterNode(input) : input
 
 /** EXPLAIN FORMAT=TREE's text: each iterator on its own line as `-> name`, its inputs four spaces in. */
 export function renderTree(roots: readonly PlanNode[]): string {

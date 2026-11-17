@@ -57,7 +57,7 @@ import {
   type Value,
   valueBytes,
 } from '@myjs/types'
-import { AGGREGATE_NAMES, asNumber, cacheInteger, compile, decimalField, printedArgument, readSlot, realInteger, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
+import { AGGREGATE_NAMES, asNumber, cacheInteger, compile, decimalField, printedArgument, readArguments, readSlot, realInteger, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { firstKey, rowKey, valueKey } from './keys.ts'
 import { canonicalFunctionName, wrongParameterCount } from './registry.ts'
 import { asJson } from './json.ts'
@@ -249,7 +249,7 @@ export class AggregateSink {
                   n++
                   return
                 }
-                const values = argumentValues(args, row, env)
+                const values = readArguments(args, row, env)
                 if (values === undefined || (seen !== undefined && !firstKey(seen, rowKey(values)))) return
                 n++
               },
@@ -286,17 +286,6 @@ export class AggregateSink {
       }
     }
   }
-}
-
-/** Evaluate arguments in order, stopping at the first NULL. */
-function argumentValues(args: readonly Compiled[], row: Row, env: Env): NonNullable<Value>[] | undefined {
-  const out: NonNullable<Value>[] = []
-  for (const a of args) {
-    const v = a.eval(row, env)
-    if (v === null) return undefined
-    out.push(v)
-  }
-  return out
 }
 
 /**
@@ -379,7 +368,7 @@ function groupConcat(e: CallNode, args: readonly Compiled[], type: ResultType, d
       const seen = distinct ? new Set<string>() : undefined
       return {
         add(row, env) {
-          const parts = argumentValues(args, row, env)
+          const parts = readArguments(args, row, env)
           if (parts === undefined || (seen !== undefined && !firstKey(seen, rowKey(parts)))) return
           // A binary result joins bytes, which need not be text in any charset.
           entries.push({ text: binary ? '' : parts.map(toText).join(''), bytes: binary ? concatBytes(parts.map(valueBytes)) : undefined, keys: order.map((o) => o.expr.eval(row, env)) })

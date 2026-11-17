@@ -552,24 +552,31 @@ interface Piece {
   readonly inline?: number
 }
 
-function custom(field: number, payload: Uint8Array): Piece {
-  const len = writeVarint(payload.length)
-  const body = new Uint8Array(1 + len.length + payload.length)
-  body[0] = field
-  body.set(len, 1)
-  body.set(payload, 1 + len.length)
-  return { type: JSON_TYPE.CUSTOM, body }
+/** The bytes after the type tag for strings and custom data. */
+function sizedBody(payload: Uint8Array, field?: number): Uint8Array {
+  const length = writeVarint(payload.length)
+  const offset = field === undefined ? 0 : 1
+  const body = new Uint8Array(offset + length.length + payload.length)
+  if (field !== undefined) body[0] = field
+  body.set(length, offset)
+  body.set(payload, offset + length.length)
+  return body
 }
+
+function custom(field: number, payload: Uint8Array): Piece {
+  return { type: JSON_TYPE.CUSTOM, body: sizedBody(payload, field) }
+}
+
+const EMPTY_INLINE_BODY = new Uint8Array(0)
 
 function piece(doc: JsonDoc): Piece {
   switch (doc.t) {
     case 'null':
-      return { type: JSON_TYPE.LITERAL, body: new Uint8Array(0), inline: 0 }
     case 'bool':
-      return { type: JSON_TYPE.LITERAL, body: new Uint8Array(0), inline: doc.v ? 1 : 2 }
+      return { type: JSON_TYPE.LITERAL, body: EMPTY_INLINE_BODY, inline: doc.t === 'null' ? 0 : doc.v ? 1 : 2 }
     case 'int': {
       const v = doc.v
-      if (v >= -0x8000n && v <= 0x7fffn) return { type: JSON_TYPE.INT16, body: new Uint8Array(0), inline: Number(v) & 0xffff }
+      if (v >= -0x8000n && v <= 0x7fffn) return { type: JSON_TYPE.INT16, body: EMPTY_INLINE_BODY, inline: Number(v) & 0xffff }
       if (v >= -0x80000000n && v <= 0x7fffffffn) {
         const body = new Uint8Array(4)
         new DataView(body.buffer).setInt32(0, Number(v), true)
@@ -584,14 +591,8 @@ function piece(doc: JsonDoc): Piece {
       new DataView(body.buffer).setFloat64(0, doc.v, true)
       return { type: JSON_TYPE.DOUBLE, body }
     }
-    case 'string': {
-      const bytes = utf8(doc.v)
-      const len = writeVarint(bytes.length)
-      const body = new Uint8Array(len.length + bytes.length)
-      body.set(len)
-      body.set(bytes, len.length)
-      return { type: JSON_TYPE.STRING, body }
-    }
+    case 'string':
+      return { type: JSON_TYPE.STRING, body: sizedBody(utf8(doc.v)) }
     case 'decimal': {
       const text = renderDecimal(doc.v)
       const digits = text.replace(/^-/, '').split('.')
@@ -690,6 +691,13 @@ function need(b: Uint8Array, at: number, n: number): void {
   if (at < 0 || at + n > b.length) throw invalidJson(`needs ${n} byte(s) at ${at} of ${b.length}`)
 }
 
+function sizedPayload(body: Uint8Array, at: number): Uint8Array {
+  const { value: length, size } = varint(body, at)
+  at += size
+  need(body, at, length)
+  return body.subarray(at, at + length)
+}
+
 function decodeAt(type: number, body: Uint8Array): JsonDoc {
   const view = (n: number): DataView => {
     need(body, 0, n)
@@ -718,17 +726,12 @@ function decodeAt(type: number, body: Uint8Array): JsonDoc {
       return jsonInteger(view(8).getBigUint64(0, true))
     case JSON_TYPE.DOUBLE:
       return { t: 'double', v: view(8).getFloat64(0, true) }
-    case JSON_TYPE.STRING: {
-      const { value: n, size } = varint(body, 0)
-      need(body, size, n)
-      return { t: 'string', v: fromUtf8(body.subarray(size, size + n)) }
-    }
+    case JSON_TYPE.STRING:
+      return { t: 'string', v: fromUtf8(sizedPayload(body, 0)) }
     case JSON_TYPE.CUSTOM: {
       need(body, 0, 1)
       const field = body[0] as number
-      const { value: n, size } = varint(body, 1)
-      need(body, 1 + size, n)
-      const payload = body.subarray(1 + size, 1 + size + n)
+      const payload = sizedPayload(body, 1)
       const packed = (): bigint => {
         need(payload, 0, 8)
         return new DataView(payload.buffer, payload.byteOffset, 8).getBigInt64(0, true)
@@ -774,12 +777,7 @@ function decodeContainer(c: Uint8Array, large: boolean, isObject: boolean): Json
   const entry = (at: number): JsonDoc => {
     need(c, at, 1 + w)
     const type = c[at] as number
-    if (isInlined(type, large)) {
-      const raw = get(at + 1)
-      const tmp = new Uint8Array(4)
-      new DataView(tmp.buffer).setUint32(0, raw, true)
-      return decodeAt(type, tmp)
-    }
+    if (isInlined(type, large)) return decodeAt(type, c.subarray(at + 1, at + 1 + w))
     const offset = get(at + 1)
     if (offset >= c.length) throw invalidJson(`value offset ${offset} past a ${c.length}-byte container`)
     return decodeAt(type, c.subarray(offset))

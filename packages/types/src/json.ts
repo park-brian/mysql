@@ -139,7 +139,7 @@ export function isInlined(type: number, large: boolean): boolean {
 /** Decode one binary JSON document. */
 export function decodeJson(bytes: Uint8Array, meta?: Omit<ColumnMeta, 'type'>): JsonValue {
   if (bytes.length === 0) throw invalidJson('empty document')
-  return decodeValue(bytes, bytes[0] as number, bytes.subarray(1), meta)
+  return decodeValue(bytes[0] as number, bytes.subarray(1), meta)
 }
 
 /**
@@ -149,7 +149,6 @@ export function decodeJson(bytes: Uint8Array, meta?: Omit<ColumnMeta, 'type'>): 
  * offset inside it container-relative without any arithmetic at the call site.
  */
 function decodeValue(
-  document: Uint8Array,
   type: number,
   body: Uint8Array,
   meta?: Omit<ColumnMeta, 'type'>,
@@ -212,7 +211,6 @@ function decodeValue(
 
 interface Header {
   readonly count: number
-  readonly size: number
   readonly offsetSize: number
   readonly headerSize: number
 }
@@ -228,7 +226,7 @@ function readHeader(container: Uint8Array, large: boolean): Header {
   if (size > container.length) {
     throw invalidJson(`container claims ${size} bytes but only ${container.length} are present`)
   }
-  return { count, size, offsetSize, headerSize: offsetSize * 2 }
+  return { count, offsetSize, headerSize: offsetSize * 2 }
 }
 
 function readValueEntry(
@@ -242,15 +240,14 @@ function readValueEntry(
   if (isInlined(type, large)) {
     // The value is in the entry itself. Reading it as an offset here is the
     // bug doc 28 warns about.
-    return decodeValue(container, type, container.subarray(at + 1), meta)
+    return decodeValue(type, container.subarray(at + 1), meta)
   }
   const offset = large ? u32(container, at + 1) : u16(container, at + 1)
   if (offset >= container.length) {
     throw invalidJson(`value offset ${offset} is past the end of a ${container.length}-byte container`)
   }
-  // Offsets are relative to the *container*, which is exactly why `container`
-  // and not the document is passed down.
-  return decodeValue(container, type, container.subarray(offset), meta)
+  // Value offsets are relative to the current container.
+  return decodeValue(type, container.subarray(offset), meta)
 }
 
 function decodeArray(container: Uint8Array, large: boolean, meta?: Omit<ColumnMeta, 'type'>): JsonValue[] {

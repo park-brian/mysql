@@ -659,7 +659,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       // A noncovering residual can feed either a clustered lookup or a hash build.
       const filteredScan = !index && residual !== undefined
       const buffered = !index && !filteredScan
-      const canBuffer = !index && settings.buffered && optimizerEnabled(ctx.env, 'condition_fanout_filter')
+      const canBuffer = settings.buffered && optimizerEnabled(ctx.env, 'condition_fanout_filter')
       if (buffered && !canBuffer) return undefined
       const firstMatch = { alias, enabled: optimizerEnabled(ctx.env, 'firstmatch'), filteredScan }
       if (index && optimizerEnabled(ctx.env, 'loosescan')) settings.loose = { alias, index, key, competeRange: strategy === 'BETWEEN' }
@@ -686,19 +686,31 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         if (strategy !== 'filteredHash' || !canBuffer || !firstMatch.enabled || materialized || node.lookup) return undefined
         return false
       }
-      const primary = node.lookup?.unique === true && node.lookup.index.kind === 'primary'
+      const primary = node.lookup?.unique && node.lookup.index.kind === 'primary'
       if (buffered && materialized) return undefined
       // An inner-first filtered build feeds an indexed materialized scan or weedout.
       if (filteredScan && (!primary || (materialized && materialized !== 'scan'))) return undefined
       // Indexed LooseScan retains PRIMARY identity; weedout retains physical outer identity.
-      const loose = !materialized && innerFirst && settings.loose && (node.lookup ? primary : settings.buffered)
-      // Fractional residuals use this path only when the covering read won.
-      if (strategy && strategy !== 'filteredHash' && (!loose || !firstMatch.enabled || !plan.positions[0]?.loose)) return undefined
+      let loose = !materialized && innerFirst && settings.loose && (node.lookup ? primary : settings.buffered)
+      let range = false
+      if (strategy && strategy !== 'filteredHash') {
+        if (!firstMatch.enabled) return undefined
+        if (!loose || !plan.positions[0]?.loose) {
+          // The selected temporary strategy keeps a primary range and its point probe.
+          const access = strategy === 'BETWEEN' && settings.loose && innerFirst && primary && ctx.env && chosenAccess(outer, settings, ctx.env)
+          if (!access || access.ranges?.length !== 1 || access.index !== 'PRIMARY' ||
+            (materialized ? materialized !== 'scan' : !optimizerEnabled(ctx.env, 'duplicateweedout'))) return undefined
+          range = true
+          loose = false
+          if (materialized) settings.rangeBuild = true
+          else settings.weedout = inner
+        }
+      }
       if (!loose) delete settings.loose
       if (!materialized && !loose && innerFirst && (filteredScan ? optimizerEnabled(ctx.env, 'duplicateweedout') : residual === undefined)) settings.weedout = inner
       if (materialized || loose || settings.weedout) {
         if (!filteredScan || settings.weedout) delete settings.firstMatch
-        if (index) this.readInOrder(index.name, true, false, alias)
+        if (index && !range) this.readInOrder(index.name, true, false, alias)
         return materialized !== 'lookup'
       }
       if (filteredScan || inner.alias !== alias || (buffered ? !firstMatch.enabled : !plan.lookups.has(alias))) return undefined
@@ -1010,6 +1022,8 @@ interface LeafSettings {
   ordered?: { readonly index: string; readonly force: boolean; readonly reverse: boolean; readonly alias: string | undefined; readonly covering: boolean | undefined }
   /** Order supplied before an indexed join expands or discards first-table rows. */
   firstSort?: { readonly alias: string; readonly keys: readonly SortKey[] }
+  /** Materializing the primary range keeps the residual and NULL filters separate. */
+  rangeBuild?: true
   /** LooseScan removes adjacent equal integer keys after the inner filter. */
   loose?: { readonly alias: string; readonly index: IndexDef; readonly key: Compiled; readonly competeRange?: boolean }
   /** Logical inner and FirstMatch availability for admitted semijoins; undefined keeps unmodeled residual costs. */
@@ -1818,10 +1832,9 @@ function filterOp(input: Op, conditions: readonly Placed[], leaf?: FromTable, se
       const below = input.describe(env)
       const semi = shown.length === 1 ? shown[0]?.semijoin : undefined
       if (semi !== undefined) return { ...semi, children: [below, ...semi.children] }
-      const filtered = filterPlan(shown.length > 0, below)
       // MySQL places the inferred non-NULL test above the residual build filter.
       const firstMatch = settings?.firstMatch
-      return filterPlan(firstMatch?.filteredScan === true && firstMatch.alias === leaf?.alias && shown.length === 2, filtered)
+      return filterPlan(shown.length === 2 && (settings?.rangeBuild || (firstMatch?.filteredScan && firstMatch.alias === leaf?.alias)), filterPlan(shown.length > 0, below))
     },
   }
 }

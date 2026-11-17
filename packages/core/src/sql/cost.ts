@@ -370,7 +370,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     const alternative = materialPlan(cost)
     cost += sortCost(rows)
     // An inner-first materialized scan wins its native equal-cost weedout tie.
-    const chosen = alternative !== undefined && (alternative.cost < cost || (alternative.cost === cost && loose === undefined && innerFirst))
+    const chosen = alternative !== undefined && (alternative.cost < cost || (alternative.cost === cost && (positions !== undefined || loose === undefined && innerFirst)))
       ? alternative : { cost, plan: positions ?? plan.slice() }
     // When revisiting a complete filtered semijoin plan, MySQL's best_read
     // already excludes the optimizer's 0.001 adjustment.
@@ -405,7 +405,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
       const placed = place(c)
       const next = step(plan.at(-1), placed)
       // Native heuristic pruning uses the original driver, before LooseScan fanout.
-      const pruned = plan.length === 0 && c.alias === loose?.alias ? driving as Step : next
+      const pruned = placed.loose ? driving! : next
       const costOfMaterial = materialPlan()?.cost ?? Infinity
       const cost = Math.min(pruned.cost, costOfMaterial)
       const rows = costOfMaterial === Infinity ? pruned.rows : Math.min(pruned.rows, (plan[0] as Step).rows)

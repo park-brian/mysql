@@ -2477,10 +2477,9 @@ fractional decimal lower bound and a written integer upper bound on the
 signed single-column `INT PRIMARY` key. It uses the covering read when
 LooseScan wins the cost comparison. Materialization and duplicate weedout
 compete with the covering scan using the ordinary primary-range driver.
-When either wins, the query keeps the existing dependent reader until those
-physical paths are verified for this residual. The original predicate
-filters the covering read in seed 2026111602, case 183, statement 15. Both
-wire protocols match MySQL 8.4.11 across inserts, updates and deletes. The
+The original predicate filters the covering read in seed 2026111602,
+case 183, statement 15. Both wire protocols match MySQL 8.4.11 across
+inserts, updates and deletes. The
 pinned audits fix 3,010 of 64,000 outcomes and preserve the rest, including
 other bounds, limited and locking reads, disabled strategies and unsupported
 index layouts. The fresh seeds improve from 131 to 132 of 138 plans. The
@@ -2491,8 +2490,26 @@ encoder writes sequential payloads without offset arrays. A before-and-after
 audit matched the bytes and decoded values of 20,026 documents, including
 the small-to-large boundary. The scalar string functions share their call
 setup and dispatch. Parser/core/facade measure 45,567/334,337/334,265 B
-gzipped under the existing caps. Continue M5.47 with the competing primary
-range materialization and duplicate weedout readers.
+gzipped under the existing caps.
+
+**M5.47 primary-range materialization and duplicate weedout, verified.**
+For the same fractional primary `BETWEEN` residual, the selected temporary
+strategy can build from one physical child `PRIMARY` range and probe the
+parent by its unique primary key. Materialization wins its equal-cost
+weedout tie. Its build keeps the original residual and the nullable child
+key check as separate filters. Duplicate weedout keeps the parent row's
+physical identity. Both wire protocols match MySQL 8.4.11 across writes,
+including setting the matching child key to NULL. The pinned audits fix
+149 of 27,136 outcomes, preserving all others in those audits and 36,864
+additional index controls. The committed relational ledger and the three
+fresh seeds, with 132 of 138 matching plans, are unchanged.
+
+Group aggregates reuse the ordered argument reader. Both binary JSON
+readers and the current encoder preserve bytes, values and truncation
+errors across 20,026 documents. Parser/core/facade measure
+45,567/334,353/334,266 B gzipped within the existing caps. Continue M5.47
+with the noncovering fractional comparison in seed 2026111603, case 41,
+statement 11, where MySQL chooses duplicate weedout over a child table scan.
 
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.

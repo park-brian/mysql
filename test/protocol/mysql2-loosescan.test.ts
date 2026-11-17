@@ -23,7 +23,7 @@ const coveringLooseScan = `Sort
                     Covering index scan on ch using pa_id
             Single-row index lookup on pa using PRIMARY`
 
-async function readFractionalSemijoin(conn: mysql.Connection, schema: string, sql: string, names: readonly string[], plan: string | RegExp = coveringLooseScan) {
+async function readFractionalSemijoin(conn: mysql.Connection, schema: string, sql: string, names: readonly string[], plan = coveringLooseScan) {
   const options = { sql, rowsAsArray: true }
   const explain = `EXPLAIN FORMAT=TREE ${sql}`
   for (const api of ['query', 'execute'] as const) {
@@ -33,9 +33,7 @@ async function readFractionalSemijoin(conn: mysql.Connection, schema: string, sq
       [['name', 253, 48, 4097, 0, 224, schema, 'pa', 'pa', 'name']], api)
     assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], api)
     const [explained] = api === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
-    const skeleton: string = planSkeleton(explained[0]?.EXPLAIN)
-    if (typeof plan === 'string') assert.equal(skeleton, plan, api)
-    else assert.match(skeleton, plan, api)
+    assert.equal(planSkeleton(explained[0]?.EXPLAIN), plan, api)
   }
 }
 
@@ -88,12 +86,32 @@ test('a fractional BETWEEN primary range competes with a covering LooseScan', as
     await conn.query('INSERT INTO pa VALUES ' + Array.from({ length: 12 }, (_, i) => `(${i + 1},'p${12 - i}')`).join(','))
     await conn.query('INSERT INTO ch VALUES (1,1),(2,2),(3,3),(4,4),(5,NULL),(6,6),(7,7),(8,8)')
     await conn.query('ANALYZE TABLE pa,ch')
-    const fallback = /^Filter\n    Covering index scan on pa using name\n    Select #2/
-    await readFractionalSemijoin(conn, schema, sql, ['p7'], db ? fallback : /Materialize with deduplication/)
+    const materialized = `Sort
+    Stream results
+        Nested loop inner join
+            Filter
+                Table scan on <subquery2>
+                    Materialize with deduplication
+                        Filter
+                            Filter
+                                Index range scan on ch using PRIMARY over
+            Single-row index lookup on pa using PRIMARY`
+    const weedout = `Sort
+    Stream results
+        Remove duplicate pa rows using temporary table
+            Nested loop inner join
+                Filter
+                    Index range scan on ch using PRIMARY over
+                Single-row index lookup on pa using PRIMARY`
+    await readFractionalSemijoin(conn, schema, sql, ['p7'], materialized)
     await conn.query("SET optimizer_switch='materialization=off'")
-    await readFractionalSemijoin(conn, schema, sql, ['p7'], db ? fallback : /Remove duplicate pa rows using temporary table/)
+    await readFractionalSemijoin(conn, schema, sql, ['p7'], weedout)
+    await conn.query('UPDATE ch SET pa_id=10 WHERE id=6')
+    await readFractionalSemijoin(conn, schema, sql, ['p3'], weedout)
     await conn.query("SET optimizer_switch='materialization=on,duplicateweedout=off'")
-    await readFractionalSemijoin(conn, schema, sql, ['p7'], db ? fallback : /Materialize with deduplication/)
+    await readFractionalSemijoin(conn, schema, sql, ['p3'], materialized)
+    await conn.query('UPDATE ch SET pa_id=NULL WHERE id=6')
+    await readFractionalSemijoin(conn, schema, sql, [], materialized)
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end(); await db?.end()
