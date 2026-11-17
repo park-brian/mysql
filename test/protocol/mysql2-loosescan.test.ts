@@ -23,14 +23,15 @@ const coveringLooseScan = `Sort
                     Covering index scan on ch using pa_id
             Single-row index lookup on pa using PRIMARY`
 
-async function readFractionalSemijoin(conn: mysql.Connection, schema: string, sql: string, names: readonly string[], plan = coveringLooseScan) {
+async function readSemijoin(conn: mysql.Connection, schema: string, sql: string, names: readonly string[], plan = coveringLooseScan,
+  { flags, charset } = { flags: 4097, charset: 224 }) {
   const options = { sql, rowsAsArray: true }
   const explain = `EXPLAIN FORMAT=TREE ${sql}`
   for (const api of ['query', 'execute'] as const) {
     const [rows, fields] = api === 'query' ? await conn.query(options) : await conn.execute(options)
     assert.deepEqual(rows, names.map((name) => [name]), api)
     assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]),
-      [['name', 253, 48, 4097, 0, 224, schema, 'pa', 'pa', 'name']], api)
+      [['name', 253, 48, flags, 0, charset, schema, 'pa', 'pa', 'name']], api)
     assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], api)
     const [explained] = api === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
     assert.equal(planSkeleton(explained[0]?.EXPLAIN), plan, api)
@@ -49,11 +50,11 @@ test('a covering LooseScan costs a fractional NOT IN primary residual', async ()
     await conn.query("INSERT INTO pa(name,grp,amt) VALUES ('Mo',NULL,165.82),('al',2,214.05),('cy',2,-10.35),('dee',3,230.97),('ann',NULL,296.50)")
     await conn.query("INSERT INTO ch(pa_id,label,qty) VALUES (NULL,'zoë',0),(6,'green',4),(5,'green',6),(5,'Blue',3),(1,'cy',3),(3,NULL,0),(4,'cy',2),(1,'cy',4)")
     await conn.query('ANALYZE TABLE pa,ch')
-    await readFractionalSemijoin(conn, schema, sql, ['ann', 'dee', 'Mo'])
+    await readSemijoin(conn, schema, sql, ['ann', 'dee', 'Mo'])
     await conn.query('UPDATE ch SET pa_id=2 WHERE id=7')
-    await readFractionalSemijoin(conn, schema, sql, ['al', 'ann', 'Mo'])
+    await readSemijoin(conn, schema, sql, ['al', 'ann', 'Mo'])
     await conn.query('UPDATE ch SET pa_id=4 WHERE id=7')
-    await readFractionalSemijoin(conn, schema, sql, ['ann', 'dee', 'Mo'])
+    await readSemijoin(conn, schema, sql, ['ann', 'dee', 'Mo'])
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end(); await db?.end()
@@ -72,13 +73,13 @@ test('a fractional BETWEEN primary range competes with a covering LooseScan', as
     await conn.query("INSERT INTO pa VALUES (1,'Bob'),(2,'ann'),(3,'ÄNNA'),(4,'x y'),(5,'Mo')")
     await conn.query('INSERT INTO ch VALUES (1,2),(2,7),(3,1),(4,7),(5,5)')
     await conn.query('ANALYZE TABLE pa,ch')
-    await readFractionalSemijoin(conn, schema, sql, [])
+    await readSemijoin(conn, schema, sql, [])
     await conn.query('INSERT INTO ch VALUES (6,2)')
-    await readFractionalSemijoin(conn, schema, sql, ['ann'])
+    await readSemijoin(conn, schema, sql, ['ann'])
     await conn.query('UPDATE ch SET pa_id=3 WHERE id=6')
-    await readFractionalSemijoin(conn, schema, sql, ['ÄNNA'])
+    await readSemijoin(conn, schema, sql, ['ÄNNA'])
     await conn.query('DELETE FROM ch WHERE id=6')
-    await readFractionalSemijoin(conn, schema, sql, [])
+    await readSemijoin(conn, schema, sql, [])
 
     // The full covering scan now reads more distinct keys while the primary range reads one row.
     await conn.query('DELETE FROM pa')
@@ -103,15 +104,15 @@ test('a fractional BETWEEN primary range competes with a covering LooseScan', as
                 Filter
                     Index range scan on ch using PRIMARY over
                 Single-row index lookup on pa using PRIMARY`
-    await readFractionalSemijoin(conn, schema, sql, ['p7'], materialized)
+    await readSemijoin(conn, schema, sql, ['p7'], materialized)
     await conn.query("SET optimizer_switch='materialization=off'")
-    await readFractionalSemijoin(conn, schema, sql, ['p7'], weedout)
+    await readSemijoin(conn, schema, sql, ['p7'], weedout)
     await conn.query('UPDATE ch SET pa_id=10 WHERE id=6')
-    await readFractionalSemijoin(conn, schema, sql, ['p3'], weedout)
+    await readSemijoin(conn, schema, sql, ['p3'], weedout)
     await conn.query("SET optimizer_switch='materialization=on,duplicateweedout=off'")
-    await readFractionalSemijoin(conn, schema, sql, ['p3'], materialized)
+    await readSemijoin(conn, schema, sql, ['p3'], materialized)
     await conn.query('UPDATE ch SET pa_id=NULL WHERE id=6')
-    await readFractionalSemijoin(conn, schema, sql, [], materialized)
+    await readSemijoin(conn, schema, sql, [], materialized)
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end(); await db?.end()
@@ -137,14 +138,49 @@ test('an ordered IN can weed out an unindexed fractional comparison over a table
     await conn.query("INSERT INTO pa VALUES (1,'al'),(2,'x y')")
     await conn.query('INSERT INTO ch VALUES (1,2,3)')
     await conn.query('ANALYZE TABLE pa,ch')
-    await readFractionalSemijoin(conn, schema, sql, [], plan)
+    await readSemijoin(conn, schema, sql, [], plan)
     await conn.query('UPDATE ch SET qty=1 WHERE id=1')
-    await readFractionalSemijoin(conn, schema, sql, ['x y'], plan)
+    await readSemijoin(conn, schema, sql, ['x y'], plan)
     await conn.query('UPDATE ch SET pa_id=NULL WHERE id=1')
-    await readFractionalSemijoin(conn, schema, sql, [], plan)
+    await readSemijoin(conn, schema, sql, [], plan)
     await conn.query("SET optimizer_switch='materialization=off'")
     await conn.query('UPDATE ch SET pa_id=1 WHERE id=1')
-    await readFractionalSemijoin(conn, schema, sql, ['al'], plan)
+    await readSemijoin(conn, schema, sql, ['al'], plan)
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
+
+test('an unordered IN can weed out a noncovering text comparison', async () => {
+  const { db, conn } = await looseScanConnection()
+  const schema = 'unordered_text_weedout'
+  const sql = "SELECT name FROM pa WHERE id IN (SELECT pa_id FROM ch WHERE ch.label > 'dee')"
+  const plan = `Remove duplicate pa rows using temporary table
+    Nested loop inner join
+        Filter
+            Table scan on ch
+        Single-row index lookup on pa using PRIMARY`
+  const read = (names: readonly string[]) => readSemijoin(conn, schema, sql, names, plan, { flags: 20485, charset: 255 })
+  try {
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,pa_id INT,label VARCHAR(10),KEY(pa_id)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO pa VALUES (1,'cy'),(2,'al'),(3,'x y')")
+    await conn.query("INSERT INTO ch VALUES (1,4,'red')")
+    await conn.query('ANALYZE TABLE pa,ch')
+    await read([])
+    await conn.query('UPDATE ch SET pa_id=1 WHERE id=1')
+    await read(['cy'])
+    await conn.query("UPDATE ch SET label='dée' WHERE id=1")
+    await read([])
+    await conn.query("UPDATE ch SET pa_id=NULL,label='red' WHERE id=1")
+    await read([])
+    await conn.query("SET optimizer_switch='materialization=off'")
+    await conn.query('UPDATE ch SET pa_id=2 WHERE id=1')
+    await read(['al'])
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end(); await db?.end()

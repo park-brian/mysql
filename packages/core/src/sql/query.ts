@@ -1354,7 +1354,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   if (any && (limitOrLock || hasLeadingKey(outerDef, outerField.parts[1]!))) return undefined
   let residual: Extract<Expression, { kind: typeof NODE.BINARY }> | undefined
   let text = false
-  let looseOnly: 'BETWEEN' | 'NOT IN' | undefined
+  let strategy: 'filteredHash' | 'weedout' | 'BETWEEN' | 'NOT IN' | undefined
   if (extra !== undefined && !notNull) {
     if (any || extra.kind !== NODE.BINARY) return undefined
     const field = qualify(extra.left, innerAlias)
@@ -1366,7 +1366,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
       const bounds = op === 'BETWEEN' ? [extra.extra as Expression, right] : right.kind === NODE.ROW ? right.items : []
       if (exists || limitOrLock || bounds.length !== 2 || !integerLiteral(bounds[0]) || bounds[1]!.kind !== NODE.LITERAL ||
         !fractionalIntBound(constantValue(bounds[1]!, run.env))) return undefined
-      looseOnly = op
+      strategy = op
     } else {
       if (right.kind !== NODE.LITERAL) return undefined
       text = !exists && textBesideColumn(field, right) && (isOrderedComparison(extra.op) ||
@@ -1381,7 +1381,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     if (def === undefined) return undefined
     const field = residual && tableColumn(residual.left, def, innerAlias)
     const signedInt = field?.type.type === FIELD_TYPE.LONG && !field.type.unsigned
-    if (looseOnly && (!signedInt || !def.indexes.some((i) => i.kind === 'primary' && i.parts.length === 1 && i.parts[0]!.column === field.name))) return undefined
+    if (strategy && (!signedInt || !def.indexes.some((i) => i.kind === 'primary' && i.parts.length === 1 && i.parts[0]!.column === field.name))) return undefined
     if (any && (hasLeadingKey(def, innerColumn) || from.access(run.env).index !== undefined)) return undefined
     let nullTest: typeof notNull
     if (notNull) {
@@ -1406,13 +1406,16 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     const ordersOuter = sortBy === outerAlias
     if (text && (!scanOnly || !sessionVarchar(field, run))) return undefined
     if ((any || scanOnly) && hasGenerated(def, outerDef)) return undefined
-    let strategy: 'filteredHash' | 'weedout' | typeof looseOnly = looseOnly
     if (scanOnly) {
-      if ((!ordersOuter && (!exists || q.orderBy !== undefined)) || limitOrLock || !singleRefIndex(index) ||
+      if ((!ordersOuter && q.orderBy !== undefined) || limitOrLock || !singleRefIndex(index) ||
         def.indexes.some((i) => holdsRead(def, i, innerRead))) return undefined
       if (exists) {
         if (residual?.op !== '>' || !integerLiteral(residual.right)) return undefined
         strategy = 'filteredHash'
+      } else if (!ordersOuter) {
+        // An unordered text comparison can use the same weedout scan.
+        if (!text || residual?.op !== '>' || field === undefined || indexedColumn(def, field.name)) return undefined
+        strategy = 'weedout'
       } else if (!text) {
         // A noncovering fractional comparison can feed the selected weedout scan.
         if (residual?.op !== '<=' || !signedInt || indexedColumn(def, field.name) || !fractionalIntBound(constantValue(residual.right, run.env))) return undefined
@@ -1431,7 +1434,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     alternative.sortedBy(sortBy, keep)
     const innerFirst = alternative.integerSemijoin(innerAlias, scanOnly ? undefined : index, key, residual,
       !someNode([node.items, q.orderBy], (n) => (n as Expression).kind === NODE.SUBQUERY || undefined), strategy)
-    if (innerFirst === undefined || (scanOnly && innerFirst && !ordersOuter)) return undefined
+    if (innerFirst === undefined || (scanOnly && innerFirst && !ordersOuter && exists)) return undefined
     // MySQL substitutes the first field of an equality class after join ordering.
     const outerType = !innerFirst && nullTest ? tableColumn(outerField, outerDef, outerAlias)?.type : undefined
     const preserve = nullTest && outerType?.type === key.type.field && (outerType.unsigned === true) === key.type.unsigned

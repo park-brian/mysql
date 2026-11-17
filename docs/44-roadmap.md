@@ -139,7 +139,7 @@ and 296 now match. Projected, negated, nullable `ALL` and indexed extrema
 have separate admission rules.
 
 **M5.47 fresh relational seeds.** Three MySQL 8.4.11 seeds of 300 scripts
-each now match 133 of 138 semijoin and quantified plans. The ordered
+each now match 134 of 138 semijoin and quantified plans. The ordered
 `IN` cases with `>` and a standalone wildcard-leading `LIKE` now match,
 as do the six unindexed integer `= ANY` and `= SOME` cases with a bare
 inner key or a direct `IS NOT NULL` test. Four unindexed integer `<> ALL`
@@ -152,7 +152,9 @@ fractional decimal now uses the bound covering read's cost. Case 300,
 statement 13 matches. In seed 2026111602, covering LooseScan matches the
 fractional primary-key `NOT IN` in case 296, statement 16 and `BETWEEN` in
 case 183, statement 15. In seed 2026111603, case 41, statement 11 matches
-with duplicate weedout over the child table scan.
+with duplicate weedout over the child table scan. In seed 2026111602,
+case 9, statement 16 also uses duplicate weedout for the unordered text
+comparison.
 
 **0.3 is staged**, with exact workspace versions and installed-package smoke
 checks. Publication still requires claiming the npm scope/name and publishing
@@ -2526,9 +2528,22 @@ the committed relational ledger. The three fresh seeds improve to
 `INFORMATION_SCHEMA` catalog readers supply plain strings and numbers.
 One conversion assigns the output column's collation and integer values.
 The 2,568 pinned schema observations agree. Parser/core/facade measure
-45,567/334,324/334,243 B gzipped within the existing caps. M5.47 stays
-partial. The next case to investigate is the unordered noncovering text
-comparison in seed 2026111602, case 9, statement 16.
+45,567/334,324/334,243 B gzipped within the existing caps.
+
+**M5.47 unordered noncovering text weedout, verified.** A positive integer
+`IN` with no order, limit or lock can use duplicate weedout for a written
+`>` comparison of an unindexed session-collated `VARCHAR` column with
+a literal. The selected child table scan retains the original predicate,
+then probes the parent's unique `PRIMARY` key. Both wire protocols match
+MySQL 8.4.11 across rekeying, an accent-equivalent endpoint, a NULL residual
+and a NULL membership key. The two pinned audits repair 492 of 21,504
+outcomes and preserve the rest plus 53,760 index and collation controls.
+The committed relational ledger is unchanged, and the three fresh seeds
+reach 134 of 138 matching plans.
+One strategy variable carries the admission from the written predicate to
+the physical planner. Parser/core/facade measure 45,567/334,327/334,253 B
+gzipped within the existing caps. M5.47 stays partial. Seed 2026111603,
+case 135, statement 14 is the next covering LooseScan case to investigate.
 
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.
