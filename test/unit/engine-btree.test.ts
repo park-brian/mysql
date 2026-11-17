@@ -501,6 +501,32 @@ test('review: a tree opened at an older schema version than its leaves refuses t
   assert.throws(() => stale.get(be(1)), (e: EngineError) => e.code === 'ENGINE_MISUSE')
 })
 
+test('a reopened store can free a versioned raw tree without decoding its values', async () => {
+  for (const rows of [1, 40]) {
+    const files = await freshFiles()
+    let store = Store.create(...files, { frames: 32 })
+    const tree = store.createTree({ schemaVersion: 2, upgrade: (v) => v })
+    for (let i = 0; i < rows; i++) tree.put(be(i), new Uint8Array(120))
+    assert.equal(tree.height() > 1, rows > 1)
+    const other = store.createTree()
+    other.put(be(1), be(2))
+    store.checkpoint()
+    store = Store.open(...files, { frames: 32 })
+    const stale = store.openTree(tree.indexId)
+    const newerSchema = (error: EngineError) => error.code === 'ENGINE_MISUSE'
+    assert.throws(() => stale.get(be(0)), newerSchema)
+    assert.throws(() => stale.nodePages(() => assert.fail('callback sees newer bytes')), newerSchema)
+    store.dropTree(tree.indexId)
+    assert.equal(store.hasTree(tree.indexId), false)
+    verifyStore(store)
+    store.checkpoint()
+    store = Store.open(...files, { frames: 32 })
+    assert.equal(store.hasTree(tree.indexId), false)
+    assert.deepEqual(store.openTree(other.indexId).get(be(1)), be(2))
+    verifyStore(store)
+  }
+})
+
 test('review: a file of more than one allocation group verifies', async () => {
   // At 512-byte pages a group is 40 extents, so a few thousand rows cross it.
   const store = Store.create(...(await freshFiles(512)), { frames: 32 })

@@ -3350,6 +3350,20 @@ overlapping timings in separate probes. The existing one-descent checks
 pass. M5.50 still needs a measured end-to-end INSERT gain and durable
 transactional schema ownership.
 
+**M5.50 reopened versioned raw tree drop, verified.** A topology-only
+page walk checks page ownership and structure with no leaf value decoder.
+Normal value reads, writes and leaf callbacks still check the schema
+version. The test covers a root leaf, a deeper tree and an unrelated tree
+through two store reopenings. The private error reader splits its state
+field once to keep the existing size caps, and all 65,536 public lookup
+slots agree. Six paired runs of the 5,000-row INSERT benchmark have median
+times of 68.6 and 68.8 ms. Full Docker verification passes 1,881 tests,
+all nine size gates, seeded fuzzing, 10,000 crash points, package and client
+smoke and all seven pinned corpora, including 1,737 coercion warning counts.
+Parser, core and facade measure 44,526, 334,333 and 334,263 gzipped bytes.
+The measured speed criterion and durable schema ownership for transactional
+upgrades remain open.
+
 **M5.12 SHOW column metadata, verified.** The wire layouts for SHOW
 COLUMNS, DESCRIBE and SHOW INDEX use their compiled column names and one
 view name per statement kind. Each layout carries its original table, wire

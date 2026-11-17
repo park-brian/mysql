@@ -52,13 +52,11 @@ function load(): ErrorTable {
       errno = Number(row.slice(1))
       continue
     }
-    const space = row.indexOf(' ')
-    const packedSymbol = space === -1 ? row : row.slice(0, space)
+    const [packedSymbol, sqlState = DEFAULT_SQLSTATE] = row.split(' ') as [string, string?]
     const prefix = packedSymbol[0] === '!' ? '' : 'ER_'
     const symbol = prefix + packedSymbol.match(/[a-l]|[m-z][a-z]|[A-Z0-9]+|~/g)!.map(unpack).join('_')
     // A trailing space abbreviates 42000, the most common nondefault SQLSTATE.
-    const sqlState = space === -1 ? DEFAULT_SQLSTATE : row.slice(space + 1) || '42000'
-    const entry: Entry = { errno, symbol, sqlState }
+    const entry: Entry = { errno, symbol, sqlState: sqlState || '42000' }
     bySymbol.set(symbol, entry)
     // Some symbols share a number (aliases); the first wins for errno lookup.
     if (!byErrno.has(errno)) byErrno.set(errno, entry)

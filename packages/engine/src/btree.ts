@@ -279,14 +279,16 @@ export class BTree {
   nodePages(leafValue?: (value: Uint8Array) => void): number[] {
     const out: number[] = []
     const pending = [this.root]
-    for (let pageNo = pending.pop(); pageNo !== undefined; pageNo = pending.pop()) {
+    while (pending.length > 0) {
+      const pageNo = pending.pop()!
       if (out.length > this.space.alloc.pageCount) throw corrupt(this.root, 'the tree reaches more pages than the file has')
       out.push(pageNo)
+      // A topology-only walk needs no decoder for leaf values.
       this.#read(pageNo, (p) => {
         const n = ip.cellCount(p)
         if (ip.level(p) > 0) for (let i = 0; i < n; i++) pending.push(ip.childAt(p, i))
         else if (leafValue !== undefined) for (let i = 0; i < n; i++) leafValue(ip.cell(p, i).value)
-      })
+      }, undefined, leafValue === undefined)
     }
     return out
   }
@@ -298,10 +300,10 @@ export class BTree {
    * anywhere else — another index, a map page, the wrong level — is corruption,
    * reported as such rather than read as a node.
    */
-  #fetch(pageNo: number, level?: number): Uint8Array {
+  #fetch(pageNo: number, level?: number, topologyOnly?: boolean): Uint8Array {
     const page = this.space.pool.fetch(pageNo)
     try {
-      this.#check(page, pageNo, level)
+      this.#check(page, pageNo, level, topologyOnly)
     } catch (e) {
       this.space.pool.release(page)
       throw e
@@ -309,20 +311,21 @@ export class BTree {
     return page
   }
 
-  #check(page: Uint8Array, pageNo: number, level?: number): void {
-    if (pageType(page) !== PAGE_TYPE.INDEX || ip.indexIdOf(page) !== this.indexId || (level !== undefined && ip.level(page) !== level)) {
+  #check(page: Uint8Array, pageNo: number, level?: number, topologyOnly?: boolean): void {
+    const actualLevel = ip.level(page)
+    if (pageType(page) !== PAGE_TYPE.INDEX || ip.indexIdOf(page) !== this.indexId || (level !== undefined && actualLevel !== level)) {
       throw corrupt(pageNo, `not a level-${level ?? '?'} page of index ${this.indexId}`)
     }
     // A leaf written at a newer version than this tree was opened with would be
     // read as the wrong layout and, on its next write, stamped with the older
     // version: its records upgraded twice later. Refused instead.
-    if (ip.level(page) === 0 && ip.schemaVersion(page) > this.#version) {
+    if (!topologyOnly && actualLevel === 0 && ip.schemaVersion(page) > this.#version) {
       throw misuse(`leaf ${pageNo} is at schema version ${ip.schemaVersion(page)}; the tree was opened at ${this.#version}`)
     }
   }
 
-  #read<T>(pageNo: number, use: (page: Uint8Array) => T, level?: number): T {
-    const page = this.#fetch(pageNo, level)
+  #read<T>(pageNo: number, use: (page: Uint8Array) => T, level?: number, topologyOnly?: boolean): T {
+    const page = this.#fetch(pageNo, level, topologyOnly)
     try {
       return use(page)
     } finally {
