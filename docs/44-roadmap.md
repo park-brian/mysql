@@ -2736,6 +2736,28 @@ The parser, core, and facade measure 45,567, 334,359, and 334,261 bytes
 gzipped within the existing caps.
 Other unbuffered loops and broader predicate shapes remain open.
 
+**M5.49 right-side primary ranges in a buffered LEFT hash join, verified.**
+In captured case 3:14, MySQL 8.4.11 reads two right-side ranges for
+`n NOT IN (2, 5.5)` on a signed `INT` primary key. The fraction cannot
+equal a stored key. MyJS chooses the two ranges through the existing
+range chooser and keeps the original `ON` filter and NULL extension of
+unmatched rows. Both wire protocols agree in the regression through a
+primary-key update. The differential checks repair 26 outcomes and keep
+514 controls unchanged. A separate 26-case check covers index hints on
+both sides of the join with empty and populated right tables. MyJS
+honors right-side `IGNORE INDEX` and `USE INDEX ()` and matches all 26
+outcomes. A separate 48-case audit repairs plans for `LEFT JOIN`, `RIGHT
+JOIN`, `LIMIT`, and locking reads, and matches native rows, fields and
+warning counts through both protocols. The 300-case replay changes only
+the captured plan. Preserve the written list order in the admission proof.
+The broader range prototype changed 12 already-correct plans for
+fraction-first lists. Full Docker verification passes 1,851 tests, the
+seeded fuzz suites, 10,000 crash points, package and real-client smoke,
+and all seven pinned corpora. Parser, core and facade measure 44,945,
+333,947 and 333,897 bytes gzipped within the existing caps. Wider primary
+shapes, named ranges in set-operation branches and range selection after
+outer-join simplification remain open.
+
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.
 Grouping, DISTINCT and byte readers now see the same result collation.

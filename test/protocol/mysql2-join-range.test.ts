@@ -5,12 +5,17 @@ import { MySQL } from '@myjs/core'
 // @ts-expect-error — the capture owns plan normalization.
 import { planSkeleton } from '../../tools/capture-relational.mjs'
 
-test('join range quotes preserve native ref choices, fields, buffering, order and fresh parameters', async () => {
+async function rangeConnection() {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = await mysql.createConnection(db === undefined
     ? { host: host ?? 'reference', user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
     : { stream: db.createStream(), user: 'root' })
+  return { db, conn }
+}
+
+test('join range quotes preserve native ref choices, fields, buffering, order and fresh parameters', async () => {
+  const { db, conn } = await rangeConnection()
   const schema = 'join_range110'
   const indent = (plan: string, spaces: number) => plan.split('\n').map((line) => ' '.repeat(spaces) + line).join('\n')
   try {
@@ -65,6 +70,52 @@ test('join range quotes preserve native ref choices, fields, buffering, order an
       }
       await conn.query('DROP TABLE pa,ch')
     }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
+
+test('a LEFT hash build reads the right primary ranges and retains the ON filter', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'join_range393'
+  try {
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,label VARCHAR(10)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE r(n INT PRIMARY KEY,s VARCHAR(10) CHARACTER SET latin1,t VARCHAR(10) COLLATE utf8mb4_bin) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO p VALUES (1,'x'),(2,'Blue'),(3,'red'),(4,NULL)")
+    const read = async (expected: (number | null)[][], hint = '') => {
+      const sql = `SELECT p.id,r.n FROM p LEFT JOIN r ${hint} ON p.label=r.t AND r.s='zoë' AND r.n NOT IN (2,5.5) ORDER BY p.id,r.n`
+      const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+      const tree = String(explain[0]?.EXPLAIN)
+      assert.equal(planSkeleton(tree), `Sort
+    Stream results
+        Left hash join
+            Table scan on p
+            Hash
+                Filter
+                    ${hint ? 'Table scan on r' : 'Index range scan on r using PRIMARY over'}`)
+      if (!hint) assert.match(tree, /Index range scan on r using PRIMARY over \(n < 2\) OR \(2 < n\)(?= +\(cost=|\n)/)
+      for (const method of ['query', 'execute'] as const) {
+        const options = { sql, rowsAsArray: true }
+        const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+        assert.deepEqual(rows, expected)
+        assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
+          ['id', 3, 11, 4097, 0, 63, schema, 'p', 'p', 'id'],
+          ['n', 3, 11, 4096, 0, 63, schema, 'r', 'r', 'n'],
+        ])
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      }
+    }
+    await conn.query('ANALYZE TABLE p,r')
+    await read([[1, null], [2, null], [3, null], [4, null]])
+    await conn.query("INSERT INTO r VALUES (1,'Bob','x'),(2,'zoë','x'),(6,'zoë','Blue'),(7,'zoë',NULL)")
+    await conn.query('ANALYZE TABLE r')
+    await read([[1, null], [2, 6], [3, null], [4, null]])
+    await conn.query('UPDATE r SET n=3 WHERE n=2')
+    await read([[1, 3], [2, 6], [3, null], [4, null]])
+    await read([[1, 3], [2, 6], [3, null], [4, null]], 'IGNORE INDEX FOR JOIN (PRIMARY)')
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end(); await db?.end()

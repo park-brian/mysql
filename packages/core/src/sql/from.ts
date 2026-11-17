@@ -43,7 +43,7 @@ import { messages, sqlError } from '@myjs/protocol'
 import { integerBytes, truth, type ColumnType, type Value } from '@myjs/types'
 import { compatibleEqualityKeys, type Compiled, type Env, type Row, type Scope } from './compile.ts'
 import { coveringScan, filterPlan, indexLookup, lookupMaterialized, materialize, planNode, scanMaterialized, tableScan, wrap, type PlanNode } from './explain.ts'
-import { FULL_SCAN, chooseAccess, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type InferredRange, type OuterColumn, type RangeCosting } from './plan.ts'
+import { FULL_SCAN, chooseAccess, constantValue, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type InferredRange, type OuterColumn, type RangeCosting } from './plan.ts'
 import { ROW_EVALUATE, bestAccess, floorFilter, indexScanCost, joinOrder, materializedAntijoinWins, membershipCost, type Candidate, type FirstMatch, type KeyChoice, type Positioned, type RangeRead } from './cost.ts'
 import { rowKey, valueKey } from './keys.ts'
 import { fulltextOf } from './fulltext.ts'
@@ -51,6 +51,7 @@ import { chooseStrategy } from './group.ts'
 import { clusteredIndex, forwardKeyPart, indexPartMatchesColumn, indexParts, leadingIndex, singleRefIndex, uniquePoint } from './indexes.ts'
 import { accessRows, distinct, sort as sortRows, type SortKey } from './operators.ts'
 import { neverEqual, rejectsNullExtension } from './optimize.ts'
+import { fractionalIntBound } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
 import { equalSlots, unknownColumnError, safeIndex, safeResolve, TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
 
@@ -59,6 +60,7 @@ export interface FromTable extends ScopeTableSpec {
   readonly alias: string
   readonly def?: TableDef | undefined
   readonly table?: Table | undefined
+  readonly indexHints?: readonly IndexHint[] | undefined
   /** A derived table's or a CTE's rows and columns, when it is not a base table. */
   readonly derived?: DerivedSource | undefined
   readonly nullable: boolean
@@ -362,7 +364,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       derived = ctx.derived(p.derivedRef, p.derivedRef.lateral === true ? before : undefined)
     }
     const width = derived?.columns.length ?? p.def!.columns.length
-    const table: FromTable = { alias: p.alias, def: p.def, table: p.table, columns: derived?.columns, schema: p.schema, derived, nullable: p.nullable, offset, width, lateral: p.derivedRef?.lateral === true }
+    const table: FromTable = { alias: p.alias, def: p.def, table: p.table, indexHints: p.indexHints, columns: derived?.columns, schema: p.schema, derived, nullable: p.nullable, offset, width, lateral: p.derivedRef?.lateral === true }
     byAlias.set(p.alias, table)
     tables.push(table)
     offset += width
@@ -1319,9 +1321,9 @@ function holds(conditions: readonly Placed[], row: Row, env: Env): boolean {
  * joined. A WHERE condition never goes into the side an outer join may null,
  * nor an outer join's ON condition into its preserved side.
  */
-function toOp(node: Node, conditions: readonly Placed[], settings: LeafSettings, ctx: FromContext, preliminary: TableScope): Op {
+function toOp(node: Node, conditions: readonly Placed[], settings: LeafSettings, ctx: FromContext, preliminary: TableScope, held?: Access): Op {
   if (node.kind === 'leaf') {
-    let op = filterOp(tableOp(node.table, settings), conditions, node.table, settings)
+    let op = filterOp(tableOp(node.table, settings, held), conditions, node.table, settings)
     const loose = settings.loose
     if (loose?.alias === node.table.alias) {
       const input = op
@@ -1385,7 +1387,8 @@ function toOp(node: Node, conditions: readonly Placed[], settings: LeafSettings,
     return filterOp(weedoutOp(indexedJoinOp(node, outer, innerTable, node.lookup, [...toInner, ...spanning], settings), settings.weedout), above)
   }
   const repeated = settings.buffered === false && !materialized
-  const inner = toOp(node.inner, repeated ? [...toInner, ...spanning] : toInner, settings, ctx, preliminary)
+  const access = node.left && settings.buffered && innerTable && ctx.env ? localOnRange(innerTable, toInner, settings, ctx.env) : undefined
+  const inner = toOp(node.inner, repeated ? [...toInner, ...spanning] : toInner, settings, ctx, preliminary, access)
   if (repeated) return filterOp(weedoutOp(nestedJoinOp(node, outer, inner, []), settings.weedout), above)
   const joinScope = slotScope(preliminary, new Set([...outerAliases, ...innerAliases]))
   const keys = hashKeys(spanning, outerAliases, innerAliases, scope, (e) => ctx.compileOn(e, joinScope))
@@ -1400,6 +1403,27 @@ function toOp(node: Node, conditions: readonly Placed[], settings: LeafSettings,
   const anti = node.left && !materialized && !autoIndex && innerTable !== undefined && node.outer.kind === 'leaf' &&
     above.length === 1 && testsNullExtension(above[0]!.e, innerTable, scope) && spanning.some(({ e }) => equalitySides(e, outerAliases, innerAliases, scope) !== undefined)
   return filterOp(buildJoinOp(semi ? 'semi' : anti ? 'anti' : node.left, node.innerSlots, outer, inner, on, keys, autoIndex, materialized, settings.weedout), pairs ? above : spanning.filter((c) => !on.includes(c)))
+}
+
+/** Quote an already placed right-side ON bound before the hash build. */
+function localOnRange(table: FromTable, conditions: readonly Placed[], settings: LeafSettings, env: Env): Access | undefined {
+  const { def, alias, indexHints } = table
+  const index = def?.indexes[0]
+  if (!def || def.indexes.length !== 1 || index?.kind !== 'primary' || index.parts.length !== 1) return undefined
+  const hints = indexHints && indexHintEligibility(def, alias, indexHints, env, false, 'JOIN')
+  if (hints?.JOIN?.length === 0) return undefined
+  for (const { e } of conditions) {
+    if (e.kind !== NODE.BINARY || e.op !== 'NOT IN' || e.right.kind !== NODE.ROW || e.right.items.length !== 2) continue
+    const column = columnOf(table, e.left, settings.scope)
+    if (column?.type.type !== FIELD_TYPE.LONG || column.type.unsigned) continue
+    const [first, second] = e.right.items
+    if (!integerLiteral(first) || second?.kind !== NODE.LITERAL || !fractionalIntBound(constantValue(second, env))) continue
+    // A signed integer key cannot equal the fraction. The scan stores only
+    // the integer exclusion; the original ON filter still checks each row read.
+    const range = chooseAccess(def, alias, { ...e, op: '<>', right: first }, env, undefined, rangeCosting(table, settings, env))
+    if (range.ranges?.length === 2) return range
+  }
+  return undefined
 }
 
 // --- the cost model's choices (M5.7) -----------------------------------------------
@@ -1836,7 +1860,7 @@ function tableOp(t: FromTable, settings: LeafSettings, held?: Access): Op {
         if (d?.merged) return d.node
         return tableScan(t.alias, planNode(d?.materialize ?? 'Materialize', d?.children))
       }
-      const access = leafAccess(t, settings, env)
+      const access = held ?? leafAccess(t, settings, env)
       const order = orderFor(t, settings)
       if (order !== undefined && access.ranges === undefined) {
         // Read whole in an index's order: covering when it holds every column the query reads.
