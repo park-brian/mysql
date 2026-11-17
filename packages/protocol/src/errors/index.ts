@@ -53,7 +53,8 @@ function load(): ErrorTable {
       continue
     }
     const [packedSymbol, sqlState = DEFAULT_SQLSTATE] = row.split(' ') as [string, string?]
-    const prefix = packedSymbol[0] === '!' ? '' : 'ER_'
+    const first = packedSymbol[0]
+    const prefix = first === '?' ? 'OBSOLETE_ER_' : first === '!' ? '' : 'ER_'
     const symbol = prefix + packedSymbol.match(/[a-l]|[m-z][a-z]|[A-Z0-9]+|~/g)!.map(unpack).join('_')
     // A trailing space abbreviates 42000, the most common nondefault SQLSTATE.
     const entry: Entry = { errno, symbol, sqlState: sqlState || '42000' }

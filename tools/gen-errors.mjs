@@ -100,7 +100,11 @@ if (strictSymbols.length !== 23 || new Set(strictSymbols).size !== 23 || strictS
 const strictCodes = strictSymbols.map((s) => bySymbol.get(s).errno)
 
 // Encode the most repeated parts of uppercase symbols with lowercase letters.
-const storedName = (symbol) => symbol.startsWith('ER_') ? symbol.slice(3) : symbol
+function symbolPrefix(symbol) {
+  if (symbol.startsWith('ER_')) return 'ER_'
+  return symbol.startsWith('OBSOLETE_ER_') ? 'OBSOLETE_ER_' : ''
+}
+const storedName = (symbol) => symbol.slice(symbolPrefix(symbol).length)
 const counts = new Map()
 for (const { symbol } of entries) {
   for (const word of storedName(symbol).split('_')) {
@@ -119,9 +123,12 @@ const longWords = names.slice(shortCount).sort((a, b) => savings(b) - savings(a)
 const words = [...shortWords, ...longWords]
 const codes = new Map(words.map((word, i) => [word, tokens[i]]))
 
+const symbolMarkers = { ER_: '', OBSOLETE_ER_: '?', '': '!' }
+
 function packSymbol(symbol) {
-  const name = storedName(symbol)
-  let packed = name === symbol ? '!' : ''
+  const prefix = symbolPrefix(symbol)
+  const name = symbol.slice(prefix.length)
+  let packed = symbolMarkers[prefix]
   let previousRaw = false
   for (const word of name.split('_')) {
     const token = codes.get(word)
@@ -183,7 +190,8 @@ export const ERROR_NAME_WORDS = '${words.join(' ')}'
  * \`@errno\` starts a sequential range; each following entry consumes one code.
  * Comma-delimited entries hold a packed symbol and an optional SQLSTATE.
  * A trailing space represents 42000, the most common nondefault state.
- * Symbols begin with an implicit ER_ unless prefixed by !. Lowercase tokens
+ * Symbols begin with ER_ by default. ? means OBSOLETE_ER_, and ! leaves
+ * the symbol prefix empty. Lowercase tokens
  * encode words, _ separates adjacent raw words and ~ encodes an empty word.
  * The decoder preserves entry order and alias precedence.
  */

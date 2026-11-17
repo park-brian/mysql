@@ -51,6 +51,15 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 
 ## Next
 
+**M1.6 packed obsolete error prefixes, verified.** One marker represents
+the shared `OBSOLETE_ER_` prefix of 170 symbols. The pinned generator
+reproduces the same errno, symbol and SQLSTATE mappings for all 65,536
+codes. Core, facade and protocol save 78, 76 and 61 gzipped bytes. Full
+Docker verification passes 1,881 tests, all nine size gates, seeded fuzzing,
+10,000 crash points, package and client smoke and all seven pinned corpora,
+including 1,737 coercion warning counts. Parser, core and facade measure
+44,526, 334,255 and 334,187 gzipped bytes.
+
 **M1.6 packed SQLSTATE `42000`, verified.** A trailing field separator
 represents the most common nondefault state. The pinned generator reproduces
 the table, and the sweep across all 65,536 codes keeps all 2,132 names and
