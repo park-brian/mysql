@@ -193,6 +193,8 @@ export function floorFilter(filter: number, rows: number, fetched: number): numb
 export interface Positioned extends Position {
   /** Base scan/probe, materialized key probe, or materialized scan. */
   readonly lookup: boolean | 'materialized' | 'materialized-scan'
+  /** The covering LooseScan read survived the strategy comparison. */
+  readonly loose?: true
   /** `read_cost`. */
   readonly read: number
 }
@@ -291,7 +293,7 @@ export interface FirstMatch {
  * `weedout` controls temporary competitors when an enabled semijoin alternative
  * exists; the ordinary last-resort fallback remains.
  */
-export function joinOrder(candidates: readonly Candidate[], sort?: { readonly alias: string; readonly limit: number }, loose?: { readonly alias: string; readonly rows: number; readonly read: number; readonly fetched: number }, firstMatch?: FirstMatch, materialization = false, weedout = true): Positioned[] {
+export function joinOrder(candidates: readonly Candidate[], sort?: { readonly alias: string; readonly limit: number }, loose?: { readonly alias: string; readonly rows: number; readonly read: number; readonly fetched: number; readonly competeRange?: boolean | undefined }, firstMatch?: FirstMatch, materialization = false, weedout = true): Positioned[] {
   let sortBy = sort?.alias
   const sorted = [...candidates].sort((a, b) => {
     const ab = a.keyDependent.has(b.alias)
@@ -308,7 +310,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     let placed = c.place(plan.map((p) => p.alias === driving?.alias ? driving! : p))
     if (loose !== undefined && plan.length === 0 && c.alias === loose.alias) {
       driving = step(undefined, placed)
-      placed = { ...placed, read: loose.read, fetched: loose.fetched, filter: c.range ? placed.filter : floorFilter(placed.fetched * placed.filter / loose.rows, loose.rows, loose.fetched) }
+      placed = { ...placed, loose: true, read: loose.read, fetched: loose.fetched, filter: c.range ? placed.filter : floorFilter(placed.fetched * placed.filter / loose.rows, loose.rows, loose.fetched) }
     }
     if (plan.length === 0 && c.alias === sortBy && !placed.lookup && sort !== undefined && sort.limit >= placed.fetched) sortBy = undefined
     return placed
@@ -347,20 +349,29 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     let cost = last.cost
     // Either order can need weedout when an enabled alternative is available.
     // Default memory temporary costs: creation 1, each write/lookup 0.1.
-    if (semijoin !== undefined && (innerFirst ? loose === undefined : firstMatch?.enabled !== true)) {
-      // An outer-first filtered weedout starts at the semijoin inner table.
-      // Its prefix already supplies the output rows and temporary writes.
-      if (innerFirst || !firstMatch?.filteredScan) rows = Math.min(rows, (candidates[0] as Candidate).rows * last.filter)
-      cost = extendedCost(first, last)
+    let positions: Step[] | undefined
+    // Weedout on the primary range uses the ordinary driver and its probe.
+    const range = loose?.competeRange && weedout && first.loose && last.lookup ? driving : undefined
+    if (range || (semijoin !== undefined && (innerFirst ? loose === undefined : firstMatch?.enabled !== true))) {
+      const joined = range ? step(range, last) : last
+      const output = innerFirst || !firstMatch?.filteredScan
+        ? Math.min(range ? joined.rows : rows, (candidates[0] as Candidate).rows * last.filter)
+        : rows
+      let temporary = extendedCost(range ?? first, last)
       // Native charges creation before row operations; the grouping decides exact ties.
-      cost += weedout || lastResort ? MEMORY_CREATE : Infinity
-      cost += 0.1 * (rows + last.rows)
+      temporary += weedout || lastResort ? MEMORY_CREATE : Infinity
+      temporary += ROW_EVALUATE * (output + joined.rows)
+      if (!range || temporary < cost) {
+        cost = temporary
+        rows = output
+        if (range) positions = [range, joined]
+      }
     }
     const alternative = materialPlan(cost)
     cost += sortCost(rows)
     // An inner-first materialized scan wins its native equal-cost weedout tie.
     const chosen = alternative !== undefined && (alternative.cost < cost || (alternative.cost === cost && loose === undefined && innerFirst))
-      ? alternative : { cost, plan: plan.slice() }
+      ? alternative : { cost, plan: positions ?? plan.slice() }
     // When revisiting a complete filtered semijoin plan, MySQL's best_read
     // already excludes the optimizer's 0.001 adjustment.
     if (best === undefined || chosen.cost < best.cost - (firstMatch?.filteredScan ? 0.001 : 0)) best = chosen

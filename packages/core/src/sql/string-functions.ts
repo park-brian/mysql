@@ -933,19 +933,12 @@ function toBase(n: bigint, radix: number): string {
   return v.toString(r).toUpperCase()
 }
 
-/** What the other string functions' compilers ask of a call: its count checked, whether any argument may be NULL, a hex string's type, a string in the connection's collation, the name as the server prints it. */
-function stringCall(xs: readonly Compiled[], callName: string, ctx: CompileContext) {
+/** Edit strings and convert between strings, numbers and bytes. */
+function scalarStringFunction(name: string, xs: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext, using?: string): Compiled {
   const conn = ctx.connectionCollation
   const arity = nativeArity(callName, xs.length)
   const hexText = (chars: number): ResultType => ({ ...stringType(chars, conn, true), coercibility: COERCIBILITY.COERCIBLE })
   const conv = (s: string): Value => stringValue(s, conn, COERCIBILITY.COERCIBLE)
-  return { conn, arity, hexText, conv }
-}
-
-/** The rest of the string functions: CHAR, FIELD, ELT, the sets, INSERT, SUBSTRING_INDEX, QUOTE, SOUNDEX, FORMAT, BIT_LENGTH, CONV, base64, ORD. */
-/** Edits of a string: INSERT, SUBSTRING_INDEX, QUOTE, SOUNDEX. */
-function moreStringFunction(name: string, xs: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext): Compiled {
-  const { conn, arity } = stringCall(xs, callName, ctx)
   switch (name) {
     case 'INSERT': {
       arity(4)
@@ -1052,15 +1045,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
         type: stringResultType(Math.max(widthOf(s.type, binary), 4), binary, collation, coercibility),
       }
     }
-    default:
-      throw unregistered(name)
-  }
-}
 
-/** A string as a list or a set: FIELD, ELT, MAKE_SET, EXPORT_SET, FIND_IN_SET. */
-function listFunction(name: string, xs: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext): Compiled {
-  const { conn, arity } = stringCall(xs, callName, ctx)
-  switch (name) {
     case 'FIELD': {
       arity(2, Infinity)
       const kinds = xs.map((x) => x.type.kind)
@@ -1190,15 +1175,7 @@ function listFunction(name: string, xs: readonly Compiled[], callName: string, c
         type: intType(3, s.type.nullable || list.type.nullable),
       }
     }
-    default:
-      throw unregistered(name)
-  }
-}
 
-/** Strings to and from numbers, bytes and other bases: CHAR, ORD, FORMAT, BIT_LENGTH, CONV, TO_BASE64, FROM_BASE64. */
-function conversionFunction(name: string, xs: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext, using?: string): Compiled {
-  const { arity, hexText, conv } = stringCall(xs, callName, ctx)
-  switch (name) {
     case 'CHAR': {
       arity(1, Infinity)
       const reads = xs.map(intReader)
@@ -1362,15 +1339,7 @@ function conversionFunction(name: string, xs: readonly Compiled[], callName: str
         type: intType(21, s.type.nullable),
       }
     }
-    default:
-      throw unregistered(name)
-  }
-}
 
-/** The hashes: MD5, SHA1 and SHA, SHA2, CRC32. */
-function hashFunction(name: string, xs: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext): Compiled {
-  const { arity, hexText, conv } = stringCall(xs, callName, ctx)
-  switch (name) {
     case 'MD5':
     case 'SHA1':
     case 'SHA':
@@ -1440,18 +1409,12 @@ function hashFunction(name: string, xs: readonly Compiled[], callName: string, c
   }
 }
 
-/** Lists and sets, which `listFunction` compiles. */
-const LIST_FUNCTIONS: ReadonlySet<string> = new Set(['FIELD', 'ELT', 'MAKE_SET', 'EXPORT_SET', 'FIND_IN_SET'])
-
-/** Conversions, which `conversionFunction` compiles. */
-const CONVERSION_FUNCTIONS: ReadonlySet<string> = new Set(['CHAR', 'FORMAT', 'BIT_LENGTH', 'CONV', 'TO_BASE64', 'FROM_BASE64', 'ORD'])
-
-/** The hashes, which `hashFunction` compiles. */
-const HASH_FUNCTIONS: ReadonlySet<string> = new Set(['MD5', 'SHA1', 'SHA', 'CRC32', 'SHA2'])
-
 /** Every function this file compiles. */
 export const STRING_FUNCTIONS: ReadonlySet<string> = new Set([
-  ...LIBRARY, ...READS_DOUBLE, ...LIST_FUNCTIONS, ...CONVERSION_FUNCTIONS, ...HASH_FUNCTIONS,
+  ...LIBRARY, ...READS_DOUBLE,
+  'FIELD', 'ELT', 'MAKE_SET', 'EXPORT_SET', 'FIND_IN_SET',
+  'CHAR', 'FORMAT', 'BIT_LENGTH', 'CONV', 'TO_BASE64', 'FROM_BASE64', 'ORD',
+  'MD5', 'SHA1', 'SHA', 'CRC32', 'SHA2',
   'GREATEST', 'LEAST', 'INSERT', 'SUBSTRING_INDEX', 'QUOTE', 'SOUNDEX',
 ])
 
@@ -1473,6 +1436,5 @@ export function stringFunction(name: string, e: CallNode, ctx: CompileContext): 
     // Their integral results bypass text conversion in asNumber.
     return { ...libraryFunction(name, xs, e, constant, ctx), decimalPrefix: true }
   }
-  const family = HASH_FUNCTIONS.has(name) ? hashFunction : LIST_FUNCTIONS.has(name) ? listFunction : CONVERSION_FUNCTIONS.has(name) ? conversionFunction : moreStringFunction
-  return { ...family(name, xs, e.name, constant, ctx, e.using), decimalPrefix: true }
+  return { ...scalarStringFunction(name, xs, e.name, constant, ctx, e.using), decimalPrefix: true }
 }

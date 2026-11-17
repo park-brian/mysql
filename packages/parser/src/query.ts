@@ -188,7 +188,7 @@ class QueryParser {
     let into = this.#pendingInto
     this.#pendingInto = undefined
     const orderBy = c.atWords('ORDER', 'BY') ? this.orderBy() : undefined
-    const limit = c.atWord('LIMIT') ? this.#limit() : undefined
+    const limit = c.takeWord('LIMIT') ? parseLimit(c) : undefined
     into = this.#oneInto(into, true)
     const locking: Locking[] = []
     for (let lock = this.#locking(); lock !== undefined; lock = this.#locking()) locking.push(lock)
@@ -427,16 +427,6 @@ class QueryParser {
       }
     } while (c.takeOp(','))
     return items
-  }
-
-  /** `LIMIT n`, `LIMIT offset, n`, `LIMIT n OFFSET offset`. */
-  #limit(): Limit {
-    const c = this.#c
-    c.expectWord('LIMIT')
-    const first = parseLimitValue(c)
-    if (c.takeOp(',')) return { count: parseLimitValue(c), offset: first }
-    if (c.takeWord('OFFSET')) return { count: first, offset: parseLimitValue(c) }
-    return { count: first }
   }
 
   #into(): Into | undefined {
@@ -745,6 +735,14 @@ function hangCrossJoin(ref: TableReference, make: (leaf: TableReference) => Tabl
   let out = make(leaf)
   for (const join of spine.reverse()) out = { ...join, left: out }
   return out
+}
+
+/** Read a count and optional offset after LIMIT. */
+export function parseLimit(c: Cursor): Limit {
+  const first = parseLimitValue(c)
+  if (c.takeOp(',')) return { count: parseLimitValue(c), offset: first }
+  if (c.takeWord('OFFSET')) return { count: first, offset: parseLimitValue(c) }
+  return { count: first }
 }
 
 /**

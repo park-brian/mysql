@@ -615,9 +615,9 @@ function piece(doc: JsonDoc): Piece {
     case 'opaque':
       return custom(doc.field, doc.v)
     case 'array':
-      return container(doc.v.map((v) => [undefined, v] as const), false)
+      return container(JSON_TYPE.SMALL_ARRAY, [], doc.v.map(piece))
     case 'object':
-      return container(doc.v, true)
+      return container(JSON_TYPE.SMALL_OBJECT, doc.v.map(([key]) => utf8(key)), doc.v.map(([, value]) => piece(value)))
   }
 }
 
@@ -625,85 +625,72 @@ function piece(doc: JsonDoc): Piece {
  * A container: small unless its bytes cannot be addressed in 16 bits, then
  * large. Widths are per container, so each child has chosen its own already.
  */
-function container(members: readonly (readonly [string | undefined, JsonDoc])[], isObject: boolean): Piece {
-  const keys = isObject ? members.map(([k]) => utf8(k as string)) : []
-  const pieces = members.map(([, v]) => piece(v))
+function container(type: typeof JSON_TYPE.SMALL_ARRAY | typeof JSON_TYPE.SMALL_OBJECT, keys: readonly Uint8Array[], pieces: readonly Piece[]): Piece {
   const small = layout(keys, pieces, false)
-  if (small !== undefined) return { type: isObject ? JSON_TYPE.SMALL_OBJECT : JSON_TYPE.SMALL_ARRAY, body: small }
-  return { type: isObject ? JSON_TYPE.LARGE_OBJECT : JSON_TYPE.LARGE_ARRAY, body: layout(keys, pieces, true) as Uint8Array }
+  if (small !== undefined) return { type, body: small }
+  // The large container tag follows its small tag.
+  return { type: type + 1, body: layout(keys, pieces, true)! }
 }
 
 /** A container's bytes: header, key entries for an object, value entries, keys, then out-of-line values; undefined when too large for a small one. */
 function layout(keys: readonly Uint8Array[], pieces: readonly Piece[], large: boolean): Uint8Array | undefined {
   const w = large ? 4 : 2
-  const isObject = keys.length > 0
-  let cursor = 2 * w + (isObject ? pieces.length * (w + 2) : 0) + pieces.length * (1 + w)
-  const keyAt = keys.map((k) => {
-    const at = cursor
-    cursor += k.length
-    return at
-  })
-  const valueAt = pieces.map((p) => {
-    if (isInlined(p.type, large)) return -1
-    const at = cursor
-    cursor += p.body.length
-    return at
-  })
-  if (!large && cursor > 0xffff) return undefined
-  const out = new Uint8Array(cursor)
+  const headerSize = 2 * w
+  let payload = headerSize + keys.length * (w + 2) + pieces.length * (1 + w)
+  let size = payload
+  for (const key of keys) size += key.length
+  for (const piece of pieces) if (!isInlined(piece.type, large)) size += piece.body.length
+  if (!large && size > 0xffff) return undefined
+  const out = new Uint8Array(size)
   const view = new DataView(out.buffer)
   const put = (at: number, v: number): void => (large ? view.setUint32(at, v, true) : view.setUint16(at, v, true))
   put(0, pieces.length)
-  put(w, cursor)
-  let at = 2 * w
-  keys.forEach((k, i) => {
-    put(at, keyAt[i] as number)
-    view.setUint16(at + w, k.length, true)
-    out.set(k, keyAt[i] as number)
+  put(w, size)
+  let at = headerSize
+  const copy = (offset: number, bytes: Uint8Array): void => {
+    put(offset, payload)
+    out.set(bytes, payload)
+    payload += bytes.length
+  }
+  for (const key of keys) {
+    copy(at, key)
+    view.setUint16(at + w, key.length, true)
     at += w + 2
-  })
-  pieces.forEach((p, i) => {
-    out[at] = p.type
-    const v = valueAt[i] as number
-    if (v < 0) put(at + 1, p.inline ?? 0)
-    else {
-      put(at + 1, v)
-      out.set(p.body, v)
-    }
+  }
+  for (const piece of pieces) {
+    out[at] = piece.type
+    if (isInlined(piece.type, large)) put(at + 1, piece.inline ?? 0)
+    else copy(at + 1, piece.body)
     at += 1 + w
-  })
+  }
   return out
 }
 
 /** A JSON value as MySQL's binary JSON (D-22). */
 export function encodeJsonDoc(doc: JsonDoc): Uint8Array {
   const p = piece(doc)
-  if (isInlined(p.type, false)) {
-    // A bare scalar document has no entry to inline into: its value follows the type byte.
-    const out = new Uint8Array(p.type === JSON_TYPE.LITERAL ? 2 : 3)
-    out[0] = p.type
-    if (p.type === JSON_TYPE.LITERAL) out[1] = p.inline ?? 0
-    else new DataView(out.buffer).setUint16(1, p.inline ?? 0, true)
-    return out
-  }
-  const out = new Uint8Array(1 + p.body.length)
+  // A bare scalar has no entry to inline into: its value follows the type byte.
+  const inline = isInlined(p.type, false)
+  const literal = p.type === JSON_TYPE.LITERAL
+  const out = new Uint8Array(1 + (inline ? literal ? 1 : 2 : p.body.length))
   out[0] = p.type
-  out.set(p.body, 1)
+  if (!inline) out.set(p.body, 1)
+  else if (literal) out[1] = p.inline ?? 0
+  else new DataView(out.buffer).setUint16(1, p.inline ?? 0, true)
   return out
 }
 
 /** MySQL's binary JSON as a value. */
 export function decodeJsonDoc(bytes: Uint8Array): JsonDoc {
   if (bytes.length === 0) throw invalidJson('empty document')
-  return decodeAt(bytes[0] as number, bytes.subarray(1), false)
+  return decodeAt(bytes[0] as number, bytes.subarray(1))
 }
 
 function need(b: Uint8Array, at: number, n: number): void {
   if (at < 0 || at + n > b.length) throw invalidJson(`needs ${n} byte(s) at ${at} of ${b.length}`)
 }
 
-function decodeAt(type: number, body: Uint8Array, inEntryOfLarge: boolean | undefined): JsonDoc {
-  void inEntryOfLarge
+function decodeAt(type: number, body: Uint8Array): JsonDoc {
   const view = (n: number): DataView => {
     need(body, 0, n)
     return new DataView(body.buffer, body.byteOffset, n)
@@ -791,11 +778,11 @@ function decodeContainer(c: Uint8Array, large: boolean, isObject: boolean): Json
       const raw = get(at + 1)
       const tmp = new Uint8Array(4)
       new DataView(tmp.buffer).setUint32(0, raw, true)
-      return decodeAt(type, tmp, large)
+      return decodeAt(type, tmp)
     }
     const offset = get(at + 1)
     if (offset >= c.length) throw invalidJson(`value offset ${offset} past a ${c.length}-byte container`)
-    return decodeAt(type, c.subarray(offset), large)
+    return decodeAt(type, c.subarray(offset))
   }
   if (!isObject) {
     const items: JsonDoc[] = []

@@ -139,7 +139,7 @@ and 296 now match. Projected, negated, nullable `ALL` and indexed extrema
 have separate admission rules.
 
 **M5.47 fresh relational seeds.** Three MySQL 8.4.11 seeds of 300 scripts
-each now match 130 of 138 semijoin and quantified plans. The ordered
+each now match 132 of 138 semijoin and quantified plans. The ordered
 `IN` cases with `>` and a standalone wildcard-leading `LIKE` now match,
 as do the six unindexed integer `= ANY` and `= SOME` cases with a bare
 inner key or a direct `IS NOT NULL` test. Four unindexed integer `<> ALL`
@@ -149,8 +149,9 @@ residual also match. The `NOT IN` case with a noncovering wildcard-leading
 ranges and the covering build for a required-field `IS NOT NULL` also
 match. A dependent build with a two-item `NOT IN` list containing NULL and a
 fractional decimal now uses the bound covering read's cost. Case 300,
-statement 13 matches. The covered fractional predicates that MySQL runs
-with LooseScan are among the remaining gaps.
+statement 13 matches. In seed 2026111602, covering LooseScan matches the
+fractional primary-key `NOT IN` in case 296, statement 16 and `BETWEEN` in
+case 183, statement 15.
 
 **0.3 is staged**, with exact workspace versions and installed-package smoke
 checks. Publication still requires claiming the npm scope/name and publishing
@@ -2468,8 +2469,30 @@ FirstMatch or LooseScan cases. The committed ledger retains 2,140 of 2,248
 matching plans, and the three fresh seeds improve from 130 to 131 of 138.
 Parser/core/facade measure 45,614/334,348/334,265 B gzipped within the
 existing caps. Reversed lists, other strategies, limited reads and the child
-locking boundary remain open. Continue with the primary fractional `BETWEEN`
-residual in case 183, statement 15.
+locking boundary remain open.
+
+**M5.47 covering LooseScan with a fractional primary `BETWEEN`, verified.**
+The same unbounded, nonlocking semijoin accepts a written in-range
+fractional decimal lower bound and a written integer upper bound on the
+signed single-column `INT PRIMARY` key. It uses the covering read when
+LooseScan wins the cost comparison. Materialization and duplicate weedout
+compete with the covering scan using the ordinary primary-range driver.
+When either wins, the query keeps the existing dependent reader until those
+physical paths are verified for this residual. The original predicate
+filters the covering read in seed 2026111602, case 183, statement 15. Both
+wire protocols match MySQL 8.4.11 across inserts, updates and deletes. The
+pinned audits fix 3,010 of 64,000 outcomes and preserve the rest, including
+other bounds, limited and locking reads, disabled strategies and unsupported
+index layouts. The fresh seeds improve from 131 to 132 of 138 plans. The
+committed relational ledger retains all outcomes.
+
+The parser shares its `LIMIT` count and offset grammar. The JSON container
+encoder writes sequential payloads without offset arrays. A before-and-after
+audit matched the bytes and decoded values of 20,026 documents, including
+the small-to-large boundary. The scalar string functions share their call
+setup and dispatch. Parser/core/facade measure 45,567/334,337/334,265 B
+gzipped under the existing caps. Continue M5.47 with the competing primary
+range materialization and duplicate weedout readers.
 
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.

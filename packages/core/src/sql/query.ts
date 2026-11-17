@@ -624,11 +624,9 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode, pending?: Co
     if (semi !== undefined) {
       const whereCtx = compileContext(run, semi.from.scope, 'where clause')
       from.filter(semi.where, (e) => resolved.read(e, whereCtx), undefined, semi.preserve)
-    } else if (anti?.kind === 'materialized' || anti?.kind === 'correlated') {
+    } else if (anti && anti.kind !== 'lookup') {
       from.filter(undefined, resolved.read)
-    } else if (anti?.kind === 'hash') {
-      from.filter(undefined, resolved.read)
-      from.hashAntijoin(anti.key, (trx, env) => anti.inner.rows(trx, env), () => anti.plan)
+      if (anti.kind === 'hash') from.hashAntijoin(anti.key, (trx, env) => anti.inner.rows(trx, env), () => anti.plan)
     } else {
       const semijoins = source !== undefined && loopSemijoin
       from.filter(node.where, resolved.read, semijoins ? (e) => semijoinNode(run, e) : undefined)
@@ -1037,7 +1035,7 @@ function integerRangePredicate(e: Expression | undefined, def: TableDef, alias: 
   } else {
     const high = e.extra as Expression | undefined
     if (e.op !== 'BETWEEN' || (!integerLiteral(e.right) && !nullLiteral(e.right)) ||
-        (high === undefined || (!integerLiteral(high) && !nullLiteral(high)))) return false
+        (!integerLiteral(high) && !nullLiteral(high))) return false
   }
   const column = tableColumn(field, def, alias)
   return column?.type.type === FIELD_TYPE.LONG && leadingIndex(def, column, true) !== undefined
@@ -1356,26 +1354,33 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   if (any && (limitOrLock || hasLeadingKey(outerDef, outerField.parts[1]!))) return undefined
   let residual: Extract<Expression, { kind: typeof NODE.BINARY }> | undefined
   let text = false
+  let looseOnly: 'BETWEEN' | 'NOT IN' | undefined
   if (extra !== undefined && !notNull) {
     if (any || extra.kind !== NODE.BINARY) return undefined
     const field = qualify(extra.left, innerAlias)
     if (field === undefined) return undefined
     const right = extra.right
-    if (right.kind === NODE.LITERAL) {
+    const op = extra.op
+    if (op === 'BETWEEN' || op === 'NOT IN') {
+      // The list writes the integer first. The range writes the fraction first.
+      const bounds = op === 'BETWEEN' ? [extra.extra as Expression, right] : right.kind === NODE.ROW ? right.items : []
+      if (exists || limitOrLock || bounds.length !== 2 || !integerLiteral(bounds[0]) || bounds[1]!.kind !== NODE.LITERAL ||
+        !fractionalIntBound(constantValue(bounds[1]!, run.env))) return undefined
+      looseOnly = op
+    } else {
+      if (right.kind !== NODE.LITERAL) return undefined
       text = !exists && textBesideColumn(field, right) && (isOrderedComparison(extra.op) ||
         (wildcardLike(extra) && optimizerEnabled(run.env, 'condition_fanout_filter')))
       if (!text && (!isComparison(extra.op) || !numberLiteral(right))) return undefined
-    } else if (exists || limitOrLock || extra.op !== 'NOT IN' || right.kind !== NODE.ROW || right.items.length !== 2 ||
-      !integerLiteral(right.items[0]!) || right.items[1]!.kind !== NODE.LITERAL ||
-      !fractionalIntBound(constantValue(right.items[1]!, run.env))) return undefined
+    }
     residual = { ...extra, left: field }
   }
   const equality: Expression = { kind: NODE.BINARY, op: '=', left: innerField, right: outerField, at: where.at }
   return proof(() => {
     const def = nonTemporaryDefinition(run, inner.table)
     if (def === undefined) return undefined
-    if (residual?.op === 'NOT IN') {
-      const field = tableColumn(residual.left, def, innerAlias)
+    if (looseOnly) {
+      const field = tableColumn(residual!.left, def, innerAlias)
       if (field?.type.type !== FIELD_TYPE.LONG || field.type.unsigned === true || !def.indexes.some((i) => i.kind === 'primary' && i.parts.length === 1 && i.parts[0]!.column === field.name)) return undefined
     }
     if (any && (hasLeadingKey(def, innerColumn) || from.access(run.env).index !== undefined)) return undefined
@@ -1417,7 +1422,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     alternative.reads(read)
     alternative.sortedBy(sortBy, keep)
     const innerFirst = alternative.integerSemijoin(innerAlias, scanOnly ? undefined : index, key, residual,
-      !someNode([node.items, q.orderBy], (n) => (n as Expression).kind === NODE.SUBQUERY || undefined), exists)
+      !someNode([node.items, q.orderBy], (n) => (n as Expression).kind === NODE.SUBQUERY || undefined), exists ? 'filteredHash' : looseOnly)
     if (innerFirst === undefined || (scanOnly && innerFirst && !ordersOuter)) return undefined
     // MySQL substitutes the first field of an equality class after join ordering.
     const outerType = !innerFirst && nullTest ? tableColumn(outerField, outerDef, outerAlias)?.type : undefined
@@ -1687,10 +1692,7 @@ function negativeExistsSubquery(e: Expression | undefined): QueryExpression | un
 
 /** The WHERE's IN and EXISTS subqueries MySQL runs as semijoins (NOT EXISTS, antijoins), each with the subquery. */
 function semijoinSubqueries(where: Expression | undefined): QueryExpression[] {
-  return splitAnd(where).flatMap((e) => {
-    const query = positiveSubquery(e) ?? negativeExistsSubquery(e)
-    return query === undefined ? [] : [query]
-  })
+  return splitAnd(where).flatMap((e) => positiveSubquery(e) ?? negativeExistsSubquery(e) ?? [])
 }
 
 /**

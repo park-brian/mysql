@@ -24,8 +24,7 @@ import { parseSetDefaultRole, parseSetPassword, parseSetRole } from './admin.ts'
 import { parseUser } from './ddl.ts'
 import { parseDelete, parseInsert, parseUpdate } from './dml.ts'
 import { parseExpressionFrom } from './expression.ts'
-import { atParenthesisedQuery, atQueryStart, parseLimitValue, parseQueryFrom, parseWithFrom } from './query.ts'
-import type { Limit } from './query-ast.ts'
+import { atParenthesisedQuery, atQueryStart, parseLimit, parseQueryFrom, parseWithFrom } from './query.ts'
 import type { SqlMode } from './sql-mode.ts'
 import {
   STATEMENT,
@@ -507,7 +506,7 @@ export function parseShow(c: Cursor, mode: SqlMode): ShowNode {
 
   if (c.atWord('WARNINGS') || c.atWord('ERRORS')) {
     const what = c.take().text.toUpperCase()
-    const limit = c.takeWord('LIMIT') ? showLimit(c) : undefined
+    const limit = c.takeWord('LIMIT') ? parseLimit(c) : undefined
     return { kind: STATEMENT.SHOW, what, ...opt('limit', limit), at }
   }
   if (c.atWord('COUNT') && c.atOp('(', 1)) {
@@ -594,12 +593,4 @@ function filter(c: Cursor, mode: SqlMode, like: boolean): { like?: string; where
   if (like && c.takeWord('LIKE')) return { like: c.expectString() }
   if (c.takeWord('WHERE')) return { where: parseExpressionFrom(c, mode) }
   return {}
-}
-
-/** `LIMIT n`, `LIMIT m, n` or `LIMIT n OFFSET m`, for `SHOW WARNINGS` and `SHOW ERRORS`. */
-function showLimit(c: Cursor): Limit {
-  const first = parseLimitValue(c)
-  if (c.takeOp(',')) return { count: parseLimitValue(c), offset: first }
-  if (c.takeWord('OFFSET')) return { count: first, offset: parseLimitValue(c) }
-  return { count: first }
 }

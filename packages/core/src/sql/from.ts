@@ -160,7 +160,7 @@ export interface FromPlan {
   /** Sort the first table before its indexed joins expand or discard rows. */
   sortFirst(alias: string, keys: readonly SortKey[]): void
   /** Select a bounded integer semijoin; return whether its physical order is inner-first. */
-  integerSemijoin(alias: string, index: IndexDef | undefined, key: Compiled, residual: Expression | undefined, materializationEligible: boolean, allowFilteredHash?: boolean): boolean | undefined
+  integerSemijoin(alias: string, index: IndexDef | undefined, key: Compiled, residual: Expression | undefined, materializationEligible: boolean, strategy?: 'filteredHash' | 'NOT IN' | 'BETWEEN'): boolean | undefined
   /**
    * The columns the query reads of each table (`'all'` for one read whole).
    * A table no condition chooses an access path for is read through the
@@ -655,15 +655,16 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     sortFirst(alias, keys) {
       settings.firstSort = { alias, keys }
     },
-    integerSemijoin(alias, index, key, residual, materializationEligible, allowFilteredHash) {
+    integerSemijoin(alias, index, key, residual, materializationEligible, strategy) {
       // A noncovering residual can feed either a clustered lookup or a hash build.
       const filteredScan = !index && residual !== undefined
       const buffered = !index && !filteredScan
       const canBuffer = !index && settings.buffered && optimizerEnabled(ctx.env, 'condition_fanout_filter')
       if (buffered && !canBuffer) return undefined
       const firstMatch = { alias, enabled: optimizerEnabled(ctx.env, 'firstmatch'), filteredScan }
-      if (index && optimizerEnabled(ctx.env, 'loosescan')) settings.loose = { alias, index, key }
-      if (residual !== undefined && materializationEligible && index) {
+      if (index && optimizerEnabled(ctx.env, 'loosescan')) settings.loose = { alias, index, key, competeRange: strategy === 'BETWEEN' }
+      // A primary BETWEEN competes with materialization on its first search.
+      if (strategy !== 'BETWEEN' && residual !== undefined && materializationEligible && index) {
         joinPlan()
         // The actual predicate stays in settings.where; only its bounded cost admission changes.
         if (settings.inferred.size > 0) {
@@ -671,7 +672,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
           planned = undefined
         }
       }
-      if (residual === undefined || filteredScan) settings.firstMatch = firstMatch
+      if (residual === undefined || filteredScan || strategy === 'BETWEEN') settings.firstMatch = firstMatch
       const plan = joinPlan(materializationEligible && settings.firstMatch !== undefined && optimizerEnabled(ctx.env, 'materialization'))
       if (plan === undefined) return undefined
       const node = plan.node
@@ -682,7 +683,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const innerFirst = outer.alias === alias
       // A constant residual cannot request a range based on the probe.
       if (filteredScan && !innerFirst) {
-        if (!allowFilteredHash || !canBuffer || !firstMatch.enabled || materialized || node.lookup) return undefined
+        if (strategy !== 'filteredHash' || !canBuffer || !firstMatch.enabled || materialized || node.lookup) return undefined
         return false
       }
       const primary = node.lookup?.unique === true && node.lookup.index.kind === 'primary'
@@ -691,8 +692,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       if (filteredScan && (!primary || (materialized && materialized !== 'scan'))) return undefined
       // Indexed LooseScan retains PRIMARY identity; weedout retains physical outer identity.
       const loose = !materialized && innerFirst && settings.loose && (node.lookup ? primary : settings.buffered)
-      // The fractional list is verified only for the selected covering LooseScan.
-      if ((residual as { readonly op?: string } | undefined)?.op === 'NOT IN' && (!loose || !firstMatch.enabled)) return undefined
+      // Fractional residuals use this path only when the covering read won.
+      if (strategy && strategy !== 'filteredHash' && (!loose || !firstMatch.enabled || !plan.positions[0]?.loose)) return undefined
       if (!loose) delete settings.loose
       if (!materialized && !loose && innerFirst && (filteredScan ? optimizerEnabled(ctx.env, 'duplicateweedout') : residual === undefined)) settings.weedout = inner
       if (materialized || loose || settings.weedout) {
@@ -1010,7 +1011,7 @@ interface LeafSettings {
   /** Order supplied before an indexed join expands or discards first-table rows. */
   firstSort?: { readonly alias: string; readonly keys: readonly SortKey[] }
   /** LooseScan removes adjacent equal integer keys after the inner filter. */
-  loose?: { readonly alias: string; readonly index: IndexDef; readonly key: Compiled }
+  loose?: { readonly alias: string; readonly index: IndexDef; readonly key: Compiled; readonly competeRange?: boolean }
   /** Logical inner and FirstMatch availability for admitted semijoins; undefined keeps unmodeled residual costs. */
   firstMatch?: FirstMatch
   /** Whether scanned joins may buffer their inner side. */
@@ -1407,6 +1408,7 @@ function planJoins(root: Node, where: readonly Weighed[], settings: LeafSettings
       rows: stats.rows,
       read: indexScanCost(stats.rows, indexRecordBytes(driver.def, index)),
       fetched: stats.rows / stats.recordsPerKey(index, 1),
+      competeRange: settings.loose?.competeRange,
     }
     const order = joinOrder(candidates, sort, loose, settings.firstMatch, materialization, weedout)
     settings.materialized = false

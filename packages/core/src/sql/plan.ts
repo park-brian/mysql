@@ -55,7 +55,7 @@ import { intersect, normalize, rangeOf, type Constant, type Interval, type Range
 import type { TableStatistics } from './stats.ts'
 import { forwardKeyColumn, uniquePoint } from './indexes.ts'
 import { columnIndex } from './scope.ts'
-import { isNotEqual, REVERSE_COMPARISON, logicalShortCircuit, signedOperand } from './ast.ts'
+import { isNotEqual, REVERSE_COMPARISON, isOrderedComparison, logicalShortCircuit, signedOperand } from './ast.ts'
 import { byteKey } from './keys.ts'
 import { proof } from './errors.ts'
 
@@ -332,10 +332,11 @@ function describeIntervals(intervals: readonly Interval[], name: string): string
   return intervals
     .map((i) => {
       if (i === 'null') return `(${name} = NULL)`
-      if (i.lo !== undefined && i.hi !== undefined && i.lo.inclusive && i.hi.inclusive && compareValues(i.lo.v, i.hi.v) === 0) return `(${name} = ${text(i.lo.v)})`
-      const lo = i.lo === undefined ? i.hi === undefined ? 'NULL < ' : '' : `${text(i.lo.v)} ${i.lo.inclusive ? '<=' : '<'} `
-      const hi = i.hi === undefined ? '' : ` ${i.hi.inclusive ? '<=' : '<'} ${text(i.hi.v)}`
-      return `(${lo}${name}${hi})`
+      const { lo, hi } = i
+      if (lo?.inclusive && hi?.inclusive && compareValues(lo.v, hi.v) === 0) return `(${name} = ${text(lo.v)})`
+      const lower = lo ? `${text(lo.v)} ${lo.inclusive ? '<=' : '<'} ` : hi ? '' : 'NULL < '
+      const upper = hi ? ` ${hi.inclusive ? '<=' : '<'} ${text(hi.v)}` : ''
+      return `(${lower}${name}${upper})`
     })
     .join(' OR ')
 }
@@ -368,9 +369,9 @@ function mostRows(cost: (rows: number) => number, best: number): number {
  */
 function keyRanges(intervals: readonly Interval[], column: ColumnDef): { readonly range: KeyRange; readonly point: boolean }[] | undefined {
   const range = integerRange(column.type)
-  const side = (b: { readonly v: Exclude<Value, null>; readonly inclusive: boolean }, lower: boolean): KeyBound | 'empty' | 'open' | undefined => {
+  const side = (b: { readonly v: RangeValue; readonly inclusive: boolean }, lower: boolean): KeyBound | 'empty' | 'open' | undefined => {
     let { v, inclusive } = b
-    if (range !== undefined && (v.kind === 'decimal' || v.kind === 'int')) {
+    if (range !== undefined && v.kind !== 'string') {
       const scale = v.kind === 'decimal' ? 10n ** BigInt(v.scale) : 1n
       const raw = v.v
       let n = raw / scale
@@ -400,7 +401,10 @@ function keyRanges(intervals: readonly Interval[], column: ColumnDef): { readonl
     const lower = from === 'open' ? (column.nullable ? { values: [null], inclusive: false } : undefined) : from
     // Present endpoints here encode one non-NULL value each.
     const point = from !== 'open' && to !== 'open' && from.inclusive && to.inclusive && equalBytes(from.values[0]!, to.values[0]!)
-    out.push({ range: { ...(lower === undefined ? {} : { from: lower }), ...(to === 'open' ? {} : { to }) }, point })
+    const key: { from?: KeyBound; to?: KeyBound } = {}
+    if (lower !== undefined) key.from = lower
+    if (to !== 'open') key.to = to
+    out.push({ range: key, point })
   }
   return out
 }
@@ -485,8 +489,7 @@ function pointRanges(column: ColumnDef, conditions: readonly Condition[], outer:
         if (b === undefined) return false
         points.set(byteKey(encodeKey(b.values, [part])), b)
       }
-      const ranges = [...points.keys()].sort().map((key) => pointRange(points.get(key)!))
-      return ranges
+      return [...points.keys()].sort().map((key) => pointRange(points.get(key)!))
     }
   }
   return undefined
@@ -496,7 +499,7 @@ function pointRanges(column: ColumnDef, conditions: readonly Condition[], outer:
 function primaryRange(index: IndexDef, column: ColumnDef, conditions: readonly Condition[], evaluate: Constant): Access | undefined {
   const range: { from?: KeyBound; to?: KeyBound } = {}
   for (const c of conditions) {
-    if (c.op === 'IN' || c.op === '=' || c.op === '<=>' || c.op === 'IS NULL') continue
+    if (!isOrderedComparison(c.op)) continue
     const v = evaluate(c.constants[0] as Expression)
     if (v === undefined || !exact(v, column)) continue
     const b = bound(v, column, c.op === '<=' || c.op === '>=')

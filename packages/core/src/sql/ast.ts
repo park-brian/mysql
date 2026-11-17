@@ -107,8 +107,8 @@ export function and(a: Expression | undefined, b: Expression | undefined): Expre
 }
 
 /** A written integer literal; expressions, placeholders and DECIMAL spellings stay distinct. */
-export function integerLiteral(e: Expression): e is LiteralNode & { readonly type: typeof LITERAL.INT; readonly value: bigint } {
-  return e.kind === NODE.LITERAL && e.type === LITERAL.INT
+export function integerLiteral(e: Expression | undefined): e is LiteralNode & { readonly type: typeof LITERAL.INT; readonly value: bigint } {
+  return e?.kind === NODE.LITERAL && e.type === LITERAL.INT
 }
 
 export function nullLiteral(e: Expression | undefined): boolean {
