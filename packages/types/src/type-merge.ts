@@ -5,42 +5,46 @@
 // table's column types and NULL, the type `COALESCE(a, b)`, `IF(c, a, b)` and
 // `CASE WHEN c THEN a ELSE b END` report, which the capture checked agree.
 // VARCHAR stands for both VARCHAR and VAR_STRING, which is how a VARCHAR goes
-// on the wire. Row a, column b, is a letter: the merged type's place in
-// MERGE_TYPES, `a` for the first.
+// on the wire. Store one half of the table, with exceptions for ordered
+// pairs that differ. Each letter indexes MERGE_TYPES, `a` for the first.
 
 export type MergeType = 'TINY' | 'SHORT' | 'INT24' | 'LONG' | 'LONGLONG' | 'NEWDECIMAL' | 'FLOAT' | 'DOUBLE' | 'BIT' | 'YEAR' | 'DATE' | 'TIME' | 'DATETIME' | 'TIMESTAMP' | 'STRING' | 'VARCHAR' | 'TINY_BLOB' | 'BLOB' | 'MEDIUM_BLOB' | 'LONG_BLOB' | 'ENUM' | 'SET' | 'JSON' | 'NULL'
 
 /** The types in the order the table indexes them. */
 export const MERGE_TYPES: readonly MergeType[] = ['TINY', 'SHORT', 'INT24', 'LONG', 'LONGLONG', 'NEWDECIMAL', 'FLOAT', 'DOUBLE', 'BIT', 'YEAR', 'DATE', 'TIME', 'DATETIME', 'TIMESTAMP', 'STRING', 'VARCHAR', 'TINY_BLOB', 'BLOB', 'MEDIUM_BLOB', 'LONG_BLOB', 'ENUM', 'SET', 'JSON', 'NULL']
 
-const TABLE: readonly string[] = [
-  'abcdefghfappppoprrrrppta', // TINY
-  'bbcdefghfbppppoprrrrpptb', // SHORT
-  'cccdefghfcppppoprrrrpptc', // INT24
-  'ddddefhhfdppppoprrrrpptd', // LONG
-  'eeeeefhhfeppppoprrrrppte', // LONGLONG
-  'ffffffhhffppppoprrrrpptf', // NEWDECIMAL
-  'ggghghghhgppppoprrrrpptg', // FLOAT
-  'hhhhhhhhhhppppoprrrrppth', // DOUBLE
-  'ffffffhhieppppoprrrrppti', // BIT
-  'abcdefghejppppoprrrrpptj', // YEAR
-  'ppppppppppkmmmoprrrrpptk', // DATE
-  'ppppppppppmlmmoprrrrpptl', // TIME
-  'ppppppppppmmmmoprrrrpptm', // DATETIME
-  'ppppppppppmmmnoprrrrpptn', // TIMESTAMP
-  'oooooooooooooooprrrrooto', // STRING
-  'pppppppppppppppprrrrpptp', // VARCHAR
-  'rrrrrrrrrrrrrrrrrrrrrrtr', // TINY_BLOB
-  'rrrrrrrrrrrrrrrrrrrrrrtr', // BLOB
-  'rrrrrrrrrrrrrrrrrrrrrrtr', // MEDIUM_BLOB
-  'rrrrrrrrrrrrrrrrrrrrrrtr', // LONG_BLOB
-  'ppppppppppppppoprrrrpptu', // ENUM
-  'ppppppppppppppoprrrrpptv', // SET
-  'ttttttttttttttttttttttww', // JSON
-  'abcdefghijklmnoprrrruvwx', // NULL
-]
+const TABLE = (
+  'a,' + // TINY
+  'bb,' + // SHORT
+  'ccc,' + // INT24
+  'dddd,' + // LONG
+  'eeeee,' + // LONGLONG
+  'ffffff,' + // NEWDECIMAL
+  'ggghghg,' + // FLOAT
+  'hhhhhhhh,' + // DOUBLE
+  'ffffffhhi,' + // BIT
+  'abcdefghej,' + // YEAR
+  'ppppppppppk,' + // DATE
+  'ppppppppppml,' + // TIME
+  'ppppppppppmmm,' + // DATETIME
+  'ppppppppppmmmn,' + // TIMESTAMP
+  'ooooooooooooooo,' + // STRING
+  'pppppppppppppppp,' + // VARCHAR
+  'rrrrrrrrrrrrrrrrr,' + // TINY_BLOB
+  'rrrrrrrrrrrrrrrrrr,' + // BLOB
+  'rrrrrrrrrrrrrrrrrrr,' + // MEDIUM_BLOB
+  'rrrrrrrrrrrrrrrrrrrr,' + // LONG_BLOB
+  'ppppppppppppppoprrrrp,' + // ENUM
+  'ppppppppppppppoprrrrpp,' + // SET
+  'ttttttttttttttttttttttw,' + // JSON
+  'abcdefghijklmnoprrrruvwx' // NULL
+).split(',')
 
 /** The field type `a` and `b` merge to. */
 export function mergeTypes(a: MergeType, b: MergeType): MergeType {
-  return MERGE_TYPES[(TABLE[MERGE_TYPES.indexOf(a)] as string).charCodeAt(MERGE_TYPES.indexOf(b)) - 97] as MergeType
+  const i = MERGE_TYPES.indexOf(a)
+  const j = MERGE_TYPES.indexOf(b)
+  if (i === 4 && j === 6) return 'DOUBLE' // LONGLONG, FLOAT
+  const row = i >= 0 && i < j ? j : i
+  return MERGE_TYPES[TABLE[row]!.charCodeAt(Math.min(i, j)) - 97] as MergeType
 }
