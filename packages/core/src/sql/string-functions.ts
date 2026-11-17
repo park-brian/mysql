@@ -88,7 +88,7 @@ import {
   constantEnv,
   maxPacket,
 } from './compile.ts'
-import { NULL_TYPE, charWidth, decimalType, doubleType, intType, stringType, stringResultType, type ResultType } from './meta.ts'
+import { NULL_TYPE, charWidth, decimalType, doubleType, intType, stringType, stringResultType, type ResultType, maxOf, minOf } from './meta.ts'
 import { nativeArity, unregistered } from './registry.ts'
 import { modeOf } from './mode.ts'
 import { timeValue, today } from './temporal-functions.ts'
@@ -169,7 +169,7 @@ export function widthOf(t: ResultType, binary: boolean): number {
 /** The collation several string arguments aggregate to: a binary one wins only at the lowest coercibility. */
 function aggregateString(types: readonly ResultType[], conn: number): { readonly binary: boolean; readonly collation: number; readonly coercibility: number } {
   const live = types.filter((t) => t.kind === 'string' || t.kind === 'bytes')
-  const coercibility = live.length === 0 ? COERCIBILITY.NUMERIC : Math.min(...live.map(coercibilityOf))
+  const coercibility = live.length === 0 ? COERCIBILITY.NUMERIC : minOf(live, coercibilityOf)
   const binary = live.some((t) => t.kind === 'bytes' && coercibilityOf(t) === coercibility)
   return { binary, collation: binary ? CHARSET_BINARY : aggregateTypes(live, conn), coercibility }
 }
@@ -1098,7 +1098,7 @@ function scalarStringFunction(name: string, xs: readonly Compiled[], callName: s
           const v = (choices[Number(i) - 1] as Compiled).eval(r, env)
           return v === null ? null : result(stringUnits(v, binary, collation), binary, collation, coercibility)
         },
-        type: stringResultType(Math.max(...choices.map((c) => charsOf(c.type))), binary, collation, coercibility),
+        type: stringResultType(maxOf(choices, (c) => charsOf(c.type)), binary, collation, coercibility),
       }
     }
     case 'MAKE_SET':

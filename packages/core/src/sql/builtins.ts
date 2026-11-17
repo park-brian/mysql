@@ -93,6 +93,7 @@ import {
   stringType,
   stringResultType,
   type ResultType,
+  minOf,
 } from './meta.ts'
 import { matchType, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from './regexp.ts'
 import { canonicalFunctionName, lengthArity, nativeArity, unregistered } from './registry.ts'
@@ -199,7 +200,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
       // Bytes make the result bytes unless text of a stronger derivation wins (8.4.11: `'a' COLLATE utf8mb4_bin` over `x'61'`).
       const binary = derived !== undefined ? derived.collationId === CHARSET_BINARY || types.some(isBits) : types.some((t) => t.kind === 'bytes' || isBits(t))
       const id = binary ? CHARSET_BINARY : (derived?.collationId ?? aggregateTypes(types, conn))
-      const coercibility = derived?.derivation ?? Math.min(...types.map(coercibilityOf))
+      const coercibility = derived?.derivation ?? minOf(types, coercibilityOf)
       // A binary argument makes the result bytes: each argument contributes
       // its own bytes, a string in its own charset, and the width is counted
       // in bytes too (8.4.11).

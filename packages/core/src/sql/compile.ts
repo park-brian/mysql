@@ -116,6 +116,8 @@ import {
   stringType,
   stringResultType,
   type ResultType,
+  maxOf,
+  minOf,
 } from './meta.ts'
 import { castAsJson } from './json.ts'
 import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
@@ -2325,12 +2327,6 @@ function matchLike(s: readonly string[], p: readonly string[], escape: string, c
 }
 
 /**
- * The type a set of alternatives aggregates to — `CASE`, `IF`, `COALESCE` —
- * as `Item_func::aggregate_type` picks it: a string if any is one, else a
- * double, else a decimal wide enough for every integer and scale, else an
- * integer. NULL branches take no part.
- */
-/**
  * The one type CASE, IF, IFNULL and COALESCE give values of several types.
  * Its field type is MySQL's pairwise merge of theirs (`type-merge.ts`,
  * captured from 8.4.11); its length, scale and collation are the holder's
@@ -2351,7 +2347,7 @@ export function aggregate(types: readonly ResultType[], nullable: boolean, conne
     case 'DATETIME':
     case 'TIMESTAMP':
       // Reported in the connection's charset as text is, the field type kept (8.4.11).
-      return { ...datetimeType(field, Math.max(...live.map((t) => (t.kind === 'datetime' || t.kind === 'time' ? t.scale : 0))), nullable), asText: true }
+      return { ...datetimeType(field, maxOf(live, (t) => (t.kind === 'datetime' || t.kind === 'time' ? t.scale : 0)), nullable), asText: true }
     case 'TINY':
     case 'SHORT':
     case 'INT24':
@@ -2361,14 +2357,14 @@ export function aggregate(types: readonly ResultType[], nullable: boolean, conne
       return { ...(type.kind === 'int' ? type : integerHolder(live, nullable)), field }
     case 'NEWDECIMAL':
       // BIGINT UNSIGNED beside a signed integer: a DECIMAL of as many digits as the widest (8.4.11: 21 wide).
-      return type.kind === 'int' ? decimalType(Math.max(...live.map(intDigits)), 0, nullable) : type
+      return type.kind === 'int' ? decimalType(maxOf(live, intDigits), 0, nullable) : type
     case 'FLOAT':
     case 'DOUBLE':
       return type.kind === 'double' ? { ...type, field } : type
     case 'STRING':
     case 'VARCHAR':
       // A BIT among temporals or numbers that merge to a string makes it a binary one, as wide as the widest (8.4.11: `COALESCE(tm, bt, 1.5)` is VARBINARY(10)).
-      if (type.kind === 'string' && live.some(isBits)) return { ...stringType(Math.max(...live.map((t) => (isBits(t) ? t.length : byteWidth(t)))), CHARSET_BINARY, nullable), field, coercibility: COERCIBILITY.IMPLICIT }
+      if (type.kind === 'string' && live.some(isBits)) return { ...stringType(maxOf(live, (t) => (isBits(t) ? t.length : byteWidth(t))), CHARSET_BINARY, nullable), field, coercibility: COERCIBILITY.IMPLICIT }
       // Fall through to the field update shared by the other text holders.
     case 'ENUM':
     case 'SET':
@@ -2393,7 +2389,7 @@ function signedness(live: readonly ResultType[], merged: MergeType): MergeType {
   if (live.some(isBits) && merged === 'NEWDECIMAL' && ints.length > 0 && ints.every((t) => t.unsigned) && live.every((t) => t.kind === 'int' || t.kind === 'null')) return 'LONGLONG'
   const rank = INTEGERS.indexOf(merged)
   if (rank === -1 || !ints.some((t) => t.unsigned) || !ints.some((t) => !t.unsigned)) return merged
-  const promoted = Math.max(rank, ...ints.filter((t) => t.unsigned).map((t) => INTEGERS.indexOf(mergeTypeOf(t)) + 1))
+  const promoted = maxOf(ints, (t) => t.unsigned ? INTEGERS.indexOf(mergeTypeOf(t)) + 1 : rank)
   return INTEGERS[Math.min(promoted, INTEGERS.length - 1)] as MergeType
 }
 
@@ -2441,39 +2437,39 @@ function holderOf(types: readonly ResultType[], live: readonly ResultType[], nul
     // makes it a BLOB of its bytes.
     const texts = live.filter(isText)
     const derived = operation === undefined ? undefined : aggregateCollations(types, operation, compare)
-    const least = Math.min(...texts.map(coercibilityOf))
+    const least = minOf(texts, coercibilityOf)
     const binary = derived !== undefined ? derived.collationId === CHARSET_BINARY : texts.some((t) => t.kind === 'bytes' && coercibilityOf(t) === least)
     const collation = binary ? CHARSET_BINARY : (derived?.collationId ?? aggregateTypes(live, connectionCollation))
     const tagged = (t: ResultType): ResultType => (derived === undefined || binary ? t : { ...t, coercibility: derived.derivation })
     // Binary holders use the item's byte bound, including a DOUBLE literal's
     // written width; text holders keep the separate numeric character bound.
-    const width = Math.max(...live.map(binary ? byteWidth : charWidth))
-    const blob = Math.max(0, ...live.map((t) => t.blobBytes ?? 0))
+    const width = maxOf(live, binary ? byteWidth : charWidth)
+    const blob = maxOf(live, (t) => t.blobBytes ?? 0)
     if (blob > 0 && !binary) return tagged({ ...stringType(width, collation, nullable), field: FIELD_TYPE.BLOB, blobBytes: blob * requireCollationInfo(collation).mbmaxlen })
     return tagged(stringType(width, collation, nullable))
   }
   const first = live[0] as ResultType
   if (live.every((t) => t.kind === first.kind && t.field === first.field) && (first.kind === 'datetime' || first.kind === 'time')) {
-    return datetimeType(first.field, Math.max(...live.map((t) => t.scale)), nullable)
+    return datetimeType(first.field, maxOf(live, (t) => t.scale), nullable)
   }
-  if (live.some((t) => t.kind === 'datetime' || t.kind === 'time')) return stringType(Math.max(...live.map(charWidth)), connectionCollation, nullable)
+  if (live.some((t) => t.kind === 'datetime' || t.kind === 'time')) return stringType(maxOf(live, charWidth), connectionCollation, nullable)
   // The merger owns FLOAT/DOUBLE field selection; the holder owns width and scale.
   if (live.some((t) => t.kind === 'double')) return fixedDouble(live, nullable) ?? doubleType(nullable)
   if (live.some((t) => t.kind === 'decimal')) {
-    const s = Math.max(...live.map(scaleOf))
-    return decimalType(Math.max(...live.map(intDigits)) + s, s, nullable)
+    const s = maxOf(live, scaleOf)
+    return decimalType(maxOf(live, intDigits) + s, s, nullable)
   }
   // A BIT beside another integer is a DECIMAL of as many digits as it has
   // bits (`field_types_merge_rules`, 8.4.11: `IF(1, b, 0)` of a BIT(8) is
   // DECIMAL(8,0)).
-  if (live.some(isBits) && !live.every(isBits)) return decimalType(Math.max(...live.map(intDigits)), 0, nullable)
+  if (live.some(isBits) && !live.every(isBits)) return decimalType(maxOf(live, intDigits), 0, nullable)
   // Integers of one field type keep it (8.4.11: `GREATEST(NULL, id)` of an INT is an INT).
   const field = live.every((t) => t.field === first.field) ? first.field : FIELD_TYPE.LONGLONG
   return { ...integerHolder(live, nullable), field }
 }
 
 function integerHolder(types: readonly ResultType[], nullable: boolean): ResultType {
-  return intType(Math.max(...types.map((t) => t.length)), nullable, types.every((t) => t.unsigned))
+  return intType(maxOf(types, (t) => t.length), nullable, types.every((t) => t.unsigned))
 }
 
 /** A real value with SQL string traits; canonical functions can override FLOAT text. */

@@ -221,6 +221,19 @@ export const decimalType = (precision: number, scale: number, nullable: boolean,
 /** A DOUBLE: a column is 22 wide, and every double an expression makes is 23 (8.4.11). */
 export const doubleType = (nullable: boolean, length = 23): ResultType => scalarType('double', FIELD_TYPE.DOUBLE, length, 31, nullable)
 
+/** Numeric extrema over SQL operands without turning them into call arguments. */
+export function maxOf<T>(items: readonly T[], value: (item: T) => number): number {
+  let max = -Infinity
+  for (const item of items) max = Math.max(max, value(item))
+  return max
+}
+
+export function minOf<T>(items: readonly T[], value: (item: T) => number): number {
+  let min = Infinity
+  for (const item of items) min = Math.min(min, value(item))
+  return min
+}
+
 /**
  * A DOUBLE with fixed decimals, from FLOAT(M,D) operands: when every operand
  * has a scale below 31 and one of them is such a double, the result keeps
@@ -230,8 +243,8 @@ export const doubleType = (nullable: boolean, length = 23): ResultType => scalar
 export function fixedDouble(types: readonly ResultType[], nullable: boolean): ResultType | undefined {
   if (!types.some((t) => t.kind === 'double' && t.scale < 31)) return undefined
   if (!types.every((t) => isNumber(t) && t.scale < 31)) return undefined
-  const scale = Math.max(...types.map((t) => t.scale))
-  const whole = Math.max(...types.map((t) => (t.kind === 'decimal' ? charWidth(t) : t.length) - t.scale))
+  const scale = maxOf(types, (t) => t.scale)
+  const whole = maxOf(types, (t) => (t.kind === 'decimal' ? charWidth(t) : t.length) - t.scale)
   return { ...doubleType(nullable, whole + scale), scale }
 }
 
