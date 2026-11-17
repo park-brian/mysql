@@ -948,6 +948,10 @@ test('an ordered row-ID union keeps ascending IDs and the statement snapshot on 
       ['INT', '>=', 2147483647], ['INT UNSIGNED', '>=', 4294967295],
       ['INT', 'IS NULL', null], ['INT UNSIGNED', 'IS NULL', null],
       ['INT', '=', -7, 'g = -7'], ['INT UNSIGNED', '=', 7, '7.0 = g'],
+      ['TINYINT', '=', -7], ['TINYINT UNSIGNED', '>=', 255],
+      ['SMALLINT', 'IS NULL', null], ['SMALLINT UNSIGNED', '=', 7, '7.0 = g'],
+      ['MEDIUMINT', '<=', -8388608], ['MEDIUMINT UNSIGNED', '>=', 16777215],
+      ['BIGINT', '<=', -9223372036854775808n, 'g <= -9223372036854775808.0'], ['BIGINT UNSIGNED', '>=', 18446744073709551615n],
     ] as const) {
       await conn.query(`CREATE TABLE t(id INT PRIMARY KEY,g ${type},v INT,KEY by_g(g)) STATS_AUTO_RECALC=0`)
       const stored = Array.from({ length: 30 }, (_, i) => {

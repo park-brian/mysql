@@ -269,8 +269,20 @@ verification passes 1,879 tests, all nine size gates, seeded fuzzing,
 10,000 crash points, package and client smoke and all seven pinned
 corpora, including 1,737 coercion warning counts. Parser, core and facade
 measure 44,526, 334,338 and 334,259 gzipped bytes. The relational score
-stays at 2,158 of 2,248. Other secondary integer widths and broader
-ordered union plans remain open.
+stays at 2,158 of 2,248. Broader ordered union plans remain open.
+
+**M5.49 ordered row-ID union across secondary integer widths, verified.**
+The same reader accepts nullable signed and unsigned TINYINT, SMALLINT,
+MEDIUMINT and BIGINT keys. Two pinned studies gain 2,304 of 3,072 and 3,456
+of 4,608 exact observations across both protocols. A third study of lower
+edges and out-of-range controls gains 2,224 of 3,584, with no previously
+matching observation lost. The retained snapshot test covers every width
+and both clustered range directions. Full Docker verification passes 1,879
+tests, all nine size gates, seeded fuzzing, 10,000 crash points, package and
+client smoke and all seven pinned corpora, including 1,737 coercion warning
+counts. Parser, core and facade measure 44,526, 334,344 and 334,265 gzipped
+bytes. The relational score stays at 2,158 of 2,248. Bare negative literals
+at and below the BIGINT minimum and broader ordered union plans remain open.
 
 **M5.10 `REGEXP_LIKE` result nullability, verified.** The regex binder
 uses the operands' nullability for the scalar result field. Both

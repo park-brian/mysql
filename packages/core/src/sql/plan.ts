@@ -284,7 +284,7 @@ export interface RangeCosting {
   count(index: string, range: KeyRange, limit: number): number
 }
 
-/** Merge one nullable INT secondary range and one signed INT primary range. */
+/** Merge one nullable integer secondary range and one signed INT primary range. */
 function indexUnionAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, costing: RangeCosting, indexes: readonly IndexDef[]): Access | undefined {
   if (def.engine !== 'native' || where?.kind !== NODE.BINARY || !logicalShortCircuit(where.op)) return undefined
   const primary = indexes.find((key) => key.kind === 'primary')
@@ -301,10 +301,9 @@ function indexUnionAccess(def: TableDef, alias: string, where: Expression | unde
   const ordered = isOrderedComparison(op)
   const point = op === '=' || op === 'IS NULL'
   if (point ? !costing.allowIndexUnion : !ordered && op !== 'IS NOT NULL') return undefined
-  if (!column.nullable || column.type.type !== FIELD_TYPE.LONG) return undefined
-  const keys = indexes.filter((key) => forwardKeyColumn(def, key) === column)
-  const secondary = keys[0]
-  if (keys.length !== 1 || !singleRefIndex(secondary)) return undefined
+  if (!column.nullable || !integerBytes(column.type.type)) return undefined
+  const [secondary, rival] = indexes.filter((key) => forwardKeyColumn(def, key) === column)
+  if (rival || !singleRefIndex(secondary)) return undefined
   const bound = constantValue(comparison.constants[0]!, env)
   if (bound?.kind !== 'int') return undefined
   const edge = { v: bound, inclusive: comparison.op.endsWith('=') }
