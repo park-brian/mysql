@@ -354,6 +354,20 @@ Parser, core and facade measure 44,906, 334,321 and 334,245 gzipped bytes.
 The relational score stays at 2,158 of 2,248. Argument validation in the
 other regex search functions remains open.
 
+**M5.10 pattern validation before NULL search arguments, verified.**
+`REGEXP_INSTR`, `REGEXP_SUBSTR` and `REGEXP_REPLACE` validate the pattern
+before a NULL subject, position, occurrence or replacement ends the
+search. A NULL match type still ends evaluation before pattern validation.
+The retained test checks both protocols and confirms that a skipped match
+cannot time out. The pinned study gains 100 exact outcomes in 498 profiles
+and keeps every previous complete match. Full Docker verification passes
+1,882 tests, all nine size gates, seeded fuzzing, 10,000 crash points,
+package and client smoke and all seven pinned corpora, including 1,737
+coercion warning counts. Parser, core and facade measure 44,906, 334,361
+and 334,265 gzipped bytes. The relational score stays at 2,158 of 2,248.
+Mixed binary replacement collations, prepared return-option checks and
+nonpositive positions with NULL inputs remain open.
+
 **M5.2 packed field type merge table, verified.** The generator stores
 one triangle of the matrix and emits an exception for each ordered pair
 that differs from its reverse. All 576 public results retain their order

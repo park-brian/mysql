@@ -45,6 +45,19 @@ test('M5.10: REGEXP_LIKE reports nullable operands in its result flags', async (
       assert.deepEqual((await read("SELECT REGEXP_LIKE(NULL, '(', NULL), NULL REGEXP NULL"))[0], [[null, null]])
       assert.deepEqual((await read("SELECT NULL NOT RLIKE '(' LIMIT 0"))[0], [])
       assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      const broken = 'Mismatched parenthesis in regular expression.'
+      for (const statement of [
+        "SELECT REGEXP_SUBSTR(NULL, '(', NULL)",
+        "SELECT REGEXP_INSTR('x', '(', 1, 1, NULL)",
+        "SELECT REGEXP_REPLACE('x', '(', NULL)",
+      ]) {
+        await conn.query('DO 0')
+        await assert.rejects(read(statement), { errno: 3691, sqlState: 'HY000', sqlMessage: broken })
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [['Error', 3691, broken]])
+      }
+      assert.deepEqual((await read(`SELECT REGEXP_SUBSTR(NULL, '(', 1, 1, NULL),
+        REGEXP_REPLACE(REPEAT('a', 30), '(a+)+', NULL)`))[0], [[null, null]])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
     }
   } finally {
     await conn.query('DROP DATABASE IF EXISTS ' + schema)

@@ -95,7 +95,7 @@ import {
   type ResultType,
   minOf,
 } from './meta.ts'
-import { matchType, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from './regexp.ts'
+import { matchType, regexpFor, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from './regexp.ts'
 import { canonicalFunctionName, lengthArity, nativeArity, unregistered } from './registry.ts'
 import { modeOf } from './mode.ts'
 import { bitBytes } from './wire.ts'
@@ -631,18 +631,23 @@ export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): 
         : stringType(charWidth(subject.type), collation, true)
   return {
     eval: (r, env) => {
-      const vs = xs.map((x) => x.eval(r, env))
-      if (vs.some((v) => v === null)) return null
-      const v = vs as Exclude<Value, null>[]
-      const int = (i: number, fallback: bigint) => (v[i] === undefined ? fallback : toInteger(v[i] as Exclude<Value, null>))
-      const option = v[matchAt]
-      const mt = option === undefined ? undefined : matchType(toText(option), fn)
-      const search = { subject: v[0] as Exclude<Value, null>, pattern: v[1] as Exclude<Value, null>, position: int(required, 1n), occurrence: int(required + 1, replace ? 0n : 1n), type: mt }
-      if (instr) {
-        const ret = int(required + 2, 0n)
-        if (ret !== 0n && ret !== 1n) throw sqlError('ER_WRONG_ARGUMENTS', 'Incorrect arguments to regexp_instr: return_option must be 1 or 0.')
-        return intValue(regexpInstr(search, ret === 1n))
+      const v = xs.map((x) => x.eval(r, env))
+      const int = (i: number, fallback: bigint) => {
+        const value = v[i]
+        return value ? toInteger(value) : fallback
       }
+      const ret = instr ? int(required + 2, 0n) : 0n
+      if (ret !== 0n && ret !== 1n) throw sqlError('ER_WRONG_ARGUMENTS', 'Incorrect arguments to regexp_instr: return_option must be 1 or 0.')
+      const option = v[matchAt]
+      if (option === null) return null
+      const mt = option === undefined ? undefined : matchType(toText(option), fn)
+      const [subject, pattern] = v
+      if (v.includes(null)) {
+        if (pattern) regexpFor(subject ?? null, pattern, mt, fn, false)
+        return null
+      }
+      const search = { subject: subject!, pattern: pattern!, position: int(required, 1n), occurrence: int(required + 1, replace ? 0n : 1n), type: mt }
+      if (instr) return intValue(regexpInstr(search, ret === 1n))
       const out = replace ? regexpReplace(search, v[2] as Exclude<Value, null>) : regexpSubstr(search)
       if (out === undefined) return null
       // my_charset_latin1 (8) is also the binary regex output map: a

@@ -131,7 +131,7 @@ function pairCollation(a: Value, b: Exclude<Value, null>, fn: string): number {
 const textOf = (v: Exclude<Value, null>): string => (v.kind === 'bytes' ? decodeCharset(v.v, 'latin1') : toText(v))
 
 /** The engine's pattern for `pattern` over `subject`. */
-function regexpFor(subject: Value, pattern: Exclude<Value, null>, type: MatchType | undefined, fn: string): IcuPattern & { readonly re: RegExp } {
+export function regexpFor(subject: Value, pattern: Exclude<Value, null>, type: MatchType | undefined, fn: string, searching = true): IcuPattern & { readonly re: RegExp } {
   const base = pairCollation(subject, pattern, fn)
   const collation = subject?.kind === 'string' && pattern.kind === 'string' ? aggregateCollation(subject, pattern) : base
   const text = textOf(pattern)
@@ -139,7 +139,7 @@ function regexpFor(subject: Value, pattern: Exclude<Value, null>, type: MatchTyp
   const shape = shapeOf(text)
   if (shape.depth >= 100) throw sqlError('ER_REGEXP_INTERNAL_ERROR', 'Internal error in the regular expression library.')
   const c = compiled(text, { i: type?.i ?? nameOf(collation).endsWith('_ci'), m: type?.m ?? false, s: type?.s ?? false, d: type?.d ?? false })
-  if (shape.nested && subject !== null && [...textOf(subject)].length > RUNAWAY_LENGTH) throw sqlError('ER_REGEXP_TIME_OUT', 'Timeout exceeded in regular expression match.')
+  if (searching && shape.nested && subject !== null && [...textOf(subject)].length > RUNAWAY_LENGTH) throw sqlError('ER_REGEXP_TIME_OUT', 'Timeout exceeded in regular expression match.')
   return c
 }
 
