@@ -131,7 +131,7 @@ function pairCollation(a: Value, b: Exclude<Value, null>, fn: string): number {
 const textOf = (v: Exclude<Value, null>): string => (v.kind === 'bytes' ? decodeCharset(v.v, 'latin1') : toText(v))
 
 /** The engine's pattern for `pattern` over `subject`. */
-export function regexpFor(subject: Value, pattern: Exclude<Value, null>, type: MatchType | undefined, fn: string, searching = true): IcuPattern & { readonly re: RegExp } {
+function regexpFor(subject: Value, pattern: Exclude<Value, null>, type: MatchType | undefined, fn: string, searching = true): IcuPattern & { readonly re: RegExp } {
   const base = pairCollation(subject, pattern, fn)
   const collation = subject?.kind === 'string' && pattern.kind === 'string' ? aggregateCollation(subject, pattern) : base
   const text = textOf(pattern)
@@ -217,28 +217,12 @@ function nth(re: RegExp, text: string, start: number, occurrence: bigint): RegEx
   return undefined
 }
 
-export interface Search {
-  readonly subject: Exclude<Value, null>
-  readonly pattern: Exclude<Value, null>
+interface Search {
+  readonly subject: Value
+  readonly pattern: Value
   readonly position: bigint
   readonly occurrence: bigint
   readonly type: MatchType | undefined
-}
-
-export function regexpInstr(s: Search, returnEnd: boolean): bigint {
-  const { re } = regexpFor(s.subject, s.pattern, s.type, 'regexp_instr')
-  const binary = s.subject.kind === 'bytes'
-  const text = textOf(s.subject)
-  const m = nth(re, text, offsetOf(text, s.position, binary, 'regexp_instr'), s.occurrence)
-  if (m === undefined) return 0n
-  return BigInt(charsBefore(text, m.index + (returnEnd ? m[0].length : 0), binary) + 1)
-}
-
-/** The matched text, or undefined when there is no such match. */
-export function regexpSubstr(s: Search): string | undefined {
-  const { re } = regexpFor(s.subject, s.pattern, s.type, 'regexp_substr')
-  const text = textOf(s.subject)
-  return nth(re, text, offsetOf(text, s.position, s.subject.kind === 'bytes', 'regexp_substr'), s.occurrence)?.[0]
 }
 
 type Piece = string | number
@@ -297,22 +281,32 @@ function replacementOf(text: string, groups: number, names: ReadonlyMap<string, 
   return out
 }
 
-export function regexpReplace(s: Search, replacement: Exclude<Value, null>): string {
-  pairCollation(s.subject, replacement, 'regexp_replace')
-  const { re, groups, names } = regexpFor(s.subject, s.pattern, s.type, 'regexp_replace')
+/** Compile the pattern once before any matching work. */
+export function regexpSearch(s: Search, fn: string, searching: boolean, returnEnd: boolean, replacement: Value): string | bigint | undefined {
+  if (replacement) pairCollation(s.subject ?? s.pattern, replacement, fn)
+  if (!s.pattern) return undefined
+  const { re, groups, names } = regexpFor(s.subject, s.pattern, s.type, fn, searching)
+  if (!searching || !s.subject) return undefined
   const text = textOf(s.subject)
-  const start = offsetOf(text, s.position, s.subject.kind === 'bytes', 'regexp_replace')
-  const pieces = replacementOf(textOf(replacement), groups.length - 1, names)
-  const expand = (m: RegExpExecArray): string => pieces.map((p) => (typeof p === 'string' ? p : (m[groups[p] as number] ?? ''))).join('')
-  let out = text.slice(0, start)
-  let at = start
-  let n = 0n
-  for (const m of matchesFrom(re, text, start)) {
-    n++
-    if (s.occurrence > 0n && n !== s.occurrence) continue
-    out += text.slice(at, m.index) + expand(m)
-    at = m.index + m[0].length
-    if (s.occurrence > 0n) break
+  const binary = s.subject.kind === 'bytes'
+  const start = offsetOf(text, s.position, binary, fn)
+  if (replacement) {
+    const pieces = replacementOf(textOf(replacement), groups.length - 1, names)
+    const expand = (m: RegExpExecArray): string => pieces.map((p) => (typeof p === 'string' ? p : (m[groups[p] as number] ?? ''))).join('')
+    let out = text.slice(0, start)
+    let at = start
+    let n = 0n
+    for (const m of matchesFrom(re, text, start)) {
+      n++
+      if (s.occurrence > 0n && n !== s.occurrence) continue
+      out += text.slice(at, m.index) + expand(m)
+      at = m.index + m[0].length
+      if (s.occurrence > 0n) break
+    }
+    return out + text.slice(at)
   }
-  return out + text.slice(at)
+  const match = nth(re, text, start, s.occurrence)
+  if (fn === 'regexp_substr') return match?.[0]
+  if (match === undefined) return 0n
+  return BigInt(charsBefore(text, match.index + (returnEnd ? match[0].length : 0), binary) + 1)
 }

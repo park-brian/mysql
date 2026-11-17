@@ -58,6 +58,9 @@ test('M5.10: REGEXP_LIKE reports nullable operands in its result flags', async (
       assert.deepEqual((await read(`SELECT REGEXP_SUBSTR(NULL, '(', 1, 1, NULL),
         REGEXP_REPLACE(REPEAT('a', 30), '(a+)+', NULL)`))[0], [[null, null]])
       assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      const mixed = "Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_replace."
+      await assert.rejects(read("SELECT REGEXP_REPLACE(_binary 'x', _binary '(', 'z', NULL)"), { errno: 3995, sqlState: 'HY000', sqlMessage: mixed })
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [['Error', 3995, mixed]])
     }
   } finally {
     await conn.query('DROP DATABASE IF EXISTS ' + schema)

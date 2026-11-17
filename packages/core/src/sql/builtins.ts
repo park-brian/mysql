@@ -95,7 +95,7 @@ import {
   type ResultType,
   minOf,
 } from './meta.ts'
-import { matchType, regexpFor, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from './regexp.ts'
+import { matchType, regexpLike, regexpSearch } from './regexp.ts'
 import { canonicalFunctionName, lengthArity, nativeArity, unregistered } from './registry.ts'
 import { modeOf } from './mode.ts'
 import { bitBytes } from './wire.ts'
@@ -631,7 +631,7 @@ export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): 
         : stringType(charWidth(subject.type), collation, true)
   return {
     eval: (r, env) => {
-      const v = xs.map((x) => x.eval(r, env))
+      const v = xs.map((x) => x.eval(r, env)) as [Value, Value, ...Value[]]
       const int = (i: number, fallback: bigint) => {
         const value = v[i]
         return value ? toInteger(value) : fallback
@@ -641,14 +641,10 @@ export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): 
       const option = v[matchAt]
       if (option === null) return null
       const mt = option === undefined ? undefined : matchType(toText(option), fn)
-      const [subject, pattern] = v
-      if (v.includes(null)) {
-        if (pattern) regexpFor(subject ?? null, pattern, mt, fn, false)
-        return null
-      }
-      const search = { subject: subject!, pattern: pattern!, position: int(required, 1n), occurrence: int(required + 1, replace ? 0n : 1n), type: mt }
-      if (instr) return intValue(regexpInstr(search, ret === 1n))
-      const out = replace ? regexpReplace(search, v[2] as Exclude<Value, null>) : regexpSubstr(search)
+      const [subject, pattern, replacement] = v
+      const search = { subject, pattern, position: int(required, 1n), occurrence: int(required + 1, replace ? 0n : 1n), type: mt }
+      const out = regexpSearch(search, fn, !v.includes(null), ret === 1n, replace ? replacement! : null)
+      if (typeof out === 'bigint') return intValue(out)
       if (out === undefined) return null
       // my_charset_latin1 (8) is also the binary regex output map: a
       // decoded euro sign returns byte 80 rather than its UTF-16 low byte AC.

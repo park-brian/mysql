@@ -365,8 +365,22 @@ and keeps every previous complete match. Full Docker verification passes
 package and client smoke and all seven pinned corpora, including 1,737
 coercion warning counts. Parser, core and facade measure 44,906, 334,361
 and 334,265 gzipped bytes. The relational score stays at 2,158 of 2,248.
-Mixed binary replacement collations, prepared return-option checks and
-nonpositive positions with NULL inputs remain open.
+Prepared return-option checks and nonpositive positions with NULL inputs
+remain open.
+
+**M5.10 shared regex search setup and replacement collation, verified.**
+The search functions compile the pattern and set the character offset
+through one path. Replacement collation validation precedes compilation
+even when a NULL position would skip matching. The two observed errors
+match MySQL 8.4.11 on both protocols, with every other outcome unchanged
+in the 498-observation study. The retained check covers binary and text
+operands. Other combinations of binary replacement and NULL arguments
+remain open. Core and facade save 44 and seven gzipped bytes. Full Docker
+verification passes 1,882 tests, all nine size gates, seeded fuzzing,
+10,000 crash points, package and client smoke and all seven pinned corpora,
+including 1,737 coercion warning counts. Parser, core and facade measure
+44,906, 334,317 and 334,258 gzipped bytes. The relational score stays at
+2,158 of 2,248.
 
 **M5.2 packed field type merge table, verified.** The generator stores
 one triangle of the matrix and emits an exception for each ordered pair
