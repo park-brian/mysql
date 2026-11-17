@@ -9,6 +9,7 @@
 //
 // A key's cardinality is what the table's statistics say, through the
 // server's cache of them (`cardinalities` in stats.ts, M5.45).
+import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { requireSchema } from './scope.ts'
 import { and } from './ast.ts'
 import { proof } from './errors.ts'
@@ -90,53 +91,51 @@ export function variablesColumns(table: string, resultsCollation: number, mbmaxl
   return [column('Variable_name', 64, 4097), column('Value', 1024, 0)]
 }
 
-/**
- * The result columns as the server describes them: its SHOW views' own
- * definitions, not a derived table's (8.4.11, through `mysql2`). Each is
- * [table, original table, name, original name, characters of text or
- * `undefined` for a number, length of a number, type, flags]; text is as
- * long as its characters in the results' charset, as every text column is.
- */
-type Shown = readonly [string, string, string, string, number | undefined, number, number, number]
+/** The server's SHOW view columns, with lengths in characters for text. */
+type Shown = readonly [length: number, flags: number, type?: number, orgTable?: string]
 
 const COLUMNS_SHOWN: Readonly<Record<string, Shown>> = {
-  Field: ['COLUMNS', '', 'Field', 'Field', 64, 0, 253, 0],
-  Type: ['COLUMNS', 'columns', 'Type', 'Type', 16777215, 0, 252, 4241],
-  Collation: ['COLUMNS', '', 'Collation', 'Collation', 64, 0, 253, 0],
-  Null: ['COLUMNS', '', 'Null', 'Null', 3, 0, 253, 1],
-  Key: ['COLUMNS', 'columns', 'Key', 'Key', 3, 0, 254, 4481],
-  Default: ['COLUMNS', 'columns', 'Default', 'Default', 65535, 0, 252, 144],
-  Extra: ['COLUMNS', '', 'Extra', 'Extra', 256, 0, 253, 0],
-  Privileges: ['COLUMNS', '', 'Privileges', 'Privileges', 154, 0, 253, 0],
-  Comment: ['COLUMNS', '', 'Comment', 'Comment', 6144, 0, 252, 145],
+  Field: [64, 0],
+  Type: [16777215, 4241, 252, 'columns'],
+  Collation: [64, 0],
+  Null: [3, 1],
+  Key: [3, 4481, 254, 'columns'],
+  Default: [65535, 144, 252, 'columns'],
+  Extra: [256, 0],
+  Privileges: [154, 0],
+  Comment: [6144, 145, 252],
 }
 
 const INDEX_SHOWN: readonly Shown[] = [
-  ['SHOW_STATISTICS', 'tables', 'Table', 'Table', 64, 0, 253, 4225],
-  ['SHOW_STATISTICS', '', 'Non_unique', 'Non_unique', undefined, 2, 3, 1],
-  ['SHOW_STATISTICS', '', 'Key_name', 'Key_name', 64, 0, 253, 0],
-  ['SHOW_STATISTICS', 'index_column_usage', 'Seq_in_index', 'Seq_in_index', undefined, 10, 3, 4129],
-  ['SHOW_STATISTICS', '', 'Column_name', 'Column_name', 64, 0, 253, 0],
-  ['SHOW_STATISTICS', '', 'Collation', 'Collation', 1, 0, 253, 0],
-  ['SHOW_STATISTICS', '', 'Cardinality', 'Cardinality', undefined, 21, 8, 0],
-  ['SHOW_STATISTICS', '', 'Sub_part', 'Sub_part', undefined, 21, 8, 0],
-  // NULL, which no table holds.
-  ['', '', 'Packed', '', undefined, 0, 6, 128],
-  ['SHOW_STATISTICS', '', 'Null', 'Null', 3, 0, 253, 1],
-  ['SHOW_STATISTICS', '', 'Index_type', 'Index_type', 11, 0, 253, 129],
-  ['SHOW_STATISTICS', '', 'Comment', 'Comment', 8, 0, 253, 1],
-  ['SHOW_STATISTICS', 'indexes', 'Index_comment', 'Index_comment', 2048, 0, 253, 4225],
-  ['SHOW_STATISTICS', '', 'Visible', 'Visible', 3, 0, 253, 1],
-  ['SHOW_STATISTICS', '', 'Expression', 'Expression', 4294967295, 0, 252, 144],
+  [64, 4225, 253, 'tables'],
+  [2, 1, 3],
+  [64, 0],
+  [10, 4129, 3, 'index_column_usage'],
+  [64, 0],
+  [1, 0],
+  [21, 0, 8],
+  [21, 0, 8],
+  // Packed is the NULL literal, which no table holds.
+  [0, 128, 6],
+  [3, 1],
+  [11, 129],
+  [8, 1],
+  [2048, 4225, 253, 'indexes'],
+  [3, 1],
+  [4294967295, 144, 252],
 ]
 
 /** The column definitions a SHOW COLUMNS or SHOW INDEX answers with, in the results' collation. */
 export function shownColumns(node: ShowNode, names: readonly string[], resultsCollation: number, mbmaxlen: number): ColumnDefinition[] {
+  const index = node.what === 'INDEX'
   return names.map((name, i) => {
-    const shown = node.what === 'INDEX' ? (INDEX_SHOWN[i] as Shown) : (COLUMNS_SHOWN[name] as Shown)
-    const [table, orgTable, , orgName, chars, length, type, flags] = shown
-    const text = chars !== undefined
-    return { schema: '', table, orgTable, name, orgName, characterSet: text ? resultsCollation : 63, columnLength: text ? Math.min(4294967295, chars * mbmaxlen) : length, type, flags, decimals: 0 }
+    const [length, flags, type = FIELD_TYPE.VAR_STRING, orgTable = ''] = (index ? INDEX_SHOWN[i] : COLUMNS_SHOWN[name])!
+    const literal = type === FIELD_TYPE.NULL
+    const text = type === FIELD_TYPE.BLOB || type === FIELD_TYPE.VAR_STRING || type === FIELD_TYPE.STRING
+    return {
+      schema: '', table: literal ? '' : index ? 'SHOW_STATISTICS' : 'COLUMNS', orgTable, name, orgName: literal ? '' : name,
+      characterSet: text ? resultsCollation : CHARSET_BINARY, columnLength: text ? Math.min(4294967295, length * mbmaxlen) : length, type, flags, decimals: 0,
+    }
   })
 }
 
