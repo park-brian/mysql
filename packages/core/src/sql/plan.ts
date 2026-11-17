@@ -322,10 +322,12 @@ function sortUnionAccess(def: TableDef, alias: string, where: Expression | undef
       v = intValue(value.v / scale - (fraction < 0n ? 1n : 0n))
       inclusive &&= fraction === 0n
     }
-    secondaryInterval = { lo: { v, inclusive } }
+    // A lower edge admitting the minimum admits every non-NULL key.
+    const minimum = integerRange(column.type)!.min
+    if (v.v > minimum || (v.v === minimum && !inclusive)) secondaryInterval = { lo: { v, inclusive } }
   }
   const secondaryRange = keyRanges([secondaryInterval], column)?.[0]?.range
-  if (secondaryRange?.from === undefined || (greater && secondaryRange.from.values[0] === null)) return undefined
+  if (secondaryRange?.from === undefined) return undefined
   const { stats, coveringScan } = costing
   // This reader models an in-memory sort. Leave space per row ID for the sort tree.
   const limit = Math.min(stats.rows - 2, Math.floor(sortBufferBytes(env) / 64) - 1)

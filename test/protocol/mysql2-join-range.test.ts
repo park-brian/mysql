@@ -672,3 +672,57 @@ ${children}
     await conn.end(); await db?.end()
   }
 })
+
+test('a nullable signed or unsigned INT minimum can supply a whole non-NULL merge range', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'index_merge_domain409'
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    for (const [type, minimum] of [['INT', -2147483648], ['INT UNSIGNED', 0]] as const) {
+      await conn.query(`CREATE TABLE p(id INT PRIMARY KEY,g ${type},name VARCHAR(12),KEY by_g(g)) STATS_AUTO_RECALC=0`)
+      await conn.query('INSERT INTO p VALUES ?', [Array.from({ length: 30 }, (_, i) => [
+        i + 1, i === 1 ? 8 : i === 25 ? minimum : i === 26 ? minimum + 1 : i === 28 ? 8 : null, 'name' + i,
+      ])])
+      await conn.query('ANALYZE TABLE p')
+      const select = 'SELECT id,g,name FROM p WHERE '
+      for (const [secondary, acceptsMinimum] of [
+        [`g >= ${minimum}`, true],
+        [`g > ${minimum - 1}.5`, true],
+        [`g > ${minimum}`, false],
+      ] as const) for (const method of ['query', 'execute'] as const) {
+        const read = (sql: string) => method === 'query' ? conn.query<mysql.RowDataPacket[]>(sql) : conn.execute<mysql.RowDataPacket[]>(sql)
+        const sql = select + secondary + ' OR id < 4'
+        const [rows] = await read(sql)
+        assert.deepEqual(rows.map((r) => r.id), acceptsMinimum ? [26, 27, 29, 1, 2, 3] : [27, 29, 1, 2, 3])
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+        const [explain] = await read('EXPLAIN FORMAT=TREE ' + sql)
+        const tree = String(explain[0]?.EXPLAIN)
+        assert.match(tree, /Sort-deduplicate by row ID/)
+        assert.ok(tree.includes('using by_g over ' + (acceptsMinimum ? '(NULL < g)' : `(${minimum} < g)`)))
+      }
+
+      const prepared = select + 'id < 4 OR g > ?'
+      const statement = await conn.prepare(prepared)
+      const ids = async (bound: string) => {
+        const [rows] = await statement.execute([mysql.TypedParameter.NEWDECIMAL(bound)])
+        return (rows as mysql.RowDataPacket[]).map((r) => r.id)
+      }
+      try {
+        // The exact DECIMAL below the domain includes the former and the new minimum row.
+        const below = String(minimum - 1) + '.5'
+        assert.deepEqual(await ids(below), [26, 27, 29, 1, 2, 3])
+        await conn.query('UPDATE p SET g=NULL WHERE id=26')
+        await conn.query('UPDATE p SET g=? WHERE id=28', [minimum])
+        assert.deepEqual(await ids(below), [27, 28, 29, 1, 2, 3])
+        assert.deepEqual(await ids(String(minimum)), [27, 29, 1, 2, 3])
+      } finally {
+        conn.unprepare(prepared)
+      }
+      await conn.query('DROP TABLE p')
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})

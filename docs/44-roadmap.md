@@ -2881,7 +2881,8 @@ stays at 2,153 of 2,248 matching plans. Full Docker verification passes
 1,859 tests, seeded fuzzing, 10,000 crash points, package and real-client
 smoke and all seven pinned corpora. Parser, core and facade measure
 44,526, 334,287 and 334,210 bytes gzipped within the existing caps.
-Domain-minimum simplification and join-side case 219:13 remain open.
+This signed-bounds slice left domain-minimum simplification and join-side
+case 219:13 open. The next entry records the join repair.
 
 **M5.49 join-side Sort Union, verified.** An ordinary nonlocking SELECT may
 use the existing merge on the selected probe of an inner hash join between
@@ -2900,6 +2901,18 @@ the existing caps. Multi-row hash builds still have a separate
 filter-placement difference. A 96-observation signed and unsigned INT
 study confirms the next boundary. MySQL writes a secondary bound covering
 the whole non-NULL domain as `NULL < column`.
+
+**M5.49 nullable INT minimum, verified.** The existing Sort Union reader
+can use its open lower interval when a signed or unsigned nullable INT bound
+admits every non-NULL key. Both protocols, including a retained NEWDECIMAL
+statement after writes, preserve the written filter and the primary read's
+order. This reproduces all 96 targeted native observations and
+repairs another eight plans and their bound descriptions in the earlier
+3,120-observation study. The earlier 4,320-observation study and the captured
+relational replay are unchanged. Full Docker verification passes 1,861
+tests, seeded fuzzing, 10,000 crash points, package and client smoke, and
+all seven pinned corpora. Parser, core and facade measure 44,526, 334,280
+and 334,200 bytes gzipped within the existing caps.
 
 **M5.12 SHOW column metadata, verified.** The wire layouts for SHOW
 COLUMNS, DESCRIBE and SHOW INDEX use their compiled column names and one
@@ -12892,7 +12905,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,270 B (326.4 KiB) for the browser entry chunk, measured on 2026-11-17. The facade is 334,188 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
+| Core bundle, gzipped | 334,280 B (326.4 KiB) for the browser entry chunk, measured on 2026-11-17. The facade is 334,200 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |
