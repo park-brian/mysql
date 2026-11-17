@@ -56,7 +56,8 @@ function load(): ErrorTable {
     const packedSymbol = space === -1 ? row : row.slice(0, space)
     const prefix = packedSymbol[0] === '!' ? '' : 'ER_'
     const symbol = prefix + packedSymbol.match(/[a-l]|[m-z][a-z]|[A-Z0-9]+|~/g)!.map(unpack).join('_')
-    const sqlState = space === -1 ? DEFAULT_SQLSTATE : row.slice(space + 1)
+    // A trailing space abbreviates 42000, the most common nondefault SQLSTATE.
+    const sqlState = space === -1 ? DEFAULT_SQLSTATE : row.slice(space + 1) || '42000'
     const entry: Entry = { errno, symbol, sqlState }
     bySymbol.set(symbol, entry)
     // Some symbols share a number (aliases); the first wins for errno lookup.

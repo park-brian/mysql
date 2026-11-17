@@ -141,7 +141,7 @@ let expected = null
 for (const entry of entries) {
   if (entry.errno !== expected) lines.push(`@${entry.errno}`)
   const symbol = packSymbol(entry.symbol)
-  lines.push(entry.sqlState === null || entry.sqlState === 'HY000' ? symbol : `${symbol} ${entry.sqlState}`)
+  lines.push(entry.sqlState === null || entry.sqlState === 'HY000' ? symbol : `${symbol} ${entry.sqlState === '42000' ? '' : entry.sqlState}`)
   expected = entry.errno + 1
 }
 // Comma-delimited rows gzip smaller. Line continuations keep one generated
@@ -182,6 +182,7 @@ export const ERROR_NAME_WORDS = '${words.join(' ')}'
 /**
  * \`@errno\` starts a sequential range; each following entry consumes one code.
  * Comma-delimited entries hold a packed symbol and an optional SQLSTATE.
+ * A trailing space represents 42000, the most common nondefault state.
  * Symbols begin with an implicit ER_ unless prefixed by !. Lowercase tokens
  * encode words, _ separates adjacent raw words and ~ encodes an empty word.
  * The decoder preserves entry order and alias precedence.

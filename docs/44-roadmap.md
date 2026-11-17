@@ -51,6 +51,15 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 
 ## Next
 
+**M1.6 packed SQLSTATE `42000`, verified.** A trailing field separator
+represents the most common nondefault state. The pinned generator reproduces
+the table, and the sweep across all 65,536 codes keeps all 2,132 names and
+23 strict-warning codes. Core, facade and protocol save 63, 62 and 66
+gzipped bytes. Full Docker verification passes 1,879 tests, all nine size
+gates, seeded fuzzing, 10,000 crash points, package and client smoke and
+all seven pinned corpora, including 1,737 coercion warning counts. Parser,
+core and facade measure 44,526, 334,281 and 334,203 gzipped bytes.
+
 **M1.6 packed error-name ranking, verified.** The generator ranks
 single-letter tokens by frequency in the stored names. The implicit
 `ER_` prefix uses no token, and the two-letter tokens retain the existing

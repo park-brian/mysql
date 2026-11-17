@@ -32,6 +32,7 @@ export const ERROR_NAME_WORDS = 'NOT INVALID OBSOLETE ER ERROR WARN TABLE NO CAN
 /**
  * `@errno` starts a sequential range; each following entry consumes one code.
  * Comma-delimited entries hold a packed symbol and an optional SQLSTATE.
+ * A trailing space represents 42000, the most common nondefault state.
  * Symbols begin with an implicit ER_ unless prefixed by !. Lowercase tokens
  * encode words, _ separates adjacent raw words and ~ encodes an empty word.
  * The decoder preserves entry order and alias precedence.
@@ -81,38 +82,38 @@ CONsre 08004,\
 rotcRESOURCES,\
 tezie 08S01,\
 HANDSHAKEe 08S01,\
-DBACCESSple 42000,\
+DBACCESSple ,\
 olple 28000,\
 hDBe 3D000,\
 mpCOMe 08S01,\
 teqze 23000,\
-teDBe 42000,\
+teDBe ,\
 gnke 42S01,\
 tege 42S02,\
 sqUNIQe 23000,\
 rrSHUTDOWN 08S01,\
 teoke 42S22,\
-mfoknjnu 42000,\
-mfnuok 42000,\
-mfSUMog 42000,\
+mfoknjnu ,\
+mfnuok ,\
+mfSUMog ,\
 mfmnsr 21S01,\
-nmpxIDENT 42000,\
+nmpxIDENT ,\
 uoFIELDNAME 42S21,\
-uoKEYNAME 42000,\
+uoKEYNAME ,\
 uozn 23000,\
-mfokSPEC 42000,\
-wne 42000,\
-prsd 42000,\
-NONUNIQg 42000,\
-bnr 42000,\
-pcPRIni 42000,\
-nmsjKEYS 42000,\
-nmsjniPARTS 42000,\
-nmpxni 42000,\
-nimgsuaEXITS 42000,\
-BLOBsbASni 42000,\
-nmvfFIELDLENGTH 42000,\
-mfqjni 42000,\
+mfokSPEC ,\
+wne ,\
+prsd ,\
+NONUNIQg ,\
+bnr ,\
+pcPRIni ,\
+nmsjKEYS ,\
+nmsjniPARTS ,\
+nmpxni ,\
+nimgsuaEXITS ,\
+BLOBsbASni ,\
+nmvfFIELDLENGTH ,\
+mfqjni ,\
 READY,\
 !cdNORMAL_SHUTDOWN,\
 !cdGOTxf,\
@@ -120,15 +121,15 @@ SHUTDOWNxw,\
 FORCING_CLOSE 08S01,\
 IPSOCKe 08S01,\
 hwimx 42S12,\
-mfokTERMINATORS 42000,\
-BLOBStuhTERMINATED 42000,\
+mfokTERMINATORS ,\
+BLOBStuhTERMINATED ,\
 TEXTFILEaREADABLE,\
 nvnke,\
 svwe,\
 ohwe,\
 mfSUBni,\
-iREMOVE_ALLtz 42000,\
-ipjokORni 42000,\
+iREMOVE_ALLtz ,\
+ipjokORni ,\
 utwe,\
 oogsb,\
 hwiqt,\
@@ -138,27 +139,27 @@ nmvfpa,\
 hzdLOGFILE,\
 gayvodst,\
 gayv,\
-BLOBiwdnr 42000,\
-mfDBng 42000,\
-mfgng 42000,\
-nmvfog 42000,\
+BLOBiwdnr ,\
+mfDBng ,\
+mfgng ,\
+nmvfog ,\
 mpe,\
-mpwu 42000,\
-mfPARAMCOUNTqowu 42000,\
+mpwu ,\
+mfPARAMCOUNTqowu ,\
 mfvpqowu,\
 mpg 42S02,\
-okwxTWICE 42000,\
+okwxTWICE ,\
 bnutftv,\
-mlEXTENSION 42000,\
-gsawdtj 42000,\
+mlEXTENSION ,\
+gsawdtj ,\
 yynvFULL,\
-mpoypa 42000,\
+mpoypa ,\
 nmsjqs,\
 nmsjtz,\
-nmvfROWSIZE 42000,\
+nmvfROWSIZE ,\
 STACK_OVERRUN,\
-mfOUTER_JOINru 42000,\
-qzmglmx 42000,\
+mfOUTER_JOINru ,\
+qzmglmx ,\
 iFINDrg,\
 iINITIALIZErg,\
 rghPATHS,\
@@ -168,25 +169,25 @@ iFIND_DLzn,\
 neazs,\
 ziunBLOCKED,\
 ziaPRIVILEGED,\
-mvorno 42000,\
-mvamt 42000,\
-mvhvj 42000,\
+mvorno ,\
+mvamt ,\
+mvhvj ,\
 oowe,\
 imzqt,\
 mfmnsrswqq 21S01,\
 iREOPENg,\
 btvtcqz 22004,\
-one 42000,\
-MIXtcnutftutz 42000,\
-xprh 42000,\
-TABLEACCESSple 42000,\
-COLUMNACCESSple 42000,\
-qarhodg 42000,\
-rhmfziORno 42000,\
+one ,\
+MIXtcnutftutz ,\
+xprh ,\
+TABLEACCESSple ,\
+COLUMNACCESSple ,\
+qarhodg ,\
+rhmfziORno ,\
 hwig 42S02,\
-xpgrh 42000,\
-amtsk 42000,\
-tbe 42000,\
+xpgrh ,\
+amtsk ,\
+tbe ,\
 !cdUNUSED1,\
 !cdUNUSED2,\
 ABORTINGso 08S01,\
@@ -199,23 +200,23 @@ zepde 08S01,\
 zepdxo 08S01,\
 zeeswst 08S01,\
 zestxo 08S01,\
-nmpxrs 42000,\
-giysBLOB 42000,\
-giysqjtq 42000,\
+nmpxrs ,\
+giysBLOB ,\
+giysqjtq ,\
 !cdUNUSED3,\
-mfmgng 42000,\
-mfnimg 42000,\
+mfmgng ,\
+mfnimg ,\
 mfMRGg,\
 uozd 23000,\
-BLOBniptrf 42000,\
-tmiwdqz 42000,\
-nmsjROWS 42000,\
-pwtmni 42000,\
+BLOBniptrf ,\
+tmiwdqz ,\
+nmsjROWS ,\
+pwtmni ,\
 !cdhRAID_COMPILED,\
 ooptnilSAFEny,\
-nisuaEXITS 42000,\
-pqhwig 42000,\
-pqaqw 42000,\
+nisuaEXITS ,\
+pqhwig ,\
+pqaqw ,\
 iDO_THISusANnd 25000,\
 eusxc,\
 eusum,\
@@ -240,7 +241,7 @@ mkard,\
 temk,\
 souk,\
 mkqt,\
-nmsjnoCONNECTIONS 42000,\
+nmsjnoCONNECTIONS ,\
 paCONSTANTSpk,\
 qyWAITre,\
 qygFULL,\
@@ -248,7 +249,7 @@ pdpknd 25000,\
 !cdpjDBnjpdqy,\
 !cdmzDBnjpdqy,\
 mfARGUMENTS,\
-hPERMISSIONqomzno 42000,\
+hPERMISSIONqomzno ,\
 !cdUNIONqsltpDIR,\
 qyDEADLOCK 40001,\
 giysFT,\
@@ -263,20 +264,20 @@ mfvwtctjlog 21000,\
 ioonjREADLOCK,\
 MIXINGamt,\
 uoph,\
-noqdREACHED 42000,\
-SPECIFIColple 42000,\
+noqdREACHED ,\
+SPECIFIColple ,\
 LOCALoq,\
 yroq,\
-hnr 42000,\
-mfmnodwb 42000,\
-mfocodwb 42000,\
+hnr ,\
+mfmnodwb ,\
+mfocodwb ,\
 wbiynpd,\
-itvoeHERE 42000,\
-amaYET 42000,\
+itvoeHERE ,\
+amaYET ,\
 nlFATALeREADINGmc,\
 mkryg,\
 uyyrLOCALwb,\
-mfwyDEF 42000,\
+mfwyDEF ,\
 niREF_DOavjgREF,\
 OPERANDtj 21000,\
 yfh1qq 21000,\
@@ -285,12 +286,12 @@ slHELP_DB,\
 !cdCYCLICts,\
 qjvl,\
 qats 42S22,\
-DERIVEDsawdALIAS 42000,\
+DERIVEDsawdALIAS ,\
 ogREDUCED 01000,\
-TABLENAMEamtHERE 42000,\
+TABLENAMEamtHERE ,\
 amazgny 08004,\
-ugiwdqz 42000,\
-tnrcnp 42000,\
+ugiwdqz ,\
+tnrcnp ,\
 !cdtiWASrd,\
 !cdtiWASard,\
 nmvfodUNCOMPRESS,\
@@ -317,13 +318,13 @@ fokRESOLVED,\
 temkUNTIL_COND,\
 muSKIPmk,\
 UNTIL_CONDry,\
-mfngodmx 42000,\
-mfngodCATALOG 42000,\
+mfngodmx ,\
+mfngodCATALOG ,\
 !cdfQC_RESIZE,\
 teFTmg,\
 mpnizl,\
 fHOSTNAME_WONT_WORK,\
-mpSTORAGEnc 42000,\
+mpSTORAGEnc ,\
 fmetb,\
 sqUPDATABLEg,\
 uepu,\
@@ -341,41 +342,41 @@ boyrs,\
 fmtyxOVERFLOWED,\
 CONFLICTING_DECLARATIONS,\
 sphrjmz 2F003,\
-sprvnk 42000,\
-spsuarp 42000,\
+sprvnk ,\
+spsuarp ,\
 sppjmi,\
 spxvmi,\
-spLILABELnp 42000,\
-spLABEL_REDEFINE 42000,\
-spLABELnp 42000,\
+spLILABELnp ,\
+spLABEL_REDEFINE ,\
+spLABELnp ,\
 spUNINITwb 01000,\
 spBADSELECT 0A000,\
-spBADRETURN 42000,\
+spBADRETURN ,\
 spBADSTATEMENT 0A000,\
-ookmery 42000,\
-ookmeTRANSLATED 42000,\
+ookmery ,\
+ookmeTRANSLATED ,\
 sdxo 70100,\
-spmfhtcARGS 42000,\
-spCONDnp 42000,\
-spNORETURN 42000,\
+spmfhtcARGS ,\
+spCONDnp ,\
+spNORETURN ,\
 spNORETURNEND 2F005,\
-spteupsd 42000,\
-spteupog 42000,\
-spupnp 42000,\
+spteupsd ,\
+spteupog ,\
+spupnp ,\
 spuprvra 24000,\
 spupara 24000,\
-spUNDECLAREDwb 42000,\
+spUNDECLAREDwb ,\
 spmfhtcFETCH_ARGS,\
 spFETCHhot 02000,\
-spuoxu 42000,\
-spuowb 42000,\
-spuoCOND 42000,\
-spuoCURS 42000,\
+spuoxu ,\
+spuowb ,\
+spuoCOND ,\
+spuoCURS ,\
 spioh,\
 spSUBSELECT_NYI 0A000,\
 tyamtlSF_ORvg 0A000,\
-spVARCONDthCURSHNDLR 42000,\
-spupthtk 42000,\
+spVARCONDthCURSHNDLR ,\
+spupthtk ,\
 spCASEaox 20000,\
 xinmvfnv,\
 xitesz,\
@@ -407,7 +408,7 @@ ttmfmnodok,\
 qamnodoc 22007,\
 ppNONUPDpq,\
 pppqmi,\
-PROCACCESSple 42000,\
+PROCACCESSple ,\
 RELAYkwc,\
 !cdPASSWDrf,\
 mpzcmc,\
@@ -440,18 +441,18 @@ XAER_RMFAIL XAE07,\
 XAER_OUTSIDE XAE09,\
 XAER_RMERR XAE03,\
 XA_RBROLLBACK XA100,\
-xpPROCrh 42000,\
+xpPROCrh ,\
 PROCqjrhwc,\
 PROCqjREVOKEwc,\
 otnmpx 22001,\
-spteSQLSTATE 42000,\
+spteSQLSTATE ,\
 STARTUP,\
 svFROM_FIXEDpoROWSqowb,\
-imznonjrh 42000,\
+imznonjrh ,\
 mfmnodoc,\
 gDEFzq,\
-spuotk 42000,\
-spawbARG 42000,\
+spuotk ,\
+spawbARG ,\
 sphRETSET 0A000,\
 imzovta 22003,\
 !cdmizzBREAKmc,\
@@ -462,9 +463,9 @@ tyHAShraup,\
 xcamtlSF_ORvg,\
 hnrodppok,\
 sphva,\
-nmvfSCALE 42000,\
-nmvfPRECISION 42000,\
-M_BIGGER_THAN_D 42000,\
+nmvfSCALE ,\
+nmvfPRECISION ,\
+M_BIGGER_THAN_D ,\
 mfqytcoug,\
 CONNECTqopeotnl,\
 sdswpeotnl,\
@@ -474,9 +475,9 @@ peotrsb,\
 !cdimzFEDERATEDg,\
 vglmfof,\
 STACK_OVERRUN_NEED_MORE,\
-nmpxBODY 42000,\
+nmpxBODY ,\
 fipjnrKEYCACHE,\
-nmvfDISPLAYWIDTH 42000,\
+nmvfDISPLAYWIDTH ,\
 XAER_DUPID XAE08,\
 xxneul 22008,\
 ioosbglSF_ORvg,\
@@ -490,17 +491,17 @@ hwino,\
 FORBIDofmy,\
 qqunqn2 23000,\
 hqnqq2 23000,\
-sptewbSHADOW 42000,\
+sptewbSHADOW ,\
 vghzt,\
 OLDnvnz,\
 spvaqd,\
 !cdspPROCgsl,\
-spmfng 42000,\
+spmfng ,\
 gNEEDS_UPGRADE,\
-sphri 42000,\
-qpPREPAREDtysrREACHED 42000,\
+sphri ,\
+qpPREPAREDtysrREACHED ,\
 pprj,\
-sqyaoksb 42000,\
+sqyaoksb ,\
 giysSPKEYS,\
 hTRIGGERSswouof,\
 REMOVED_SPACES,\
@@ -619,9 +620,9 @@ pkINTEGERSmt,\
 UNSUPORTEDknc,\
 tekpg,\
 iRENAMEkg,\
-mfPARAMCOUNTqovvFCT 42000,\
-mfvpqovvFCT 42000,\
-mfvpqozbFCT 42000,\
+mfPARAMCOUNTqovvFCT ,\
+mfvpqovvFCT ,\
+mfvpqozbFCT ,\
 vvFCTngwq,\
 uoznnjning 23000,\
 mcvkEMFILE,\
@@ -667,7 +668,7 @@ uhFNwne,\
 EXCEPTIONSste,\
 nmpxgrw,\
 nmpxokrw,\
-tfINEXISTENTngwq 42000,\
+tfINEXISTENTngwq ,\
 DATABASEng,\
 gng,\
 mbng,\
@@ -678,7 +679,7 @@ nmsjyhTRXS,\
 !fsqASCII_SEPARATORaqw,\
 DEBUG_SYNCre,\
 DEBUG_SYNC_HITqd,\
-uoxfpa 42000,\
+uoxfpa ,\
 xff 01000,\
 xfaox 02000,\
 xfpn,\
@@ -724,7 +725,7 @@ mfPERFSCHEMA_USAGE,\
 fI_S_SKIPPEDg,\
 INSIDEndpvrtmcDIRECT,\
 zbnepvrtmcDIRECT,\
-ugsawdGEOMvh 42000,\
+ugsawdGEOMvh ,\
 nmpxmxrw,\
 qyABORTED,\
 otrotcnn 22003,\
@@ -738,7 +739,7 @@ uvunaINToce,\
 olplhmve 28000,\
 !cdpamvzgoa,\
 !cdrhoanonk,\
-TRUNCATEqawy 42000,\
+TRUNCATEqawy ,\
 oaunPERMANENT,\
 mkwsmnrotcnnMIN,\
 mkwsmnrotcnnqp,\
@@ -983,11 +984,11 @@ zfRUNTIMEe,\
 zfmppn,\
 GISotmfENDIANESS,\
 mynlmvrf,\
-noqymfng 42000,\
+noqymfng ,\
 noqyDEADLOCK,\
 zyINACCESSIBLE_ROWS,\
 ohmwamaqhGIS,\
-qanowb 42000,\
+qanowb ,\
 mmnyxr,\
 !cdmlBYnbqt,\
 uyoc,\
@@ -1045,7 +1046,7 @@ itvqjtdnjmmnyxr,\
 iENFORCEmmqvnjONGOINGmmVIOLATING_TX,\
 ENFORCEmmqvfnjONGOINGmmVIOLATING_TX,\
 ACCOUNT_HAS_BEENyv,\
-mfmong 42000,\
+mfmong ,\
 mounapr,\
 mfnvng,\
 xsovqcTURNSpn,\
@@ -1057,7 +1058,7 @@ fmpQBng,\
 UNRESOLVED_HINTng,\
 fswMODIFYINGmmujg,\
 PLUGGABLE_PROTOCOLskama,\
-LOCKINGqbmfng 42000,\
+LOCKINGqbmfng ,\
 LOCKINGqbDEADLOCK,\
 LOCKINGqbre,\
 GISqpPOINTSlovOVERFLOWED,\
@@ -1069,18 +1070,18 @@ mkozmwamt,\
 bnaTEXT 22032,\
 bnaTEXTlxu 22032,\
 bnaBINARYot,\
-bnavi 42000,\
+bnavi ,\
 bnarc 22032,\
 bnarclne 22032,\
 bocodna 22032,\
 bCASTqona 22032,\
-bnavirc 42000,\
-bnaviWILDCARD 42000,\
+bnavirc ,\
+bnaviWILDCARD ,\
 namnnmvf 22032,\
 naninmvf 22032,\
-nasbASni 42000,\
-naVACUOUSvi 42000,\
-nateONE_OR_ALL_ARG 42000,\
+nasbASni ,\
+naVACUOUSvi ,\
+nateONE_OR_ALL_ARG ,\
 NUMERICnamnrotcnn 22003,\
 bnamnodCAST 22018,\
 naDOCUMENTnmDEEP 22032,\
@@ -1091,7 +1092,7 @@ puSTORAGEnc,\
 nosuarp,\
 norvnk,\
 mqAPI_ABORT,\
-bnaviARRAY_CELL 42000,\
+bnaviARRAY_CELL ,\
 BUFPOOL_RESIZE_INPROGRESS,\
 uepuSEE_DOC,\
 rrISNTwp,\
@@ -1128,7 +1129,7 @@ pfAWSrgAWS_KMSe,\
 mcnhXA,\
 rge,\
 pfMIGRATIONop,\
-pfolple 42000,\
+pfolple ,\
 pfMIGRATION_STATUS,\
 !cdoamiqoraqs,\
 !cdoamiqorag,\
@@ -1296,7 +1297,7 @@ uuqopjmgvr,\
 uuqoBUILD_HISTOGRAM,\
 sgxa,\
 mumonv,\
-zxpkolple 42000,\
+zxpkolple ,\
 !cdCMD_NEED_SUPER,\
 vilDATADIR,\
 qxDDLlPROGRESS,\
@@ -1333,10 +1334,10 @@ nunbskop,\
 SDImwmi,\
 munagmn 22035,\
 mfnagmn 2203F,\
-TFsawdALIAS 42000,\
+TFsawdALIAS ,\
 TF_FORBIDDEN_JOINoc,\
 JTmnrotcnn 22003,\
-JTqpywvi 42000,\
+JTqpywvi ,\
 mvEXPIRATIONamaBYzgMETHOD,\
 bzuCRSaTOP_LEVEL,\
 teqzeary 23000,\
@@ -1419,7 +1420,7 @@ ommmnhmzpjucglTRXlSBR,\
 gptPK,\
 fotttnwmx 01000,\
 fotrotcnnnwmx 22003,\
-nwmxswnaORovne 42000,\
+nwmxswnaORovne ,\
 nwmxREFqjtq,\
 mdpjmgnwmx,\
 nwmxtmni,\
@@ -1614,7 +1615,7 @@ omsdopbsqqqnz,\
 REQUIREqqnzbmn,\
 miqoDETERMINE_IFxaunsg,\
 miqoFETCHsgxatw,\
-omLOCALwlpu 42000,\
+omLOCALwlpu ,\
 IMPosCFGqk,\
 xqOOM,\
 xqrgbphqoparc,\
@@ -1665,7 +1666,7 @@ oypanp,\
 fwbmnmyama,\
 bTIME_ZONEyb,\
 bCAST,\
-yiamaYET 42000,\
+yiamaYET ,\
 !cdfyiEXPERIMENTAL,\
 xqhekqrCONFIGURED,\
 xqekgpu,\
@@ -1714,7 +1715,7 @@ KERBEROSmzno,\
 xjoauhom,\
 xqekmjFLUSHmi,\
 fwkthMTS_GAPS_GAPaCALCULATED,\
-bASSIGNMENTzc 42000,\
+bASSIGNMENTzc ,\
 mwamtswGRvb,\
 wzrnFAILOVERozSTATUS_PROPAGATION,\
 fmqknzUNIXrkpktgna,\
@@ -1829,7 +1830,7 @@ ipawt,\
 xjmjpaqzmn,\
 xjmjparumn,\
 fmenozsCOLLATIONS,\
-noqyOVERLONGng 42000,\
+noqyOVERLONGng ,\
 fhSPACEqkrw,\
 VALIDATEmvwjzqCHARACTERS,\
 fmenjNOTE,\
@@ -2141,19 +2142,19 @@ mqkmjnabqemdynsb,\
 fmqkvmb,\
 nxnftuEXPLICIT_PKSamt,\
 psqgmje,\
-psqgrvnk 42000,\
-psqgEXPECTS_CASE 42000,\
-psqgEXPECTS_CASEtg 42000,\
-psqgmuELSE 42000,\
-psqgONEtgwa 42000,\
-psqgsaRETURNph 42000,\
-psqgbGATEKEEPER 42000,\
-psqgsqLITERAL_GATEKEEPER_ARG 42000,\
-psqgvoCONSTRUCT 42000,\
-psqgbmgts 42000,\
-psqgosmgue 42000,\
-psqgosTYPES 42000,\
-psqgsqDETERMINISTICtf 42000,\
+psqgrvnk ,\
+psqgEXPECTS_CASE ,\
+psqgEXPECTS_CASEtg ,\
+psqgmuELSE ,\
+psqgONEtgwa ,\
+psqgsaRETURNph ,\
+psqgbGATEKEEPER ,\
+psqgsqLITERAL_GATEKEEPER_ARG ,\
+psqgvoCONSTRUCT ,\
+psqgbmgts ,\
+psqgosmgue ,\
+psqgosTYPES ,\
+psqgsqDETERMINISTICtf ,\
 wyqpqslCASCADE_CHAINpi,\
 wyCASCADExlUPDATINGwytjama,\
 ioosbglwyCASCADE,\
