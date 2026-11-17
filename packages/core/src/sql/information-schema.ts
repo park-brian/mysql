@@ -47,23 +47,24 @@ const COLUMN_FLAG = { PRI_KEY: 2, UNIQUE_KEY: 4, MULTIPLE_KEY: 8 } as const
 const isInformationSchema = (schema: string): boolean => schema.toLowerCase() === 'information_schema'
 
 /** The ResultType of one captured column: what expressions over it compute with, and what a bare reference reports. */
-export function systemColumnType(c: InformationSchemaColumn, table: string, alias: string, schema = 'information_schema'): ResultType {
-  const nullable = (c.flags & 1) === 0
-  const unsigned = (c.flags & 32) !== 0
+function systemColumnType(c: InformationSchemaColumn, table: string, alias: string, schema: string): ResultType {
+  const { type: field, length, flags, decimals, text, streamed } = c
+  const nullable = (flags & 1) === 0
+  const unsigned = (flags & 32) !== 0
   let base: ResultType
-  if (c.text) {
+  if (text) {
     const id = c.collation === null ? 255 : (collationInfoByName(c.collation)?.id ?? 255)
-    const chars = Math.max(1, Math.ceil(c.length / 4))
-    const blob = c.type >= FIELD_TYPE.TINY_BLOB && c.type <= FIELD_TYPE.BLOB
-    base = { ...stringType(chars, id, nullable), field: c.type, coercibility: COERCIBILITY.IMPLICIT, ...(blob ? { blobBytes: chars } : {}) }
-  } else if (c.type === FIELD_TYPE.NULL) base = NULL_TYPE
-  else if (c.type === FIELD_TYPE.TIMESTAMP || c.type === FIELD_TYPE.DATETIME) base = datetimeType(FIELD_TYPE.DATETIME, 0, nullable)
-  else base = { ...intType(c.length, nullable, unsigned), field: c.type }
-  const wire = { field: c.type, length: c.length, flags: c.flags, decimals: c.decimals, text: c.text, streamed: c.streamed }
+    const chars = Math.max(1, Math.ceil(length / 4))
+    const blob = field >= FIELD_TYPE.TINY_BLOB && field <= FIELD_TYPE.BLOB
+    base = { ...stringType(chars, id, nullable), field, coercibility: COERCIBILITY.IMPLICIT, ...(blob ? { blobBytes: chars } : {}) }
+  } else if (field === FIELD_TYPE.NULL) base = NULL_TYPE
+  else if (field === FIELD_TYPE.TIMESTAMP || field === FIELD_TYPE.DATETIME) base = datetimeType(FIELD_TYPE.DATETIME, 0, nullable)
+  else base = { ...intType(length, nullable, unsigned), field }
+  const wire = { field, length, flags, decimals, text, streamed }
   // A dictionary column is copied through a temporary table as a table column
   // is, keeping its own flags less its key flags; a computed one as an
   // expression (8.4.11, under a sort over the view's join).
-  if (c.column) return { ...base, wire, column: { schema, table: alias, orgTable: table, orgName: c.name, flags: c.flags & ~(1 | 32 | 128) } }
+  if (c.column) return { ...base, wire, column: { schema, table: alias, orgTable: table, orgName: c.name, flags: flags & ~(1 | 32 | 128) } }
   return { ...base, wire, names: { schema: '', table: alias, orgTable: table, orgName: c.name } }
 }
 
@@ -81,16 +82,20 @@ export function informationSchemaTable(run: Run, name: TableName, alias: string,
     if (KNOWN.has(table)) throw notSupported(`INFORMATION_SCHEMA.${table}`)
     throw sqlError('ER_UNKNOWN_TABLE', `Unknown table '${name.name}' in information_schema`)
   }
-  const rowsOf = ROWS[table]!
-  const columns = defs.map((c) => ({ name: c.name, type: systemColumnType(c, table, alias) }))
+  return systemTable('information_schema', table, alias, defs, () => ROWS[table]!(run))
+}
+
+/** Build a system table with its captured metadata and column collations. */
+export function systemTable(schema: string, table: string, alias: string, defs: readonly InformationSchemaColumn[], rowsOf: () => Iterable<readonly SystemCell[]>): { schema: string; source: DerivedSource } {
+  const columns = defs.map((c) => ({ name: c.name, type: systemColumnType(c, table, alias, schema) }))
   // Each string in its column's own collation, so a comparison is made in it.
   const collations = columns.map((c) => (c.type.kind === 'string' ? c.type.collationId : undefined))
   return {
-    schema: 'information_schema',
+    schema,
     source: {
       joined: true,
       columns,
-      rows: () => [...rowsOf(run)].map((row) => row.map((v, i) => {
+      rows: () => Array.from(rowsOf(), (row) => row.map((v, i) => {
         if (typeof v === 'string') return stringValue(v, collations[i] ?? TEXT, COERCIBILITY.IMPLICIT)
         if (typeof v === 'number') return intValue(BigInt(v))
         return v

@@ -12,7 +12,7 @@
 import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type IndexHint, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, PreparedStatement, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
-import { MAX_UNSIGNED, MIN_SIGNED, extremeAccumulator, intValue, integerRange, numericPrefix, roundedIntegerText, storageWidth, terminalIntegerValue, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
+import { MAX_UNSIGNED, MIN_SIGNED, compareValues, extremeAccumulator, intValue, integerRange, numericPrefix, roundedIntegerText, storageWidth, terminalIntegerValue, toInteger, truth, withoutHex, type Condition, type Value } from '@myjs/types'
 import { appendConditions, compile, constantNode, isComparison, literalPredicate, membershipReader, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, numberLiteral, readSlot, textBesideColumn, withOuterRow, writtenFalse, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
@@ -1354,8 +1354,23 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   if (any && (limitOrLock || hasLeadingKey(outerDef, outerField.parts[1]!))) return undefined
   let residual: Extract<Expression, { kind: typeof NODE.BINARY }> | undefined
   let text = false
-  let strategy: 'filteredHash' | 'weedout' | 'BETWEEN' | 'NOT IN' | undefined
-  if (extra !== undefined && !notNull) {
+  let strategy: 'filteredHash' | 'weedout' | 'BETWEEN' | 'NOT IN' | 'OR' | undefined
+  if (extra?.kind === NODE.BINARY && extra.op === 'OR') {
+    // The written overlap covers every non-NULL membership key.
+    if (any || exists || limitOrLock || q.orderBy !== undefined) return undefined
+    const { left, right } = extra
+    if (left.kind !== NODE.BINARY || left.op !== '<=' || right.kind !== NODE.BINARY || right.op !== '>') return undefined
+    const upperKey = left.left
+    const lowerKey = right.left
+    if (![upperKey, lowerKey].every((key) => isQualifiedColumn(key, innerAlias) && key.parts[1].toLowerCase() === innerColumn) ||
+      left.right.kind !== NODE.LITERAL || right.right.kind !== NODE.LITERAL) return undefined
+    const upper = constantValue(left.right, run.env)
+    const lower = constantValue(right.right, run.env)
+    if (!upper || !lower || !fractionalIntBound(upper) || !fractionalIntBound(lower) ||
+      compareValues(upper, lower) === -1) return undefined
+    residual = extra
+    strategy = 'OR'
+  } else if (extra !== undefined && !notNull) {
     if (any || extra.kind !== NODE.BINARY) return undefined
     const field = qualify(extra.left, innerAlias)
     if (field === undefined) return undefined
@@ -1379,9 +1394,12 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   return proof(() => {
     const def = nonTemporaryDefinition(run, inner.table)
     if (def === undefined) return undefined
-    const field = residual && tableColumn(residual.left, def, innerAlias)
+    const left = residual?.left
+    const operand = left?.kind === NODE.BINARY ? left.left : left
+    const field = operand && tableColumn(operand, def, innerAlias)
     const signedInt = field?.type.type === FIELD_TYPE.LONG && !field.type.unsigned
-    if (strategy && (!signedInt || !def.indexes.some((i) => i.kind === 'primary' && i.parts.length === 1 && i.parts[0]!.column === field.name))) return undefined
+    if (strategy && (!signedInt || (strategy === 'OR' ? !field.nullable :
+      !def.indexes.some((i) => i.kind === 'primary' && i.parts.length === 1 && i.parts[0]!.column === field.name)))) return undefined
     if (any && (hasLeadingKey(def, innerColumn) || from.access(run.env).index !== undefined)) return undefined
     let nullTest: typeof notNull
     if (notNull) {
@@ -1427,7 +1445,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     const alternative = planFrom([outer, inner], fromContext(run), predicate)
     const ctx = compileContext(run, alternative.scope, 'where clause')
     const key = compile(innerField, ctx)
-    if (!bindIntegers(ctx, key, outerField, text ? undefined : residual?.left)) return undefined
+    if (!bindIntegers(ctx, key, outerField, text ? undefined : operand)) return undefined
     const read = columnsRead(from.scope, node, q)
     read.set(innerAlias, innerRead)
     alternative.reads(read)

@@ -282,10 +282,12 @@ export class Corpus {
     this.#raw = raw
     this.#fold = fold
     for (const d of documents) {
-      const words = [...new Set(d)]
-      for (const w of words) this.#docs.set(w, (this.#docs.get(w) ?? 0) + 1)
       // A document's words reach the cache in their own order, sorted (`fts_cache_add_doc`).
-      for (const w of words.sort(order)) this.#tree.insert(w)
+      for (const w of [...new Set(d)].sort(order)) {
+        const count = this.#docs.get(w)
+        this.#docs.set(w, (count ?? 0) + 1)
+        if (count === undefined) this.#tree.insert(w)
+      }
     }
   }
 
@@ -299,8 +301,8 @@ export class Corpus {
     let out = this.#visits.get(prefix)
     if (out === undefined) {
       const p = this.#fold(prefix)
-      const cut = (w: string) => [...w].slice(0, [...p].length).join('')
-      out = this.#tree.scan((w) => order(p, cut(w)), (w) => this.starts(w, prefix))
+      const width = [...p].length
+      out = this.#tree.scan((w) => order(p, [...w].slice(0, width).join('')), (w) => this.starts(w, prefix))
       this.#visits.set(prefix, out)
     }
     return out
@@ -341,68 +343,48 @@ export class Corpus {
 
 const order = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
 
+type Side = 'left' | 'right'
+const opposite = (side: Side): Side => side === 'left' ? 'right' : 'left'
+
 type TreeNode = { readonly key: string; left: TreeNode | null; right: TreeNode | null; parent: TreeNode | null; red: boolean }
 
 /** `ut0rbt.cc`'s red-black tree: a binary search tree balanced as CLRS balances one, with no deletion. */
 class WordTree {
   #root: TreeNode | null = null
-  readonly #keys = new Set<string>()
 
   insert(key: string): void {
-    if (this.#keys.has(key)) return
-    this.#keys.add(key)
     let parent: TreeNode | null = null
     let at = this.#root
-    let left = false
+    let side: Side = 'left'
     while (at !== null) {
       parent = at
-      left = order(key, at.key) < 0
-      at = left ? at.left : at.right
+      side = key < at.key ? 'left' : 'right'
+      at = at[side]
     }
     let node: TreeNode = { key, left: null, right: null, parent, red: true }
     if (parent === null) this.#root = node
-    else if (left) parent.left = node
-    else parent.right = node
+    else parent[side] = node
     // `rbt_balance_tree`.
     while (node !== this.#root && node.parent?.red === true) {
       const p = node.parent
       const g = p.parent as TreeNode
-      if (p === g.left) {
-        const uncle = g.right
-        if (uncle?.red === true) {
-          uncle.red = false
-          p.red = false
-          g.red = true
-          node = g
-        } else {
-          if (node === p.right) {
-            node = p
-            this.#rotateLeft(node)
-          }
-          const q = node.parent as TreeNode
-          const gg = q.parent as TreeNode
-          q.red = false
-          gg.red = true
-          this.#rotateRight(gg)
-        }
+      const side = p === g.left ? 'left' : 'right'
+      const other = opposite(side)
+      const uncle = g[other]
+      if (uncle?.red === true) {
+        uncle.red = false
+        p.red = false
+        g.red = true
+        node = g
       } else {
-        const uncle = g.left
-        if (uncle?.red === true) {
-          uncle.red = false
-          p.red = false
-          g.red = true
-          node = g
-        } else {
-          if (node === p.left) {
-            node = p
-            this.#rotateRight(node)
-          }
-          const q = node.parent as TreeNode
-          const gg = q.parent as TreeNode
-          q.red = false
-          gg.red = true
-          this.#rotateLeft(gg)
+        if (node === p[other]) {
+          node = p
+          this.#rotate(node, side)
         }
+        const promoted = node.parent as TreeNode
+        promoted.red = false
+        g.red = true
+        this.#rotate(g, other)
       }
     }
     ;(this.#root as TreeNode).red = false
@@ -424,8 +406,8 @@ class WordTree {
   }
 
   /** A node's predecessor (`left`) or successor (`right`). */
-  static #step(node: TreeNode, side: 'left' | 'right'): TreeNode | null {
-    const other = side === 'left' ? 'right' : 'left'
+  static #step(node: TreeNode, side: Side): TreeNode | null {
+    const other = opposite(side)
     let n = node[side]
     if (n !== null) {
       while (n[other] !== null) n = n[other] as TreeNode
@@ -440,27 +422,15 @@ class WordTree {
     return p
   }
 
-  #rotateLeft(x: TreeNode): void {
-    const y = x.right as TreeNode
-    x.right = y.left
-    if (y.left !== null) y.left.parent = x
+  #rotate(x: TreeNode, side: Side): void {
+    const other = opposite(side)
+    const y = x[other] as TreeNode
+    x[other] = y[side]
+    if (y[side] !== null) y[side].parent = x
     y.parent = x.parent
     if (x.parent === null) this.#root = y
-    else if (x === x.parent.left) x.parent.left = y
-    else x.parent.right = y
-    y.left = x
-    x.parent = y
-  }
-
-  #rotateRight(x: TreeNode): void {
-    const y = x.left as TreeNode
-    x.left = y.right
-    if (y.right !== null) y.right.parent = x
-    y.parent = x.parent
-    if (x.parent === null) this.#root = y
-    else if (x === x.parent.right) x.parent.right = y
-    else x.parent.left = y
-    y.right = x
+    else x.parent[x === x.parent[side] ? side : other] = y
+    y[side] = x
     x.parent = y
   }
 }
@@ -483,7 +453,7 @@ export function naturalRank(corpus: Corpus, query: readonly string[], words: rea
   const asked = new Map<string, number>()
   for (const q of query) asked.set(q, (asked.get(q) ?? 0) + 1)
   let rank = 0
-  for (const [word, times] of [...asked].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+  for (const [word, times] of [...asked].sort(([a], [b]) => order(a, b))) {
     const tf = frequency(words, word, false)
     if (tf === 0) continue
     rank = f32(rank + f32(tf * corpus.weight(corpus.holding(word, false) * times)))
@@ -497,7 +467,7 @@ function holdsPhrase(words: readonly string[], phrase: readonly string[], within
   if (within !== undefined) {
     for (let i = 0; i < words.length; i++) {
       const span = words.slice(i, i + Math.max(within, phrase.length))
-      if (phrase.every((p) => span.includes(p)) && span.includes(words[i] as string) && phrase.includes(words[i] as string)) return true
+      if (phrase.every((p) => span.includes(p)) && phrase.includes(words[i] as string)) return true
     }
     return false
   }

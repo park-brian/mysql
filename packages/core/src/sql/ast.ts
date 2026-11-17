@@ -123,3 +123,14 @@ export function signedOperand(e: Expression, plus?: '+'): Expression {
 
 /** Both spellings of an ordinary inequality. */
 export const isNotEqual = (op: string): boolean => op === '<>' || op === '!='
+
+/** The highest automatic constraint number already used by this table. */
+export function lastConstraintNumber(prefix: string, constraints: readonly { readonly name: string }[]): number {
+  let highest = 0
+  for (const { name } of constraints) {
+    if (!name.startsWith(prefix)) continue
+    const suffix = name.slice(prefix.length)
+    if (/^\d+$/.test(suffix)) highest = Math.max(highest, +suffix)
+  }
+  return highest
+}

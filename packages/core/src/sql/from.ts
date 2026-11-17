@@ -160,7 +160,7 @@ export interface FromPlan {
   /** Sort the first table before its indexed joins expand or discard rows. */
   sortFirst(alias: string, keys: readonly SortKey[]): void
   /** Select a bounded integer semijoin; return whether its physical order is inner-first. */
-  integerSemijoin(alias: string, index: IndexDef | undefined, key: Compiled, residual: Expression | undefined, materializationEligible: boolean, strategy?: 'filteredHash' | 'weedout' | 'NOT IN' | 'BETWEEN'): boolean | undefined
+  integerSemijoin(alias: string, index: IndexDef | undefined, key: Compiled, residual: Expression | undefined, materializationEligible: boolean, strategy?: 'filteredHash' | 'weedout' | 'NOT IN' | 'BETWEEN' | 'OR'): boolean | undefined
   /**
    * The columns the query reads of each table (`'all'` for one read whole).
    * A table no condition chooses an access path for is read through the
@@ -714,6 +714,12 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
           if (materialized) settings.rangeBuild = true
           else settings.weedout = inner
           return true
+        }
+        if (strategy === 'OR') {
+          // Keep the chosen range on the ordered membership index when one wins.
+          const access = ctx.env && chosenAccess(outer, settings, ctx.env)
+          if (!primary || !singleRefIndex(index) || !access ||
+            (access.ranges && (access.index !== index.name || access.ranges.length !== 1))) return undefined
         }
       }
       if (!loose) delete settings.loose

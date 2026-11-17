@@ -1,3 +1,4 @@
+import { lastConstraintNumber } from './ast.ts'
 import { missingKeyColumn } from './errors.ts'
 // M5.25 — foreign keys: what one is, what makes one, and what it does to a write.
 //
@@ -188,7 +189,7 @@ export function withForeignKeys(catalog: CatalogApi, schema: string, spec: Table
   for (const t of catalog.tables(schema)) if (t.name !== spec.name) for (const fk of foreignKeysOf(t)) taken.add(fk.name.toLowerCase())
   for (const fk of existing) taken.add(fk.name.toLowerCase())
   const prefix = `${spec.name}_ibfk_`
-  let next = 1 + Math.max(0, ...existing.map((fk) => (fk.name.startsWith(prefix) && /^\d+$/.test(fk.name.slice(prefix.length)) ? Number(fk.name.slice(prefix.length)) : 0)))
+  let next = 1 + lastConstraintNumber(prefix, existing)
 
   for (const clause of clauses) {
     const name = clause.constraint ?? `${prefix}${next++}`

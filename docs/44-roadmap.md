@@ -139,7 +139,7 @@ and 296 now match. Projected, negated, nullable `ALL` and indexed extrema
 have separate admission rules.
 
 **M5.47 fresh relational seeds.** Three MySQL 8.4.11 seeds of 300 scripts
-each now match 134 of 138 semijoin and quantified plans. The ordered
+each now match 135 of 138 semijoin and quantified plans. The ordered
 `IN` cases with `>` and a standalone wildcard-leading `LIKE` now match,
 as do the six unindexed integer `= ANY` and `= SOME` cases with a bare
 inner key or a direct `IS NOT NULL` test. Four unindexed integer `<> ALL`
@@ -154,7 +154,8 @@ fractional primary-key `NOT IN` in case 296, statement 16 and `BETWEEN` in
 case 183, statement 15. In seed 2026111603, case 41, statement 11 matches
 with duplicate weedout over the child table scan. In seed 2026111602,
 case 9, statement 16 also uses duplicate weedout for the unordered text
-comparison.
+comparison. In seed 2026111603, case 135, statement 14 uses LooseScan
+over a covering range for the overlapping fractional bounds.
 
 **0.3 is staged**, with exact workspace versions and installed-package smoke
 checks. Publication still requires claiming the npm scope/name and publishing
@@ -2542,8 +2543,32 @@ The committed relational ledger is unchanged, and the three fresh seeds
 reach 134 of 138 matching plans.
 One strategy variable carries the admission from the written predicate to
 the physical planner. Parser/core/facade measure 45,567/334,327/334,253 B
-gzipped within the existing caps. M5.47 stays partial. Seed 2026111603,
-case 135, statement 14 is the next covering LooseScan case to investigate.
+gzipped within the existing caps.
+
+**M5.47 covering LooseScan for overlapping fractional bounds, verified.**
+An unordered positive integer `IN` can keep the selected LooseScan for
+written `<=` and `>` comparisons joined by `OR` on the same qualified,
+nullable signed `INT` membership key. Both bounds are in-range fractional
+decimals. The one-part ascending covering index supplies either the chosen
+range or its full ordered read. The executor keeps the written filter and
+the parent `PRIMARY` lookup. Both wire protocols match MySQL 8.4.11 across
+the range, full scan, and range again as membership keys change and
+`ANALYZE TABLE` refreshes estimates. The two pinned audits repair 1,215 of
+30,720 outcomes and preserve the rest plus 92,160 index and type controls.
+The committed relational ledger is unchanged, and the three fresh seeds
+reach 135 of 138 matching plans.
+
+Secondary-key writes without `ANALYZE TABLE` can leave native index-dive
+estimates above the live range count and lead MySQL to choose a full scan.
+That access-path difference remains open under M5.49.
+
+System tables share metadata and row conversion. CHECK and foreign-key
+names share the automatic-number scan. Full-text ranking shares a rotation
+routine and uses one word inventory, with 103,275 matching observations of
+prefix order, cardinality, and rank. Parser/core/facade measure
+45,567/334,340/334,265 B gzipped within existing caps. M5.47 remains partial.
+Investigate the materialized scans for the noncovering disjunctions in
+seed 2026111601, case 36, statement 17 and case 98, statement 12 next.
 
 **M5.10 choice-result collation, verified.** IF, CASE, IFNULL and COALESCE
 carry the resolved collation and derivation on selected string values.

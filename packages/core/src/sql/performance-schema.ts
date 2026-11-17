@@ -7,14 +7,12 @@
 // others: what performance_schema instruments, this executor does not keep.
 import type { TableName } from '@myjs/parser'
 import { fromUtf8, messages, sqlError } from '@myjs/protocol'
-import { COERCIBILITY, stringValue, type Value } from '@myjs/types'
+import type { Value } from '@myjs/types'
 import type { DerivedSource } from './from.ts'
 import type { InformationSchemaColumn } from './information-schema-defs.ts'
-import { systemColumnType } from './information-schema.ts'
+import { systemTable } from './information-schema.ts'
 import type { Run } from './query.ts'
 import { systemVariableInfo } from './variables.ts'
-
-const UTF8MB4_0900_AI_CI = 255
 
 /** Each table's two columns, as 8.4.11 describes them: the name its primary key, the value nullable. */
 const COLUMNS: readonly InformationSchemaColumn[] = [
@@ -42,12 +40,7 @@ export function performanceSchemaTable(run: Run, name: TableName, alias: string,
   if (schema !== 'performance_schema') throw sqlError('ER_BAD_DB_ERROR', messages.unknownDatabase(schema))
   const rowsOf = TABLES[name.name]
   if (rowsOf === undefined) throw sqlError('ER_NO_SUCH_TABLE', messages.noSuchTable('performance_schema', name.name))
-  const columns = COLUMNS.map((c) => ({ name: c.name, type: systemColumnType(c, name.name, alias, 'performance_schema') }))
-  const text = (s: string): Value => stringValue(s, UTF8MB4_0900_AI_CI, COERCIBILITY.IMPLICIT)
-  return {
-    schema: 'performance_schema',
-    source: { joined: true, columns, rows: () => [...rowsOf(run)].map(([n, v]) => [text(n), text(v)]) },
-  }
+  return systemTable(schema, name.name, alias, COLUMNS, () => rowsOf(run))
 }
 
 /**

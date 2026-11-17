@@ -119,6 +119,42 @@ test('a fractional BETWEEN primary range competes with a covering LooseScan', as
   }
 })
 
+test('a covering LooseScan keeps the selected access for overlapping fractional bounds', async () => {
+  const { db, conn } = await looseScanConnection()
+  const schema = 'fractional_overlap_loosescan'
+  const sql = 'SELECT name FROM pa WHERE id IN (SELECT pa_id FROM ch WHERE ch.pa_id <= 5.5 OR ch.pa_id > 1.5)'
+  const read = (names: readonly string[], range = true) => readSemijoin(conn, schema, sql, names, `Nested loop inner join
+    Remove duplicates from input sorted on pa_id
+        Filter
+            Covering index ${range ? 'range scan on ch using pa_id over' : 'scan on ch using pa_id'}
+    Single-row index lookup on pa using PRIMARY`, { flags: 20485, charset: 255 })
+  const analyze = () => conn.query('ANALYZE TABLE pa,ch')
+  try {
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+    await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,grp INT,amt DECIMAL(6,2),UNIQUE KEY(name),KEY(grp)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,pa_id INT,label VARCHAR(10),qty INT NOT NULL,KEY(pa_id)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO pa(id,name) VALUES (1,'dee'),(2,'b'),(3,'Bob'),(4,'éva'),(5,'x y'),(6,'al')")
+    await conn.query("INSERT INTO ch VALUES (1,1,'cy',3),(2,1,'cy',5),(3,5,'cy',0),(4,NULL,'x',4),(5,2,'Blue',4)")
+    await analyze()
+    await read(['dee', 'b', 'x y'])
+    await conn.query('UPDATE ch SET pa_id=3 WHERE id=4')
+    await analyze()
+    await read(['dee', 'b', 'Bob', 'x y'], false)
+    await conn.query("SET optimizer_switch='materialization=off'")
+    await conn.query('UPDATE ch SET pa_id=NULL WHERE id=5')
+    await analyze()
+    await read(['dee', 'Bob', 'x y'])
+    await conn.query('UPDATE ch SET pa_id=6 WHERE id=2')
+    await analyze()
+    await read(['dee', 'Bob', 'x y', 'al'])
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
+
 test('an ordered IN can weed out an unindexed fractional comparison over a table scan', async () => {
   const { db, conn } = await looseScanConnection()
   const schema = 'fractional_weedout382'

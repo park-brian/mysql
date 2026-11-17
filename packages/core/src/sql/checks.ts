@@ -22,7 +22,7 @@
 import { proof } from './errors.ts'
 import { requireCollationInfo } from '@myjs/charsets'
 import { sqlError } from '@myjs/protocol'
-import { REVERSE_COMPARISON, columnRefs, logicalShortCircuit, nativeCallName, someNode, visitPostorder } from './ast.ts'
+import { REVERSE_COMPARISON, columnRefs, logicalShortCircuit, nativeCallName, someNode, visitPostorder, lastConstraintNumber } from './ast.ts'
 import type { FieldBytes, TableDef, TableSpec } from '@myjs/engine'
 import { NODE, TOKEN, lex, parseExpression, type CheckConstraint, type CreateTableNode, type Expression, type Token, type SqlMode } from '@myjs/parser'
 import { truth } from '@myjs/types'
@@ -114,9 +114,9 @@ export function withChecks(catalog: CatalogApi, schema: string, spec: TableSpec,
   for (const c of existing) taken.add(c.name.toLowerCase())
   // An ALTER's new constraint continues from the table's highest number (8.4.11).
   const prefix = `${spec.name}_chk_`
-  let n = Math.max(0, ...existing.map((c) => (c.name.startsWith(prefix) && /^\d+$/.test(c.name.slice(prefix.length)) ? Number(c.name.slice(prefix.length)) : 0)))
+  let n = lastConstraintNumber(prefix, existing)
   for (const clause of clauses) {
-    const name = clause.name ?? `${spec.name}_chk_${++n}`
+    const name = clause.name ?? `${prefix}${++n}`
     if (taken.has(name.toLowerCase())) throw sqlError('ER_CHECK_CONSTRAINT_DUP_NAME', `Duplicate check constraint name '${name}'.`)
     taken.add(name.toLowerCase())
     const e = clause.expr
