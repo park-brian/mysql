@@ -2914,6 +2914,20 @@ tests, seeded fuzzing, 10,000 crash points, package and client smoke, and
 all seven pinned corpora. Parser, core and facade measure 44,526, 334,280
 and 334,200 bytes gzipped within the existing caps.
 
+**M5.50 paired INSERT benchmark.** The existing 5,000-row workload ran six
+alternating best-of-five pairs in one Docker Node 22.18.0 container. The
+revision before the single-descent changes (`bd742108`) and the current
+executor (`d644922`) measured 46.3/44.3, 41.0/43.4, 44.9/46.2, 43.8/49.8,
+44.5/43.7 and 40.4/42.4 ms, respectively. The medians, 44.15 and 44.00 ms,
+differ by less than the benchmark's documented noise.
+
+An exploratory profile again identifies garbage collection, AST traversal,
+page diffs and undo encoding among the larger costs. Changing the AST
+traversal loop, batch row count and per-column parameter tracking produced
+overlapping timings in separate probes. The existing one-descent checks
+pass. M5.50 still needs a measured end-to-end INSERT gain and durable
+transactional schema ownership.
+
 **M5.12 SHOW column metadata, verified.** The wire layouts for SHOW
 COLUMNS, DESCRIBE and SHOW INDEX use their compiled column names and one
 view name per statement kind. Each layout carries its original table, wire
