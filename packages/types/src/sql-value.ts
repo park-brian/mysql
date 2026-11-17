@@ -266,8 +266,8 @@ export function textOf(v: StringValue | BytesValue): string {
   return v.kind === 'string' ? v.v : byteText(v.v)
 }
 
-/** Numeric binary text maps every byte to the same code point without an argument limit. */
-function byteText(bytes: Uint8Array): string {
+/** Map each byte to its code point from U+0000 through U+00FF without an argument limit. */
+export function byteText(bytes: Uint8Array): string {
   let text = ''
   for (const byte of bytes) text += String.fromCharCode(byte)
   return text

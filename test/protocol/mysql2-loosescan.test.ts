@@ -188,6 +188,75 @@ test('an ordered IN can weed out an unindexed fractional comparison over a table
   }
 })
 
+const materializedDisjunctions = [
+  {
+    schema: 'mat_inverted_range',
+    predicate: "ch.label <=> 'ann' OR ch.id BETWEEN 5 AND 1",
+    parents: "(1,'zoë'),(2,'dee'),(3,'Mo'),(4,'Bob'),(5,'b'),(6,'éva')",
+    children: "(1,1,'red',5),(2,2,'green',0),(3,3,NULL,0)",
+    initial: [],
+    writes: [
+      ["UPDATE ch SET label='ANN' WHERE id=1", ['zoë']],
+      ['UPDATE ch SET pa_id=6 WHERE id=1', ['éva']],
+      ['UPDATE ch SET label=NULL WHERE id=1', []],
+      ["SET optimizer_switch='duplicateweedout=off'", []],
+      ["UPDATE ch SET label='ann',pa_id=NULL WHERE id=1", []],
+      ['UPDATE ch SET pa_id=2 WHERE id=1', ['dee']],
+    ],
+  },
+  {
+    schema: 'mat_wildcard_range',
+    predicate: "ch.pa_id <= 1 OR ch.label LIKE '_'",
+    parents: "(1,'b'),(2,'al'),(3,'éva')",
+    children: "(1,3,'Blue',2),(2,3,'cy',2),(3,NULL,'x',5),(4,4,'green',1),(5,3,'Blue',4),(6,1,'red',5),(7,2,'zoë',0)",
+    initial: ['b'],
+    writes: [
+      ["UPDATE ch SET label='ñ' WHERE id=2", ['b', 'éva']],
+      ['UPDATE ch SET pa_id=NULL WHERE id=6', ['éva']],
+      ["UPDATE ch SET label='a' WHERE id=7", ['al', 'éva']],
+      ["SET optimizer_switch='duplicateweedout=off'", ['al', 'éva']],
+      ['UPDATE ch SET label=NULL WHERE id=7', ['éva']],
+      ['UPDATE ch SET pa_id=1 WHERE id=6', ['b', 'éva']],
+    ],
+  },
+] as const
+
+for (const { schema, predicate, parents, children, initial, writes } of materializedDisjunctions) {
+  test(`ordered IN materializes the noncovering disjunction ${predicate}`, async () => {
+    const { db, conn } = await looseScanConnection()
+    const sql = `SELECT name FROM pa WHERE id IN (SELECT pa_id FROM ch WHERE ${predicate}) ORDER BY 1`
+    const plan = `Sort
+    Stream results
+        Nested loop inner join
+            Filter
+                Table scan on <subquery2>
+                    Materialize with deduplication
+                        Filter
+                            Filter
+                                Table scan on ch
+            Single-row index lookup on pa using PRIMARY`
+    const read = (names: readonly string[]) => readSemijoin(conn, schema, sql, names, plan, { flags: 4097, charset: 255 })
+    try {
+      await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+      await conn.query(`CREATE DATABASE ${schema} DEFAULT COLLATE utf8mb4_0900_ai_ci`)
+      await conn.query(`USE ${schema}`)
+      await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,grp INT,amt DECIMAL(6,2),UNIQUE KEY(name),KEY(grp)) STATS_AUTO_RECALC=0')
+      await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,pa_id INT,label VARCHAR(10),qty INT NOT NULL,KEY(pa_id)) STATS_AUTO_RECALC=0')
+      await conn.query(`INSERT INTO pa(id,name) VALUES ${parents}`)
+      await conn.query(`INSERT INTO ch VALUES ${children}`)
+      await conn.query('ANALYZE TABLE pa,ch')
+      await read(initial)
+      for (const [sql, names] of writes) {
+        await conn.query(sql)
+        await read(names)
+      }
+    } finally {
+      await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+      await conn.end(); await db?.end()
+    }
+  })
+}
+
 test('an unordered IN can weed out a noncovering text comparison', async () => {
   const { db, conn } = await looseScanConnection()
   const schema = 'unordered_text_weedout'

@@ -1150,6 +1150,14 @@ function indexedColumn(def: TableDef, name: string): boolean {
   return def.indexes.some((i) => i.parts.some((p) => p.column.toLowerCase() === folded))
 }
 
+function singlePrimary(def: TableDef, column: ColumnDef): IndexDef | undefined {
+  return def.indexes.find((i) => i.kind === 'primary' && i.parts.length === 1 && i.parts[0]!.column === column.name)
+}
+
+function signedIntColumn(column: ColumnDef | undefined): column is ColumnDef & { readonly type: { readonly type: typeof FIELD_TYPE.LONG; readonly unsigned?: false } } {
+  return column?.type.type === FIELD_TYPE.LONG && !column.type.unsigned
+}
+
 /** BIT and YEAR have their own comparison representations rather than exact integer keys. */
 function exactInteger(c: { readonly type: ResultType }): boolean {
   return c.type.kind === 'int' && c.type.field !== FIELD_TYPE.BIT && c.type.field !== FIELD_TYPE.YEAR
@@ -1351,25 +1359,46 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   const outerDef = from.single!.def
   const notNull = any && extra?.kind === NODE.UNARY && extra.op === 'IS NOT NULL' ? extra : undefined
   const limitOrLock = q.limit || q.locking
+  const ordersOuter = sortBy === outerAlias
   if (any && (limitOrLock || hasLeadingKey(outerDef, outerField.parts[1]!))) return undefined
   let residual: Extract<Expression, { kind: typeof NODE.BINARY }> | undefined
+  let operand: Expression | undefined
+  let compoundBound: Expression | undefined
   let text = false
-  let strategy: 'filteredHash' | 'weedout' | 'BETWEEN' | 'NOT IN' | 'OR' | undefined
+  let strategy: 'filteredHash' | 'filteredMaterial' | 'weedout' | 'BETWEEN' | 'NOT IN' | 'OR' | undefined
   if (extra?.kind === NODE.BINARY && extra.op === 'OR') {
-    // The written overlap covers every non-NULL membership key.
-    if (any || exists || limitOrLock || q.orderBy !== undefined) return undefined
+    if (any || exists || limitOrLock) return undefined
     const { left, right } = extra
-    if (left.kind !== NODE.BINARY || left.op !== '<=' || right.kind !== NODE.BINARY || right.op !== '>') return undefined
-    const upperKey = left.left
-    const lowerKey = right.left
-    if (![upperKey, lowerKey].every((key) => isQualifiedColumn(key, innerAlias) && key.parts[1].toLowerCase() === innerColumn) ||
-      left.right.kind !== NODE.LITERAL || right.right.kind !== NODE.LITERAL) return undefined
-    const upper = constantValue(left.right, run.env)
-    const lower = constantValue(right.right, run.env)
-    if (!upper || !lower || !fractionalIntBound(upper) || !fractionalIntBound(lower) ||
-      compareValues(upper, lower) === -1) return undefined
+    if (left.kind !== NODE.BINARY || right.kind !== NODE.BINARY ||
+      !isQualifiedColumn(left.left, innerAlias) || !isQualifiedColumn(right.left, innerAlias)) return undefined
+    operand = left.left
+    const member = left.left.parts[1].toLowerCase() === innerColumn
+    if (q.orderBy === undefined) {
+      // The written overlap covers every non-NULL membership key.
+      if (!member || left.op !== '<=' || right.op !== '>' || right.left.parts[1].toLowerCase() !== innerColumn ||
+        left.right.kind !== NODE.LITERAL || right.right.kind !== NODE.LITERAL) return undefined
+      const upper = constantValue(left.right, run.env)
+      const lower = constantValue(right.right, run.env)
+      if (!upper || !lower || !fractionalIntBound(upper) || !fractionalIntBound(lower) ||
+        compareValues(upper, lower) === -1) return undefined
+      strategy = 'OR'
+    } else {
+      // Both disjunctions feed the existing filtered table scan when materialization wins.
+      if (!ordersOuter || !optimizerEnabled(run.env, 'condition_fanout_filter')) return undefined
+      const high = right.extra as Expression | undefined
+      if (left.op === '<=>' && right.op === 'BETWEEN' && integerLiteral(right.right) &&
+        integerLiteral(high) && right.right.value > high.value) {
+        text = textBesideColumn(left.left, left.right)
+        compoundBound = right.left
+      } else if (member && left.op === '<=' && integerLiteral(left.right) && wildcardLike(right)) {
+        text = textBesideColumn(right.left, right.right)
+        compoundBound = left.left
+        operand = right.left
+      }
+      if (!text) return undefined
+      strategy = 'filteredMaterial'
+    }
     residual = extra
-    strategy = 'OR'
   } else if (extra !== undefined && !notNull) {
     if (any || extra.kind !== NODE.BINARY) return undefined
     const field = qualify(extra.left, innerAlias)
@@ -1388,18 +1417,20 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
         (wildcardLike(extra) && optimizerEnabled(run.env, 'condition_fanout_filter')))
       if (!text && (!isComparison(extra.op) || !numberLiteral(right))) return undefined
     }
+    operand = field
     residual = { ...extra, left: field }
   }
   const equality: Expression = { kind: NODE.BINARY, op: '=', left: innerField, right: outerField, at: where.at }
   return proof(() => {
     const def = nonTemporaryDefinition(run, inner.table)
     if (def === undefined) return undefined
-    const left = residual?.left
-    const operand = left?.kind === NODE.BINARY ? left.left : left
     const field = operand && tableColumn(operand, def, innerAlias)
-    const signedInt = field?.type.type === FIELD_TYPE.LONG && !field.type.unsigned
-    if (strategy && (!signedInt || (strategy === 'OR' ? !field.nullable :
-      !def.indexes.some((i) => i.kind === 'primary' && i.parts.length === 1 && i.parts[0]!.column === field.name)))) return undefined
+    const signedInt = signedIntColumn(field)
+    if (strategy === 'filteredMaterial') {
+      const bound = compoundBound && tableColumn(compoundBound, def, innerAlias)
+      if (!field || indexedColumn(def, field.name) || !signedIntColumn(bound) ||
+        (wildcardLike(residual?.right) ? !bound.nullable : bound.nullable || !singlePrimary(def, bound))) return undefined
+    } else if (strategy && (!signedInt || (strategy === 'OR' ? !field.nullable : !singlePrimary(def, field)))) return undefined
     if (any && (hasLeadingKey(def, innerColumn) || from.access(run.env).index !== undefined)) return undefined
     let nullTest: typeof notNull
     if (notNull) {
@@ -1421,7 +1452,6 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     if (!any && index === undefined) return undefined
     const innerRead = keyReads(innerColumn, residual)
     const scanOnly = index !== undefined && !holdsRead(def, index, innerRead)
-    const ordersOuter = sortBy === outerAlias
     if (text && (!scanOnly || !sessionVarchar(field, run))) return undefined
     if ((any || scanOnly) && hasGenerated(def, outerDef)) return undefined
     if (scanOnly) {
@@ -3099,7 +3129,7 @@ function boundJoinWarnings(on: JoinWarnings, scope: Scope): boolean {
     if (!def || !slot || slot.index < boundary || !exactInteger(slot) || literal.kind !== NODE.LITERAL) return false
     const column = def.columns[slot.index - boundary]!
     const wide = column.type.type === FIELD_TYPE.LONGLONG
-    const index = def.indexes.find((i) => i.kind === 'primary' && i.parts.length === 1 && i.parts[0]!.column === column.name)
+    const index = singlePrimary(def, column)
     if (!index) return false
     const pointFor = (key: bigint | undefined) => key === undefined ? undefined : pointAccess(index, column, intValue(key))
     const source = literal.value as string

@@ -488,15 +488,13 @@ function convertUsing(e: ConvertNode, ctx: CompileContext): Compiled {
   const widthOf = id === CHARSET_BINARY ? byteWidth : charWidth
   const width = x.type.kind === 'bytes' || isBits(x.type) ? bitsOrBytesWidth(x.type) : widthOf(x.type)
   return {
-    eval: (r, env) => {
-      const v = x.eval(r, env)
-      if (v === null) return null
+    eval: readNonNull(x.eval, (v, env) => {
       const bytes = binaryStringBytes(v, x.type)
       if (id === CHARSET_BINARY) return bytesValue(bytes ?? valueBytes(v))
       let text = bytes === undefined ? decodeCollation(encodeCollation(toText(v), id), id) : textIn(bytes, id, env)
       if (bytes === undefined && charset === 'utf8mb3' && text !== null) text = bmpText(text)
       return text === null ? null : stringValue(text, id, COERCIBILITY.IMPLICIT)
-    },
+    }),
     type: stringType(width, id, true),
     decimalPrefix: true,
   }
@@ -1762,13 +1760,11 @@ export function temporalOperands(left: Expression, right: Expression, a: Compile
   const bk = b.type.kind
   const yearDate = (c: Compiled): Compiled => ({
     type: c.type,
-    eval: (r, env) => {
-      const v = c.eval(r, env)
-      if (v === null) return null
+    eval: readNonNull(c.eval, (v) => {
       const year = Number(toInteger(v))
       const first = year === 0 ? 0 : 1
       return dateValue({ year, month: first, day: first })
-    },
+    }),
   })
   if (a.type.field === FIELD_TYPE.YEAR && bk === 'datetime') return [yearDate(a), b]
   if (b.type.field === FIELD_TYPE.YEAR && ak === 'datetime') return [a, yearDate(b)]
@@ -2574,12 +2570,10 @@ export function choiceBranch(from: ResultType, result: ResultType): ((value: Exc
 function branchOf(x: Compiled, result: ResultType): Compiled['eval'] {
   const convert = choiceBranch(x.type, result)
   if (convert !== undefined) return readNonNull(x.eval, convert)
-  if (result.kind === 'double') return (r, env) => {
-    const v = x.eval(r, env)
-    if (v === null) return null
+  if (result.kind === 'double') return readNonNull(x.eval, (v) => {
     const str = binaryStringBytes(v, x.type) ?? textOf(v, x.type)
     return { ...doubleOf(v, result)!, str }
-  }
+  })
   if (!isBits(x.type) || !(result.kind === 'decimal' || result.kind === 'bytes' || isBits(result))) return x.eval
   const bits = x.type.length
   return (r, env) => {
@@ -2727,16 +2721,14 @@ function binaryCastType(input: ResultType, length: number | undefined, ctx: Comp
 /** CHAR with binary charset and BINARY share byte truncation and zero padding. */
 function binaryCast(inner: Compiled, length: number | undefined, ctx: CompileContext): Compiled {
   return {
-    eval: (r, env) => {
-      const value = inner.eval(r, env)
-      if (value === null) return null
+    eval: readNonNull(inner.eval, (value, env) => {
       const bytes = valueBytes(value)
       if (length === undefined) return bytesValue(bytes)
       if (bytes.length > length) truncated(env, `BINARY(${length})`, toText(value))
       const result = new Uint8Array(length)
       result.set(bytes.subarray(0, length))
       return bytesValue(result)
-    },
+    }),
     decimalPrefix: true,
     type: binaryCastType(inner.type, length, ctx),
   }
@@ -2758,9 +2750,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
       const id = (t.charset ? defaultCollationOf(t.charset)?.id : undefined) ?? ctx.connectionCollation
       if (id === CHARSET_BINARY) return binaryCast(inner, t.length, ctx)
       return {
-        eval: (r, env) => {
-          const v = x(r, env)
-          if (v === null) return null
+        eval: readNonNull(x, (v, env) => {
           // Bytes, a BIT's included, are read in the target charset: NULL and
           // 1300 when they are no text in it (8.4.11: CAST(X'C3A9' AS CHAR) is 'é').
           const bytes = binaryStringBytes(v, inner.type)
@@ -2775,7 +2765,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
             }
           }
           return stringValue(read, id, COERCIBILITY.IMPLICIT)
-        },
+        }),
         decimalPrefix: true,
         // Invalid decoding may produce NULL; native declaration flags need broader coverage.
         type: stringType(t.length ?? charWidth(inner.type), id, true),
@@ -2791,9 +2781,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
     case 'BIGINT': {
       const unsigned = t.name === 'UNSIGNED' || t.unsigned === true
       return {
-        eval: (r, env) => {
-          const v = x(r, env)
-          if (v === null) return null
+        eval: readNonNull(x, (v, env) => {
           let n = valInt(v)
           // Complement warnings use the original integer range before saturation.
           const prefix = integerPrefix(v)
@@ -2806,7 +2794,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
           if (unsigned) n &= MAX_UNSIGNED
           else if (n > MAX_SIGNED) n -= 1n << 64n
           return intValue(n, unsigned)
-        },
+        }),
         // 21 wide, unsigned or not (8.4.11).
         type: intType(21, nullable, unsigned),
       }
@@ -2816,15 +2804,13 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
       const limit = pow10(precision) - 1n
       const label = () => sourceText(ctx.sql, e.at) ?? deparse(e)
       return {
-        eval: (r, env) => {
-          const v = x(r, env)
-          if (v === null) return null
+        eval: readNonNull(x, (v, env) => {
           const d = decimalAt(v, scale)
           // Past DECIMAL(M,D)'s digits: the largest it holds, and 1264 (8.4.11).
           if (d.v <= limit && d.v >= -limit) return d
           raise(env, 1264, `Out of range value for column '${label()}' at row 1`)
           return decimalValue(d.v < 0n ? -limit : limit, scale)
-        },
+        }),
         type: decimalType(precision, scale, nullable),
       }
     }
@@ -2834,13 +2820,11 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
       if ((t.precision ?? 0) <= 24) {
         const printed = `cast(${printedArgument(e.expr, ctx)} as float)`
         return realInteger({
-          eval: (r, env) => {
-            const v = x(r, env)
-            if (v === null) return null
+          eval: readNonNull(x, (v) => {
             const n = toDouble(v)
             if (Math.abs(n) > FLT_MAX) throw valueOutOfRange('DOUBLE', printed)
             return { kind: 'double', v: Math.fround(n), float: true }
-          },
+          }),
           type: { ...doubleType(nullable), field: FIELD_TYPE.FLOAT },
         }, () => printed)
       }
@@ -2853,9 +2837,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
       const fsp = type === 'DATE' ? 0 : (t.length ?? 0)
       const flags = modeOf(ctx.session.sqlMode)
       return {
-        eval: (r, env) => {
-          const v = x(r, env)
-          if (v === null) return null
+        eval: readNonNull(x, (v, env) => {
           let input = v
           // Text is read under the session's zero-date modes; what is no
           // date is NULL with 1292 (8.4.11: CAST('0000-00-00' AS DATE)).
@@ -2869,7 +2851,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
           }
           const d = toDateTime(input, type)
           return d === undefined ? null : { ...d, fsp }
-        },
+        }),
         type: datetimeType(type === 'DATE' ? FIELD_TYPE.DATE : FIELD_TYPE.DATETIME, fsp, true),
       }
     }

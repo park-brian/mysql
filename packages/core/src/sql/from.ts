@@ -160,7 +160,7 @@ export interface FromPlan {
   /** Sort the first table before its indexed joins expand or discard rows. */
   sortFirst(alias: string, keys: readonly SortKey[]): void
   /** Select a bounded integer semijoin; return whether its physical order is inner-first. */
-  integerSemijoin(alias: string, index: IndexDef | undefined, key: Compiled, residual: Expression | undefined, materializationEligible: boolean, strategy?: 'filteredHash' | 'weedout' | 'NOT IN' | 'BETWEEN' | 'OR'): boolean | undefined
+  integerSemijoin(alias: string, index: IndexDef | undefined, key: Compiled, residual: Expression | undefined, materializationEligible: boolean, strategy?: 'filteredHash' | 'filteredMaterial' | 'weedout' | 'NOT IN' | 'BETWEEN' | 'OR'): boolean | undefined
   /**
    * The columns the query reads of each table (`'all'` for one read whole).
    * A table no condition chooses an access path for is read through the
@@ -694,7 +694,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
           if (materialized !== 'scan' || strategy === 'weedout') return undefined
           return true
         }
-        if (!optimizerEnabled(ctx.env, 'duplicateweedout')) return undefined
+        if (strategy === 'filteredMaterial' || !optimizerEnabled(ctx.env, 'duplicateweedout')) return undefined
         settings.weedout = inner
         delete settings.firstMatch
         return true

@@ -29,7 +29,7 @@ import { decodeDecimal, encodeDecimal } from './decimal.ts'
 import { invalidJson } from './errors.ts'
 import { JSON_TYPE, compareJsonKeys, isInlined, varint, writeVarint } from './json.ts'
 import { compareDecimals } from './compare.ts'
-import { parseDecimal, renderDecimal, renderDouble, timeFieldValue, type DecimalValue, type Value } from './sql-value.ts'
+import { parseDecimal, renderDecimal, renderDouble, timeFieldValue, byteText, type DecimalValue, type Value } from './sql-value.ts'
 
 export type JsonDoc =
   | { readonly t: 'null' }
@@ -343,20 +343,6 @@ export function quoteJsonString(s: string): string {
   return `${out}"`
 }
 
-function base64(bytes: Uint8Array): string {
-  const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-  let out = ''
-  for (let i = 0; i < bytes.length; i += 3) {
-    const a = bytes[i] as number
-    const b = bytes[i + 1]
-    const c = bytes[i + 2]
-    out += (A[a >> 2] as string) + (A[((a & 3) << 4) | ((b ?? 0) >> 4)] as string)
-    out += b === undefined ? '=' : (A[((b & 15) << 2) | ((c ?? 0) >> 6)] as string)
-    out += c === undefined ? '=' : (A[c & 63] as string)
-  }
-  return out
-}
-
 /** A double as JSON text: MySQL's rendering, with `.0` where it would read as an integer (`1.0`, `100.0`, `-0.0`). */
 function renderJsonDouble(v: number): string {
   const s = renderDouble(v)
@@ -391,7 +377,7 @@ export function renderJson(doc: JsonDoc): string {
       return `"${t.negative ? '-' : ''}${hours}:${renderMysqlTime({ ...t, negative: false, days: 0, hour: 0 }, 6).slice(2)}"`
     }
     case 'opaque':
-      return `"base64:type${doc.field}:${base64(doc.v)}"`
+      return `"base64:type${doc.field}:${btoa(byteText(doc.v))}"`
     case 'array':
       return `[${doc.v.map(renderJson).join(', ')}]`
     case 'object':

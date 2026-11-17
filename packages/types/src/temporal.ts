@@ -85,17 +85,24 @@ function getBE(bytes: Uint8Array, at: number, width: number): bigint {
  * | 3, 4 | 2     | `microseconds / 100`, BE       |
  * | 5, 6 | 3     | `microseconds`, BE             |
  */
+const FRACTION_FACTOR = [0, 10000, 100, 1] as const
+
+function fractionWidth(dec: number): number {
+  return dec >= 5 ? 3 : dec >= 3 ? 2 : dec >= 1 ? 1 : 0
+}
+
+function packedFraction(microsecond: number, width: number): number {
+  return width === 3 ? microsecond : width === 0 ? 0 : Math.floor(microsecond / FRACTION_FACTOR[width]!)
+}
+
 function writeFraction(out: Uint8Array, at: number, microsecond: number, dec: number): void {
-  if (dec >= 5) putBE(out, at, 3, BigInt(microsecond))
-  else if (dec >= 3) putBE(out, at, 2, BigInt(Math.floor(microsecond / 100)))
-  else if (dec >= 1) putBE(out, at, 1, BigInt(Math.floor(microsecond / 10000)))
+  const width = fractionWidth(dec)
+  putBE(out, at, width, BigInt(packedFraction(microsecond, width)))
 }
 
 function readFraction(bytes: Uint8Array, at: number, dec: number): number {
-  if (dec >= 5) return Number(getBE(bytes, at, 3))
-  if (dec >= 3) return Number(getBE(bytes, at, 2)) * 100
-  if (dec >= 1) return Number(getBE(bytes, at, 1)) * 10000
-  return 0
+  const width = fractionWidth(dec)
+  return Number(getBE(bytes, at, width)) * FRACTION_FACTOR[width]!
 }
 
 // --- DATETIME2 --------------------------------------------------------------
@@ -209,7 +216,7 @@ export function encodeTime2(v: MysqlTime, dec: number): Uint8Array {
   checkMinutesAndSeconds(v)
 
   const fracBytes = fractionalBytes(dec)
-  const fracValue = dec >= 5 ? v.microsecond : dec >= 3 ? Math.floor(v.microsecond / 100) : dec >= 1 ? Math.floor(v.microsecond / 10000) : 0
+  const fracValue = packedFraction(v.microsecond, fractionWidth(dec))
   const fracBits = BigInt(fracBytes) * 8n
 
   // Pack magnitude as one integer covering the 3-byte head and the tail, so
@@ -235,7 +242,7 @@ export function decodeTime2(bytes: Uint8Array, dec: number): MysqlTime {
   const fracMask = (1n << fracBits) - 1n
   const rawFrac = Number(magnitude & fracMask)
   const hms = Number(magnitude >> fracBits)
-  const microsecond = dec >= 5 ? rawFrac : dec >= 3 ? rawFrac * 100 : dec >= 1 ? rawFrac * 10000 : 0
+  const microsecond = rawFrac * FRACTION_FACTOR[fractionWidth(dec)]!
 
   const hours = (hms >> 12) & 0x3ff
   return {
