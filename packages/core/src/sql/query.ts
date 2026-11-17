@@ -375,8 +375,16 @@ export function planQuery(run: Run, q: QueryExpression, pending?: Condition[], h
   const r = q.with === undefined ? run : withClause(run, q.with)
   const body = q.body
   switch (body.kind) {
-    case QUERY.SELECT:
-      return planSelect({ ...r, subqueries: [], clauses: { 'where clause': body.where, 'having clause': body.having } }, q, body, pending, hints)
+    case QUERY.TABLE:
+    case QUERY.SELECT: {
+      const node: SelectNode = body.kind === QUERY.SELECT ? body : {
+        kind: QUERY.SELECT as typeof QUERY.SELECT,
+        items: [{ expr: { kind: NODE.COLUMN as typeof NODE.COLUMN, parts: ['*'], at: body.at } }],
+        from: [{ kind: REF.TABLE as typeof REF.TABLE, at: body.at, table: body.table }],
+        at: body.at,
+      }
+      return planSelect({ ...r, subqueries: [], clauses: { 'where clause': node.where, 'having clause': node.having } }, q, node, pending, hints)
+    }
     case QUERY.QUERY: {
       // An unordered LIMIT belongs to the child before its projection, not its emitted rows.
       const pushed = q.orderBy === undefined && q.locking === undefined && q.limit !== undefined && body.limit === undefined
@@ -1969,26 +1977,18 @@ function wrapBoundReader(bound: BoundSubquery, label: string, rows: SelectPlan['
  * columns as their own, keys included; a materialized one as a temporary
  * table's copies (8.4.11).
  */
-function mergeable(q: QueryExpression): boolean {
-  if (q.limit !== undefined || q.with !== undefined) return false
+function mergeable(q: QueryExpression, physical = true): boolean {
+  if (q.limit !== undefined || (physical ? q.with !== undefined : containsWindow(q.orderBy))) return false
   const body = q.body
-  if (body.kind === QUERY.QUERY) return mergeable(body)
-  return body.kind === QUERY.SELECT && body.windows === undefined && mergeableSelect(body)
-}
-
-/** Logical view algorithm eligibility; WITH and unused WINDOW declarations are not physical merge proofs. */
-export function viewMergeable(query: QueryExpression): boolean {
-  if (query.limit !== undefined || containsWindow(query.orderBy)) return false
-  const body = query.body
-  if (body.kind === QUERY.QUERY) return viewMergeable(body)
-  return body.kind === QUERY.SELECT && mergeableSelect(body)
-}
-
-/** Shared SELECT eligibility; wrapper and physical WINDOW-declaration fences stay with their callers. */
-function mergeableSelect(body: SelectNode): boolean {
+  if (body.kind === QUERY.QUERY) return mergeable(body, physical)
+  if (body.kind === QUERY.TABLE) return true
   // A source-free SELECT is a constant row MySQL materializes.
-  return !!body.from?.length && body.groupBy === undefined && body.having === undefined && body.distinct !== true && !containsAggregate(body.items) && !containsWindow(body.items)
+  return body.kind === QUERY.SELECT && (!physical || body.windows === undefined) && !!body.from?.length &&
+    body.groupBy === undefined && body.having === undefined && body.distinct !== true && !containsAggregate(body.items) && !containsWindow(body.items)
 }
+
+/** Logical view eligibility allows WITH and unused WINDOW declarations. */
+export const viewMergeable = (query: QueryExpression): boolean => mergeable(query, false)
 
 /** A derived table, or one reference to a CTE: its columns as the outer query sees them, and its rows. */
 function derivedTable(run: Run, query: QueryExpression, alias: string, names: readonly string[] | undefined, lateral: Scope | undefined, view?: ViewDef, cte?: string): DerivedSource {
