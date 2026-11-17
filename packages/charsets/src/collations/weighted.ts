@@ -25,24 +25,19 @@ import { requireCollationInfo, type Collation, type CollationInfo } from '../col
 import { comparePadded, memcmp } from './memcmp.ts'
 import { utf8CodePoints } from './utf8.ts'
 import { expandRuns } from '../runs.ts'
+import { PACKED_RUN_RADIX } from '../run-format.ts'
 import { corruptTable } from '../errors.ts'
-import { BYTE_WEIGHT_RUNS, PACKED_UNICASE_LOWER, UNICASE_WEIGHT_RUNS, PACKED_WEIGHTED_COLLATIONS } from './weights.ts'
+import { BYTE_WEIGHT_RUNS, PACKED_UNICASE_LOWER, UNICASE_WEIGHT_RUNS, WEIGHT_SLOTS } from './weights.ts'
 
 /** Code points above `my_unicase_default`'s `maxchar` all weigh this. */
 const REPLACEMENT_WEIGHT = 0xfffd
 
 
-let byteTables: Map<string, Uint8Array> | null = null
-function byteWeightTable(name: string): Uint8Array {
-  if (byteTables === null) {
-    byteTables = new Map()
-    for (const line of BYTE_WEIGHT_RUNS.split('\n')) {
-      const at = line.indexOf(' ')
-      byteTables.set(line.slice(0, at), Uint8Array.from(expandRuns(line.slice(at + 1), 0, 256)))
-    }
-  }
-  const table = byteTables.get(name)
-  if (table === undefined) throw corruptTable(`no weight table named ${name}`)
+let byteTables: Uint8Array[] | undefined
+function byteWeightTable(slot: number): Uint8Array {
+  const tables = (byteTables ??= BYTE_WEIGHT_RUNS.split('\n').map((runs) => Uint8Array.from(expandRuns(runs, 0, 256, PACKED_RUN_RADIX))))
+  const table = tables[slot]
+  if (table === undefined) throw corruptTable(`no weight table at slot ${slot}`)
   return table
 }
 
@@ -51,7 +46,7 @@ function unicaseTable(packed: string): Map<number, Uint16Array> {
   for (const line of packed.split('\n')) {
     const at = line.indexOf(' ')
     const page = Number.parseInt(line.slice(0, at), 16)
-    pages.set(page, Uint16Array.from(expandRuns(line.slice(at + 1), page << 8, 256)))
+    pages.set(page, Uint16Array.from(expandRuns(line.slice(at + 1), page << 8, 256, PACKED_RUN_RADIX)))
   }
   return pages
 }
@@ -68,19 +63,9 @@ function unicaseWeight(codePoint: number, lower = false): number {
   return page === undefined ? codePoint : (page[codePoint & 0xff] as number)
 }
 
-/** `id -> weight table name`, `-` meaning the unicase pages. */
-let weighted: Map<number, string> | null = null
-function weightSource(id: number): string | undefined {
-  if (weighted === null) {
-    weighted = new Map()
-    for (const line of PACKED_WEIGHTED_COLLATIONS.split('\n')) {
-      const at = line.indexOf(' ')
-      weighted.set(Number(line.slice(0, at)), line.slice(at + 1))
-    }
-  }
-  return weighted.get(id)
+function weightSource(id: number): number | undefined {
+  return Number.isInteger(id) ? WEIGHT_SLOTS[id] ?? undefined : undefined
 }
-
 
 function byteWeightCollation(info: CollationInfo, table: Uint8Array): Collation {
   const padUnit = Uint8Array.of(table[0x20] as number)
@@ -124,6 +109,8 @@ function unicaseCollation(info: CollationInfo, lower = false): Collation {
   }
 }
 
+const UNICASE_SORT = -1
+const UNICASE_LOWER = -2
 const cache = new Map<number, Collation>()
 
 /** Whether `weightedCollationFor` would succeed. */
@@ -133,8 +120,7 @@ export function isWeightedCollation(id: number): boolean {
 
 /** The ids the generated weight tables serve, in id order. */
 export function weightedCollationIds(): readonly number[] {
-  weightSource(0)
-  return [...(weighted as Map<number, string>).keys()]
+  return WEIGHT_SLOTS.flatMap((slot, id) => slot === null ? [] : [id])
 }
 
 /** The `Collation` for a weight-table id, cached. */
@@ -144,7 +130,7 @@ export function weightedCollationFor(id: number): Collation {
   const source = weightSource(id)
   if (source === undefined) throw corruptTable(`collation ${id} has no weight table`)
   const info = requireCollationInfo(id)
-  const c = source === '-' ? unicaseCollation(info) : source === '<' ? unicaseCollation(info, true) : byteWeightCollation(info, byteWeightTable(source))
+  const c = source === UNICASE_SORT ? unicaseCollation(info) : source === UNICASE_LOWER ? unicaseCollation(info, true) : byteWeightCollation(info, byteWeightTable(source))
   cache.set(id, c)
   return c
 }

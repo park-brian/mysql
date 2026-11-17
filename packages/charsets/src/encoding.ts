@@ -27,6 +27,7 @@ import { unsupportedCharset } from './errors.ts'
 import { requireCollationInfo } from './collation.ts'
 import { CHARSET_ENCODING_RUNS } from './encodings.ts'
 import { expandRuns } from './runs.ts'
+import { PACKED_RUN_RADIX } from './run-format.ts'
 
 /**
  * Fallback decoders only: generated single-byte tables are authoritative.
@@ -96,7 +97,7 @@ function singleByteTable(charset: string): Uint16Array | undefined {
     toUni = new Map()
     for (const line of CHARSET_ENCODING_RUNS.split('\n')) {
       const at = line.indexOf(' ')
-      toUni.set(line.slice(0, at), Uint16Array.from(expandRuns(line.slice(at + 1), 0, 256)))
+      toUni.set(line.slice(0, at), Uint16Array.from(expandRuns(line.slice(at + 1), 0, 256, PACKED_RUN_RADIX)))
     }
   }
   return toUni.get(charset)

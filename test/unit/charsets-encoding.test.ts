@@ -79,12 +79,13 @@ test('B0: latin1 decodes from the generated table, not from the runtime', async 
   // this pass and cannot make it fail.
   const { PACKED_CHARSET_TO_UNI } = await import('@myjs/charsets')
   const { CHARSET_ENCODING_RUNS } = await import('../../packages/charsets/src/encodings.ts')
+  const { PACKED_RUN_RADIX } = await import('../../packages/charsets/src/run-format.ts')
   const packed = PACKED_CHARSET_TO_UNI satisfies `armscii8 ${string}`
   assert.equal(createHash('sha256').update(packed).digest('hex'),
     'af9e462e6a498ed41244b3b7a9d122c7de0f7e0a335a63d4c9836cc26af3e880')
   const line = CHARSET_ENCODING_RUNS.split('\n').find((l) => l.startsWith('latin1 '))
   assert.ok(line, 'latin1 must have a generated table')
-  const table = expandRuns(line.slice('latin1 '.length), 0, 256)
+  const table = expandRuns(line.slice('latin1 '.length), 0, 256, PACKED_RUN_RADIX)
   assert.equal(table[0x80], 0x20ac, 'MySQL latin1 is cp1252: 0x80 is the euro sign')
   assert.equal(table[0x41], 0x41, 'the ASCII half is identity')
   // And the public API agrees with the table it is built from.

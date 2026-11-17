@@ -11,8 +11,8 @@
 //
 // Ground rule 7: the source is fetched, hashed and discarded. Nothing from
 // MySQL's tree lands in this MIT repository — and note that we take *facts*
-// only (ids, names, byte widths, pad attributes), never MySQL's comments or
-// its weight tables, which are expression. That is D-29 applied to charsets.
+// only (ids, names, byte widths, pad attributes and numeric weights).
+// That is D-29 applied to charsets.
 //
 // One parse, three outputs (D-33, and M2.5 since):
 //
@@ -33,7 +33,7 @@
 // inside ground rule 7. What we never take is MySQL's prose.
 import { fileURLToPath } from 'node:url'
 import { writeFileSync } from 'node:fs'
-import { packRuns } from '../packages/charsets/src/run-format.ts'
+import { PACKED_RUN_RADIX, packRuns } from '../packages/charsets/src/run-format.ts'
 import { REF, REPO, banner, check, combinedSha256, fetchAllPinned, packed } from './lib/gen-common.mjs'
 
 // Every `strings/` file that defines a `CHARSET_INFO`. Enumerated rather than
@@ -528,21 +528,31 @@ check(weightOf(0x00df) === weightOf(0x0073), 'gen-charsets: general_ci must fold
 check(byteWeightsOf(8)[0xe4] > byteWeightsOf(8)[0x7a], 'gen-charsets: latin1_swedish_ci must sort a-umlaut after z')
 
 const usedByteTables = [...new Set(byteWeighted.map((c) => c.sortOrder))].sort()
+const byteNames = usedByteTables.map((name) => name.replace('sort_order_', ''))
+const byteSlots = new Map(usedByteTables.map((name, slot) => [name, slot]))
 const byteLines = (repeats) => usedByteTables
-  .map((name) => `${name.replace('sort_order_', '')} ${packRuns(byteTables.get(name), 0, repeats)}`)
+  .map((name, slot) => (repeats ? '' : byteNames[slot] + ' ') + packRuns(byteTables.get(name), 0, repeats, repeats ? PACKED_RUN_RADIX : 16))
   .join('\n')
 const unicaseLines = (repeats) => [...unicasePages.entries()]
   .sort((a, b) => a[0] - b[0])
-  .map(([page, weights]) => `${page.toString(16)} ${packRuns(weights, page << 8, repeats)}`)
+  .map(([page, weights]) => `${page.toString(16)} ${packRuns(weights, page << 8, repeats, repeats ? PACKED_RUN_RADIX : 16)}`)
   .join('\n')
 const lowerLines = [...lowerPages.entries()]
   .sort((a, b) => a[0] - b[0])
-  .map(([page, weights]) => `${page.toString(16)} ${packRuns(weights, page << 8)}`)
+  .map(([page, weights]) => `${page.toString(16)} ${packRuns(weights, page << 8, undefined, PACKED_RUN_RADIX)}`)
   .join('\n')
-const weightedLines = [...byteWeighted, ...unicaseWeighted, ...lowerWeighted]
-  .sort((a, b) => a.id - b.id)
-  .map((c) => `${c.id} ${c.lowerSort ? '<' : c.sortOrder === null ? '-' : c.sortOrder.replace('sort_order_', '')}`)
-  .join('\n')
+const weightedCollations = [...byteWeighted, ...unicaseWeighted, ...lowerWeighted]
+const weightSlots = []
+for (const c of weightedCollations) {
+  const slot = c.lowerSort ? -2 : c.sortOrder === null ? -1 : byteSlots.get(c.sortOrder)
+  check(slot !== undefined, `gen-charsets: no weight table for collation ${c.id}`)
+  weightSlots[c.id] = slot
+}
+const weightRows = []
+for (let id = 0; id < weightSlots.length; id += 10) {
+  const row = Array.from(weightSlots.slice(id, id + 10), (slot) => slot ?? 'null')
+  weightRows.push('  ' + row.join(', ') + ',')
+}
 
 writeFileSync(
   WEIGHTS_OUT,
@@ -553,7 +563,7 @@ writeFileSync(
     counts: {
       'Byte weight tables': usedByteTables.length,
       'Unicase pages': unicasePages.size,
-      'Collations served': byteWeighted.length + unicaseWeighted.length + lowerWeighted.length,
+      'Collations served': weightedCollations.length,
     },
   })}
 
@@ -564,14 +574,15 @@ export const WEIGHT_TABLE_SOURCE_SHA256 =
   '${sha256}'
 
 /**
- * The 8-bit weight tables: \`name runs\`, one per line.
+ * The 8-bit weight tables in slot order, one line of runs per slot.
  *
- * Runs can encode either deltas from identity or repeated absolute weights.
+ * Deltas and absolute weights are base ${PACKED_RUN_RADIX}. Run lengths are decimal.
  */
 export const BYTE_WEIGHT_RUNS = ${packed(byteLines('absolute'))}
 
-/** The public byte weights in their original delta format and literal type. */
-export const PACKED_BYTE_WEIGHTS = /* @__PURE__ */ relativeTables(BYTE_WEIGHT_RUNS) as ${packed(byteLines())}
+// The public view still uses the original names and delta format.
+const BYTE_WEIGHT_NAMES = ${JSON.stringify(byteNames)}
+export const PACKED_BYTE_WEIGHTS = /* @__PURE__ */ relativeTables(BYTE_WEIGHT_RUNS, false, BYTE_WEIGHT_NAMES) as ${packed(byteLines())}
 
 /**
  * \`my_unicase_default\`'s non-null pages: \`page runs\`, one per line, the page
@@ -590,10 +601,12 @@ export const PACKED_UNICASE_WEIGHTS = /* @__PURE__ */ relativeTables(UNICASE_WEI
 export const PACKED_UNICASE_LOWER = ${packed(lowerLines)}
 
 /**
- * \`id table\`, one per line, where \`-\` means the unicase page table and \`<\` its lowercase column. Read out
- * of each collation's own \`CHARSET_INFO\`, not guessed from its name.
+ * Slots indexed by collation id. A null slot has no entry in these tables.
+ * Negative slots select the unicase sort (-1) or lowercase (-2) column.
  */
-export const PACKED_WEIGHTED_COLLATIONS = ${packed(weightedLines)}
+export const WEIGHT_SLOTS: readonly (number | null)[] = [
+${weightRows.join('\n')}
+]
 `,
 )
 
@@ -743,7 +756,7 @@ check(
 
 const encodingLines = (repeats) => [...charsetToUni]
   .sort(([a], [b]) => (a < b ? -1 : 1))
-  .map(([cs, table]) => `${cs} ${packRuns(table, 0, repeats)}`)
+  .map(([cs, table]) => `${cs} ${packRuns(table, 0, repeats, repeats ? PACKED_RUN_RADIX : 16)}`)
   .join('\n')
 
 writeFileSync(
@@ -777,7 +790,7 @@ export const ENCODING_TABLE_SOURCE_SHA256 =
 /**
  * \`charset code-points\`, one single-byte charset per line.
  *
- * Delta-plus-run with additional zero runs.
+ * Delta-plus-run with additional zero runs. Internal values are base ${PACKED_RUN_RADIX}.
  */
 export const CHARSET_ENCODING_RUNS = ${packed(encodingLines('zero'))}
 
@@ -789,7 +802,7 @@ export const PACKED_CHARSET_TO_UNI = /* @__PURE__ */ relativeTables(CHARSET_ENCO
 console.log(
   `gen-charsets: ${collations.length} collations, ${classes.size} width classes\n` +
     `  ${usedByteTables.length} byte weight tables, ${unicasePages.size} unicase pages, ` +
-    `${byteWeighted.length + unicaseWeighted.length} weighted collations\n` +
+    `${weightedCollations.length} weighted collations\n` +
     `  ${charsetToUni.size} single-byte encoding tables\n` +
     `  -> ${REGISTRY_OUT}\n  -> ${WEIGHTS_OUT}\n  -> ${METRICS_OUT}\n  -> ${ENCODINGS_OUT}\n` +
     `  source ${REPO}@${REF} ${SOURCES.length} files\n  sha256 ${sha256}`,

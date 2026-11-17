@@ -57,12 +57,14 @@ compare weight sequences. Fast, approximate, and full of well-known quirks
 The generated `utf8mb4_general_ci` table stores eleven nonidentity pages.
 Missing pages in the Basic Multilingual Plane use identity weights, and
 supplementary code points share weight `0xFFFD`. Relative and absolute runs
-pack the stored pages into 2,207 bytes, or 831 bytes gzipped. The public
+pack the stored pages into 2,071 bytes, or 873 bytes gzipped. The public
 packed export retains its original 5,033-byte relative format.
 
-The 42 single-byte weight tables use the same run codec. The internal
-table text is 13,487 bytes, or 4,467 bytes gzipped. Both public weight
-exports keep their original relative bytes and TypeScript literal types.
+The 42 single-byte weight tables use the same run codec. A table's slot is
+looked up by collation id. The internal table text is 12,129 bytes, or 4,211
+bytes gzipped. Private weight and charset runs use base-36 values and
+decimal counts. The public exports use hexadecimal values and retain their
+original bytes and TypeScript literal types.
 
 ### 3. `*_0900_*` — UCA-based collations
 

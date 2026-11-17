@@ -413,6 +413,20 @@ open. `VALUES` needs to preserve each demanded row's expression values in
 the direct protocol result and convert them when a derived or set-operation
 field stores them.
 
+**M2.19 compact charset data by slot and radix, verified.** Collation
+ids select byte-weight table slots. The shared run codec uses base-36
+values in the private tables and reconstructs the public hexadecimal
+exports. The pinned generator reproduces both artifacts. Differential
+checks cover 65,536 collation memberships, 45 weighted collations, all 24
+single-byte mappings and their inverses, and the three public packed
+exports. The bundle test follows the Swedish weights by slot and checks the
+UCA lazy boundary. Core and facade save 452 and 465 gzipped bytes. Full
+Docker verification passes 1,884 tests, all nine size gates, seeded fuzzing,
+10,000 crash points, package and client smoke and all seven pinned corpora,
+including 1,737 coercion warning counts. Parser, core and facade measure
+44,812, 333,877 and 333,796 gzipped bytes. The relational score stays at
+2,158 of 2,248.
+
 **M5.2 packed field type merge table, verified.** The generator stores
 one triangle of the matrix and emits an exception for each ordered pair
 that differs from its reverse. All 576 public results retain their order
