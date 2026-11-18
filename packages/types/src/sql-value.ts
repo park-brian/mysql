@@ -12,8 +12,7 @@
 //
 // A DECIMAL is an unscaled `bigint` and a scale, so arithmetic is exact and
 // needs no decimal library: `12.50` is `{ v: 1250n, scale: 2 }`.
-import { utf8 } from './utf8.ts'
-import { byteText, renderMysqlDateTime, renderMysqlTime, type MysqlDateTime, type MysqlTime } from '@myjs/bytes'
+import { byteText, utf8, renderMysqlDateTime, renderMysqlTime, type MysqlDateTime, type MysqlTime } from '@myjs/bytes'
 import { decodeCollation, encodeCollation } from '@myjs/charsets'
 import { renderJson, type JsonDoc } from './json-doc.ts'
 import { scanDateTime, scanTime, type Deprecation, type ScanFlags } from './temporal-scan.ts'

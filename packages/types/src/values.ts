@@ -24,10 +24,10 @@
 // precision, the zero date, durations beyond 24 hours, DECIMAL beyond a
 // double. Widening one into the other would lose exactly the values that make
 // the distinction worth having.
-import { fromUtf8 } from './utf8.ts'
 import {
   CHARSET_BINARY,
   FIELD_TYPE,
+  fromUtf8,
   renderMysqlDateTime,
   renderMysqlTime,
   type MysqlDateTime,

@@ -22,9 +22,8 @@
 // a fraction nor an exponent is an INT64 if it fits, a UINT64 if that fits, and
 // a double past both; `-0` is the integer 0 and `-0.0` the double -0. All of it
 // was read off 8.4.11 (tools/capture-json.mjs, M5.21).
-import { fromUtf8, utf8 } from './utf8.ts'
 import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
-import { byteText, FIELD_TYPE, compareBytes, MyjsError, renderMysqlDateTime, renderMysqlTime } from '@myjs/bytes'
+import { byteText, fromUtf8, utf8, FIELD_TYPE, compareBytes, MyjsError, renderMysqlDateTime, renderMysqlTime } from '@myjs/bytes'
 import { decodeDecimal, encodeDecimal } from './decimal.ts'
 import { invalidJson } from './errors.ts'
 import { JSON_TYPE, compareJsonKeys, encodeJsonContainer, encodeJsonDocument, isInlined, varint, writeVarint, type EncodedJson } from './json.ts'

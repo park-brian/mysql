@@ -96,16 +96,15 @@ export class Writer {
   /** `int<6>`. */
   u48(v: number): this {
     const at = this.#ensure(6)
-    const lo = v % 0x1_0000_0000
-    const hi = Math.floor(v / 0x1_0000_0000)
-    this.#dataView().setUint32(at, lo, true)
-    this.#dataView().setUint16(at + 4, hi, true)
+    const view = this.#dataView()
+    view.setUint32(at, v, true)
+    view.setUint16(at + 4, Math.floor(v / 0x1_0000_0000), true)
     return this
   }
 
   u64(v: bigint | number): this {
     const at = this.#ensure(8)
-    this.#dataView().setBigUint64(at, BigInt(v) & U64_MAX, true)
+    this.#dataView().setBigUint64(at, BigInt(v), true)
     return this
   }
 
@@ -113,7 +112,7 @@ export class Writer {
 
   i8(v: number): this {
     const at = this.#ensure(1)
-    this.#dataView().setInt8(at, v)
+    this.#bytes[at] = v
     return this
   }
 
@@ -178,20 +177,18 @@ export class Writer {
    */
   lenEncInt(v: number | bigint | null): this {
     if (v === null) return this.u8(LENENC_NULL)
-    if (typeof v === 'bigint') {
-      if (v < 0n || v > U64_MAX) {
-        throw new ProtocolError('PROTOCOL_BAD_LENENC', `length-encoded integer out of range: ${v}`)
-      }
-      if (v > BigInt(U24_MAX)) return this.u8(LENENC_U64).u64(v)
-      return this.lenEncInt(Number(v))
-    }
-    if (!Number.isInteger(v) || v < 0) {
+    if (
+      typeof v === 'bigint'
+        ? v < 0n || v > U64_MAX
+        : !Number.isInteger(v) || v < 0 || v >= 2 ** 64
+    ) {
       throw new ProtocolError('PROTOCOL_BAD_LENENC', `length-encoded integer out of range: ${v}`)
     }
-    if (v < LENENC_NULL) return this.u8(v)
-    if (v <= U16_MAX) return this.u8(LENENC_U16).u16(v)
-    if (v <= U24_MAX) return this.u8(LENENC_U24).u24(v)
-    return this.u8(LENENC_U64).u64(BigInt(v))
+    if (v > U24_MAX) return this.u8(LENENC_U64).u64(v)
+    const n = Number(v)
+    if (n < LENENC_NULL) return this.u8(n)
+    if (n <= U16_MAX) return this.u8(LENENC_U16).u16(n)
+    return this.u8(LENENC_U24).u24(n)
   }
 
   /** `string<lenenc>`; `null` writes the bare `0xFB`. */

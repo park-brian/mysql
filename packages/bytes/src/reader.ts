@@ -21,7 +21,6 @@ const LENENC_NULL = 0xfb
 const LENENC_U16 = 0xfc
 const LENENC_U24 = 0xfd
 const LENENC_U64 = 0xfe
-const LENENC_INVALID = 0xff
 
 export class Reader {
   readonly #bytes: Uint8Array
@@ -31,7 +30,7 @@ export class Reader {
   #pos: number
 
   constructor(bytes: Uint8Array, start = 0, end = bytes.length) {
-    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end > bytes.length || start > end) {
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > bytes.length || start > end) {
       throw new ProtocolError('PROTOCOL_BAD_RANGE', `invalid Reader range ${start}..${end} over ${bytes.length} bytes`)
     }
     this.#bytes = bytes
@@ -55,7 +54,8 @@ export class Reader {
   }
 
   #need(n: number, what: string): number {
-    if (n > this.#end - this.#pos) throw outOfBounds(n, this.#end - this.#pos, what)
+    const remaining = this.#end - this.#pos
+    if (n > remaining) throw outOfBounds(n, remaining, what)
     const at = this.#pos
     this.#pos += n
     return at
@@ -182,20 +182,15 @@ export class Reader {
     if (first === LENENC_U16) return BigInt(this.u16())
     if (first === LENENC_U24) return BigInt(this.u24())
     if (first === LENENC_U64) return this.u64()
-    // first === 0xFF
-    throw new ProtocolError(
-      'PROTOCOL_BAD_LENENC',
-      `invalid length-encoded integer prefix 0x${LENENC_INVALID.toString(16)}`,
-    )
+    throw new ProtocolError('PROTOCOL_BAD_LENENC', 'invalid length-encoded integer prefix 0xff')
   }
 
   /** `string<lenenc>` — a length-encoded integer, then that many bytes. */
   lenEncBytes(): Uint8Array | null {
     const n = this.lenEncInt()
     if (n === null) return null
-    if (n > BigInt(this.remaining)) {
-      throw outOfBounds(Number(n), this.remaining, 'string<lenenc>')
-    }
-    return this.bytes(Number(n))
+    const length = Number(n)
+    const at = this.#need(length, 'string<lenenc>')
+    return this.#bytes.subarray(at, at + length)
   }
 }

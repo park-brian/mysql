@@ -27,7 +27,7 @@
 //   and the text rendering both reflect the stored order, which is why
 //   `JSON_OBJECT('b',1,'a',2)` comes back with `a` first. Reproducing it is
 //   required for output compatibility, not a nicety.
-import { fromUtf8, utf8 } from './utf8.ts'
+import { fromUtf8, utf8 } from '@myjs/bytes'
 import { invalidJson } from './errors.ts'
 import { decodeStorageValue, type ColumnMeta, type StorageValue } from './values.ts'
 

@@ -66,7 +66,9 @@ function readLenEncInt(r) {
 
 Writers must use the **shortest** encoding — real clients are tolerant, but
 byte-for-byte comparison against captured traces (doc 43) is only possible if we
-are canonical.
+are canonical. An integer outside the unsigned 64-bit range raises
+`PROTOCOL_BAD_LENENC`. Both JavaScript `number` and `bigint` inputs follow
+that limit.
 
 ## Strings
 
@@ -77,6 +79,10 @@ are canonical.
 | `string<lenenc>` | `int<lenenc>` length, then that many bytes |
 | `string<var>` | length comes from elsewhere in the packet |
 | `string<EOF>` | runs to the end of the packet payload |
+
+The wire protocol and SQL value codecs use the default UTF-8 codec from
+`@myjs/bytes`. Session text uses an injected transcoder, and charset
+diagnostics encode into the requested byte span.
 
 `string<EOF>` is why the framer must hand parsers an exact payload slice: the
 "end" is the end of the *reassembled* payload, and getting the 16 MiB

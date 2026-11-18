@@ -31,6 +31,10 @@ test('out-of-range length-encoded integers are typed errors', () => {
   assert.throws(() => new Writer().lenEncInt(-1), ProtocolError)
   assert.throws(() => new Writer().lenEncInt(1.5), ProtocolError)
   assert.throws(() => new Writer().lenEncInt(-1n), ProtocolError)
+  assert.throws(() => new Writer().lenEncInt(2 ** 64), { code: 'PROTOCOL_BAD_LENENC' })
+  assert.throws(() => new Writer().lenEncInt(2n ** 64n), { code: 'PROTOCOL_BAD_LENENC' })
+  const greatestNumber = 2 ** 64 - 2048
+  assert.equal(new Reader(new Writer().lenEncInt(greatestNumber).view()).lenEncInt(), BigInt(greatestNumber))
 })
 
 test('every fixed-width write round-trips through Reader', () => {

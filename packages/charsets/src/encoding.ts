@@ -23,6 +23,7 @@
 // The remaining host decoders cover UTF-8, the UTF-16 family, legacy
 // multibyte charsets and TIS620, which has no generated map yet. They are
 // probed rather than trusted — see `rejectsLatin1Substitute` below.
+import { utf8 } from '@myjs/bytes'
 import { unsupportedCharset } from './errors.ts'
 import { requireCollationInfo } from './collation.ts'
 import { CHARSET_ENCODING_RUNS } from './encodings.ts'
@@ -226,7 +227,7 @@ export function decodeCharset(bytes: Uint8Array, charset: string): string {
  */
 export function encodeCharset(text: string, charset: string): Uint8Array {
   const label = WHATWG_LABEL[charset]
-  if (label === 'utf-8') return text.length <= SHORT_TEXT ? shortUtf8(text) : encoder.encode(text)
+  if (label === 'utf-8') return text.length <= SHORT_TEXT ? shortUtf8(text) : utf8(text)
   const table = singleByteTable(charset)
   if (table === undefined) throw unsupportedCharset(charset)
   const map = singleByteInverse(charset, table)
@@ -254,7 +255,7 @@ function shortUtf8(text: string): Uint8Array {
   const out = new Uint8Array(text.length)
   for (let i = 0; i < text.length; i++) {
     const c = text.charCodeAt(i)
-    if (c > 0x7f) return encoder.encode(text)
+    if (c > 0x7f) return utf8(text)
     out[i] = c
   }
   return out

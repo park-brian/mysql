@@ -17,21 +17,13 @@
 //
 // The alternative — depending on `@myjs/charsets` — is ruled out by the
 // release plan, which ships this package at 0.1 and that one at 0.2.
+import { utf8, fromUtf8 } from '@myjs/bytes'
 import { protocolError } from './errors/index.ts'
 import { messages } from './errors/messages.ts'
 import { charsetWidths } from './constants/charset-widths.ts'
 import { CHARSET_UTF8MB4_0900_AI_CI, CHARSET_UTF8MB4_GENERAL_CI } from './constants/types.ts'
 
-const encoder = new TextEncoder()
-const decoder = new TextDecoder('utf-8')
-
-export function utf8(s: string): Uint8Array {
-  return encoder.encode(s)
-}
-
-export function fromUtf8(b: Uint8Array): string {
-  return decoder.decode(b)
-}
+export { utf8, fromUtf8 }
 
 /**
  * Text whose charset the session decides, rather than the protocol.
