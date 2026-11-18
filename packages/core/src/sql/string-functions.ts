@@ -1369,20 +1369,20 @@ function scalarStringFunction(name: string, xs: readonly Compiled[], callName: s
       arity(2)
       const [s, bitsC] = xs as [Compiled, Compiled]
       const bits = intReader(bitsC)
-      // A constant length decides the width, 64 for one that is no length; any other 128.
+      const message = "Incorrect parameters in the call to native function 'sha2'"
+      const digestBits = (n: bigint | null): bigint | null => {
+        if (n === 0n) return 256n
+        return n === 224n || n === 256n || n === 384n || n === 512n ? n : null
+      }
+      // A constant length fixes the metadata width and warns during binding if invalid.
       let shaWidth = 128
       let fixedBits: bigint | null | undefined
       if (constant[1] === true) {
         try {
           const b = bitsC.eval([], constantEnv(ctx))
-          const n = b === null ? null : valInt(b)
-          shaWidth = n === 224n ? 56 : n === 384n ? 96 : n === 512n ? 128 : 64
-          // A constant length that is none is NULL, warned once (8.4.11).
-          fixedBits = n === 0n ? 256n : n
-          if (fixedBits === null || ![224n, 256n, 384n, 512n].includes(fixedBits)) {
-            ctx.conditions?.push({ level: 'Warning', code: 1583, message: `Incorrect parameters in the call to native function 'sha2'` })
-            fixedBits = null
-          }
+          fixedBits = digestBits(b === null ? null : valInt(b))
+          shaWidth = Number(fixedBits ?? 256n) / 4
+          if (fixedBits === null) ctx.conditions?.push({ level: 'Warning', code: 1583, message })
         } catch (e) {
           expectTyped(e)
           shaWidth = 64
@@ -1394,9 +1394,9 @@ function scalarStringFunction(name: string, xs: readonly Compiled[], callName: s
           const v = s.eval(r, env)
           const b = fixedBits ?? bits(r, env)
           if (v === null || b === null) return null
-          const n = b === 0n ? 256n : b
-          if (n !== 224n && n !== 256n && n !== 384n && n !== 512n) {
-            raise(env, 1583, `Incorrect parameters in the call to native function 'sha2'`)
+          const n = fixedBits ?? digestBits(b)
+          if (n === null) {
+            raise(env, 1583, message)
             return null
           }
           const data = valueBytes(v)

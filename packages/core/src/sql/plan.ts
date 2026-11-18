@@ -53,7 +53,7 @@ import {
   type Value,
 } from '@myjs/types'
 import type { Compiled, Env } from './compile.ts'
-import { PAGE_READ, ROW_EVALUATE, rangeBaseline, rangeCost, indexUnionCost, type RangeShape, type RangeRead } from './cost.ts'
+import { PAGE_READ, ROW_EVALUATE, scanBeatsNoncoveringRef, rangeBaseline, rangeCost, indexUnionCost, type RangeShape, type RangeRead } from './cost.ts'
 import { encodeBound, impossibleBetween, intersect, normalize, pointInterval, pruneImpossibleOr, rangeOf, significantCharPadding, type Constant, type Interval, type RangeSet, type RangeValue } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
 import { forwardKeyColumn, forwardKeyPart, singleRefIndex, uniquePoint } from './indexes.ts'
@@ -231,13 +231,13 @@ function exact(v: Value, c: ColumnDef): boolean {
 export function chooseAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, outer?: OuterColumn, costing?: RangeCosting, inferred?: InferredRange, indexes = def.indexes): Access {
   const conjuncts = splitAnd(inferred?.condition, splitAnd(where))
   const conditions = conjuncts.flatMap((e) => conditionOf(e, def, alias, outer, env) ?? [])
-  const read = conditionAccess(def, conditions, env, outer, indexes, costing === undefined)
+  const read = conditionAccess(def, conditions, env, outer, indexes, costing)
   return read ?? (costing && (rangeAccess(def, alias, conjuncts, env, costing, undefined, inferred, indexes) ??
     indexUnionAccess(def, alias, inferred?.condition ?? (costing.allowIndexUnion ? where : undefined), env, costing, indexes))) ?? FULL_SCAN
 }
 
 /** Points win first, with the primary or clustered key preferred among them. */
-function conditionAccess(def: TableDef, conditions: readonly Condition[], env: Env, outer: OuterColumn | undefined, indexes: readonly IndexDef[], allowRange: boolean): Access | undefined {
+function conditionAccess(def: TableDef, conditions: readonly Condition[], env: Env, outer: OuterColumn | undefined, indexes: readonly IndexDef[], costing: RangeCosting | undefined): Access | undefined {
   if (!conditions.length) return undefined
   const evaluate: Constant = (e) => proof(() => {
     const o = outer?.(e)
@@ -252,10 +252,17 @@ function conditionAccess(def: TableDef, conditions: readonly Condition[], env: E
     const eligible = conditions.filter((c) => c.column === column)
     const points = pointRanges(column, eligible, unresolved, evaluate)
     if (points) {
-      const access = { index: index.name, ranges: points, over: allowRange ? undefined : describePoints(points, column) }
+      const condition = eligible[0]
+      // A dependent non-covering lookup is compared with a scan before its key value is known.
+      if (costing && !costing.hasIndexHints && singleRefIndex(index) && eligible.length === 1 &&
+          condition?.op === '=' && outer?.(condition.constants[0]!) && !costing.shape(index).covering) {
+        const { stats } = costing
+        if (scanBeatsNoncoveringRef(stats, stats.recordsPerKey(index, 1))) continue
+      }
+      const access = { index: index.name, ranges: points, over: costing === undefined ? undefined : describePoints(points, column) }
       if (index.kind === 'primary') return access
       if (point === undefined || index.name === def.clustered) point = access
-    } else if (points === undefined && allowRange && index.kind === 'primary') {
+    } else if (points === undefined && costing === undefined && index.kind === 'primary') {
       range = primaryRange(index, column, eligible, evaluate)
     }
   }

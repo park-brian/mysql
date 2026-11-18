@@ -120,6 +120,11 @@ const worstSeeks = (t: TableStatistics): number => Math.max(Math.min(PAGE_READ *
 
 const noncoveringRefRead = (t: TableStatistics, rows: number): number => Math.min(PAGE_READ * rows, worstSeeks(t))
 
+/** Compare one dependent non-covering lookup with a full table read. */
+export function scanBeatsNoncoveringRef(stats: TableStatistics, fanout: number): boolean {
+  return accessCost(scanCost(stats), stats.rows) < accessCost(noncoveringRefRead(stats, fanout), fanout)
+}
+
 /** Quote a dependent read and its materialized alternative. A covering ref already wins its scan comparison. */
 export function dependentMembershipAccess(stats: TableStatistics, fanout: number | undefined, probes: number, kept: number, materialize: boolean | undefined, recordBytes?: number, range?: RangeRead): 'scan' | 'materialize' | undefined {
   if (materialize) return 'materialize'

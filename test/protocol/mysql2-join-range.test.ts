@@ -1119,3 +1119,49 @@ test('multipoint plans show short bounds in physical key order', async () => {
     await conn.end(); await db?.end()
   }
 })
+
+test('M5.49: a dependent non-covering lookup competes with a table scan', async () => {
+  const { db, conn } = await rangeConnection()
+  const schema = 'dependent_lookup_cost'
+  const scan = 'Table scan on c'
+  const lookup = 'Index lookup on c using ix'
+  const select = 'SELECT p.id,(SELECT MAX(v) FROM c'
+  const condition = ' WHERE c.k=p.k) AS m FROM p ORDER BY p.id'
+  try {
+    if (db === undefined) assert.deepEqual((await conn.query("SELECT SUBSTRING_INDEX(VERSION(), '-', 1) AS version"))[0], [{ version: '8.4.11' }])
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,k INT) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE c(id INT PRIMARY KEY,k INT,v INT,KEY ix(k)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO p VALUES (1,0),(2,1),(3,55),(4,NULL)')
+    await conn.query('INSERT INTO c VALUES (1,0,7),(2,0,9)')
+    await conn.query('ANALYZE TABLE p,c')
+    for (const distinct of [false, true]) {
+      if (distinct) {
+        await conn.query('UPDATE c SET k=1 WHERE id=2')
+        await conn.query('ANALYZE TABLE c')
+      }
+      const maxima = distinct ? [[1, 7], [2, 9], [3, null], [4, null]] : [[1, 9], [2, null], [3, null], [4, null]]
+      const counts = distinct ? [[1, 1], [2, 1], [3, 0], [4, 0]] : [[1, 2], [2, 0], [3, 0], [4, 0]]
+      const cases = [
+        [select + condition, distinct ? lookup : scan, maxima],
+        [select + ' FORCE INDEX FOR JOIN(ix)' + condition, lookup, maxima],
+        ['SELECT p.id,(SELECT COUNT(*) FROM c' + condition, 'Covering index lookup on c using ix', counts],
+        ['SELECT p.id,q.m FROM p JOIN LATERAL (SELECT MAX(v) AS m FROM c WHERE c.k=p.k) q ON TRUE ORDER BY p.id', distinct ? lookup : scan, maxima],
+      ] as const
+      for (const [sql, reader, expected] of cases) for (const method of ['query', 'execute'] as const) {
+        const options = { sql, rowsAsArray: true }
+        const [rows] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+        assert.deepEqual(rows, expected, sql)
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], sql)
+        const explain = 'EXPLAIN FORMAT=TREE ' + sql
+        const [plan] = method === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
+        const tree = String(plan[0]?.EXPLAIN)
+        assert.ok(planSkeleton(tree).split('\n').some((line: string) => line.trim() === reader), tree)
+      }
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})
