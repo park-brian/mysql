@@ -12,6 +12,7 @@ entry, recorded out of order, sits where its date and its commit put it.
 
 | Date | Entry |
 |---|---|
+| 2026-11-18 | **M5.10. Retain prepared SHA2 width and short-circuit NULL subjects.** The bound length supplies the digest without narrowing its prepared field. NULL subjects leave length effects unexecuted. The pinned audit improves by 17 exact outcomes. Docker passes 1,899 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.50. Collect old overflow references while reading the previous fields.** Clustered UPDATE and delete-mark reuse that decode. Forty cases preserve WAL records and page allocations through savepoints, rollback and purge. Full Docker verification passes 1,898 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.10. Reuse compiled regex during a search.** Each synchronous caller starts at its own index on the cached expression. All 4,608 focused wire observations agree, and core and facade save 27 and 24 gzipped bytes. Full Docker verification passes 1,898 tests and all seven pinned corpora. |
 | 2026-11-18 | **M5.49. Compare dependent non-covering lookups with a table scan.** Scalar and LATERAL readers reuse the existing cost estimates while preserving covering and hinted reads. The focused audit gains 44 exact plans, and relational replay reaches 2,169 of 2,248 plans. SHA2 shares its digest-length validation. Docker passes 1,898 tests and all seven pinned corpora within the existing caps. |

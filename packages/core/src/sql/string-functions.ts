@@ -1390,10 +1390,10 @@ function scalarStringFunction(name: string, xs: readonly Compiled[], callName: s
       }
       return {
         eval: (r, env) => {
-          if (fixedBits === null) return null
           const v = s.eval(r, env)
+          if (v === null || fixedBits === null) return null
           const b = fixedBits ?? bits(r, env)
-          if (v === null || b === null) return null
+          if (b === null) return null
           const n = fixedBits ?? digestBits(b)
           if (n === null) {
             raise(env, 1583, message)
@@ -1420,7 +1420,8 @@ export const STRING_FUNCTIONS: ReadonlySet<string> = new Set([
 ])
 
 export function stringFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
-  const constant = e.args.map((a) => constantNode(a))
+  // SHA2's digest width is fixed during prepare, before any markers are bound.
+  const constant = e.args.map((a) => constantNode(a, name !== 'SHA2'))
   const numeric = READS_DOUBLE.has(name) || name === 'GREATEST' || name === 'LEAST'
   const library = numeric || LIBRARY.has(name)
   // TRIM's side is a keyword argument, carried as such.
