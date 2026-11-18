@@ -854,9 +854,9 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
   // A value generated and written becomes `LAST_INSERT_ID()`; an upsert's
   // update does not, as an UPDATE does not.
   if (firstId !== 0n) run.state.lastInsertId = firstId
-  // The SELECT form falls back to no id at all once a row was upserted, even
-  // beside rows it inserted with ids of their own (8.4.11).
-  const lastHandled = autoAt >= 0 && stats.copied > 0 && !(selected !== undefined && stats.touched > 0) ? lastAuto : 0n
+  // INSERT SELECT falls back to zero after an upsert. A signed explicit ID
+  // otherwise supplies its bits to the unsigned OK packet field (8.4.11).
+  const lastHandled = autoAt >= 0 && stats.copied > 0 && !(selected !== undefined && stats.touched > 0) ? BigInt.asUintN(64, lastAuto) : 0n
   const insertId = firstId !== 0n ? firstId : run.state.insertIdSet ? run.state.lastInsertId : lastHandled
   const updated = hasCap(run.env.session.capabilities, CLIENT.FOUND_ROWS) ? stats.touched : stats.updated
   const warnings = statementWarnings(run, store.warnings + (upsert?.deprecated ?? 0))

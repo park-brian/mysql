@@ -111,3 +111,58 @@ test('M5.8 and M5.9: INSERT reads its own row, and a promoted key is PRI, as 8.4
     await db.end()
   }
 })
+
+
+test('a signed explicit AUTO_INCREMENT ID is encoded in the OK packet', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection({
+    ...(db === undefined
+      ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+      : { stream: db.createStream() }),
+    user: 'root',
+    supportBigNumbers: true,
+    bigNumberStrings: true,
+  })
+  const schema = 'signed_insert_id'
+  try {
+    if (db === undefined) {
+      const [version] = await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS version')
+      assert.equal(version[0]?.version, '8.4.11')
+    }
+    await conn.query('CREATE DATABASE ' + schema)
+    await conn.query('USE ' + schema)
+    for (const method of ['query', 'execute'] as const) {
+      const write = async (sql: string) => {
+        const [ok] = method === 'query'
+          ? await conn.query<mysql.ResultSetHeader>(sql)
+          : await conn.execute<mysql.ResultSetHeader>(sql)
+        return [ok.affectedRows, ok.insertId, ok.warningStatus]
+      }
+      const last = async (sql = 'SELECT LAST_INSERT_ID() AS id') => {
+        const [rows] = method === 'query' ? await conn.query<mysql.RowDataPacket[]>(sql) : await conn.execute<mysql.RowDataPacket[]>(sql)
+        return rows[0]?.id
+      }
+      await conn.query('CREATE TABLE t(id BIGINT AUTO_INCREMENT PRIMARY KEY, payload INT)')
+      assert.equal(await last('SELECT LAST_INSERT_ID(40) AS id'), '40')
+      assert.deepEqual(await write('INSERT INTO t VALUES (-9223372036854775808,1)'), [1, '-9223372036854775808', 0])
+      assert.deepEqual(await write('REPLACE INTO t SELECT -6,2'), [1, '-6', 0])
+      assert.equal(await last(), '40')
+      assert.deepEqual(await write('INSERT INTO t VALUES (-5,3),(NULL,4)'), [2, 1, 0])
+      assert.equal(await last(), '1')
+      const [rows] = await conn.query('SELECT id,payload FROM t ORDER BY id')
+      assert.deepEqual(rows, [
+        { id: '-9223372036854775808', payload: 1 },
+        { id: '-6', payload: 2 },
+        { id: '-5', payload: 3 },
+        { id: '1', payload: 4 },
+      ])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      await conn.query('DROP TABLE t')
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS ' + schema)
+    await conn.end()
+    await db?.end()
+  }
+})

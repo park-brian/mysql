@@ -141,6 +141,12 @@ else:
   string<EOF>  info
 ```
 
+The OK packet carries an unsigned 64-bit insert ID. When an INSERT
+reports a signed explicit AUTO_INCREMENT value, its two's-complement
+bits are encoded in that field. Its signed column value is preserved.
+[MySQL 8.4.11 insert result](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_insert.cc#L688-L720)
+
+
 Minimal OK (0 rows, 0 insert id, autocommit, 0 warnings) is 7 payload bytes:
 
 ```
