@@ -18,14 +18,12 @@
 //
 // A named divergence: ICU folds case fully, so `'Straße' REGEXP 'STRASSE'` is
 // 1 there; the engine folds code point by code point, and it is 0 here.
-import { wrongArgumentsError } from './errors.ts'
+import { regexpArgumentError, regexpCaptureNameError, wrongArgumentsError } from './errors.ts'
 import { CHARSET_BINARY } from '@myjs/bytes'
 import { decodeCharset, requireCollationInfo } from '@myjs/charsets'
 import { sqlError } from '@myjs/protocol'
 import { aggregateCollation, toText, type Value } from '@myjs/types'
 import { compileIcu, type IcuFlags, type IcuPattern } from './icu-pattern.ts'
-
-const illegal = () => sqlError('ER_REGEXP_ILLEGAL_ARGUMENT', 'Illegal argument to a regular expression.')
 
 /**
  * ICU's limits, which the engine does not have. A pattern nested 100 groups
@@ -100,7 +98,7 @@ function compiled(pattern: string, flags: IcuFlags): IcuPattern & { readonly re:
       re = new RegExp(p.source, p.flags)
     } catch {
       // Never expected — 600,000 fuzzed patterns compile — but a typed error, not a crash, if one does not.
-      throw illegal()
+      throw regexpArgumentError()
     }
     c = { ...p, re }
     if (cache.size > 256) cache.clear()
@@ -130,7 +128,7 @@ function regexpFor(subject: Value, pattern: Exclude<Value, null>, type: MatchTyp
   const base = pairCollation(subject, pattern, fn)
   const collation = subject?.kind === 'string' && pattern.kind === 'string' ? aggregateCollation(subject, pattern) : base
   const text = textOf(pattern)
-  if (text === '' || text.includes('[[:<:]]') || text.includes('[[:>:]]')) throw illegal()
+  if (text === '' || text.includes('[[:<:]]') || text.includes('[[:>:]]')) throw regexpArgumentError()
   const shape = shapeOf(text)
   if (shape.depth >= 100) throw sqlError('ER_REGEXP_INTERNAL_ERROR', 'Internal error in the regular expression library.')
   const c = compiled(text, { i: type?.i ?? nameOf(collation).endsWith('_ci'), m: type?.m ?? false, s: type?.s ?? false, d: type?.d ?? false })
@@ -252,12 +250,12 @@ function replacementOf(text: string, groups: number, names: ReadonlyMap<string, 
       const close = cps.indexOf('}', i + 2)
       const name = close < 0 ? undefined : cps.slice(i + 2, close).join('')
       const n = name === undefined ? undefined : names.get(name)
-      if (n === undefined) throw sqlError('ER_REGEXP_INVALID_CAPTURE_GROUP_NAME', 'A capture group has an invalid name.')
+      if (n === undefined) throw regexpCaptureNameError()
       group = n
       i = close
     } else {
       const d = cps[i + 1]
-      if (d === undefined || !/[0-9]/.test(d)) throw sqlError('ER_REGEXP_INVALID_CAPTURE_GROUP_NAME', 'A capture group has an invalid name.')
+      if (d === undefined || !/[0-9]/.test(d)) throw regexpCaptureNameError()
       group = Number(d)
       i++
       while (/[0-9]/.test(cps[i + 1] ?? '') && group * 10 + Number(cps[i + 1]) <= groups) group = group * 10 + Number(cps[++i])

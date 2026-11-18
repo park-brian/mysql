@@ -43,7 +43,7 @@
 // case-insensitive stretch fold, not properties or backreferences; `\X` is
 // a character and its marks, not a full grapheme cluster, and its warning
 // 4077 is not raised.
-import { notSupported } from './errors.ts'
+import { notSupported, regexpArgumentError, regexpCaptureNameError } from './errors.ts'
 import { sqlError } from '@myjs/protocol'
 
 /** One compiled pattern: the engine's source and flags, and where ICU's groups went. */
@@ -102,11 +102,8 @@ const err = {
   lookBehind: () => sqlError('ER_REGEXP_LOOK_BEHIND_LIMIT', 'The look-behind assertion exceeds the limit in regular expression.'),
   bracket: () => sqlError('ER_REGEXP_MISSING_CLOSE_BRACKET', 'The regular expression contains an unclosed bracket expression.'),
   range: () => sqlError('ER_REGEXP_INVALID_RANGE', 'The regular expression contains an [x-y] character range where x comes after y.'),
-  name: () => sqlError('ER_REGEXP_INVALID_CAPTURE_GROUP_NAME', 'A capture group has an invalid name.'),
   flag: () => sqlError('ER_REGEXP_INVALID_FLAG', 'Invalid match mode flag in regular expression.'),
   tooBig: () => sqlError('ER_REGEX_NUMBER_TOO_BIG', 'Decimal number in regular expression is too large.'),
-  illegal: () => sqlError('ER_REGEXP_ILLEGAL_ARGUMENT', 'Illegal argument to a regular expression.'),
-  unsupported: (what: string) => notSupported(what),
 }
 
 // --- The tree ---------------------------------------------------------------
@@ -380,10 +377,10 @@ class Parser {
           if (!isLetter(d)) throw this.syntax(this.i - 1)
           name = String.fromCodePoint(d as number)
           for (let e = this.raw(); e !== C('>'); e = this.raw()) {
-            if (e === undefined || !(isLetter(e) || isDigit(e))) throw err.name()
+            if (e === undefined || !(isLetter(e) || isDigit(e))) throw regexpCaptureNameError()
             name += String.fromCodePoint(e)
           }
-          if (this.names.has(name)) throw err.name()
+          if (this.names.has(name)) throw regexpCaptureNameError()
           break
         }
         default: {
@@ -447,7 +444,7 @@ class Parser {
         return { t: 'assert', src: dollar({ ...f, m: false }), quantifiable: true }
       case 'G':
         // The end of the previous match: the engine's sticky flag, where a pattern begins.
-        if (!first) throw err.unsupported('\\G after the start of a regular expression')
+        if (!first) throw notSupported('\\G after the start of a regular expression')
         this.sticky = true
         return { t: 'assert', src: '', quantifiable: true }
       case 'R':
@@ -455,17 +452,17 @@ class Parser {
       case 'X':
         return { t: 'raw', src: '(?:\\r\\n|\\P{M}\\p{M}*)', min: 1, max: Infinity }
       case 'N':
-        if (this.rawPeek() !== C('{')) throw err.illegal()
-        throw err.unsupported('\\N{name} in a regular expression')
+        if (this.rawPeek() !== C('{')) throw regexpArgumentError()
+        throw notSupported('\\N{name} in a regular expression')
       case 'k': {
-        if (this.raw() !== C('<')) throw err.name()
+        if (this.raw() !== C('<')) throw regexpCaptureNameError()
         let name = ''
         for (let e = this.raw(); e !== C('>'); e = this.raw()) {
-          if (e === undefined) throw err.name()
+          if (e === undefined) throw regexpCaptureNameError()
           name += String.fromCodePoint(e)
         }
         const n = this.names.get(name)
-        if (n === undefined) throw err.name()
+        if (n === undefined) throw regexpCaptureNameError()
         return { t: 'ref', n }
       }
     }
@@ -502,10 +499,10 @@ class Parser {
         return `[^${TERMINATORS}]`
       case 'p':
       case 'P': {
-        if (this.raw() !== C('{')) throw err.illegal()
+        if (this.raw() !== C('{')) throw regexpArgumentError()
         let name = ''
         for (let e = this.raw(); e !== C('}'); e = this.raw()) {
-          if (e === undefined) throw err.illegal()
+          if (e === undefined) throw regexpArgumentError()
           name += String.fromCodePoint(e)
         }
         const p = property(name)
@@ -642,8 +639,8 @@ class Parser {
         const c = this.raw()
         if (c === undefined) return end()
         if (c === C('N')) {
-          if (this.rawPeek() !== C('{')) throw err.illegal()
-          throw err.unsupported('\\N{name} in a regular expression')
+          if (this.rawPeek() !== C('{')) throw regexpArgumentError()
+          throw notSupported('\\N{name} in a regular expression')
         }
         const cls = this.classEscape(c)
         if (cls !== undefined) {
@@ -749,7 +746,7 @@ const valid = (src: string): boolean => {
  */
 function property(name: string): string {
   const loose = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, '')
-  if (name.startsWith('^')) throw err.illegal()
+  if (name.startsWith('^')) throw regexpArgumentError()
   const eq = name.indexOf('=')
   const key = eq < 0 ? undefined : loose(name.slice(0, eq))
   const value = eq < 0 ? name : name.slice(eq + 1)
@@ -758,16 +755,16 @@ function property(name: string): string {
     if (posix !== undefined) return posix
     if (/^in/i.test(value.trim()) && !valid(`\\p{${value.trim()}}`) && !valid(`\\p{Script=${value.trim()}}`)) {
       const rest = value.trim().slice(2)
-      if (rest !== '' && candidates(rest).every((c) => !valid(`\\p{${c}}`) && !valid(`\\p{Script=${c}}`))) throw err.unsupported('Unicode blocks in a regular expression')
+      if (rest !== '' && candidates(rest).every((c) => !valid(`\\p{${c}}`) && !valid(`\\p{Script=${c}}`))) throw notSupported('Unicode blocks in a regular expression')
     }
   }
   const prefixes =
     key === undefined ? ['', 'Script='] : key === 'gc' || key === 'generalcategory' ? ['General_Category='] : key === 'sc' || key === 'script' ? ['Script='] : key === 'scx' || key === 'scriptextensions' ? ['Script_Extensions='] : undefined
-  if (prefixes === undefined) throw err.illegal()
+  if (prefixes === undefined) throw regexpArgumentError()
   for (const v of [value, ...(key === undefined && /^is/i.test(value.trim()) ? [value.trim().slice(2)] : [])]) {
     for (const c of candidates(v)) for (const p of prefixes) if (valid(`\\p{${p}${c}}`)) return `\\p{${p}${c}}`
   }
-  throw err.illegal()
+  throw regexpArgumentError()
 }
 
 /** The spellings the engine's exact names could take for a loosely written one. */

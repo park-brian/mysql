@@ -40,3 +40,13 @@ export function wrongArgumentsError(name: string): SqlError {
 export function missingKeyColumn(name: string): SqlError {
   return sqlError('ER_KEY_COLUMN_DOES_NOT_EXITS', `Key column '${name}' doesn't exist in table`)
 }
+
+/** ICU pattern admission and argument validation use the same diagnostic. */
+export function regexpArgumentError(): SqlError {
+  return sqlError('ER_REGEXP_ILLEGAL_ARGUMENT', 'Illegal argument to a regular expression.')
+}
+
+/** A group name is used in both the pattern and a replacement. */
+export function regexpCaptureNameError(): SqlError {
+  return sqlError('ER_REGEXP_INVALID_CAPTURE_GROUP_NAME', 'A capture group has an invalid name.')
+}
