@@ -455,6 +455,18 @@ pinned corpora, including 1,737 coercion warning counts. Parser, core
 and facade measure 44,812, 334,334 and 334,259 gzipped bytes. The
 relational score stays at 2,158 of 2,248.
 
+**M2.17 direct collation registry decoding, verified.** The generated
+groups decode to one id-indexed set of metadata. Name and default lookups
+build their maps on demand. The public packed text uses the same rows.
+The pinned generator reproduces the source, and all 65,536 id lookups,
+291 collation names and charset defaults, and the public text match the
+previous registry. Core and facade save 38 and 53 gzipped bytes. Full
+Docker verification passes 1,885 tests, the nine unchanged size gates,
+package and client smoke, seeded fuzzing, 10,000 crash points and all
+seven pinned reference corpora, including 1,737 coercion warning counts.
+Parser, core and facade measure 44,773, 334,296 and 334,206 gzipped bytes.
+The relational score stays at 2,158 of 2,248.
+
 **M5.2 packed field type merge table, verified.** The generator stores
 one triangle of the matrix and emits an exception for each ordered pair
 that differs from its reverse. All 576 public results retain their order

@@ -8,7 +8,7 @@
 // The table itself is generated (M2.17, `registry.ts`). This file expands it
 // and answers questions about it.
 import { unknownCollation } from './errors.ts'
-import { COLLATION_TABLE_SIZE, PACKED_COLLATIONS } from './registry.ts'
+import { COLLATION_TABLE_SIZE, collationRows } from './registry.ts'
 
 /**
  * `PAD SPACE` collations compare `'a'` equal to `'a '`; `NO PAD` ones do not.
@@ -63,59 +63,41 @@ export interface Collation extends CollationInfo {
 
 // --- the generated table, expanded on first use -----------------------------
 
-let table: Map<number, CollationInfo> | null = null
-let byName: Map<string, CollationInfo> | null = null
-let defaults: Map<string, CollationInfo> | null = null
+let byName: Map<string, CollationInfo> | undefined
+let defaults: Map<string, CollationInfo> | undefined
 
-function expand(): Map<number, CollationInfo> {
-  if (table !== null) return table
-  const byId = new Map<number, CollationInfo>()
+function expandNames(): void {
+  if (byName !== undefined) return
   const names = new Map<string, CollationInfo>()
   const charsets = new Map<string, CollationInfo>()
-  for (const line of PACKED_COLLATIONS.split('\n')) {
-    const parts = line.split(' ')
-    const [id, name, charset, mbminlen, mbmaxlen] = parts
-    const flags = parts[5] ?? ''
-    const info: CollationInfo = {
-      id: Number(id),
-      name: name as string,
-      charset: charset as string,
-      mbminlen: Number(mbminlen),
-      mbmaxlen: Number(mbmaxlen),
-      padAttribute: flags.includes('n') ? 'NO PAD' : 'PAD SPACE',
-      isDefault: flags.includes('d'),
-      isBinary: flags.includes('b'),
-    }
-    byId.set(info.id, info)
+  collationRows().forEach((info) => {
     names.set(info.name, info)
     if (info.isDefault) charsets.set(info.charset, info)
-  }
-  table = byId
+  })
   byName = names
   defaults = charsets
-  return byId
 }
 
 /** Every collation MySQL compiles in, by id. */
 export function collationInfo(id: number): CollationInfo | undefined {
-  return expand().get(id)
+  return Number.isInteger(id) ? collationRows()[id] : undefined
 }
 
 /** Throws `ER_UNKNOWN_COLLATION` rather than returning `undefined` (ground rule 5). */
 export function requireCollationInfo(id: number): CollationInfo {
-  const info = expand().get(id)
+  const info = collationInfo(id)
   if (info === undefined) throw unknownCollation(id)
   return info
 }
 
 export function collationInfoByName(name: string): CollationInfo | undefined {
-  expand()
+  expandNames()
   return byName?.get(sqlName(name))
 }
 
 /** The default collation of a charset, e.g. `utf8mb4` → `utf8mb4_0900_ai_ci`. */
 export function defaultCollationOf(charset: string): CollationInfo | undefined {
-  expand()
+  expandNames()
   return defaults?.get(sqlName(charset))
 }
 
@@ -126,7 +108,7 @@ function sqlName(name: string): string {
 }
 
 export function allCollations(): readonly CollationInfo[] {
-  return [...expand().values()]
+  return collationRows().filter(Boolean)
 }
 
 export { COLLATION_TABLE_SIZE }
@@ -141,6 +123,6 @@ export { COLLATION_TABLE_SIZE }
  * the rule; a test asserts the two agree on every id.
  */
 export function isProhibitedConnectionCollation(id: number): boolean {
-  const info = expand().get(id)
+  const info = collationInfo(id)
   return info !== undefined && info.mbminlen > 1
 }

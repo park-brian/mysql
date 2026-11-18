@@ -26,6 +26,8 @@
 // Source:  mysql/mysql-server@e174239c strings/ctype-win1250ch.cc
 // Collations: 291
 
+import type { CollationInfo } from './collation.ts'
+
 /** The upstream files this registry was generated from, for re-verification. */
 export const COLLATION_TABLE_SOURCE = 'mysql/mysql-server@e174239c strings/ctype-*.cc'
 
@@ -36,28 +38,7 @@ export const COLLATION_TABLE_SOURCE_SHA256 =
 /** Number of collations MySQL e174239c compiles in. */
 export const COLLATION_TABLE_SIZE = 291
 
-/** Restore the registry's public, ascending-id row format. */
-function collationRows(data: string): string {
-  const rows: string[] = []
-  for (const group of data.split('\n\n')) {
-    const [header, ...entries] = group.split('\n')
-    const [charset, min, max] = header!.split(' ')
-    for (const entry of entries) {
-      const [id, suffix, flags] = entry.split(' ')
-      const name = suffix!.startsWith('@') ? suffix!.slice(1) : `${charset}_${suffix}`
-      rows[Number(id)] = `${id} ${name} ${charset} ${min} ${max}${flags === undefined ? '' : ` ${flags}`}`
-    }
-  }
-  return rows.filter(Boolean).join('\n')
-}
-
-/**
- * One collation per line: `id collation charset mbminlen mbmaxlen [flags]`.
- *
- * Flags are a subset of `n` (NO PAD), `d` (the charset's default collation)
- * and `b` (binary). The public rows keep their original spelling and order.
- */
-export const PACKED_COLLATIONS = collationRows(`big5 1 2
+const COLLATION_GROUPS = `big5 1 2
 1 chinese_ci d
 84 bin b
 
@@ -430,7 +411,37 @@ eucjpms 1 3
 gb18030 1 4
 248 chinese_ci d
 249 bin b
-250 unicode_520_ci`) as `1 big5_chinese_ci big5 1 2 d
+250 unicode_520_ci`
+let decoded: CollationInfo[] | undefined
+
+/** Decode the generated groups once, in ascending collation-id order. */
+export function collationRows(): readonly CollationInfo[] {
+  if (decoded !== undefined) return decoded
+  const rows: CollationInfo[] = []
+  for (const group of COLLATION_GROUPS.split('\n\n')) {
+    const [header, ...entries] = group.split('\n')
+    const [charset, min, max] = header!.split(' ') as [string, string, string]
+    const mbminlen = Number(min)
+    const mbmaxlen = Number(max)
+    for (const entry of entries) {
+      const [rawId, suffix, flags = ''] = entry.split(' ') as [string, string, string?]
+      const id = Number(rawId)
+      const name = suffix.startsWith('@') ? suffix.slice(1) : `${charset}_${suffix}`
+      rows[id] = { id, name, charset, mbminlen, mbmaxlen, padAttribute: flags.includes('n') ? 'NO PAD' : 'PAD SPACE', isDefault: flags.includes('d'), isBinary: flags.includes('b') }
+    }
+  }
+  return (decoded = rows)
+}
+
+/** Restore the public row format, including its flags in source order. */
+function packedCollations(): string {
+  return collationRows().filter(Boolean).map(({ id, name, charset, mbminlen, mbmaxlen, padAttribute, isDefault, isBinary }) => {
+    const flags = (padAttribute === 'NO PAD' ? 'n' : '') + (isDefault ? 'd' : '') + (isBinary ? 'b' : '')
+    return `${id} ${name} ${charset} ${mbminlen} ${mbmaxlen}${flags ? ` ${flags}` : ''}`
+  }).join('\n')
+}
+
+export const PACKED_COLLATIONS = /* @__PURE__ */ packedCollations() as `1 big5_chinese_ci big5 1 2 d
 2 latin2_czech_cs latin2 1 1
 3 dec8_swedish_ci dec8 1 1 d
 4 cp850_general_ci cp850 1 1 d

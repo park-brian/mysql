@@ -42,6 +42,11 @@ mechanism by which `TEXT` is distinguished from `BLOB` and `VARCHAR` from
 above 255 cannot be advertised there — which is why servers advertise a
 low-numbered default and clients issue `SET NAMES` afterwards.
 
+The generator stores collations grouped by character set. The runtime
+decodes the groups once and indexes the rows by collation id. The name and
+default maps are built on the first name lookup. `PACKED_COLLATIONS` exposes
+the registry's text in ascending id order.
+
 ## The three families, and what each requires
 
 ### 1. Binary (`*_bin`, `binary`)
