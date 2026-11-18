@@ -456,18 +456,15 @@ export class SecondaryIndex {
     try {
       for (const [key, value] of this.tree.entries(range)) {
         const at = this.#ownLength(key)
-        const secondary = key.subarray(0, at)
         const pk = key.subarray(at)
         const version = versionOf(value)
-        let record: Uint8Array | undefined
-        if (v.view === null || v.view.isVisible(version.trxId)) {
-          if (version.marked) continue
-          record = this.clustered.recordAt(pk, v.view)
-        } else {
-          record = this.clustered.recordAt(pk, v.view)
-          if (record !== undefined && !equalBytes(keyOf(this.clustered.rowOf(record), this.columns), secondary)) continue
-        }
-        if (record !== undefined) yield [pk.slice(), this.clustered.rowOf(record)]
+        const visible = v.view === null || v.view.isVisible(version.trxId)
+        if (visible && version.marked) continue
+        const record = this.clustered.recordAt(pk, v.view)
+        if (record === undefined) continue
+        const row = this.clustered.rowOf(record)
+        // An invisible entry needs the clustered version's key to confirm membership.
+        if (visible || equalBytes(keyOf(row, this.columns), key.subarray(0, at))) yield [pk.slice(), row]
       }
     } catch (e) {
       if (v.view?.expired === true) throw snapshotTooOld()
