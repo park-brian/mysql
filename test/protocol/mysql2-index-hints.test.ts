@@ -622,3 +622,47 @@ test('mixed JOIN and GROUP BY hints retain the eligible scan when grouping needs
     await db?.end()
   }
 })
+
+
+test('a fully folded filter leaves the ordinary access path', async () => {
+  const { db, conn } = await indexHintConnection()
+  const schema = 'folded_access'
+  const grouped = 'SELECT t.id, t.grp, MAX(t.n) FROM t WHERE t.tag IS NOT NULL GROUP BY t.id,t.grp ORDER BY 1,2'
+  const fields = [['id', 3, 11, 4097, 0, 63], ['grp', 3, 11, 4097, 0, 63], ['MAX(t.n)', 3, 11, 0, 0, 63]]
+  const native = 'Sort\n    Table scan on <temporary>\n        Aggregate using temporary table\n            Table scan on t'
+  try {
+    if (db === undefined) {
+      const [version] = await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS version')
+      assert.equal(version[0]?.version, '8.4.11')
+    }
+    await conn.query('CREATE DATABASE ' + schema)
+    await conn.query('USE ' + schema)
+    await conn.query('CREATE TABLE t(id INT NOT NULL PRIMARY KEY, grp INT NOT NULL, tag VARCHAR(12) NOT NULL, n INT, KEY(grp), UNIQUE KEY(tag), KEY(n)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO t VALUES (1,1,'n1',1),(2,2,'n2',2),(3,3,'n3',NULL),(4,4,'n4',4)")
+    await conn.query('ANALYZE TABLE t')
+    const before = [[1, 1, 1], [2, 2, 2], [3, 3, null], [4, 4, 4]]
+    await checkIndexRead(conn, grouped, before, fields, native)
+    const [plan] = await conn.execute<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + grouped)
+    assert.equal(planSkeleton(plan[0]?.EXPLAIN), native)
+    const held = await conn.prepare(grouped)
+    const objects = (rows: (number | null)[][]) => rows.map(([id, grp, max]) => ({ id, grp, 'MAX(t.n)': max }))
+    try {
+      assert.deepEqual((await held.execute([]))[0], objects(before))
+      await conn.query("INSERT INTO t VALUES (5,0,'n5',5)")
+      await conn.query('UPDATE t SET n=NULL WHERE id=4')
+      assert.deepEqual((await held.execute([]))[0], objects([[1, 1, 1], [2, 2, 2], [3, 3, null], [4, 4, null], [5, 0, 5]]))
+      for (const method of ['query', 'execute'] as const) {
+        const options = { sql: 'SELECT t.id FROM t WHERE t.n IS NOT NULL ORDER BY 1', rowsAsArray: true }
+        const [rows] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+        assert.deepEqual(rows, [[1], [2], [5]])
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      }
+    } finally {
+      await held.close()
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS ' + schema)
+    await conn.end()
+    await db?.end()
+  }
+})

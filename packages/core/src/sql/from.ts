@@ -793,6 +793,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         const semi = semijoin?.(e)
         return { e, aliases: aliasesOf(e, scope), compiled, semijoin: semi }
       })
+      // A WHERE proved true has no residual to drive an access range.
+      if (conditions.length === 0) settings.where = undefined
       physical = undefined
     },
     usesLookup(alias) {
