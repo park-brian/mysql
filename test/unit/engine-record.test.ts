@@ -85,3 +85,19 @@ test('M4.5: a record that cannot shrink enough is ER_TOO_BIG_ROWSIZE; bytes that
     { numRuns: 2000 },
   )
 })
+
+test('M4.5: a multi-byte null bitmap precedes inline and external lengths', () => {
+  const layout: RecordLayout = [...Array.from({ length: 9 }, () => ({ nullable: true })), { nullable: false }]
+  const row = [...Array<null>(9).fill(null), new Uint8Array(0)]
+  const bytes = Uint8Array.of(0xff, 1, 0)
+  assert.deepEqual(encodeRecord(layout, row, { maxSize: 8 }), bytes)
+  assert.deepEqual(decodeRecord(layout, bytes), row)
+  const malformed = [
+    [bytes.subarray(0, 1), /shorter than its null bitmap/],
+    [bytes.subarray(0, 2), /length array runs past the record/],
+    [Uint8Array.of(0xff, 1, 0xc0, 7), /off-page field with a 7-byte reference/],
+  ] as const
+  for (const [input, message] of malformed) {
+    assert.throws(() => decodeRecord(layout, input), { code: 'ENGINE_CORRUPT_RECORD', message })
+  }
+})

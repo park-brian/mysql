@@ -119,55 +119,43 @@ export function encodeRecord(layout: RecordLayout, fields: readonly FieldBytes[]
 
 /** Decode a record into its fields: bytes, `null`, or an off-page reference. Any bytes may be passed. */
 export function decodeRecord(layout: RecordLayout, bytes: Uint8Array): (FieldBytes | OffPage)[] {
-  const isNull: boolean[] = []
+  // Keep the lengths until the header is read, then replace them with field values.
+  const fields: (FieldBytes | OffPage | number | undefined)[] = []
   let nullable = 0
   for (const f of layout) {
-    if (!f.nullable) isNull.push(false)
-    else {
-      isNull.push((((bytes[nullable >> 3] as number) >> (nullable & 7)) & 1) === 1)
-      nullable++
-    }
+    const isNull = f.nullable && ((bytes[nullable >> 3] as number) & (1 << (nullable & 7))) !== 0
+    if (f.nullable) nullable++
+    fields.push(isNull ? null : f.fixed)
   }
   let at = (nullable + 7) >> 3
   if (bytes.length < at) throw badRecord('shorter than its null bitmap')
-  const lengths: number[] = []
   const external: boolean[] = []
   for (let i = 0; i < layout.length; i++) {
-    const f = layout[i] as RecordField
-    if (isNull[i] === true) {
-      lengths.push(0)
-      external.push(false)
-    } else if (f.fixed !== undefined) {
-      lengths.push(f.fixed)
-      external.push(false)
+    if (fields[i] !== undefined) continue
+    if (at >= bytes.length) throw badRecord('the length array runs past the record')
+    const b = bytes[at++] as number
+    if (b < 0x80) {
+      fields[i] = b
     } else {
       if (at >= bytes.length) throw badRecord('the length array runs past the record')
-      const b = bytes[at++] as number
-      if (b < 0x80) {
-        lengths.push(b)
-        external.push(false)
-      } else {
-        if (at >= bytes.length) throw badRecord('the length array runs past the record')
-        lengths.push(((b & 0x3f) << 8) | (bytes[at++] as number))
-        external.push((b & 0x40) !== 0)
-        if (external[i] === true && lengths[i] !== REF_SIZE) throw badRecord(`an off-page field with a ${lengths[i]}-byte reference`)
+      const length = ((b & 0x3f) << 8) | (bytes[at++] as number)
+      if ((b & 0x40) !== 0) {
+        if (length !== REF_SIZE) throw badRecord(`an off-page field with a ${length}-byte reference`)
+        external[i] = true
       }
+      fields[i] = length
     }
   }
-  const out: (FieldBytes | OffPage)[] = []
-  for (let i = 0; i < layout.length; i++) {
-    if (isNull[i] === true) {
-      out.push(null)
-      continue
-    }
-    const length = lengths[i] as number
+  for (let i = 0; i < fields.length; i++) {
+    const length = fields[i] as number | null
+    if (length === null) continue
     if (at + length > bytes.length) throw badRecord(`field ${i} runs past the record`)
     const v = bytes.slice(at, at + length)
     at += length
-    out.push(external[i] === true ? { ref: v } : v)
+    fields[i] = external[i] === true ? { ref: v } : v
   }
   if (at !== bytes.length) throw badRecord(`${bytes.length - at} byte(s) after the last field`)
-  return out
+  return fields as (FieldBytes | OffPage)[]
 }
 
 /**

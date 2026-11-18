@@ -12,6 +12,7 @@ entry, recorded out of order, sits where its date and its commit put it.
 
 | Date | Entry |
 |---|---|
+| 2026-11-18 | **M5.50. Reuse record length slots for decoded fields.** Reuse the header array for delivery, preserving bytes and malformed-record diagnostics. Docker passes 1,909 tests, 10,000 crash points and all seven pinned corpora within the existing size caps. |
 | 2026-11-18 | **M5.50. Count null bitmap bytes during record traversal.** The record codec removes a schema pass from encoding and decoding. Seeded comparisons preserve bytes, malformed reads and overflow writes. Docker passes 1,908 tests, 10,000 crash points and all seven pinned corpora within the existing size caps. |
 | 2026-11-18 | **M5.49. Preserve right-hand EXCEPT plans.** Twenty-four more focused plans match MySQL 8.4.11. The error-name generator reuses adjacent dictionary words without changing lookups. Docker passes 1,908 tests and all seven pinned corpora within the existing size caps. |
 | 2026-11-18 | **M5.49. Report duplicate handling in mixed set operations.** The focused coverage gains 34 exact plans and relational replay gains two. Docker passes 1,908 tests and all seven pinned corpora within the existing size caps. |
