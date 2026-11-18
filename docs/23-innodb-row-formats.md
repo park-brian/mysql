@@ -313,4 +313,7 @@ in forward column order while walking *backwards* through memory.
   paid once per page, not once per row, and a page remains independently
   decodable.
 - **Adopt DYNAMIC's atomic-BLOB semantics.** No local prefix; a large value is
-  a pointer. Simpler, and it makes long index prefixes possible.
+  a pointer. Simpler, and it makes long index prefixes possible. The native
+  encoder counts the inline layout as it validates field widths. Each field
+  moved off-page replaces its inline size with a two-byte length and an
+  eight-byte reference. Fields exactly 40 bytes long stay inline.

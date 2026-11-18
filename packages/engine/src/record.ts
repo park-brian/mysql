@@ -50,25 +50,41 @@ export interface EncodeOptions {
 /** Encode a row's field bytes. */
 export function encodeRecord(layout: RecordLayout, fields: readonly FieldBytes[], options: EncodeOptions): Uint8Array {
   if (fields.length !== layout.length) throw misuse(`${fields.length} fields for a ${layout.length}-field layout`)
-  const external = new Array<boolean>(layout.length).fill(false)
+  // Size the inline layout while validating widths. Only an off-page field changes it.
+  const bitmapSize = nullBitmapSize(layout)
+  let size = bitmapSize
+  let largest = -1
+  let largestLength = 0
   for (let i = 0; i < layout.length; i++) {
     const f = layout[i] as RecordField
     const v = fields[i] ?? null
     if (v === null) {
       if (!f.nullable) throw misuse(`field ${i} is NOT NULL`)
-    } else if (f.fixed !== undefined && v.length !== f.fixed) {
-      throw misuse(`field ${i} is ${f.fixed} bytes wide, given ${v.length}`)
+      continue
+    }
+    const length = v.length
+    size += length
+    if (f.fixed === undefined) {
+      size += lengthBytes(length)
+      if (length > largestLength) {
+        largest = i
+        largestLength = length
+      }
+    } else if (length !== f.fixed) {
+      throw misuse(`field ${i} is ${f.fixed} bytes wide, given ${length}`)
     }
   }
+  let external: boolean[] | undefined
   for (;;) {
-    const size = encodedSize(layout, fields, external)
-    const longest = longestInline(layout, fields, external, size > options.maxSize ? OFF_PAGE_MIN : MAX_INLINE)
-    if (size <= options.maxSize && longest === -1) break
-    if (longest === -1 || options.storeExternal === undefined) throw rowTooBig(options.maxSize)
-    external[longest] = true
+    if (size <= options.maxSize && largestLength <= MAX_INLINE) break
+    if (largestLength <= OFF_PAGE_MIN || options.storeExternal === undefined) throw rowTooBig(options.maxSize)
+    ;(external ??= [])[largest] = true
+    size += REF_SIZE + 2 - largestLength - lengthBytes(largestLength)
+    largest = longestInline(layout, fields, external)
+    largestLength = fields[largest]?.length ?? 0
   }
-  const out = new Uint8Array(encodedSize(layout, fields, external))
-  let at = nullBitmapSize(layout)
+  const out = new Uint8Array(size)
+  let at = bitmapSize
   let nullable = 0
   for (let i = 0; i < layout.length; i++) {
     const f = layout[i] as RecordField
@@ -78,19 +94,21 @@ export function encodeRecord(layout: RecordLayout, fields: readonly FieldBytes[]
       nullable++
     }
     if (v === null || f.fixed !== undefined) continue
-    const length = external[i] === true ? REF_SIZE : v.length
-    if (length < 0x80 && external[i] !== true) {
+    const offPage = external?.[i] === true
+    const length = offPage ? REF_SIZE : v.length
+    if (length < 0x80 && !offPage) {
       out[at++] = length
     } else {
-      out[at++] = 0x80 | (external[i] === true ? 0x40 : 0) | (length >> 8)
+      out[at++] = 0x80 | (offPage ? 0x40 : 0) | (length >> 8)
       out[at++] = length & 0xff
     }
   }
   for (let i = 0; i < layout.length; i++) {
     const v = fields[i] ?? null
     if (v === null) continue
-    const bytes = external[i] === true ? (options.storeExternal as (b: Uint8Array) => Uint8Array)(v) : v
-    if (bytes.length !== (external[i] === true ? REF_SIZE : v.length)) throw misuse('storeExternal returned a reference of the wrong size')
+    const offPage = external?.[i] === true
+    const bytes = offPage ? options.storeExternal!(v) : v
+    if (offPage && bytes.length !== REF_SIZE) throw misuse('storeExternal returned a reference of the wrong size')
     out.set(bytes, at)
     at += bytes.length
   }
@@ -186,25 +204,14 @@ function nullBitmapSize(layout: RecordLayout): number {
   return (n + 7) >> 3
 }
 
-function encodedSize(layout: RecordLayout, fields: readonly FieldBytes[], external: readonly boolean[]): number {
-  let size = nullBitmapSize(layout)
-  for (let i = 0; i < layout.length; i++) {
-    const v = fields[i] ?? null
-    if (v === null) continue
-    if ((layout[i] as RecordField).fixed !== undefined) {
-      size += v.length
-      continue
-    }
-    const length = external[i] === true ? REF_SIZE : v.length
-    size += length + (length < 0x80 && external[i] !== true ? 1 : 2)
-  }
-  return size
+function lengthBytes(length: number): number {
+  return length < 0x80 ? 1 : 2
 }
 
-/** The longest inline variable-length field longer than `over`, or -1. */
-function longestInline(layout: RecordLayout, fields: readonly FieldBytes[], external: readonly boolean[], over: number): number {
+/** The longest variable-length field eligible to move off-page, or -1. */
+function longestInline(layout: RecordLayout, fields: readonly FieldBytes[], external: readonly boolean[]): number {
   let best = -1
-  let bestLength = over
+  let bestLength = OFF_PAGE_MIN
   for (let i = 0; i < layout.length; i++) {
     const v = fields[i] ?? null
     if (v === null || external[i] === true || (layout[i] as RecordField).fixed !== undefined) continue
