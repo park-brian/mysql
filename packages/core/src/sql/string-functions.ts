@@ -405,16 +405,17 @@ function libraryFunction(name: string, args: readonly Compiled[], e: CallNode, c
           if (v === undefined) return null
           const s = stringUnits(v[0] as V, binary, collation)
           const from = stringUnits(v[1] as V, binary, collation)
-          const to = stringUnits(v[2] as V, binary, collation)
+          const to = stringText(v[2] as V, binary, collation)
           if (from.length === 0) return result(s, binary, collation, coercibility)
           const out: string[] = []
           for (let i = 0; i < s.length; ) {
-            if (i + from.length <= s.length && startsWith(s, from, i)) {
-              out.push(...to)
+            if (startsWith(s, from, i)) {
+              // Spreading a replacement can exceed the JavaScript argument limit.
+              out.push(to)
               i += from.length
             } else out.push(s[i++] as string)
           }
-          return result(out, binary, collation, coercibility)
+          return result(out.join(''), binary, collation, coercibility)
         },
         type: stringResultType(replacement > 1 ? subjectWidth * (replacement - 1) : subjectWidth, binary, collation, coercibility, true),
       }
