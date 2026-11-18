@@ -701,7 +701,7 @@ export function clockFunction(name: string, e: CallNode, ctx: CompileContext): C
     case 'CURRENT_DATE':
     case 'UTC_DATE':
       arity(0)
-      return { eval: (_r, env) => ({ kind: 'datetime', v: today(env)(), type: 'DATE', fsp: 0 }), type: datetimeType(FIELD_TYPE.DATE, 0, false) }
+      return { eval: (_r, env) => ({ kind: 'datetime', v: today(env, name === 'UTC_DATE')(), type: 'DATE', fsp: 0 }), type: datetimeType(FIELD_TYPE.DATE, 0, false) }
     case 'CURTIME':
     case 'CURRENT_TIME':
     case 'UTC_TIME': {

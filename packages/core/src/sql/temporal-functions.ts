@@ -102,10 +102,10 @@ export const TEMPORAL_FUNCTIONS: ReadonlySet<string> = new Set([
   'DATEDIFF', 'TIMEDIFF', 'TIMESTAMPDIFF', 'TIMESTAMPADD', 'ADDTIME', 'SUBTIME', 'MAKEDATE', 'FROM_DAYS', 'MAKETIME', 'SEC_TO_TIME', 'PERIOD_ADD', 'PERIOD_DIFF',
 ])
 
-/** The statement's date in the session's fixed-offset zone. */
-export function today(env: Env): () => MysqlDateTime {
+/** The statement's date in the session's fixed-offset zone or in UTC. */
+export function today(env: Env, utc = false): () => MysqlDateTime {
   return () => {
-    const zone = env.state.systemVariable('time_zone', undefined, env.session)
+    const zone = utc ? null : env.state.systemVariable('time_zone', undefined, env.session)
     const offset = zone?.kind === 'string' ? offsetOf(zone.v) : undefined
     const date = offset ? new Date(env.now.getTime() + offset * 1000) : env.now
     return midnight(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate())

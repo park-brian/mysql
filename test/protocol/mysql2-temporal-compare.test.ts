@@ -102,6 +102,13 @@ test('M5.10: CAST of TIME anchors on the session date before rounding', async ()
           : [])
       }
     }
+    await conn.query("SET time_zone='-07:00'")
+    const sql = "SELECT UTC_DATE(), CURDATE(), CURRENT_DATE(), CAST(CAST('00:00:00' AS TIME) AS DATE)"
+    for (const method of ['query', 'execute'] as const) {
+      const options = { sql, rowsAsArray: true }
+      const [rows] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+      assert.deepEqual(rows, [['2024-03-01', '2024-02-29', '2024-02-29', '2024-02-29']], method)
+    }
   } finally {
     await conn.end()
     await db?.end()
