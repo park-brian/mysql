@@ -559,11 +559,8 @@ for (const c of weightedCollations) {
   check(slot !== undefined, `gen-charsets: no weight table for collation ${c.id}`)
   weightSlots[c.id] = slot
 }
-const weightRows = []
-for (let id = 0; id < weightSlots.length; id += 10) {
-  const row = Array.from(weightSlots.slice(id, id + 10), (slot) => slot ?? 'null')
-  weightRows.push('  ' + row.join(', ') + ',')
-}
+const weightSlotBase = 67
+const weightSlotCodes = Array.from(weightSlots, (slot) => slot === undefined ? ' ' : String.fromCharCode(weightSlotBase + slot)).join('')
 
 writeFileSync(
   WEIGHTS_OUT,
@@ -611,13 +608,9 @@ export const PACKED_UNICASE_WEIGHTS = /* @__PURE__ */ relativeTables(UNICASE_WEI
  */
 export const PACKED_UNICASE_LOWER = ${packed(lowerLines)}
 
-/**
- * Slots indexed by collation id. A null slot has no entry in these tables.
- * Negative slots select the unicase sort (-1) or lowercase (-2) column.
- */
-export const WEIGHT_SLOTS: readonly (number | null)[] = [
-${weightRows.join('\n')}
-]
+/** Weight table slots by id, with a space for an absent slot. */
+export const WEIGHT_SLOT_BASE = ${weightSlotBase}
+export const WEIGHT_SLOT_CODES = ${JSON.stringify(weightSlotCodes)}
 `,
 )
 

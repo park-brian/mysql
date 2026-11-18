@@ -22,12 +22,12 @@
 // `sign(compare(a, b)) === sign(memcmp(sortKey(a), sortKey(b)))` holds by
 // construction rather than by luck.
 import { requireCollationInfo, type Collation, type CollationInfo } from '../collation.ts'
-import { comparePadded, memcmp } from './memcmp.ts'
+import { collationFromKey } from './memcmp.ts'
 import { utf8CodePoints } from './utf8.ts'
 import { expandRuns } from '../runs.ts'
 import { PACKED_RUN_RADIX } from '../run-format.ts'
 import { corruptTable } from '../errors.ts'
-import { BYTE_WEIGHT_RUNS, PACKED_UNICASE_LOWER, UNICASE_WEIGHT_RUNS, WEIGHT_SLOTS } from './weights.ts'
+import { BYTE_WEIGHT_RUNS, PACKED_UNICASE_LOWER, UNICASE_WEIGHT_RUNS, WEIGHT_SLOT_BASE, WEIGHT_SLOT_CODES } from './weights.ts'
 
 /** Code points above `my_unicase_default`'s `maxchar` all weigh this. */
 const REPLACEMENT_WEIGHT = 0xfffd
@@ -64,7 +64,9 @@ function unicaseWeight(codePoint: number, lower = false): number {
 }
 
 function weightSource(id: number): number | undefined {
-  return Number.isInteger(id) ? WEIGHT_SLOTS[id] ?? undefined : undefined
+  if (!Number.isInteger(id)) return undefined
+  const slot = WEIGHT_SLOT_CODES.charCodeAt(id) - WEIGHT_SLOT_BASE
+  return slot >= UNICASE_LOWER ? slot : undefined
 }
 
 function byteWeightCollation(info: CollationInfo, table: Uint8Array): Collation {
@@ -74,15 +76,7 @@ function byteWeightCollation(info: CollationInfo, table: Uint8Array): Collation 
     for (let i = 0; i < bytes.length; i++) out[i] = table[bytes[i] as number] as number
     return out
   }
-  return {
-    ...info,
-    padUnit,
-    sortKey,
-    compare:
-      info.padAttribute === 'PAD SPACE'
-        ? (a, b) => comparePadded(sortKey(a), sortKey(b), padUnit)
-        : (a, b) => memcmp(sortKey(a), sortKey(b)),
-  }
+  return collationFromKey(info, padUnit, sortKey)
 }
 
 function unicaseCollation(info: CollationInfo, lower = false): Collation {
@@ -98,15 +92,7 @@ function unicaseCollation(info: CollationInfo, lower = false): Collation {
     }
     return out
   }
-  return {
-    ...info,
-    padUnit,
-    sortKey,
-    compare:
-      info.padAttribute === 'PAD SPACE'
-        ? (a, b) => comparePadded(sortKey(a), sortKey(b), padUnit)
-        : (a, b) => memcmp(sortKey(a), sortKey(b)),
-  }
+  return collationFromKey(info, padUnit, sortKey)
 }
 
 const UNICASE_SORT = -1
@@ -120,7 +106,7 @@ export function isWeightedCollation(id: number): boolean {
 
 /** The ids the generated weight tables serve, in id order. */
 export function weightedCollationIds(): readonly number[] {
-  return WEIGHT_SLOTS.flatMap((slot, id) => slot === null ? [] : [id])
+  return [...WEIGHT_SLOT_CODES].flatMap((slot, id) => slot === ' ' ? [] : [id])
 }
 
 /** The `Collation` for a weight-table id, cached. */

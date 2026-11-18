@@ -65,9 +65,10 @@ supplementary code points share weight `0xFFFD`. Relative and absolute runs
 pack the stored pages into 2,071 bytes, or 873 bytes gzipped. The public
 packed export retains its original 5,033-byte relative format.
 
-The 42 single-byte weight tables use the same run codec. A table's slot is
-looked up by collation id. The internal table text is 12,129 bytes, or 4,211
-bytes gzipped. Private weight and charset runs use base-36 values and
+The 42 single-byte weight tables use the same run codec. The generated slot
+map uses one character per collation id, with spaces for missing entries.
+The internal table text is 12,129 bytes, or 4,211 bytes gzipped. Private
+weight and charset runs use base-36 values and
 decimal counts. The public exports use hexadecimal values and retain their
 original bytes and TypeScript literal types.
 
@@ -144,7 +145,9 @@ interface Collation {
 }
 ```
 
-`sortKey` is what goes into index entries. Two consequences:
+`sortKey` is what goes into index entries. Byte-weighted, unicase, Unicode
+binary and generated UCA collations compare those keys under the collation's
+padding rule.
 
 - **Index size depends on the collation.** A UCA sort key can be several bytes
   per character. Index prefix limits (3072 bytes in DYNAMIC) are in *bytes* of

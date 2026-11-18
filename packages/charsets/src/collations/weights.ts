@@ -179,19 +179,6 @@ export const PACKED_UNICASE_LOWER = `0 65*0,26*w,101*0,23*w,0,7*w,33*0
 24 182*0,26*q,48*0
 ff 33*0,26*w,197*0`
 
-/**
- * Slots indexed by collation id. A null slot has no entry in these tables.
- * Negative slots select the unicase sort (-1) or lowercase (-2) column.
- */
-export const WEIGHT_SLOTS: readonly (number | null)[] = [
-  null, null, 15, 16, 12, 29, 20, 22, 24, 32,
-  40, 1, null, null, 5, 25, 19, null, null, null,
-  35, 33, 23, 8, null, 18, 3, 31, null, 11,
-  34, 26, 0, -1, 41, null, 14, 21, 38, 39,
-  13, 36, 37, null, 2, -1, null, null, 27, 28,
-  null, 6, 7, null, null, null, null, 9, null, 10,
-  null, null, null, null, null, null, null, null, null, null,
-  null, null, null, null, null, null, -2, null, null, null,
-  null, null, null, null, null, null, null, null, null, null,
-  null, null, 17, null, 30, null, null, null, null, 4,
-]
+/** Weight table slots by id, with a space for an absent slot. */
+export const WEIGHT_SLOT_BASE = 67
+export const WEIGHT_SLOT_CODES = "  RSO`WY[ckD  H\\V   fdZK UFb Ne]CBl QXijPgh EB  ^_ IJ    L M                A               T a    G"

@@ -151,15 +151,19 @@ function codePointKey(bytes: Uint8Array, width: number): Uint8Array {
 function unicodeBinCollation(info: CollationInfo, width: number): Collation {
   const padUnit = new Uint8Array(width)
   padUnit[width - 1] = 0x20
-  const padded = info.padAttribute === 'PAD SPACE'
-  const key = (bytes: Uint8Array) => codePointKey(bytes, width)
+  return collationFromKey(info, padUnit, (bytes) => codePointKey(bytes, width))
+}
+
+/** Compare the same key bytes the index stores, with the collation's padding rule. */
+export function collationFromKey(info: CollationInfo, padUnit: Uint8Array, sortKey: Collation['sortKey']): Collation {
   return {
     ...info,
     padUnit,
-    sortKey: key,
-    compare: padded
-      ? (a, b) => comparePadded(key(a), key(b), padUnit)
-      : (a, b) => memcmp(key(a), key(b)),
+    sortKey,
+    compare:
+      info.padAttribute === 'PAD SPACE'
+        ? (a, b) => comparePadded(sortKey(a), sortKey(b), padUnit)
+        : (a, b) => memcmp(sortKey(a), sortKey(b)),
   }
 }
 

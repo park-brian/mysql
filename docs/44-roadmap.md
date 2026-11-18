@@ -466,6 +466,20 @@ including 1,737 coercion warning counts. Parser, core and facade measure
 44,812, 333,877 and 333,796 gzipped bytes. The relational score stays at
 2,158 of 2,248.
 
+**M2.19 and M2.21 shared collation key comparison, verified.**
+Byte-weighted, unicase, Unicode binary and UCA collations share the
+comparison over their generated keys. The weight table's private slot map
+uses one generated character for each collation ID. Regeneration matches
+the frozen artifacts. A differential sweep preserves all 65,536 slot
+lookups, the three public packed exports and key and comparison behavior
+across 85 collations. The 80 focused tests also pass, including the UCA
+lazy boundary check. Core and facade save 73 and 65 gzipped bytes. Full
+Docker verification passes 1,888 tests, all nine size gates, seeded
+fuzzing, 10,000 crash points, package and client smoke and all seven
+pinned corpora, including 1,737 coercion warning counts. Parser, core
+and facade measure 44,769, 334,271 and 334,193 gzipped bytes. The
+relational score stays at 2,158 of 2,248.
+
 **M5.52 VALUES row constructor, verified.** The reader binds every
 row and evaluates the rows selected by LIMIT and OFFSET. Constructor
 ORDER BY resolves result columns and positions, and MySQL delivers

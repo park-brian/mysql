@@ -25,7 +25,7 @@
 // is what keeps 50 KB of DUCET out of anyone's initial bundle.
 import { requireCollationInfo, type Collation, type CollationInfo } from '../collation.ts'
 import { CharsetError, collationNotLoaded, corruptTable, unknownCollation } from '../errors.ts'
-import { comparePadded, memcmp } from './memcmp.ts'
+import { collationFromKey } from './memcmp.ts'
 import { utf8CodePoints } from './utf8.ts'
 
 /**
@@ -261,30 +261,9 @@ function ucaCollation(info: CollationInfo): Collation {
   }
   const space: number[] = []
   weigh(0x20, space)
+  // The pad unit retains its key width in both padding modes.
   const padUnit = Uint8Array.of((space[0] as number) >> 8, (space[0] as number) & 0xff)
-  if (info.padAttribute === 'PAD SPACE') {
-    // UCA 4.0.0 pads: the longer string's remaining weights are compared with
-    // the space's, so 'a' = 'a ' and a tab, which weighs below a space, sorts
-    // 'a\t' before 'a' (`my_strnncollsp_uca`).
-    return {
-      ...info,
-      padUnit,
-      sortKey,
-      compare: (a, b) => comparePadded(sortKey(a), sortKey(b), padUnit),
-    }
-  }
-  return {
-    ...info,
-    // NO PAD never pads, so this is never used to compare. It is still the
-    // honest value rather than an empty array, because `Collation` promises
-    // "one character's worth of pad weight" and a lie here would be a trap for
-    // whatever reads it next.
-    padUnit,
-    sortKey,
-    // NO PAD: a shorter weight string that is a prefix of a longer one sorts
-    // first, which is exactly `memcmp`. No padding, and so `'a' < 'a '`.
-    compare: (a, b) => memcmp(sortKey(a), sortKey(b)),
-  }
+  return collationFromKey(info, padUnit, sortKey)
 }
 
 const cache = new Map<number, Collation>()

@@ -360,10 +360,10 @@ test('D-36, D-66: @myjs/core carries the 8-bit tables now, and still not the UCA
   // still hold is D-36's real promise: the 48.6 KB of UCA weights load only
   // when a `_0900_` collation is asked for, so they are in no chunk the entry
   // point pulls in statically.
-  const { BYTE_WEIGHT_RUNS, WEIGHT_SLOTS } = await import('../../packages/charsets/src/collations/weights.ts')
+  const { BYTE_WEIGHT_RUNS, WEIGHT_SLOT_BASE, WEIGHT_SLOT_CODES } = await import('../../packages/charsets/src/collations/weights.ts')
   const { PACKED_UCA900_LEVEL1 } = await import('../../packages/charsets/src/collations/uca900.ts')
-  const slot = WEIGHT_SLOTS[8] // latin1_swedish_ci
-  assert.ok(slot != null && slot >= 0, 'latin1_swedish_ci must have a byte-weight slot')
+  const slot = WEIGHT_SLOT_CODES.charCodeAt(8) - WEIGHT_SLOT_BASE // latin1_swedish_ci
+  assert.ok(slot >= 0, 'latin1_swedish_ci must have a byte-weight slot')
   const legacy = BYTE_WEIGHT_RUNS.split('\n')[slot]
   assert.ok(legacy && legacy.length >= 100, 'the probe must contain the internal Swedish weight table')
   const uca = PACKED_UCA900_LEVEL1.slice(1000, 1100)
