@@ -102,12 +102,17 @@ export const TEMPORAL_FUNCTIONS: ReadonlySet<string> = new Set([
   'DATEDIFF', 'TIMEDIFF', 'TIMESTAMPDIFF', 'TIMESTAMPADD', 'ADDTIME', 'SUBTIME', 'MAKEDATE', 'FROM_DAYS', 'MAKETIME', 'SEC_TO_TIME', 'PERIOD_ADD', 'PERIOD_DIFF',
 ])
 
+/** Read a clock on the session's fixed-offset calendar or in UTC. */
+export function clockInZone(env: Env, utc: boolean, at = env.now): Date {
+  const zone = utc ? null : env.state.systemVariable('time_zone', undefined, env.session)
+  const offset = zone?.kind === 'string' ? offsetOf(zone.v) : undefined
+  return offset ? new Date(at.getTime() + offset * 1000) : at
+}
+
 /** The statement's date in the session's fixed-offset zone or in UTC. */
 export function today(env: Env, utc = false): () => MysqlDateTime {
   return () => {
-    const zone = utc ? null : env.state.systemVariable('time_zone', undefined, env.session)
-    const offset = zone?.kind === 'string' ? offsetOf(zone.v) : undefined
-    const date = offset ? new Date(env.now.getTime() + offset * 1000) : env.now
+    const date = clockInZone(env, utc)
     return midnight(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate())
   }
 }

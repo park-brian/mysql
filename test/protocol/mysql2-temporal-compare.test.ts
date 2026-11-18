@@ -108,6 +108,12 @@ test('M5.10: CAST of TIME anchors on the session date before rounding', async ()
       const options = { sql, rowsAsArray: true }
       const [rows] = method === 'query' ? await conn.query(options) : await conn.execute(options)
       assert.deepEqual(rows, [['2024-03-01', '2024-02-29', '2024-02-29', '2024-02-29']], method)
+      const clocks = { sql: 'SELECT NOW(), UTC_TIMESTAMP(), CURTIME(), UTC_TIME()', rowsAsArray: true }
+      const [clockRows, clockFields] = method === 'query' ? await conn.query(clocks) : await conn.execute(clocks)
+      assert.deepEqual(clockRows, [['2024-02-29 17:00:00', '2024-03-01 00:00:00', '17:00:00', '00:00:00']], method)
+      assert.deepEqual(clockFields.map((f) => [f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet]), [
+        [12, 19, 129, 0, 63], [12, 19, 129, 0, 63], [11, 8, 129, 0, 63], [11, 8, 129, 0, 63],
+      ])
     }
   } finally {
     await conn.end()

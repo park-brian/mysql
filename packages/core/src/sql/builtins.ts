@@ -101,7 +101,7 @@ import { canonicalFunctionName, lengthArity, nativeArity, unregistered } from '.
 import { modeOf } from './mode.ts'
 import { bitBytes } from './wire.ts'
 import { intReader } from './string-functions.ts'
-import { today } from './temporal-functions.ts'
+import { clockInZone, today } from './temporal-functions.ts'
 
 /** The names `builtinFunction` compiles. */
 export const BUILTINS: ReadonlySet<string> = new Set(['MOD', 'STRCMP', 'RAND', 'RANDOM_BYTES', 'CONCAT', 'LENGTH', 'OCTET_LENGTH', 'CHAR_LENGTH', 'CHARACTER_LENGTH', 'LOWER', 'LCASE', 'UPPER', 'UCASE', 'BIN', 'OCT', 'HEX', 'UNHEX', 'ABS'])
@@ -672,6 +672,7 @@ export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): 
 
 /** The session's clock and date arithmetic: NOW and its spellings, SYSDATE, CURDATE, CURTIME, DATE_ADD and DATE_SUB. */
 export function clockFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
+  const utc = name.startsWith('UTC_')
   const arity = nativeArity(e.name, e.args.length)
   switch (name) {
     case 'NOW':
@@ -683,7 +684,7 @@ export function clockFunction(name: string, e: CallNode, ctx: CompileContext): C
       const fsp = fspArgument(e)
       // SYSDATE reads the clock on each evaluation. The others use statement time.
       const live = name === 'SYSDATE'
-      return { eval: (_r, env) => ({ kind: 'datetime', v: clock(live ? new Date() : env.now, fsp), type: 'DATETIME', fsp }), type: datetimeType(FIELD_TYPE.DATETIME, fsp, false) }
+      return { eval: (_r, env) => ({ kind: 'datetime', v: clock(env, fsp, utc, live), type: 'DATETIME', fsp }), type: datetimeType(FIELD_TYPE.DATETIME, fsp, false) }
     }
     case 'DATE_ADD':
     case 'DATE_SUB':
@@ -701,14 +702,14 @@ export function clockFunction(name: string, e: CallNode, ctx: CompileContext): C
     case 'CURRENT_DATE':
     case 'UTC_DATE':
       arity(0)
-      return { eval: (_r, env) => ({ kind: 'datetime', v: today(env, name === 'UTC_DATE')(), type: 'DATE', fsp: 0 }), type: datetimeType(FIELD_TYPE.DATE, 0, false) }
+      return { eval: (_r, env) => ({ kind: 'datetime', v: today(env, utc)(), type: 'DATE', fsp: 0 }), type: datetimeType(FIELD_TYPE.DATE, 0, false) }
     case 'CURTIME':
     case 'CURRENT_TIME':
     case 'UTC_TIME': {
       const fsp = fspArgument(e)
       return {
         eval: (_r, env) => {
-          const d = clock(env.now, fsp)
+          const d = clock(env, fsp, utc)
           return { kind: 'time', v: { negative: false, days: 0, hour: d.hour, minute: d.minute, second: d.second, microsecond: d.microsecond }, fsp }
         },
         type: { ...datetimeType(FIELD_TYPE.TIME, fsp, false), length: 8 },
@@ -728,9 +729,9 @@ function fspArgument(e: CallNode): number {
   return n
 }
 
-/** The session's clock, in UTC (the `time_zone` this executor runs in). */
-export function clock(now: Date, fsp: number): MysqlDateTime {
-  const date = dateToMysql(now)
+/** Quantize the clock to the requested fractional precision. */
+function clock(env: Env, fsp: number, utc: boolean, live = false): MysqlDateTime {
+  const date = dateToMysql(clockInZone(env, utc, live ? new Date() : undefined))
   const unit = 10 ** (6 - fsp)
   return { ...date, microsecond: Math.floor(date.microsecond / unit) * unit }
 }
