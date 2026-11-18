@@ -12,6 +12,7 @@ entry, recorded out of order, sits where its date and its commit put it.
 
 | Date | Entry |
 |---|---|
+| 2026-11-18 | **M5.49. Report duplicate handling in mixed set operations.** The focused coverage gains 34 exact plans and relational replay gains two. Docker passes 1,908 tests and all seven pinned corpora within the existing size caps. |
 | 2026-11-18 | **M5.10. Cache regular-expression pattern admission.** The compiled-pattern cache retains the nested-quantifier check. All 4,608 wire observations are unchanged. Docker verifies 1,907 tests and seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.47. Preserve schema case in stored-program names.** Routine names fold within their own schema. All 14 focused fresh lookup outcomes match the pinned server. Docker verifies 1,907 tests and seven pinned corpora under the existing caps. |
 | 2026-11-18 | **M5.49. Reuse the decoded row in secondary snapshot scans.** Historical membership checks and delivery share one clustered decode. The Docker probe yields identical rows and avoids 320 repeat decodes. Full Docker verifies 1,907 tests and all seven pinned corpora. |

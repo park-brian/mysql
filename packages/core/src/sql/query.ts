@@ -2357,20 +2357,17 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: { readonly 
   }
 }
 
-/**
- * A set operation as 8.4.11's iterators. Its branches are written into a
- * temporary table and read back, deduplicated as they are written unless
- * every branch joined with ALL; branches after the chain's last DISTINCT are
- * written without it ("Disable deduplication"). A UNION ALL nothing sorts or
- * limits is not materialized at all: each branch is streamed in turn (Append).
- */
+/** A set operation as 8.4.11's iterators. A plain UNION ALL streams its branches. */
 function setOperationNode(m: SetMembers, materialized: boolean): PlanNode {
-  const name = m.op === 'UNION' ? 'Union' : m.op === 'INTERSECT' ? 'Intersect' : 'Except'
-  const lastDistinct = m.items.reduce((at, x, i) => (i > 0 && !x.all ? i : at), -1)
-  if (lastDistinct < 0 && m.op === 'UNION' && !materialized) return planNode('Append', m.items.map((x) => planNode('Stream results', x.node)))
-  const children = m.items.map((x, i) => wrap(lastDistinct >= 0 && i > lastDistinct, 'Disable deduplication', x.node))
-  const how = lastDistinct < 0 ? `${name} all materialize` : `${name} materialize with deduplication`
-  return tableScan(`<${m.op.toLowerCase()} temporary>`, planNode(how, children))
+  const kind = m.op.toLowerCase()
+  const except = m.op === 'EXCEPT'
+  // EXCEPT preserves the ALL operands before the first DISTINCT; UNION uses the last DISTINCT.
+  const boundary = m.items[except ? 'findIndex' : 'findLastIndex']((item, i) => i > 0 && !item.all)
+  const union = m.op === 'UNION'
+  if (boundary < 0 && union && !materialized) return planNode('Append', m.items.map((x) => planNode('Stream results', x.node)))
+  const children = m.items.map((x, i) => wrap(except ? i > 0 && i < boundary : union && boundary >= 0 && i > boundary, 'Disable deduplication', x.node))
+  const how = boundary < 0 ? 'all materialize' : 'materialize with deduplication'
+  return tableScan(`<${kind} temporary>`, planNode(`${m.op[0]}${kind.slice(1)} ${how}`, children))
 }
 
 /** Resolve positional and named ordering against a query result. */
