@@ -1037,7 +1037,7 @@ function quantifiedPlan(run: Run, bound: BoundSubquery, how: QuantifiedSubquery,
     const access = cover === undefined ? tableScan(alias) : coveringScan(alias, cover.name)
     return planNode('Limit', filterNode(filterPlan(column.nullable, access)))
   }
-  const index = how.kind === 'materialized-not-in' ? undefined : leadingIndex(def, column, true)
+  const index = how.kind === 'materialized' ? undefined : leadingIndex(def, column, true)
   if (index === undefined) return materializedQuantified(roots)
   if (dependentNotIn && predicate === undefined && run.env.memo !== undefined && membershipMaterialization(run.env)) return materializedQuantified(roots)
   const nulls = !top || how.kind !== 'in'
@@ -1093,11 +1093,11 @@ function integerRangePredicate(e: Expression | undefined, def: TableDef, alias: 
   return column?.type.type === FIELD_TYPE.LONG && leadingIndex(def, column, true) !== undefined
 }
 
-/** Cost membership on the original bound input, before choosing its reader and EXPLAIN. */
+/** Cost bounded membership on the original input, before choosing its reader and EXPLAIN. */
 function boundMembership(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan | undefined, bound: BoundSubquery): BoundSubquery | undefined {
   const where = node.where
   if (where?.kind !== NODE.BINARY || where.right.kind !== NODE.SUBQUERY || where.right.query !== bound.query ||
-      !(where.op === 'NOT IN' || (where.op === '<>' && where.right.quantifier === 'ALL'))) return undefined
+      !(where.op === 'IN' || where.op === 'NOT IN' || (where.op === '<>' && where.right.quantifier === 'ALL'))) return undefined
   const outer = from?.single
   const inner = bound.plan.source
   const body = boundedSubquery(bound.query)
@@ -1113,10 +1113,13 @@ function boundMembership(run: Run, q: QueryExpression, node: SelectNode, from: F
   const materialize = membershipMaterialization(run.env)
   const empty = key.nullable && integerRangePredicate(predicate, def, alias) && bound.plan.explain?.() === NO_ROWS_PLAN
   const index = leadingIndex(def, key, true)
+  const positive = where.op === 'IN'
+  if (positive && (predicate !== undefined || index === undefined || materialize === undefined || optimizerEnabled(run.env, 'semijoin') ||
+      liveStats(def, inner.table, run.catalog!.store).rows !== 0)) return undefined
   let includeNonNull: boolean | undefined
   let textSelectivity: number | undefined
   let range: RangeRead | undefined
-  if (!empty && index) {
+  if (!positive && !empty && index) {
     if (!singleRefIndex(index) || (!left.nullable && !key.nullable)) return undefined
     if (wildcardLike(predicate)) {
       if (left.nullable || !key.nullable || hasGenerated(outer.def, def) || !textBesideColumn(predicate.left, predicate.right)) return undefined
@@ -1144,19 +1147,19 @@ function boundMembership(run: Run, q: QueryExpression, node: SelectNode, from: F
         if (read?.index !== undefined || bound.plan.explain?.() === NO_ROWS_PLAN) return undefined
       }
     }
-  } else if (!empty) {
+  } else if (!positive && !empty) {
     if (hasGenerated(outer.def, def) || hasLeadingKey(outer.def, left.name) || indexedColumn(def, key.name) ||
         from.access(run.env).index !== undefined || (predicate !== undefined && notNullColumn(predicate, def, alias) !== key)) return undefined
     includeNonNull = predicate && true
   }
-  const choice = costedNotIn(run, inner, outer, index, key.nullable, materialize, includeNonNull, textSelectivity, empty, range)
-  if (choice === undefined || (choice === 'materialize' && !index && !empty)) return undefined
-  bound.quantified = { kind: choice === 'scan' ? 'dependent-not-in' : 'materialized-not-in', nullable: left.nullable }
+  const choice = costedMembership(run, inner, outer, index, !positive && key.nullable, materialize, includeNonNull, textSelectivity, empty, range)
+  if ((positive && choice !== 'materialize') || choice === undefined || (choice === 'materialize' && !index && !empty)) return undefined
+  bound.quantified = { kind: choice === 'scan' ? 'dependent-not-in' : 'materialized', nullable: left.nullable }
   return empty ? { ...bound, rows: () => [] } : bound
 }
 
-/** The single-table NOT IN alternatives measured against the native cost trace. */
-function costedNotIn(run: Run, inner: NonNullable<FromPlan['single']>, outer: NonNullable<FromPlan['single']>, index: IndexDef | undefined, nullable: boolean, materialize: boolean | undefined, includeNonNull: boolean | undefined, textSelectivity: number | undefined, empty: boolean, range: RangeRead | undefined): 'scan' | 'materialize' | undefined {
+/** Single-table membership costs measured against the native traces. */
+function costedMembership(run: Run, inner: NonNullable<FromPlan['single']>, outer: NonNullable<FromPlan['single']>, index: IndexDef | undefined, nullable: boolean, materialize: boolean | undefined, includeNonNull: boolean | undefined, textSelectivity: number | undefined, empty: boolean, range: RangeRead | undefined): 'scan' | 'materialize' | undefined {
   const store = run.catalog?.store
   if (store === undefined || isTemporary(inner.def)) return undefined
   const stats = empty ? undefined : statisticsOf(inner.def, inner.table, store)

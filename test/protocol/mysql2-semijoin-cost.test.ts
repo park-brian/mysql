@@ -167,3 +167,57 @@ test('empty integer membership picks the covering scan and rechecks after writes
     await db?.end()
   }
 })
+
+test('empty dependent IN chooses materialization at its native cost boundary', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection(db === undefined
+    ? { host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+    : { stream: db.createStream(), user: 'root' })
+  const schema = 'semi_empty_dependent_cost'
+  try {
+    await conn.query('CREATE DATABASE ' + schema)
+    await conn.query('USE ' + schema)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,n INT) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE c(id INT PRIMARY KEY,pid INT,qty INT,extra TINYINT,KEY a(pid DESC,qty),KEY b(pid DESC,extra)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO p VALUES (1,1),(2,2),(3,NULL),(4,4),(5,5)')
+    await conn.query('ANALYZE TABLE p,c')
+    await conn.query("SET optimizer_switch='default,semijoin=off'")
+    const sql = 'SELECT id,n FROM p WHERE n IN (SELECT pid FROM c)'
+    const read = (method: 'query' | 'execute', statement: string) => method === 'query'
+      ? conn.query<mysql.RowDataPacket[]>({ sql: statement, rowsAsArray: true })
+      : conn.execute<mysql.RowDataPacket[]>({ sql: statement, rowsAsArray: true })
+    const materialized = [
+      'Filter',
+      '    Table scan on p',
+      '    Select #2',
+      '        Filter',
+      '            Limit',
+      '                Index lookup on <materialized_subquery> using <auto_distinct_key>',
+      '                    Materialize with deduplication',
+      '                        Covering index scan on c using b',
+    ].join('\n')
+    const verify = async (usesMaterialization: boolean, expected: readonly (readonly number[])[]) => {
+      for (const method of ['query', 'execute'] as const) {
+        assert.deepEqual((await read(method, sql))[0], expected)
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+        const [plan] = await read(method, 'EXPLAIN FORMAT=TREE ' + sql)
+        const tree = planSkeleton(plan[0]?.[0])
+        if (usesMaterialization) assert.equal(tree, materialized)
+        else assert.match(tree, /Covering index lookup on c using [ab]$/)
+      }
+    }
+    await verify(false, [])
+    await conn.query('INSERT INTO p VALUES (6,6)')
+    await verify(true, [])
+    await conn.query("SET optimizer_switch='materialization=off'")
+    await verify(false, [])
+    await conn.query("SET optimizer_switch='materialization=on'")
+    await conn.query('INSERT INTO c VALUES ?', [Array.from({ length: 25 }, (_, i) => [i + 1, i % 2 === 0 ? 1 : 5, i, i])])
+    await verify(false, [[1, 1], [5, 5]])
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS ' + schema)
+    await conn.end()
+    await db?.end()
+  }
+})

@@ -2863,7 +2863,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
 /** An uncorrelated scalar `[NOT] IN`, `= ALL` or `<> ANY` subquery as compiled. */
 export interface QuantifiedSubquery {
   /** The comparison and, when chosen during binding, its membership reader. */
-  readonly kind: 'in' | 'not-in' | 'keyed-int-not-in' | 'scan' | 'dependent-not-in' | 'materialized-not-in'
+  readonly kind: 'in' | 'not-in' | 'keyed-int-not-in' | 'scan' | 'dependent-not-in' | 'materialized'
   /** Whether the expression it is compared with can be NULL. */
   readonly nullable: boolean
 }

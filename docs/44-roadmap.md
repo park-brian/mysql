@@ -559,6 +559,20 @@ including 1,737 coercion warning counts. Parser, core and facade measure
 44,773, 334,313 and 334,227 gzipped bytes. The relational score stays at
 2,158 of 2,248. Dependent materialization stays open.
 
+**M5.47 materialization for physically empty dependent `IN`, verified.**
+An unfiltered integer membership query with semijoin disabled costs the
+existing keyed membership reader when the inner table is physically empty.
+MySQL's trace charges 0.349 per dependent probe, or 1.449 to build the set
+and 0.1 per probe. Five outer probes use the dependent lookup and six use
+materialization. Both protocols match all 3,264 observations, up from
+1,392. The retained test reuses the prepared statement through cardinality
+changes and a switch change. Full Docker verification passes 1,889 tests,
+all nine size gates, seeded fuzzing, 10,000 crash points, package and client
+smoke and all seven pinned corpora, including 1,737 coercion warning counts.
+Parser, core and facade measure 44,769, 334,321 and 334,244 gzipped bytes.
+The relational score stays at 2,158 of 2,248. Nonempty and filtered
+dependent materialization remain open.
+
 **M5.47 competing covering LooseScan keys, verified.** For unfiltered
 integer `IN` membership without an order, limit or lock, the existing
 cost search can consider the shortest eligible covering key. Equal
