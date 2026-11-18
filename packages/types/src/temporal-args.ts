@@ -6,7 +6,7 @@
 // caller raises; what can be read but was cut short warns too and is kept.
 import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
 import { scanDateTime, scanTime, type Deprecation } from './temporal-scan.ts'
-import { parseTime, textOf, toDecimal, toText, type Value } from './sql-value.ts'
+import { parseTime, textOf, timeOrdinal, toDecimal, toText, type Value } from './sql-value.ts'
 import { timeFromSeconds, addDateTimeSeconds, TIME_MAX_SECONDS } from './temporal.ts'
 import { daysInMonth } from './calendar.ts'
 
@@ -109,11 +109,10 @@ export function dateOf(value: Value, flags: DateFlags, today: () => MysqlDateTim
       return forbidden(value.v, flags) ? { v: null } : { v: value.v, fsp: value.fsp }
     case 'time': {
       const t = today()
-      const us = (((value.v.days * 24 + value.v.hour) * 60 + value.v.minute) * 60 + value.v.second) * 1_000_000 + value.v.microsecond
-      const signed = value.v.negative ? -us : us
+      const signed = Number(timeOrdinal(value.v))
       const seconds = Math.floor(signed / 1_000_000)
-      const d = new Date(Date.UTC(t.year, t.month - 1, t.day) + seconds * 1000)
-      return { v: { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes(), second: d.getUTCSeconds(), microsecond: signed - seconds * 1_000_000 }, fsp: value.fsp }
+      const v = addDateTimeSeconds({ ...t, hour: 0, minute: 0, second: 0, microsecond: 0 }, seconds, signed - seconds * 1_000_000)
+      return v.year < 0 || v.year > 9999 ? { v: null } : { v, fsp: value.fsp }
     }
     case 'string':
     case 'bytes':

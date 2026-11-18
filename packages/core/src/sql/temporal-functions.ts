@@ -72,6 +72,7 @@ import {
   type DateFlags,
   type TimeStruct,
   type TimeValue,
+  type DateTimeValue,
   type Value,
 } from '@myjs/types'
 import { asNumber, compile, readNonNull, constantNode, raise, rowNumber, timeCast, type Compiled, type CompileContext, type Env, constantEnv } from './compile.ts'
@@ -101,9 +102,14 @@ export const TEMPORAL_FUNCTIONS: ReadonlySet<string> = new Set([
   'DATEDIFF', 'TIMEDIFF', 'TIMESTAMPDIFF', 'TIMESTAMPADD', 'ADDTIME', 'SUBTIME', 'MAKEDATE', 'FROM_DAYS', 'MAKETIME', 'SEC_TO_TIME', 'PERIOD_ADD', 'PERIOD_DIFF',
 ])
 
-/** The statement's date, in UTC: where a TIME read as a date lands. */
+/** The statement's date in the session's fixed-offset zone. */
 export function today(env: Env): () => MysqlDateTime {
-  return () => midnight(env.now.getUTCFullYear(), env.now.getUTCMonth() + 1, env.now.getUTCDate())
+  return () => {
+    const zone = env.state.systemVariable('time_zone', undefined, env.session)
+    const offset = zone?.kind === 'string' ? offsetOf(zone.v) : undefined
+    const date = offset ? new Date(env.now.getTime() + offset * 1000) : env.now
+    return midnight(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate())
+  }
 }
 
 /** A reading's value, its deprecation and its warning raised. */
@@ -162,11 +168,11 @@ function microsToDatetime(us: bigint): MysqlDateTime | undefined {
   return { ...date, hour: Math.floor(rest / 3_600_000_000), minute: Math.floor(rest / 60_000_000) % 60, second: Math.floor(rest / 1_000_000) % 60, microsecond: rest % 1_000_000 }
 }
 
-function datetimeValue(v: MysqlDateTime, fsp: number, type: 'DATE' | 'DATETIME' = 'DATETIME'): Value {
+function datetimeValue(v: MysqlDateTime, fsp: number, type: 'DATE' | 'DATETIME' = 'DATETIME'): DateTimeValue {
   return { kind: 'datetime', v, type, fsp }
 }
 
-export function dateValue(v: Pick<MysqlDateTime, 'year' | 'month' | 'day'>, type: 'DATE' | 'DATETIME' = 'DATE'): Value {
+export function dateValue(v: Pick<MysqlDateTime, 'year' | 'month' | 'day'>, type: 'DATE' | 'DATETIME' = 'DATE'): DateTimeValue {
   return datetimeValue(midnight(v.year, v.month, v.day), 0, type)
 }
 
@@ -182,9 +188,9 @@ export function timeValue(v: MysqlTime, fsp: number, truncate = false): TimeValu
 }
 
 /** A datetime's fraction cut to `fsp` digits, rounding. */
-function roundDatetime(v: MysqlDateTime, fsp: number): MysqlDateTime | undefined {
+function roundDatetime(v: MysqlDateTime, fsp: number, truncate = false): MysqlDateTime | undefined {
   if (fsp >= 6) return v
-  const us = roundFraction(v.microsecond, fsp)
+  const us = roundFraction(v.microsecond, fsp, truncate)
   if (us < 1_000_000) return { ...v, microsecond: us }
   return microsToDatetime(datetimeMicros({ ...v, microsecond: 0 }) + 1_000_000n)
 }
@@ -193,6 +199,15 @@ function roundedDatetimeValue(value: MysqlDateTime | null | undefined, fsp: numb
   if (value == null) return null
   const rounded = roundDatetime(value, fsp)
   return rounded === undefined && !keepOverflow ? null : datetimeValue(rounded ?? value, fsp)
+}
+
+/** Anchor a TIME to the statement date before applying the result's precision. */
+export function onToday(value: TimeValue, env: Env, type: 'DATE' | 'DATETIME' = 'DATETIME', fsp = value.fsp, truncate = false): DateTimeValue | null {
+  const date = dateOf(value, {}, today(env)).v
+  if (date === null) return null
+  if (type === 'DATE') return dateValue(date)
+  const rounded = roundDatetime(date, fsp, truncate)
+  return rounded === undefined ? null : datetimeValue(rounded, fsp)
 }
 
 /** A constant argument's value, evaluated once at compile time; undefined when it is not constant. */

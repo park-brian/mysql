@@ -45,7 +45,6 @@ import {
   decodeField,
   encodeField,
   decimalValue,
-  dateOf,
   divide,
   decimalFractionCapacity,
   magnitudeDigits,
@@ -127,13 +126,13 @@ import { requireSchema, safeResolve, TableScope, unknownColumnError, columnIndex
 import { bitBytes } from './wire.ts'
 import { badAgainst, booleanRank, Corpus, foldFor, fulltextOf, naturalRank, noExpansion, noIndex, parseBoolean, queryText, wordsOf, type Term } from './fulltext.ts'
 import { windowNotAllowed } from './window.ts'
-import { dateAdd, isInterval, onToday } from './interval.ts'
+import { dateAdd, isInterval } from './interval.ts'
 import { printString, printExpression, Unprintable } from './print.ts'
 import { modeOf } from './mode.ts'
 import { NOT_YET, VARIES_PER_EVALUATION, functionCompiler, invalidGroupFunction } from './registry.ts'
-import { clock, hexOf } from './builtins.ts'
+import { hexOf } from './builtins.ts'
 import { convertTextCharset } from './string-functions.ts'
-import { dateValue, settle, timeValue, zeroDateTime } from './temporal-functions.ts'
+import { dateValue, onToday, settle, timeValue, zeroDateTime } from './temporal-functions.ts'
 import { systemVariableInfo } from './variables.ts'
 
 /** One row as operators pass it: a value per column of the scope. */
@@ -1965,8 +1964,7 @@ export function onStatementDate(c: Compiled): Compiled {
     eval: (r, env) => {
       const v = c.eval(r, env)
       if (v === null || v.kind !== 'time') return v
-      const anchored = dateOf(v, {}, () => clock(env.now, 0))
-      return anchored.v === null ? null : { kind: 'datetime', v: anchored.v, type: 'DATETIME', fsp: v.fsp }
+      return onToday(v, env)
     },
     type: c.type,
   }
@@ -2549,10 +2547,7 @@ export function choiceBranch(from: ResultType, result: ResultType): ((value: Exc
       (from.kind === 'datetime' || from.kind === 'time') && from.field !== result.field) {
     // A TIME merged into a DATETIME takes the statement's date.
     return (value, env) => {
-      if (value.kind === 'time') {
-        const d = onToday(value.v, env)
-        return d === undefined ? null : { kind: 'datetime', v: d, type: 'DATETIME', fsp: value.fsp }
-      }
+      if (value.kind === 'time') return onToday(value, env)
       return value.kind === 'datetime' && value.type === 'DATE' ? { ...value, type: 'DATETIME' } : value
     }
   }
@@ -2834,18 +2829,18 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
       const flags = modeOf(ctx.session.sqlMode)
       return {
         eval: readNonNull(x, (v, env) => {
-          let input = v
-          // Text is read under the session's zero-date modes; what is no
-          // date is NULL with 1292 (8.4.11: CAST('0000-00-00' AS DATE)).
+          if (v.kind === 'time') return onToday(v, env, type, fsp, flags.truncateFractional)
+          // The session's zero-date modes govern text input.
           if (v.kind === 'string' || (v.kind === 'bytes' && v.hex !== true)) {
-            const p = parseDateTime(toText(v), flags)
-            if (p === undefined) {
-              raise(env, 1292, `Incorrect datetime value: '${toText(v)}'`)
+            const text = toText(v)
+            const parsed = parseDateTime(text, flags)
+            if (parsed === undefined) {
+              raise(env, 1292, `Incorrect datetime value: '${text}'`)
               return null
             }
-            input = { kind: 'datetime', v: p.v, type: p.hasTime ? 'DATETIME' : 'DATE', fsp: p.fsp }
+            return type === 'DATE' ? dateValue(parsed.v) : { kind: 'datetime', v: parsed.v, type, fsp }
           }
-          const d = toDateTime(input, type)
+          const d = toDateTime(v, type)
           return d === undefined ? null : { ...d, fsp }
         }),
         type: datetimeType(type === 'DATE' ? FIELD_TYPE.DATE : FIELD_TYPE.DATETIME, fsp, true),

@@ -14,12 +14,12 @@
 //     its text and the unit decide, and NULL where it is no temporal.
 //
 // The result is always nullable: an overflow is NULL.
-import { FIELD_TYPE, type MysqlDateTime } from '@myjs/bytes'
+import { FIELD_TYPE } from '@myjs/bytes'
 import type { Expression, IntervalNode } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { addInterval, dateStructOf, type TimeStruct, intervalFsp, intervalOf, isDateUnit, isIntervalUnit, isTimeUnit, renderMysqlDateTime, stringValue, timeOrdinal, COERCIBILITY } from '@myjs/types'
 import { asNumber, compile, raise, type CompileContext, type Compiled, type Env } from './compile.ts'
-import { settle, today } from './temporal-functions.ts'
+import { onToday, settle, today } from './temporal-functions.ts'
 import { datetimeType, stringType, type ResultType } from './meta.ts'
 
 /** `arg ± INTERVAL value unit`; `negate` for `-`, DATE_SUB and SUBDATE. */
@@ -66,7 +66,7 @@ export function dateAdd(arg: Expression, value: Expression, unit: string, negate
       switch (shape) {
         case 'date':
         case 'datetime': {
-          const from = v.kind === 'datetime' ? v.v : v.kind === 'time' ? onToday(v.v, env) : undefined
+          const from = v.kind === 'datetime' ? v.v : v.kind === 'time' ? onToday(v, env)?.v : undefined
           if (from === undefined) return null
           // A zero date, or a zero month or day, is no date to move, and says nothing.
           if (from.month === 0 || from.day === 0) return null
@@ -110,11 +110,4 @@ function overflow(env: Env): null {
 /** Whether an expression is an `INTERVAL n unit`. */
 export function isInterval(e: Expression): e is IntervalNode {
   return e.kind === 'interval'
-}
-
-/** A TIME on today's date, as a datetime: TIME plus a unit of days or more. */
-export function onToday(t: { readonly negative: boolean; readonly days: number; readonly hour: number; readonly minute: number; readonly second: number; readonly microsecond: number }, env: Env): MysqlDateTime | undefined {
-  const now = env.now
-  const today: MysqlDateTime = { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(), hour: 0, minute: 0, second: 0, microsecond: 0 }
-  return addInterval(today, { months: 0n, micros: timeOrdinal(t) })
 }

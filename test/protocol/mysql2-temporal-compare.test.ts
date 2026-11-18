@@ -57,3 +57,53 @@ test('A TIME compared with a datetime constant answers as 8.4.11 did', async () 
     await db.end()
   }
 })
+
+test('M5.10: CAST of TIME anchors on the session date before rounding', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection({
+    ...(db === undefined
+      ? { host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+      : { stream: db.createStream() }),
+    user: 'root',
+    dateStrings: true,
+  })
+  const cases = [
+    ['+00:00', '', '-00:00:00.500000', 'DATE', '2024-02-29'],
+    ['+00:00', '', '-00:00:00.500000', 'DATETIME', '2024-03-01 00:00:00'],
+    ['+08:00', '', '23:59:59.999999', 'DATETIME(3)', '2024-03-02 00:00:00.000', '2024-03-02 00:00:00'],
+    ['-07:00', '', '-00:00:00.000001', 'DATETIME(3)', '2024-02-29 00:00:00.000', '2024-02-29 00:00:00'],
+    ['-07:00', 'TIME_TRUNCATE_FRACTIONAL', '-00:00:00.000001', 'DATETIME(3)', '2024-02-28 23:59:59.999', '2024-02-28 23:59:59.999000'],
+    ['+00:00', '', '838:59:59.999999', 'DATETIME(6)', '2024-04-04 22:59:59.000000', '2024-04-04 22:59:59'],
+    ['+00:00', '', null, 'DATETIME(6)', null],
+  ] as const
+  try {
+    if (host !== undefined) {
+      const [rows] = await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS version')
+      assert.equal(rows[0]?.version.split('-')[0], '8.4.11')
+    }
+    await conn.query('SET timestamp=1709251200')
+    for (const [zone, mode, value, target, text, binary = text] of cases) {
+      await conn.query('SET time_zone=?', [zone])
+      await conn.query('SET sql_mode=?', [mode])
+      const sql = `SELECT CAST(CAST(? AS TIME(6)) AS ${target}) AS v`
+      const options = { sql, rowsAsArray: true }
+      const fsp = target === 'DATETIME(3)' ? 3 : target === 'DATETIME(6)' ? 6 : 0
+      const width = target === 'DATE' ? 10 : fsp ? 20 + fsp : 19
+      for (const method of ['query', 'execute'] as const) {
+        const [rows, fields] = method === 'query' ? await conn.query(options, [value]) : await conn.execute(options, [value])
+        assert.deepEqual(rows, [[method === 'query' ? text : binary]], `${method} ${zone} ${mode} ${value} ${target}`)
+        assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet]), [
+          ['v', target === 'DATE' ? 10 : 12, width, 128, fsp, 63],
+        ])
+        const [warnings] = await conn.query<mysql.RowDataPacket[]>('SHOW WARNINGS')
+        assert.deepEqual(warnings.map((w) => [w.Level, w.Code, w.Message]), value === '838:59:59.999999'
+          ? [['Warning', 1292, "Truncated incorrect time value: '838:59:59.999999'"]]
+          : [])
+      }
+    }
+  } finally {
+    await conn.end()
+    await db?.end()
+  }
+})
