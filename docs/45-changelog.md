@@ -12,6 +12,7 @@ entry, recorded out of order, sits where its date and its commit put it.
 
 | Date | Entry |
 |---|---|
+| 2026-11-18 | **M5.47. Preserve schema case in stored-program names.** Routine names fold within their own schema. All 14 focused fresh lookup outcomes match the pinned server. Docker verifies 1,907 tests and seven pinned corpora under the existing caps. |
 | 2026-11-18 | **M5.49. Reuse the decoded row in secondary snapshot scans.** Historical membership checks and delivery share one clustered decode. The Docker probe yields identical rows and avoids 320 repeat decodes. Full Docker verifies 1,907 tests and all seven pinned corpora. |
 | 2026-11-18 | **M5.10. Match MySQL numeric time-zone syntax.** CONVERT_TZ reads short components and leading zeroes, rejects whitespace, and gains 30 exact observations. Docker verifies 1,907 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.49. Show the equality comparison for covering string lookups of different widths.** The focused audit gains 48 exact plans, and relational replay gains four with all rows intact. The generated error dictionary uses eleven one-letter tokens and preserves all lookup results. Docker verifies 1,906 tests and seven pinned corpora within the existing caps. |

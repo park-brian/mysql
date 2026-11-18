@@ -15,6 +15,7 @@ test('M5.47: retained statements use the database selected at PREPARE', async ()
   })
   const a = 'prepared_context_a'
   const b = 'prepared_context_b'
+  const upper = a.toUpperCase()
   try {
     if (host !== undefined) {
       const [rows] = await conn.query('SELECT VERSION()')
@@ -32,6 +33,13 @@ test('M5.47: retained statements use the database selected at PREPARE', async ()
     const withoutDatabase = await conn.prepare('SELECT DATABASE()')
     await conn.query('USE ' + a)
     await conn.query('CREATE PROCEDURE present() SELECT 1')
+    await conn.query('CREATE DATABASE ' + upper)
+    await conn.query('CREATE PROCEDURE ' + upper + '.Present() SELECT 2')
+    await assert.rejects(conn.prepare('CALL Prepared_Context_A.present()'), { errno: 1305, sqlState: '42000' })
+    const upperCall = await conn.prepare('CALL ' + upper + '.PRESENT()')
+    upperCall.close()
+    await conn.query('DROP PROCEDURE ' + upper + '.pResent')
+    await assert.rejects(conn.prepare('CALL ' + upper + '.present()'), { errno: 1305, sqlState: '42000' })
     await assert.rejects(conn.prepare('CALL missing()'), { errno: 1305, sqlState: '42000' })
     const call = await conn.prepare('CALL present()')
     call.close()
@@ -56,6 +64,7 @@ test('M5.47: retained statements use the database selected at PREPARE', async ()
   } finally {
     await conn.query('DROP DATABASE IF EXISTS ' + a)
     await conn.query('DROP DATABASE IF EXISTS ' + b)
+    await conn.query('DROP DATABASE IF EXISTS ' + upper)
     await conn.end()
     await db?.end()
   }

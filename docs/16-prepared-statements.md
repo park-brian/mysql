@@ -70,6 +70,8 @@ Notes:
   procedure raises 1305. An unqualified name with no selected database
   raises 1046. Argument validation and execution of stored bodies remain
   open. [MySQL 8.4.11 procedure lookup](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_call.cc#L105-L124).
+  The registry preserves the case of database qualifiers and folds the
+  procedure name within its database.
 
 ## `COM_STMT_EXECUTE`
 

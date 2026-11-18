@@ -350,7 +350,8 @@ export class ServerState {
     const name = `${schema ?? ''}.${at.name}`
     const object = 'object' in statement ? statement.object as ProgramObject
       : statement.kind === STATEMENT.CALL ? 'PROCEDURE' : statement.kind === STATEMENT.CREATE_TRIGGER ? 'TRIGGER' : 'EVENT'
-    const key = `${object}:${name.toLowerCase()}`
+    // Routine names fold case within a schema; the schema name keeps its case.
+    const key = `${object}:${schema ?? ''}.${at.name.toLowerCase()}`
     if (statement.kind === STATEMENT.DROP) {
       if (!this.#programs.delete(key) && statement.ifExists !== true) {
         throw sqlError(`ER_${PROGRAM_ERRORS[object]}_DOES_NOT_EXIST`, messages.objectMissing(object, name))
