@@ -106,10 +106,6 @@ export function varint(bytes: Uint8Array, at: number): { value: number; size: nu
   }
 }
 
-function isContainer(type: number): boolean {
-  return type <= JSON_TYPE.LARGE_ARRAY
-}
-
 function isLarge(type: number): boolean {
   return type === JSON_TYPE.LARGE_OBJECT || type === JSON_TYPE.LARGE_ARRAY
 }
@@ -310,7 +306,7 @@ export function compareJsonKeys(a: string, b: string): number {
   return 0
 }
 
-interface Encoded {
+export interface EncodedJson {
   readonly type: number
   /** The value's own bytes, empty when the type is inlined. */
   readonly body: Uint8Array
@@ -318,7 +314,7 @@ interface Encoded {
   readonly inline?: number
 }
 
-function encodeScalar(value: JsonValue): Encoded {
+function encodeScalar(value: JsonValue): EncodedJson {
   if (value === null) return { type: JSON_TYPE.LITERAL, body: new Uint8Array(0), inline: LITERAL_NULL }
   if (value === true) return { type: JSON_TYPE.LITERAL, body: new Uint8Array(0), inline: LITERAL_TRUE }
   if (value === false) return { type: JSON_TYPE.LITERAL, body: new Uint8Array(0), inline: LITERAL_FALSE }
@@ -387,136 +383,81 @@ export function writeVarint(n: number): Uint8Array {
   return Uint8Array.from(out)
 }
 
-function encodeAny(value: JsonValue, large: boolean): Encoded {
+function encodeAny(value: JsonValue): EncodedJson {
   if (Array.isArray(value)) {
-    return { type: large ? JSON_TYPE.LARGE_ARRAY : JSON_TYPE.SMALL_ARRAY, body: encodeArrayBody(value, large) }
+    return encodeJsonContainer(JSON_TYPE.SMALL_ARRAY, [], value.map(encodeAny))
   }
   if (typeof value === 'object' && value !== null && !(value instanceof Uint8Array) && !(value instanceof Date)) {
     const object = value as { [key: string]: JsonValue }
-    return {
-      type: large ? JSON_TYPE.LARGE_OBJECT : JSON_TYPE.SMALL_OBJECT,
-      body: encodeObjectBody(object, large),
-    }
+    const keys = Object.keys(object).sort(compareJsonKeys)
+    const keyBytes = keys.map(utf8)
+    return encodeJsonContainer(JSON_TYPE.SMALL_OBJECT, keyBytes, keys.map((key) => encodeAny(object[key]!)))
   }
   return encodeScalar(value)
 }
 
-function putOffset(out: Uint8Array, at: number, value: number, large: boolean): void {
-  const view = new DataView(out.buffer, out.byteOffset)
-  if (large) view.setUint32(at, value, true)
-  else view.setUint16(at, value, true)
+/** Containers start small. A large child also needs a large parent. */
+export function encodeJsonContainer(
+  type: typeof JSON_TYPE.SMALL_ARRAY | typeof JSON_TYPE.SMALL_OBJECT,
+  keys: readonly Uint8Array[],
+  pieces: readonly EncodedJson[],
+): EncodedJson {
+  const small = layout(keys, pieces, false)
+  return small === undefined ? { type: type + 1, body: layout(keys, pieces, true)! } : { type, body: small }
 }
 
-function encodeArrayBody(values: readonly JsonValue[], large: boolean): Uint8Array {
-  const offsetSize = large ? 4 : 2
-  const headerSize = offsetSize * 2
-  const entrySize = 1 + offsetSize
-  const encoded = values.map((v) => encodeAny(v, large))
-
-  let cursor = headerSize + values.length * entrySize
-  const bodies: Array<{ at: number; bytes: Uint8Array } | null> = []
-  for (const e of encoded) {
-    if (isInlined(e.type, large)) {
-      bodies.push(null)
-      continue
-    }
-    bodies.push({ at: cursor, bytes: e.body })
-    cursor += e.body.length
+/** A container's bytes: header, key entries for an object, value entries, keys, then out-of-line values; undefined when too large for a small one. */
+function layout(keys: readonly Uint8Array[], pieces: readonly EncodedJson[], large: boolean): Uint8Array | undefined {
+  const w = large ? 4 : 2
+  const headerSize = 2 * w
+  let payload = headerSize + keys.length * (w + 2) + pieces.length * (1 + w)
+  let size = payload
+  for (const key of keys) size += key.length
+  for (const piece of pieces) {
+    if (!large && isLarge(piece.type)) return undefined
+    if (!isInlined(piece.type, large)) size += piece.body.length
   }
-
-  const out = new Uint8Array(cursor)
-  putOffset(out, 0, values.length, large)
-  putOffset(out, offsetSize, cursor, large)
-  encoded.forEach((e, i) => {
-    const at = headerSize + i * entrySize
-    out[at] = e.type
-    const placed = bodies[i]
-    if (placed === null || placed === undefined) putOffset(out, at + 1, e.inline ?? 0, large)
-    else {
-      putOffset(out, at + 1, placed.at, large)
-      out.set(placed.bytes, placed.at)
-    }
-  })
+  if (!large && size > 0xffff) return undefined
+  const out = new Uint8Array(size)
+  const view = new DataView(out.buffer)
+  const put = (at: number, v: number): void => (large ? view.setUint32(at, v, true) : view.setUint16(at, v, true))
+  put(0, pieces.length)
+  put(w, size)
+  let at = headerSize
+  const copy = (offset: number, bytes: Uint8Array): void => {
+    put(offset, payload)
+    out.set(bytes, payload)
+    payload += bytes.length
+  }
+  for (const key of keys) {
+    copy(at, key)
+    view.setUint16(at + w, key.length, true)
+    at += w + 2
+  }
+  for (const piece of pieces) {
+    out[at] = piece.type
+    if (isInlined(piece.type, large)) put(at + 1, piece.inline ?? 0)
+    else copy(at + 1, piece.body)
+    at += 1 + w
+  }
   return out
 }
 
-function encodeObjectBody(object: { [key: string]: JsonValue }, large: boolean): Uint8Array {
-  const offsetSize = large ? 4 : 2
-  const headerSize = offsetSize * 2
-  const keyEntrySize = offsetSize + 2
-  const valueEntrySize = 1 + offsetSize
-
-  const keys = Object.keys(object).sort(compareJsonKeys)
-  const keyBytes = keys.map(utf8)
-  const encoded = keys.map((k) => encodeAny(object[k] as JsonValue, large))
-
-  let cursor = headerSize + keys.length * (keyEntrySize + valueEntrySize)
-  const keyAt = keyBytes.map((b) => {
-    const at = cursor
-    cursor += b.length
-    return at
-  })
-  const bodies: Array<{ at: number; bytes: Uint8Array } | null> = []
-  for (const e of encoded) {
-    if (isInlined(e.type, large)) {
-      bodies.push(null)
-      continue
-    }
-    bodies.push({ at: cursor, bytes: e.body })
-    cursor += e.body.length
-  }
-
-  const out = new Uint8Array(cursor)
-  putOffset(out, 0, keys.length, large)
-  putOffset(out, offsetSize, cursor, large)
-  keys.forEach((_, i) => {
-    const at = headerSize + i * keyEntrySize
-    putOffset(out, at, keyAt[i] as number, large)
-    new DataView(out.buffer, out.byteOffset).setUint16(at + offsetSize, (keyBytes[i] as Uint8Array).length, true)
-    out.set(keyBytes[i] as Uint8Array, keyAt[i] as number)
-  })
-  const valueEntries = headerSize + keys.length * keyEntrySize
-  encoded.forEach((e, i) => {
-    const at = valueEntries + i * valueEntrySize
-    out[at] = e.type
-    const placed = bodies[i]
-    if (placed === null || placed === undefined) putOffset(out, at + 1, e.inline ?? 0, large)
-    else {
-      putOffset(out, at + 1, placed.at, large)
-      out.set(placed.bytes, placed.at)
-    }
-  })
+/** A document begins with its type byte and has no entry to inline into. */
+export function encodeJsonDocument(p: EncodedJson): Uint8Array {
+  // A bare scalar has no entry to inline into: its value follows the type byte.
+  const inline = isInlined(p.type, false)
+  const literal = p.type === JSON_TYPE.LITERAL
+  const out = new Uint8Array(1 + (inline ? literal ? 1 : 2 : p.body.length))
+  out[0] = p.type
+  if (!inline) out.set(p.body, 1)
+  else if (literal) out[1] = p.inline ?? 0
+  else new DataView(out.buffer).setUint16(1, p.inline ?? 0, true)
   return out
 }
 
-/** The largest a small container may be, since its offsets are `uint16`. */
-const SMALL_LIMIT = 0xffff
-
-/**
- * Encode one binary JSON document.
- *
- * Small is attempted first and large is the fallback, which is what makes a
- * large container nested inside a small one impossible and a small one nested
- * inside a large one ordinary — the widths are chosen bottom-up, per container,
- * exactly as the format allows.
- */
+/** Encode one binary JSON document with small or large layout per container. */
 export function encodeJson(value: JsonValue): Uint8Array {
-  let encoded = encodeAny(value, false)
-  if (isContainer(encoded.type) && encoded.body.length > SMALL_LIMIT) encoded = encodeAny(value, true)
-  const out = new Uint8Array(1 + encoded.body.length + (isInlined(encoded.type, false) ? inlineWidth(encoded.type) : 0))
-  out[0] = encoded.type
-  if (isInlined(encoded.type, false)) {
-    // A bare scalar document has no entry to be inlined into, so the value
-    // follows the type byte in its own right.
-    if (encoded.type === JSON_TYPE.LITERAL) out[1] = encoded.inline ?? 0
-    else new DataView(out.buffer).setUint16(1, encoded.inline ?? 0, true)
-    return out
-  }
-  out.set(encoded.body, 1)
-  return out
-}
-
-function inlineWidth(type: number): number {
-  return type === JSON_TYPE.LITERAL ? 1 : 2
+  return encodeJsonDocument(encodeAny(value))
 }
 

@@ -12,6 +12,7 @@
 //   key order is length-then-bytes, and it is observable.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import fc from 'fast-check'
 import { FIELD_TYPE } from '@myjs/bytes'
 import {
@@ -21,6 +22,8 @@ import {
   decodeJson,
   encodeDatetime2,
   encodeJson,
+  encodeJsonDoc,
+  parseJson,
   type JsonValue,
 } from '@myjs/types'
 
@@ -110,6 +113,7 @@ test('M2.13: a large container, and a small one nested inside it', () => {
   const big = Array.from({ length: 20000 }, (_, i) => ({ i }))
   const encoded = encodeJson(big)
   assert.equal(encoded[0], JSON_TYPE.LARGE_ARRAY, 'a 20,000-element array cannot be small')
+  assert.equal(encoded[9], JSON_TYPE.SMALL_OBJECT, 'the first value entry keeps its small layout')
   const decoded = decodeJson(encoded) as JsonValue[]
   assert.equal(decoded.length, 20000)
   assert.deepEqual(decoded[0], { i: 0 })
@@ -118,6 +122,19 @@ test('M2.13: a large container, and a small one nested inside it', () => {
   // …and a document that fits stays small, so the fallback is a fallback.
   assert.equal(encodeJson([1, 2, 3])[0], JSON_TYPE.SMALL_ARRAY)
   assert.equal(encodeJson({ a: 1 })[0], JSON_TYPE.SMALL_OBJECT)
+})
+
+test('M2.13: a large JSON child promotes its parent and keeps its small sibling', () => {
+  const wide = Array.from({ length: 11000 }, (_, i) => i % 2 ? -70000 : 70000)
+  const value = [[1], wide]
+  const raw = encodeJson(value)
+  assert.deepEqual(encodeJsonDoc(parseJson(JSON.stringify(value))), raw)
+  assert.equal(raw.length, 55034)
+  assert.equal(raw[0], JSON_TYPE.LARGE_ARRAY)
+  assert.equal(raw[9], JSON_TYPE.SMALL_ARRAY)
+  assert.equal(raw[14], JSON_TYPE.LARGE_ARRAY)
+  // MySQL 8.4.11's row image contains the 32-bit entries inline.
+  assert.equal(createHash('sha256').update(raw).digest('hex'), '5ee16c5e5e930da47d9d3a9e7c12ce3bde6ea8fe360f549902a54d8ed5c1e5ce')
 })
 
 test('M2.13: custom-data reaches back into the storage decoder', () => {

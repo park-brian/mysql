@@ -61,11 +61,12 @@ data-length ::= uint8*      // 7 bits per byte, high bit = continuation
 
 ## The parts that matter
 
-**Small vs large.** Every object and array exists in two forms. "Small" uses
-16-bit counts and offsets and is used when the whole value fits in 64 KiB;
-"large" uses 32-bit. The type byte tells you which, and it changes the width of
-*every* offset in that container. A single container can be small while a nested
-one inside it is large.
+**Small vs large.** An object or array starts with 16-bit counts and offsets.
+MySQL retries with 32-bit fields when the small layout exceeds 65,535 bytes
+or needs a large child. A large parent can still hold small children. Inlining
+32-bit integers can bring a large layout below the small size limit, and that
+child still requires a large parent. Both writers share these layout rules.
+[MySQL 8.4.11 serializer](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql-common/json_binary.cc#L672-L720)
 
 **`size` is the whole container's byte length**, which is what lets a reader skip
 a sub-document without parsing it.
