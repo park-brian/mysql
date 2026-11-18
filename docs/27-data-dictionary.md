@@ -186,7 +186,9 @@ format, which is refused rather than migrated (D-26).
 
 **A table's definition is its `_myjs_tables` row (D-57)**, not a separate page.
 There is one copy, changed by the transaction that changes the table. The
-row's value is JSON that `decodeTableDef` checks field by field.
+row's value is JSON that `decodeTableDef` checks field by field. Optional
+column type fields are checked in the catalog's field order and keep their
+field names in diagnostics.
 `ENGINE_CORRUPT_CATALOG` answers anything that does not decode, or does not
 hang together. Key parts are built when a table opens, not when it decodes,
 because they need its collations. The async edge loads those first, from

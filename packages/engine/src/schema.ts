@@ -317,26 +317,26 @@ export function decodeTableDef(bytes: Uint8Array): TableDef {
   return def
 }
 
+const COLUMN_TYPE_FIELDS = ['unsigned', 'precision', 'scale', 'decimals', 'members', 'collationId', 'bits', 'length'] as const
+
 function columnDef(v: unknown): ColumnDef {
   const c = record(v, 'a column')
   const t = record(c['type'], 'a column type')
-  const type: ColumnType = {
-    type: uint(t['type'], 'type.type'),
-    ...optional(t, 'unsigned', (x) => bool(x, 'type.unsigned')),
-    ...optional(t, 'precision', (x) => uint(x, 'type.precision')),
-    ...optional(t, 'scale', (x) => uint(x, 'type.scale')),
-    ...optional(t, 'decimals', (x) => uint(x, 'type.decimals')),
-    ...optional(t, 'members', (x) => array(x, 'type.members').map((m) => str(m, 'a member'))),
-    ...optional(t, 'collationId', (x) => uint(x, 'type.collationId')),
-    ...optional(t, 'bits', (x) => uint(x, 'type.bits')),
-    ...optional(t, 'length', (x) => uint(x, 'type.length')),
+  const type: { -readonly [K in keyof ColumnType]: ColumnType[K] } = { type: uint(t['type'], 'type.type') }
+  for (const key of COLUMN_TYPE_FIELDS) {
+    const value = t[key]
+    if (value === undefined) continue
+    const field = `type.${key}`
+    if (key === 'unsigned') type.unsigned = bool(value, field)
+    else if (key === 'members') type.members = array(value, field).map((m) => str(m, 'a member'))
+    else type[key] = uint(value, field)
   }
   return {
     name: str(c['name'], 'column name'),
     type,
     nullable: bool(c['nullable'], 'nullable'),
-    ...optional(c, 'autoIncrement', (x) => bool(x, 'autoIncrement')),
-    ...optional(c, 'attributes', (x) => record(x, 'attributes')),
+    ...optional(c, 'autoIncrement', bool),
+    ...optional(c, 'attributes', record),
   }
 }
 
@@ -349,18 +349,18 @@ function indexDef(v: unknown): IndexDef {
       const r = record(p, 'a key part')
       return {
         column: str(r['column'], 'key part column'),
-        ...optional(r, 'prefix', (x) => uint(x, 'prefix')),
-        ...optional(r, 'descending', (x) => bool(x, 'descending')),
+        ...optional(r, 'prefix', uint),
+        ...optional(r, 'descending', bool),
       }
     }),
-    ...optional(i, 'indexId', (x) => uint(x, 'indexId')),
-    ...optional(i, 'comment', (x) => str(x, 'index comment')),
+    ...optional(i, 'indexId', uint),
+    ...optional(i, 'comment', str, 'index comment'),
     ...(i['invisible'] !== undefined && bool(i['invisible'], 'invisible') ? { invisible: true as const } : {}),
   }
 }
 
-function optional<K extends string, T>(o: Record<string, unknown>, key: K, read: (v: unknown) => T): { [P in K]?: T } {
-  return (o[key] === undefined ? {} : { [key]: read(o[key]) }) as { [P in K]?: T }
+function optional<K extends string, T>(o: Record<string, unknown>, key: K, read: (v: unknown, what: string) => T, what: string = key): { [P in K]?: T } {
+  return (o[key] === undefined ? {} : { [key]: read(o[key], what) }) as { [P in K]?: T }
 }
 
 function record(v: unknown, what: string): Record<string, unknown> {

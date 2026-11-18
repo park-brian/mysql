@@ -12,6 +12,7 @@ entry, recorded out of order, sits where its date and its commit put it.
 
 | Date | Entry |
 |---|---|
+| 2026-11-17 | **M4.23. Share catalog validation for optional type fields.** Stored definitions and typed diagnostics agree across 20,004 cases, including 8,357 byte-identical re-encodings. Full Docker verification passes 1,894 tests and all seven pinned corpora. Core and facade save 38 and 31 gzipped bytes within the existing caps. |
 | 2026-11-17 | **M4.5/M5.50. Size inline records during field validation.** Record bytes, spill order and errors match across 30,000 cases. The isolated codec uses less time for both inline and off-page records. The 5,000-row INSERT benchmark stays within its documented variation. Full Docker verification passes 1,894 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-17 | **M5.49. Abbreviate long index range bounds.** Plans with four or more bounds display two bounds and the omitted count. Both protocols gain 728 exact matches in 3,408 MySQL 8.4.11 observations and retain all prior matches. Full Docker verification passes 1,894 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-17 | **M2.13/M5.21. Reject oversized binary JSON keys at serialization.** Both binary writers accept at most 65,535 UTF-8 bytes per key. Standalone JSON expressions still work with longer keys, and failed writes preserve the existing rows. Both protocols match all 96 pinned observations. Full Docker verification passes 1,894 tests and all seven pinned corpora within the existing caps. |
