@@ -269,16 +269,14 @@ function epochSeconds(v: MysqlDateTime): { readonly seconds: bigint; readonly mi
   return { seconds, microsecond: v.microsecond }
 }
 
-/** A `±HH:MM` time zone's offset in seconds; undefined for a name, which needs the time zone tables. */
+/** A time zone's numeric displacement in seconds; named zones need time zone tables. */
 function offsetOf(text: string): number | undefined {
-  const m = /^\s*([+-])(\d{1,2}):(\d\d)\s*$/.exec(text)
-  if (m === null) return text.toUpperCase() === 'UTC' || text.toUpperCase() === 'SYSTEM' ? 0 : undefined
-  const minutes = Number(m[2]) * 60 + Number(m[3])
-  if (Number(m[3]) >= 60) return undefined
-  const signed = m[1] === '-' ? -minutes : minutes
-  // `-13:59` … `+14:00` (8.4.11).
-  if (signed < -(13 * 60 + 59) || signed > 14 * 60) return undefined
-  return signed * 60
+  const match = text.length < 4 ? null : /^([+-])(\d*):(\d+)$/.exec(text)
+  if (match === null) return /^(?:UTC|SYSTEM)$/i.test(text) ? 0 : undefined
+  const minutes = Number(match[3])
+  const seconds = (Number(match[2]) * 60 + minutes) * (match[1] === '-' ? -60 : 60)
+  // MySQL admits -13:59 through +14:00, including leading zeroes.
+  return minutes < 60 && seconds > -50_400 && seconds <= 50_400 ? seconds : undefined
 }
 
 const GET_FORMATS: Readonly<Record<string, readonly [string, string, string]>> = {

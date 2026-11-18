@@ -12,6 +12,7 @@ entry, recorded out of order, sits where its date and its commit put it.
 
 | Date | Entry |
 |---|---|
+| 2026-11-18 | **M5.10. Match MySQL numeric time-zone syntax.** CONVERT_TZ reads short components and leading zeroes, rejects whitespace, and gains 30 exact observations. Docker verifies 1,907 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.49. Show the equality comparison for covering string lookups of different widths.** The focused audit gains 48 exact plans, and relational replay gains four with all rows intact. The generated error dictionary uses eleven one-letter tokens and preserves all lookup results. Docker verifies 1,906 tests and seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.10. Preserve pinned statement-clock microseconds.** Session and UTC functions keep the captured fraction through precision handling. Both protocols match all 108 focused observations. Docker verifies 1,905 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M1.6/M5.53. Order long generated error tokens alphabetically.** Every numeric slot, error name, SQLSTATE and strict rule is preserved. The reproducible table saves 31 gzipped bytes in core, 23 in the facade and 50 in protocol. Docker passes 1,904 tests and seven pinned corpora. |
