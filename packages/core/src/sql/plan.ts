@@ -471,26 +471,32 @@ const pointRange = (bound: KeyBound): KeyRange => ({ from: bound, to: bound })
 function describePoints(points: readonly KeyRange[], column: ColumnDef): string | undefined {
   const t = column.type
   if (points.length < 2) return undefined
-  if (integerBytes(t.type) !== undefined ? points.length > 3 : t.type !== FIELD_TYPE.VAR_STRING || t.collationId === undefined || t.collationId === CHARSET_BINARY) return undefined
-  return describeIntervals(points.map((point) => pointInterval(decodeField(point.from!.values[0]!, t) as RangeValue)), column.name)
+  if (integerBytes(t.type) === undefined && (t.type !== FIELD_TYPE.VAR_STRING || t.collationId === undefined || t.collationId === CHARSET_BINARY)) return undefined
+  return describeBounds(points, (point) => describeInterval(pointInterval(decodeField(point.from!.values[0]!, t) as RangeValue), column.name))
 }
 
 /** Intervals as EXPLAIN writes a range: `(2 < grp <= 5) OR (grp = 7)`, `(NULL < grp)`, `(grp = NULL)`. */
-function describeIntervals(intervals: readonly Interval[], name: string, nullLower = false): string {
-  const text = (v: RangeValue): string => {
-    if (v.kind === 'string') return `'${v.v.replace(/'/g, "''")}'`
-    return v.kind === 'decimal' ? renderDecimal(v) : String(v.v)
-  }
-  return intervals
-    .map((i) => {
-      if (i === 'null') return `(${name} = NULL)`
-      const { lo, hi } = i
-      if (lo?.inclusive && hi?.inclusive && compareValues(lo.v, hi.v) === 0) return `(${name} = ${text(lo.v)})`
-      const lower = lo ? `${text(lo.v)} ${lo.inclusive ? '<=' : '<'} ` : hi && !nullLower ? '' : 'NULL < '
-      const upper = hi ? ` ${hi.inclusive ? '<=' : '<'} ${text(hi.v)}` : ''
-      return `(${lower}${name}${upper})`
-    })
-    .join(' OR ')
+function describeIntervals(intervals: readonly Interval[], name: string, nullLower?: boolean): string {
+  return describeBounds(intervals, (i) => describeInterval(i, name, nullLower))
+}
+
+function describeBounds<T>(items: readonly T[], describe: (item: T) => string): string {
+  if (items.length > 3) return `${describe(items[0]!)} OR ${describe(items[1]!)} OR (${items.length - 2} more)`
+  return items.map(describe).join(' OR ')
+}
+
+function rangeText(v: RangeValue): string {
+  if (v.kind === 'string') return `'${v.v.replace(/'/g, "''")}'`
+  return v.kind === 'decimal' ? renderDecimal(v) : String(v.v)
+}
+
+function describeInterval(i: Interval, name: string, nullLower?: boolean): string {
+  if (i === 'null') return `(${name} = NULL)`
+  const { lo, hi } = i
+  if (lo?.inclusive && hi?.inclusive && compareValues(lo.v, hi.v) === 0) return `(${name} = ${rangeText(lo.v)})`
+  const lower = lo ? `${rangeText(lo.v)} ${lo.inclusive ? '<=' : '<'} ` : hi && !nullLower ? '' : 'NULL < '
+  const upper = hi ? ` ${hi.inclusive ? '<=' : '<'} ${rangeText(hi.v)}` : ''
+  return `(${lower}${name}${upper})`
 }
 
 /** The integer next to an exact numeric endpoint in the requested direction. */

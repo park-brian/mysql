@@ -1070,9 +1070,26 @@ test('an unhinted ordered primary read is covering when the key holds every read
   }
 })
 
-test('integer multipoint plans show exact bounds in index order', async () => {
+test('multipoint plans show short bounds in physical key order', async () => {
   const { db, conn } = await rangeConnection()
   const schema = 'integer_multipoint_range'
+  const check = async (items: string, ids: readonly number[], bounds: string) => {
+    for (const method of ['query', 'execute'] as const) {
+      const read = (sql: string) => method === 'query' ? conn.query<mysql.RowDataPacket[]>(sql) : conn.execute<mysql.RowDataPacket[]>(sql)
+      const sql = `SELECT id FROM t WHERE s IN (${items})`
+      const [rows, fields] = await read(sql)
+      assert.deepEqual(rows.map((row) => row.id), ids)
+      assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
+        ['id', 3, 11, 20483, 0, 63, schema, 't', 't', 'id'],
+      ])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      const [explain] = await read('EXPLAIN FORMAT=TREE ' + sql)
+      const tree = String(explain[0]?.EXPLAIN)
+      assert.equal(planSkeleton(tree), 'Filter\n    Covering index range scan on t using by_s over')
+      const range = tree.split('\n').find((line) => line.includes('using by_s over '))
+      assert.equal(range?.split('using by_s over ')[1]?.split(' (cost=')[0]?.trimEnd(), bounds, tree)
+    }
+  }
   try {
     await conn.query(`CREATE DATABASE ${schema}`)
     await conn.query(`USE ${schema}`)
@@ -1088,25 +1105,15 @@ test('integer multipoint plans show exact bounds in index order', async () => {
       const cases = [
         [`7,${min},7`, [1, 8], `(s = ${min}) OR (s = 7)`],
         [`7,${min + 1n},${max}`, [2, 8, 3], `(s = ${min + 1n}) OR (s = 7) OR (s = ${max})`],
+        [`10,${min},7,${max},7,NULL`, [1, 8, 11, 3], `(s = ${min}) OR (s = 7) OR (2 more)`],
       ] as const
-      for (const method of ['query', 'execute'] as const) {
-        const read = (sql: string) => method === 'query' ? conn.query<mysql.RowDataPacket[]>(sql) : conn.execute<mysql.RowDataPacket[]>(sql)
-        for (const [items, ids, bounds] of cases) {
-          const sql = `SELECT id FROM t WHERE s IN (${items})`
-          const [rows, fields] = await read(sql)
-          assert.deepEqual(rows.map((row) => row.id), ids)
-          assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
-            ['id', 3, 11, 20483, 0, 63, schema, 't', 't', 'id'],
-          ])
-          assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
-          const [explain] = await read('EXPLAIN FORMAT=TREE ' + sql)
-          const tree = String(explain[0]?.EXPLAIN)
-          assert.equal(planSkeleton(tree), 'Filter\n    Covering index range scan on t using by_s over')
-          assert.ok(tree.includes('using by_s over ' + bounds), tree)
-        }
-      }
+      for (const [items, ids, bounds] of cases) await check(items, ids, bounds)
       await conn.query('DROP TABLE t')
     }
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,s VARCHAR(12) COLLATE utf8mb4_0900_ai_ci,KEY by_s(s)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO t VALUES ' + Array.from({ length: 40 }, (_, i) => `(${i + 1},'p${String(i + 1).padStart(2, '0')}')`).join(','))
+    await conn.query('ANALYZE TABLE t')
+    await check("'p11','p03','p07','p09'", [3, 7, 9, 11], "(s = 'p03') OR (s = 'p07') OR (2 more)")
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
     await conn.end(); await db?.end()
