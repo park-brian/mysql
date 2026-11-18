@@ -168,9 +168,8 @@ const outOfBounds = () => sqlError('ER_REGEXP_INDEX_OUTOFBOUNDS_ERROR', 'Index o
  * REGEXP_REPLACE also the place just past its end, and call a position below
  * 1 their arguments' fault, 1583 (8.4.11). Past that, 3686.
  */
-function offsetOf(text: string, pos: number, binary: boolean, fn: string): number {
+function offsetOf(text: string, pos: number, binary: boolean, instr: boolean): number {
   const length = charsBefore(text, text.length, binary)
-  const instr = fn === 'regexp_instr'
   if (instr && length === 0) return 0
   if (pos < 1 || pos > length + (instr ? 0 : 1)) throw outOfBounds()
   if (binary) return pos - 1
@@ -271,12 +270,13 @@ function replacementOf(text: string, groups: number, names: ReadonlyMap<string, 
 export function regexpSearch(s: Search, fn: string, searching: boolean, returnEnd: boolean, replacement: Value): string | bigint | undefined {
   if (replacement) pairCollation(s.subject ?? s.pattern, replacement, fn)
   const pattern = s.pattern && regexpFor(s.subject, s.pattern, s.type, fn, searching)
-  if (fn !== 'regexp_instr' && s.position !== null && s.position < 1) throw sqlError('ER_WRONG_PARAMETERS_TO_NATIVE_FCT', `Incorrect parameters in the call to native function '${fn}'`)
+  const instr = fn === 'regexp_instr'
+  if (!instr && s.position !== null && s.position < 1) throw sqlError('ER_WRONG_PARAMETERS_TO_NATIVE_FCT', `Incorrect parameters in the call to native function '${fn}'`)
   if (!pattern || !searching || !s.subject || s.position === null) return undefined
   const { re, groups, names } = pattern
   const text = textOf(s.subject)
   const binary = s.subject.kind === 'bytes'
-  const start = offsetOf(text, s.position, binary, fn)
+  const start = offsetOf(text, s.position, binary, instr)
   const occurrence = s.occurrence < 0 ? 1 : s.occurrence
   if (replacement) {
     const pieces = replacementOf(textOf(replacement), groups.length - 1, names)
@@ -293,10 +293,12 @@ export function regexpSearch(s: Search, fn: string, searching: boolean, returnEn
     }
     return out + text.slice(at)
   }
-  const match = nth(re, text, start, occurrence)
-  if (fn === 'regexp_substr') return match?.[0]
+  // REGEXP_INSTR gives ICU only the suffix starting at the requested character.
+  const search = instr ? text.slice(start) : text
+  const match = nth(re, search, instr ? 0 : start, occurrence)
+  if (!instr) return match?.[0]
   if (match === undefined) return 0n
-  return BigInt(charsBefore(text, match.index + (returnEnd ? match[0].length : 0), binary) + 1)
+  return BigInt(s.position + charsBefore(search, match.index + (returnEnd ? match[0].length : 0), binary))
 }
 
 /** The narrowed REGEXP_INSTR return option selects the start or end. */

@@ -94,6 +94,20 @@ test('M5.10: regex line modes handle dot, anchors and CRLF matches', async () =>
         assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
       }
     }
+    const position = "SELECT REGEXP_INSTR(_utf8mb4 X'61F09F998262','^.',2,1,0), REGEXP_INSTR(_utf8mb4 X'61F09F998262','^.',2,1,1), REGEXP_INSTR(_binary X'800041',_binary '^.',2,1,1)"
+    const context = "SELECT REGEXP_INSTR('abc','(?<=.).',2), REGEXP_SUBSTR('abc','(?<=.).',2), REGEXP_REPLACE('abc','^.','X',2)"
+    const empty = "SELECT REGEXP_INSTR('','^$',-1,1,1), REGEXP_INSTR('','^$',0), REGEXP_INSTR('','^$',2), REGEXP_INSTR('','^$',2,2)"
+    for (const method of ['query', 'execute'] as const) {
+      for (const [sql, expected] of [
+        [position, ['2', '3', '3']],
+        [context, ['3', 'b', 'abc']],
+        [empty, ['-1', '0', '2', '0']],
+      ] as const) {
+        const [rows] = method === 'query' ? await conn.query(sql) : await conn.execute(sql)
+        assert.deepEqual(rows, [expected], method)
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], method)
+      }
+    }
   } finally {
     await conn.end()
     await db?.end()

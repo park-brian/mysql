@@ -12,6 +12,7 @@ entry, recorded out of order, sits where its date and its commit put it.
 
 | Date | Entry |
 |---|---|
+| 2026-11-17 | **M5.10. Search the requested suffix in `REGEXP_INSTR`.** Anchors and lookbehind see MySQL's search region, and empty matches keep the requested SQL position on an empty subject. Both wire protocols reproduce all 4,608 position, dot-all and line-break observations. Full Docker verification passes 1,896 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-17 | **M5.10. Treat CRLF as one forward regex line break.** The `\R` escape reuses the CRLF boundary check used by dots and anchors. Both protocols match 1,252 of 1,280 observations, a gain of 64. All 1,896 tests and seven pinned corpora pass in Docker within the existing caps. |
 | 2026-11-17 | **M5.10. Treat CRLF as one forward dot-all match.** Both protocols use MySQL's capture and replacement behavior, including an explicit starting position at LF and embedded NUL in a binary subject. The pinned comparison improves from 1,212 to 1,378 of 1,408. Full Docker verification passes 1,896 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-17 | **M5.49. Retain NULL checks on converted outer joins.** The direct check stays at the join input, and stored rows use ordinary access when the condition is already true of them. Both protocols match the retained left and right join cases. The relational plan score rises to 2,167 of 2,248. Full Docker verification passes 1,896 tests and all seven pinned corpora within the existing caps. |
