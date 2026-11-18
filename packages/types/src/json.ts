@@ -28,7 +28,7 @@
 //   `JSON_OBJECT('b',1,'a',2)` comes back with `a` first. Reproducing it is
 //   required for output compatibility, not a nicety.
 import { fromUtf8, utf8 } from '@myjs/bytes'
-import { invalidJson } from './errors.ts'
+import { invalidJson, jsonKeyTooBig } from './errors.ts'
 import { decodeStorageValue, type ColumnMeta, type StorageValue } from './values.ts'
 
 /** Type tags, from `sql-common/json_binary.h`'s grammar. */
@@ -412,7 +412,10 @@ function layout(keys: readonly Uint8Array[], pieces: readonly EncodedJson[], lar
   const headerSize = 2 * w
   let payload = headerSize + keys.length * (w + 2) + pieces.length * (1 + w)
   let size = payload
-  for (const key of keys) size += key.length
+  for (const key of keys) {
+    if (key.length > 0xffff) throw jsonKeyTooBig()
+    size += key.length
+  }
   for (const piece of pieces) {
     if (!large && isLarge(piece.type)) return undefined
     if (!isInlined(piece.type, large)) size += piece.body.length

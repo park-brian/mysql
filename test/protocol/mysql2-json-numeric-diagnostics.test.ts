@@ -316,3 +316,38 @@ test('fresh prepared JSON numeric reads preserve kinds, column names and non-JSO
     await db?.end()
   }
 })
+
+
+test('binary JSON checks the UTF-8 key length when storing a row', async () => {
+  const { db, conn } = await connect()
+  const schema = 'json_key_storage'
+  const error = { errno: 3151, sqlState: '22032', sqlMessage: 'The JSON object contains a key name that is too long.' }
+  const warnings = [{ Level: 'Error', Code: error.errno, Message: error.sqlMessage }]
+  const wide = 'REPEAT(CONVERT(0xF09F9982 USING utf8mb4),16384)'
+  try {
+    if (db === undefined) {
+      const [version] = await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS version')
+      assert.equal(version[0]?.version, '8.4.11')
+    }
+    await conn.query('CREATE DATABASE ' + schema)
+    await conn.query('USE ' + schema)
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY, j JSON NOT NULL)')
+    for (const method of ['query', 'execute'] as const) {
+      const read = (sql: string) => method === 'query' ? conn.query(sql) : conn.execute(sql)
+      assert.deepEqual((await read("SELECT JSON_LENGTH(JSON_OBJECT(REPEAT('a',65536),1)) AS n"))[0], [{ n: 1 }])
+      await read("INSERT INTO t VALUES (1,JSON_OBJECT(REPEAT('a',65535),1))")
+      assert.deepEqual((await read('SELECT LENGTH(JSON_KEYS(j)) AS n FROM t'))[0], [{ n: 65539 }])
+      await assert.rejects(read(`INSERT INTO t VALUES (2,JSON_OBJECT('safe',1)), (3,JSON_OBJECT(${wide},1))`), error)
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], warnings)
+      const text = `CONCAT('{',CHAR(34 USING utf8mb4),${wide},CHAR(34 USING utf8mb4),':1}')`
+      await assert.rejects(read(`UPDATE t SET j=CAST(${text} AS JSON) WHERE id=1`), error)
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], warnings)
+      assert.deepEqual((await read('SELECT id,LENGTH(JSON_KEYS(j)) AS n FROM t ORDER BY id'))[0], [{ id: 1, n: 65539 }])
+      await conn.query('DELETE FROM t')
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS ' + schema)
+    await conn.end()
+    await db?.end()
+  }
+})

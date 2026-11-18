@@ -33,6 +33,11 @@ export function invalidJson(why: string): TypeError_ {
   return new TypeError_('ER_INVALID_JSON_BINARY_DATA', `invalid binary JSON: ${why}`, { errno: 3142 })
 }
 
+/** A binary JSON object cannot store a key longer than its 16-bit length field. */
+export function jsonKeyTooBig(): TypeError_ {
+  return new TypeError_('ER_JSON_KEY_TOO_BIG', 'The JSON object contains a key name that is too long.', { errno: 3151, sqlState: '22032' })
+}
+
 /** ER_INVALID_JSON_TEXT, 3140 / 22032: a string into a JSON column that is not JSON, naming the column as `table.column`. */
 export function invalidJsonText(why: string, position: number, column: string): TypeError_ {
   return new TypeError_('ER_INVALID_JSON_TEXT', `Invalid JSON text: "${why}" at position ${position} in value for column '${column}'.`, { errno: 3140, sqlState: '22032' })

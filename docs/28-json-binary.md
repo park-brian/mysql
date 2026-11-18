@@ -40,7 +40,7 @@ size          ::= uint16   (small)  | uint32 (large)
 
 key-entry   ::= key-offset key-length
 key-offset  ::= uint16 (small) | uint32 (large)
-key-length  ::= uint16                     // keys must be < 64 KB
+key-length  ::= uint16                     // up to 65,535 UTF-8 bytes
 
 value-entry ::= type offset-or-inlined-value
 offset-or-inlined-value ::= uint16 (small) | uint32 (large)
@@ -83,7 +83,11 @@ third-party readers, which tend to treat every entry as an offset.
 lexicographically by bytes — so lookup is a binary search. This is also why
 `JSON_OBJECT('b',1,'a',2)` comes back with `a` first: MySQL is not preserving
 your insertion order, it is storing the sorted form. Reproducing this ordering
-exactly is required for output compatibility.
+exactly is required for output compatibility. Both small and large objects
+use a 16-bit key length. A key of 65,535 UTF-8 bytes is valid. A longer key
+raises `ER_JSON_KEY_TOO_BIG` (3151, SQLSTATE `22032`) when the value is
+serialized for storage. A standalone JSON expression can still construct
+and inspect the object before serialization.
 
 **The length varint** is 7 bits per byte with the high bit as a continuation
 flag, little-endian order — the same scheme as Protocol Buffers. Lengths up to
