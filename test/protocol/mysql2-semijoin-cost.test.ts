@@ -124,3 +124,46 @@ test('plain integer membership picks a narrow covering key in declaration order'
     await db?.end()
   }
 })
+
+test('empty integer membership picks the covering scan and rechecks after writes', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection(db === undefined
+    ? { host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+    : { stream: db.createStream(), user: 'root' })
+  const schema = 'semi_empty_covering'
+  try {
+    if (host !== undefined) assert.equal(String((await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS v'))[0][0]!.v).split('-')[0], '8.4.11')
+    await conn.query('CREATE DATABASE ' + schema)
+    await conn.query('USE ' + schema)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,label VARCHAR(16) NOT NULL) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE c(id INT PRIMARY KEY,pid INT,qty INT,extra TINYINT,KEY a(pid DESC,qty),KEY b(pid DESC,extra)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO p VALUES ?', [Array.from({ length: 12 }, (_, i) => [i + 1, `p${i + 1}`])])
+    await conn.query('ANALYZE TABLE p,c')
+    await conn.query("SET optimizer_switch='loosescan=off,materialization=off'")
+    const sql = 'SELECT id,label FROM p WHERE id IN (SELECT pid FROM c)'
+    const read = (method: 'query' | 'execute', statement: string) => method === 'query'
+      ? conn.query<mysql.RowDataPacket[]>({ sql: statement, rowsAsArray: true })
+      : conn.execute<mysql.RowDataPacket[]>({ sql: statement, rowsAsArray: true })
+    for (const method of ['query', 'execute'] as const) {
+      assert.deepEqual((await read(method, sql))[0], [])
+      const [plan] = await read(method, 'EXPLAIN FORMAT=TREE ' + sql)
+      assert.equal(planSkeleton(plan[0]?.[0]), [
+        'Remove duplicate p rows using temporary table',
+        '    Nested loop inner join',
+        '        Filter',
+        '            Covering index scan on c using b',
+        '        Single-row index lookup on p using PRIMARY',
+      ].join('\n'))
+    }
+    await conn.query('INSERT INTO c VALUES ?', [Array.from({ length: 17 }, (_, i) => [i + 1, i % 7 === 0 ? null : 1 + i * 3 % 18, i % 11, i % 5])])
+    for (const method of ['query', 'execute'] as const) {
+      assert.deepEqual((await read(method, sql))[0], [[1, 'p1'], [4, 'p4'], [7, 'p7'], [10, 'p10']])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS ' + schema)
+    await conn.end()
+    await db?.end()
+  }
+})

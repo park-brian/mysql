@@ -488,6 +488,21 @@ unordered `LIMIT` and `OFFSET`. With FirstMatch disabled, the existing cost
 search can choose it under explicit `ORDER BY` and a limit. Ordered FirstMatch
 competition and residual predicate costs remain open.
 
+**M5.47 covering scans for physically empty membership, verified.**
+When LooseScan and materialization are disabled, an unfiltered integer
+membership query with competing keys can use the narrowest covering
+index for duplicate weedout if the inner table is physically empty.
+The existing live statistics cache ties that decision to the store's log
+position. Both protocols use the same covering scan for an empty table
+and preserve MySQL's row order when the prepared statement is reused
+after inserts. The pinned comparison improves from 578 to 626 exact
+outcomes out of 1,000, with every prior match retained. Full Docker
+verification passes 1,886 tests, all nine size gates, seeded fuzzing,
+10,000 crash points, package and client smoke and all seven pinned corpora,
+including 1,737 coercion warning counts. Parser, core and facade measure
+44,773, 334,313 and 334,227 gzipped bytes. The relational score stays at
+2,158 of 2,248. Dependent materialization stays open.
+
 **M5.47 competing covering LooseScan keys, verified.** For unfiltered
 integer `IN` membership without an order, limit or lock, the existing
 cost search can consider the shortest eligible covering key. Equal

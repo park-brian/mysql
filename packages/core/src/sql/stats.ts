@@ -85,7 +85,7 @@ const recalculated: Cache<IndexStatistics> = new WeakMap()
 /** A table's live figures by the store's log position they were counted at: counting walks every page, and a plan asks for each table. */
 const counted = new WeakMap<Store, Map<number, { readonly lsn: number; readonly stats: TableStats }>>()
 
-function liveStats(def: TableDef, table: Table, store: Store): TableStats {
+export function liveStats(def: TableDef, table: Table, store: Store): TableStats {
   let tables = counted.get(store)
   if (tables === undefined) counted.set(store, (tables = new Map()))
   const lsn = store.lsn

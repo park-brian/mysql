@@ -36,7 +36,7 @@ import { checkSetWidth, convertSetRow, nestedNullability, setOperation, setOpera
 import { constTablesHaveRows, neverEqual, optimizerFacts, plannedTruth, rejectsNullExtension, uniqueKey, type OptimizerFacts } from './optimize.ts'
 import { informationSchemaTable } from './information-schema.ts'
 import { performanceSchemaTable } from './performance-schema.ts'
-import { statisticsOf } from './stats.ts'
+import { liveStats, statisticsOf } from './stats.ts'
 import type { SqlSession } from './session.ts'
 import { toWire, type WireProtocol } from './wire.ts'
 import type { Trx } from '@myjs/engine'
@@ -1517,8 +1517,10 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     const predicate = and(equality, residual ?? nullTest)
     let candidates = def.indexes.filter((i) => i.kind === 'index' && !i.invisible && indexPartMatchesColumn(i.parts[0], innerColumn))
     // LooseScan and materialization can share the shortest covering membership key.
+    // A physically empty table can use the same scan for duplicate weedout.
     if (candidates.length > 1 && !exists && !any && extra === undefined && q.orderBy === undefined &&
-      !limitOrLock && (optimizerEnabled(run.env, 'loosescan') || optimizerEnabled(run.env, 'materialization'))) {
+      !limitOrLock && (optimizerEnabled(run.env, 'loosescan') || optimizerEnabled(run.env, 'materialization') ||
+        liveStats(def, run.catalog!.table(def.schema, def.name), run.catalog!.store).rows === 0)) {
       candidates = [candidates.reduce((best, key) => indexRecordBytes(def, key) < indexRecordBytes(def, best) ? key : best)]
     } else if (candidates.length > 1 || (q.orderBy !== undefined && q.limit !== undefined && optimizerEnabled(run.env, 'firstmatch'))) {
       candidates = candidates.filter((key) => forwardKeyPart(key))
