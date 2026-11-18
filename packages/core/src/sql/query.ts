@@ -2311,13 +2311,12 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: { readonly 
   // The getter is read only during execution, after every branch is typed.
   const comparisonTypes = (): readonly ResultType[] => parent?.types() ?? op.columns.map((c) => c.type)
   const context = { op: node.op, types: comparisonTypes }
-  const hasSetBody = (b: QueryBody): boolean => b.kind === QUERY.SET_OPERATION || (b.kind === QUERY.QUERY && hasSetBody(b.body))
   const branch = (b: QueryBody, scope = run, retainOrder = false): SelectPlan => {
     // Redundant parentheses retain this branch's holder and operator context.
     if (b.kind === QUERY.QUERY && b.with === undefined && b.into === undefined && b.locking === undefined && b.orderBy === undefined && b.limit === undefined) return branch(b.body, scope, retainOrder)
     if (b.kind === QUERY.SET_OPERATION) return planSetOperation(scope, b, context)
     // Clause owners keep their scope; only set bodies use the enclosing holder.
-    if (b.kind === QUERY.QUERY && b.into === undefined && hasSetBody(b.body)) {
+    if (b.kind === QUERY.QUERY && b.into === undefined && queryBody(b).kind === QUERY.SET_OPERATION) {
       const inner = b.with === undefined ? scope : withClause(scope, b.with)
       return orderedResult(inner, b, branch(b.body, inner, b.orderBy === undefined && (b.limit !== undefined || retainOrder)), comparisonTypes, retainOrder)
     }
@@ -2332,9 +2331,15 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: { readonly 
     parent?.op !== 'UNION' || parent.op === node.op
       ? op.columns
       : op.columns.map((c, i) => ({ name: c.name, type: { ...c.type, nullable: nestedNullability(node.op, (left.columns[i] as { type: ResultType }).type.nullable, (right.columns[i] as { type: ResultType }).type.nullable) } }))
-  // EXPLAIN folds compatible operands. A right-hand EXCEPT stays separate.
+  // A right-hand EXCEPT is a separate subtraction. MySQL also keeps an
+  // all-only INTERSECT binary until DISTINCT makes multiplicity irrelevant.
   const flatten = (p: SelectPlan, all: boolean): { node: PlanNode; all: boolean }[] | undefined => {
-    if (p.members?.op === node.op && (p === left || node.op !== 'EXCEPT')) return p.members.items.map((m, i) => (i === 0 ? { ...m, all } : m))
+    const nested = p.members
+    if (nested?.op === node.op &&
+      (node.op !== 'EXCEPT' || p === left) &&
+      (node.op !== 'INTERSECT' || !node.all || nested.items.some(distinctOperand))) {
+      return nested.items.map((m, i) => i === 0 ? { ...m, all } : m)
+    }
     const n = p.explain?.(true)?.[0]
     return n === undefined ? undefined : [{ node: n, all }]
   }
@@ -2357,15 +2362,17 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: { readonly 
   }
 }
 
+const distinctOperand = (item: SetMembers['items'][number], i: number): boolean => i > 0 && !item.all
+
 /** A set operation as 8.4.11's iterators. A plain UNION ALL streams its branches. */
 function setOperationNode(m: SetMembers, materialized: boolean): PlanNode {
   const kind = m.op.toLowerCase()
   const except = m.op === 'EXCEPT'
   // EXCEPT preserves the ALL operands before the first DISTINCT; UNION uses the last DISTINCT.
-  const boundary = m.items[except ? 'findIndex' : 'findLastIndex']((item, i) => i > 0 && !item.all)
+  const boundary = m.items[except ? 'findIndex' : 'findLastIndex'](distinctOperand)
   const union = m.op === 'UNION'
   if (boundary < 0 && union && !materialized) return planNode('Append', m.items.map((x) => planNode('Stream results', x.node)))
-  const children = m.items.map((x, i) => wrap(except ? i > 0 && i < boundary : union && boundary >= 0 && i > boundary, 'Disable deduplication', x.node))
+  const children = m.items.map((x, i) => wrap(except ? i > 0 && i < boundary : boundary > 0 && union && i > boundary, 'Disable deduplication', x.node))
   const how = boundary < 0 ? 'all materialize' : 'materialize with deduplication'
   return tableScan(`<${kind} temporary>`, planNode(`${m.op[0]}${kind.slice(1)} ${how}`, children))
 }
@@ -2408,10 +2415,10 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan, holder?: 
     constant: offset === 0 && plan.constant,
     locking: plan.locking,
     ...(plan.leaves === undefined ? {} : { leaves: plan.leaves }),
-    explain() {
+    explain(materialized) {
       if (limitCount === 0) return NO_ROWS_PLAN
-      // Read from a table, for the sort or the limit: a UNION ALL is no longer streamed.
-      const [root, ...rest] = plan.explain?.(true) ?? []
+      // A sort needs a table. A limit can stop a streaming UNION ALL directly.
+      const [root, ...rest] = plan.explain?.(materialized || keys.length > 0) ?? []
       const n = root === undefined ? undefined : describeStages(root, stages)
       return n === undefined ? undefined : [n, ...rest]
     },
