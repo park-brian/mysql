@@ -30,7 +30,7 @@ import { requireCollationInfo } from '@myjs/charsets'
 import { checkGenerated, generationOf, stampGenerated } from './generated.ts'
 import { checkParentOf, foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencedIndex, referencingKeys, storageClass, supportingIndex, withForeignKeys, type ForeignKeyClause } from './foreign-keys.ts'
 import { checkFulltext, fulltextOf, type FulltextDef } from './fulltext.ts'
-import type { Run } from './query.ts'
+import { defaultDatabase, type Run } from './query.ts'
 import { isTemporary, type CatalogApi } from './temporary.ts'
 import { renameTables } from './rename.ts'
 import { modeOf } from './mode.ts'
@@ -47,7 +47,7 @@ const ACTION_NAMES: Readonly<Record<string, string>> = {
 }
 
 export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableNode): OkResult {
-  const schema = requireSchema(statement.table.schema ?? run.env.session.database)
+  const schema = requireSchema(statement.table.schema ?? defaultDatabase(run))
   // Table options: a COMMENT, an AUTO_INCREMENT counter, and the ENGINE it already has.
   for (const k of Object.keys(statement.options)) if (!['COMMENT', 'AUTO_INCREMENT', 'ENGINE'].includes(k.toUpperCase())) throw notSupported('ALTER TABLE table options')
   // DDL: an implicit commit first, as every DDL statement makes.
@@ -59,9 +59,9 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
   const renames = statement.actions.filter((a) => a.type === 'rename')
   if (renames.length > 0 && renames.length === statement.actions.length && Object.keys(statement.options).length === 0 && !isTemporary(def)) {
     const to = (renames[renames.length - 1] as Extract<AlterAction, { type: 'rename' }>).to
-    const target = { schema: to.schema ?? run.env.session.database ?? schema, name: to.name }
+    const target = { schema: to.schema ?? defaultDatabase(run) ?? schema, name: to.name }
     if (target.schema === schema && target.name === def.name) return { affectedRows: 0 }
-    return renameTables(catalog, { kind: STATEMENT.RENAME_TABLE, pairs: [{ from: { schema, name: def.name }, to: target }], at: statement.at }, run.env.session.database)
+    return renameTables(catalog, { kind: STATEMENT.RENAME_TABLE, pairs: [{ from: { schema, name: def.name }, to: target }], at: statement.at }, defaultDatabase(run))
   }
   for (const a of statement.actions) {
     const named = ACTION_NAMES[a.type]
@@ -319,7 +319,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
 
   // --- the table's own name and options ---
   const renameTo = of('rename').at(-1)?.to
-  const renameSchema = renameTo === undefined ? schema : (renameTo.schema ?? run.env.session.database ?? schema)
+  const renameSchema = renameTo === undefined ? schema : (renameTo.schema ?? defaultDatabase(run) ?? schema)
   if (renameSchema !== schema) throw notSupported('ALTER TABLE … RENAME to another schema beside other changes')
   const name = renameTo?.name ?? def.name
   if (!same(name, def.name) && (catalog.tables(schema).some((t) => same(t.name, name)) || catalog.view(schema, name) !== undefined)) throw tableExistsError(name)

@@ -583,38 +583,26 @@ export function timeFieldValue(value: TimeValue): TimeValue {
 
 /** A value as a datetime of `type`, as an implicit cast does; `undefined` when it is not one. */
 export function toDateTime(v: Exclude<Value, null>, type: TemporalType): DateTimeValue | undefined {
-  switch (v.kind) {
-    case 'datetime':
-      return truncateTemporal(v, type)
-    case 'string':
-    case 'bytes': {
-      const p = parseDateTime(textOf(v))
-      if (p === undefined) return undefined
-      return truncateTemporal({ kind: 'datetime', v: p.v, type: p.hasTime ? 'DATETIME' : 'DATE', fsp: p.fsp }, type)
-    }
-    case 'int':
-    case 'decimal':
-    case 'double': {
-      // A datetime's number has at most 14 digits: a double past them is no datetime, and is not narrowed into one.
-      if (v.kind === 'double' && !(Math.abs(v.v) < 1e14)) return undefined
-      const t = toText(v.kind === 'double' ? toDecimal(v) : v)
-      const whole = t.replace(/^-/, '').split('.')[0] as string
-      // A datetime's number has at most 14 digits; past them it is no datetime (8.4.11: `1e300 >= dt` compares as numbers).
-      if (t.startsWith('-') || whole.length > 14) return undefined
-      // `20240102` is a date and `20240102030405` a datetime, as a number.
-      const padded = whole.length <= 8 ? whole.padStart(8, '0') : whole.padStart(14, '0')
-      const p = parseDateTime(padded)
-      if (p === undefined) return undefined
-      return truncateTemporal({ kind: 'datetime', v: p.v, type: p.hasTime ? 'DATETIME' : 'DATE', fsp: 0 }, type)
-    }
-    case 'time':
-      return undefined
+  if (v.kind === 'datetime') return temporalValue(v.v, type, v.fsp)
+  if (v.kind === 'time' || v.kind === 'json') return undefined
+  let text: string
+  if (v.kind === 'string' || v.kind === 'bytes') text = textOf(v)
+  else {
+    // Numeric datetimes use at most 14 digits, without their fraction.
+    if (v.kind === 'double' && !(Math.abs(v.v) < 1e14)) return undefined
+    const number = toText(v.kind === 'double' ? toDecimal(v) : v)
+    if (number.startsWith('-')) return undefined
+    const whole = number.split('.')[0] as string
+    if (whole.length > 14) return undefined
+    text = whole.padStart(whole.length <= 8 ? 8 : 14, '0')
   }
+  const parsed = parseDateTime(text)
+  return parsed === undefined ? undefined : temporalValue(parsed.v, type, parsed.fsp)
 }
 
-function truncateTemporal(v: DateTimeValue, type: TemporalType): DateTimeValue {
-  if (type === 'DATE') return { kind: 'datetime', v: { ...v.v, hour: 0, minute: 0, second: 0, microsecond: 0 }, type, fsp: 0 }
-  return { kind: 'datetime', v: v.v, type, fsp: v.fsp }
+function temporalValue(v: MysqlDateTime, type: TemporalType, fsp: number): DateTimeValue {
+  const date = type === 'DATE'
+  return { kind: 'datetime', v: date ? { ...v, hour: 0, minute: 0, second: 0, microsecond: 0 } : v, type, fsp: date ? 0 : fsp }
 }
 
 export function toTime(v: Exclude<Value, null>): TimeValue | undefined {

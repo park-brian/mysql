@@ -529,7 +529,7 @@ export function informationFunction(name: string, e: CallNode, ctx: CompileConte
     case 'DATABASE':
     case 'SCHEMA':
       arity(0)
-      return text((env) => env.session.database, 34, true)
+      return text(() => ctx.database === undefined ? ctx.session.database : ctx.database, 34, true)
     case 'USER':
     case 'CURRENT_USER':
     case 'SESSION_USER':

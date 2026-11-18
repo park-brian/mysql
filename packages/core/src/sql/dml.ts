@@ -34,7 +34,7 @@ import { guarded, isReferenced } from './foreign-keys.ts'
 import { containsAggregate } from './group.ts'
 import { accessRows, decodeRow, filter, limit, sort, type ScannedRow } from './operators.ts'
 import { chooseAccess } from './plan.ts'
-import { checkTargetNotRead, compileContext, fromContext, limitValue, openTable, planQuery, withClause, type Run } from './query.ts'
+import { defaultDatabase, checkTargetNotRead, compileContext, fromContext, limitValue, openTable, planQuery, withClause, type Run } from './query.ts'
 import { planFrom, type FromPlan, type FromTable, type JoinedRow } from './from.ts'
 import { columnIndex as indexOfColumn, ambiguousColumnError, unknownColumnError, TableScope } from './scope.ts'
 import { firstKey } from './keys.ts'
@@ -627,7 +627,7 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
   const check = checker(run, def)
   // A VALUES or SET subquery reading the table being written is 1093, as an
   // UPDATE's is; INSERT … SELECT from it is legal, read in full first (8.4.11).
-  if (node.query === undefined) checkTargetNotRead(def, [...(node.values ?? []).flat(), ...(node.set ?? []).map((a) => a.value), ...(node.onDuplicate ?? []).map((a) => a.value)], run.env.session.database)
+  if (node.query === undefined) checkTargetNotRead(def, [...(node.values ?? []).flat(), ...(node.set ?? []).map((a) => a.value), ...(node.onDuplicate ?? []).map((a) => a.value)], defaultDatabase(run))
   const { targets, rows, selected, fieldCopies, selectRefs } = insertSource(run, node, def, trx)
   const generate = generatorOf(run, def)
 
@@ -1020,7 +1020,7 @@ function openTarget(run: Run, name: TableName): ReturnType<typeof openTable> {
   try {
     return openTable(run, name)
   } catch (e) {
-    const schema = name.schema ?? run.env.session.database
+    const schema = name.schema ?? defaultDatabase(run)
     if ((e as { errno?: number }).errno === 1146 && schema !== null && run.catalog?.view(schema, name.name) !== undefined) {
       throw notSupported('INSERT, UPDATE and DELETE through a view')
     }
@@ -1081,7 +1081,7 @@ export function* update(run: Run, node: UpdateNode, trx: Trx): Generator<void, O
   const target = singleTable(run, node.tables, 'UPDATE')
   const { def, alias } = target
   const table = guarded(run, target.table, trx)
-  checkTargetNotRead(def, [node.where, ...node.set.map((a) => a.value)], run.env.session.database)
+  checkTargetNotRead(def, [node.where, ...node.set.map((a) => a.value)], defaultDatabase(run))
   const scope = new TableScope([{ alias, def }])
   const ctx = compileContext(run, scope, 'field list')
   const assignments = node.set.map((a: Assignment) => {
@@ -1167,7 +1167,7 @@ export function* remove(run: Run, node: DeleteNode, trx: Trx): Generator<void, O
   const target = singleTable(run, node.tables, 'DELETE')
   const { def, alias } = target
   const table = guarded(run, target.table, trx)
-  checkTargetNotRead(def, [node.where], run.env.session.database)
+  checkTargetNotRead(def, [node.where], defaultDatabase(run))
   const rows = yield* matching(run, def, table, alias, node, trx)
   const ignore = node.ignore === true
   const writer = deleteWriter(run, trx, ignore)
@@ -1267,7 +1267,7 @@ function updateMulti(run: Run, node: UpdateNode, trx: Trx): OkResult {
   for (const t of from.tables) {
     if (t.def === undefined) continue
     try {
-      checkTargetNotRead(t.def, [node.where, ...node.set.map((a) => a.value)], run.env.session.database)
+      checkTargetNotRead(t.def, [node.where, ...node.set.map((a) => a.value)], defaultDatabase(run))
     } catch (e) {
       if (!(e instanceof MyjsError) || e.errno !== 1093 || first?.def === undefined) throw e
       throw sqlError('ER_UPDATE_TABLE_USED', `You can't specify target table '${first.alias}' for update in FROM clause`)
@@ -1310,7 +1310,7 @@ function removeMulti(run: Run, node: DeleteNode, trx: Trx): OkResult {
     if (found === undefined) throw sqlError('ER_UNKNOWN_TABLE', `Unknown table '${t.name}' in MULTI DELETE`)
     return targetAt(run, from, found.offset, 'DELETE', trx)
   })
-  for (const t of targets) checkTargetNotRead(t.def, [node.where], run.env.session.database)
+  for (const t of targets) checkTargetNotRead(t.def, [node.where], defaultDatabase(run))
   const writer = deleteWriter(run, trx, node.ignore === true)
   for (const t of targets) {
     const seen = new Set<string>()

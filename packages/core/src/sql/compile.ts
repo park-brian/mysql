@@ -701,6 +701,7 @@ export interface CompileContext {
   /** The clause being compiled, for "Unknown column 'x' in 'where clause'". */
   readonly clause: string
   readonly session: Session
+  readonly database?: string | null | undefined
   /** The open prepared instance owns string-result metadata across SQL-mode changes. */
   readonly preparedSqlMode?: string | undefined
   /** False skips the warning. A list holds it until the statement binds. */
@@ -2683,7 +2684,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     if (NOT_YET.includes(name)) throw notSupported(`The function ${name}`)
   }
   const collision = e.stored
-  const message = messages.objectMissing('FUNCTION', `${e.schema ?? requireSchema(ctx.session.database)}.${e.name}`)
+  const message = messages.objectMissing('FUNCTION', `${e.schema ?? requireSchema(ctx.database === undefined ? ctx.session.database : ctx.database)}.${e.name}`)
   throw sqlError(collision ? 'ER_FUNC_INEXISTENT_NAME_COLLISION' : 'ER_SP_DOES_NOT_EXIST', message + (collision ? ". Check the 'Function Name Parsing and Resolution' section in the Reference Manual" : ''))
 }
 

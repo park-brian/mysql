@@ -88,7 +88,7 @@ import { foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencingKeys, wit
 import { checkDefaultAdmission, checkDefaults, insert, remove, update } from './dml.ts'
 import { fulltextOf } from './fulltext.ts'
 import { columnDefinition, intType, stringType } from './meta.ts'
-import { columnsOf, compileContext, planQuery, planStatementQuery, resultSet, resultSteps, viewTable, viewMergeable, type PreparedHints, type Run } from './query.ts'
+import { columnsOf, compileContext, defaultDatabase, planQuery, planStatementQuery, resultSet, resultSteps, viewTable, viewMergeable, type PreparedHints, type Run } from './query.ts'
 import { lengthArity } from './registry.ts'
 import { SqlSession, finish, isolationOf } from './session.ts'
 import { dropOrphans, sessionCatalog, TemporaryTables, type CatalogApi } from './temporary.ts'
@@ -183,10 +183,10 @@ function isDiagnostic(statement: Statement): boolean {
 const grammarFailures = new WeakMap<MyjsError, readonly ParseCondition[]>()
 
 /** View targets resolve before body construction; no body history precedes 1046. */
-function admitViewTarget(statement: Statement | null, session: Session): void {
+function admitViewTarget(statement: Statement | null, database: string | null): void {
   if (statement?.kind !== STATEMENT.CREATE_VIEW) return
   try {
-    requireSchema(statement.view.schema ?? session.database)
+    requireSchema(statement.view.schema ?? database)
   } catch (e) {
     if (e instanceof MyjsError) grammarFailures.set(e, [])
     throw e
@@ -344,6 +344,7 @@ export class SqlExecutor implements Executor {
   async prepare(session: Session, sql: string): Promise<PreparedInfo> {
     this.#alive(session)
     const state = this.#state(session)
+    const database = session.database
     const limit = conditionLimit(state)
     let conditions: StatementConditions | undefined = new StatementConditions()
     try {
@@ -366,30 +367,30 @@ export class SqlExecutor implements Executor {
       if (performance.now() - started > SLICE_MS) await pause()
       this.#alive(session)
       // Admit the AST before metadata or diagnostic-count PREPARE refusal.
-      admitViewTarget(statement, session)
+      admitViewTarget(statement, database)
       const construction = statement === null ? undefined : Cursor.constructionConditions(statement)
       if (construction !== undefined) {
         appendParseConditions(conditions, construction.slice(0, limit))
         state.previous = conditions.diagnostics
       }
-      const admission = statement === null ? undefined : this.#admitStatement(statement, state, session)
+      const admission = statement === null ? undefined : this.#admitStatement(statement, state, session, database)
       if (statement === null || (admission?.diagnostic === true && construction === undefined) || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
       binaryDeclarations(statement, conditions, limit)
-      await this.#preload(session, statement)
+      await this.#preload(session, statement, database)
       this.#alive(session)
       let columns: PreparedInfo['columns'] = []
+      const hints: PreparedHints = { database }
       if (statement.kind === STATEMENT.QUERY) {
-        const hints: PreparedHints = {}
         const run: Run = {
-          ...this.#run(session, sql, [], undefined, 'binary', conditions), preparing: 'wire',
+          ...this.#run(session, sql, [], undefined, 'binary', conditions), preparedHints: hints, preparing: 'wire',
           admitQuery: (query: QueryExpression, sources?: boolean): void => {
             admission?.query(query, sources)
             if (admission?.diagnostic === true && construction === undefined) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
           },
         }
-        columns = columnsOf(run, planStatementQuery(run, statement, undefined, hints).columns)
-        if (hints.tableIds !== undefined) this.#preparedHints.set(columns, hints)
+        columns = columnsOf(run, planStatementQuery(run, statement).columns)
       }
+      this.#preparedHints.set(columns, hints)
       // Every supported statement may have a large parameter response.
       if (paramCount >= MANY_PARAMETERS) await pause()
       this.#alive(session)
@@ -400,7 +401,7 @@ export class SqlExecutor implements Executor {
   }
 
   /** Ordered admission before effects; CTE definitions join it when demanded. */
-  #admitStatement(statement: Statement, state: SqlSession, session: Session): { readonly diagnostic: boolean; readonly query: (query: QueryExpression, sources?: boolean) => void } {
+  #admitStatement(statement: Statement, state: SqlSession, session: Session, database: string | null): { readonly diagnostic: boolean; readonly query: (query: QueryExpression, sources?: boolean) => void } {
     const view = statement.kind === STATEMENT.CREATE_VIEW
     if (view && someNode(statement.query, (n) => ((n as QueryExpression).kind === QUERY.QUERY && (n as QueryExpression).into !== undefined) || undefined)) throw sqlError('ER_VIEW_SELECT_CLAUSE', "View's SELECT contains a 'INTO' clause")
     let diagnostic = false
@@ -468,7 +469,7 @@ export class SqlExecutor implements Executor {
       someNode(remaining, bind)
     }
     if (statement.kind === STATEMENT.CREATE_TABLE) {
-      requireSchema(statement.table.schema ?? session.database)
+      requireSchema(statement.table.schema ?? database)
       const declarations = [...statement.columns, ...statement.checks].sort((a, b) => a.at - b.at)
       for (const declaration of declarations) {
         if ('type' in declaration) admitColumn(declaration)
@@ -477,7 +478,7 @@ export class SqlExecutor implements Executor {
       const { columns: _columns, checks: _checks, ...remaining } = statement
       someNode(remaining, bind)
     } else if (statement.kind === STATEMENT.ALTER_TABLE) {
-      requireSchema(statement.table.schema ?? session.database)
+      requireSchema(statement.table.schema ?? database)
       for (const action of statement.actions) {
         if (action.type === 'addColumn' || action.type === 'changeColumn') admitColumn(action.column)
         else someNode(action, action.type === 'addCheck' ? bindColumnExpression : bind)
@@ -551,7 +552,7 @@ export class SqlExecutor implements Executor {
   }
 
   /** The async half: every collation the statement can reach, resident before it runs (D-36). */
-  async #preload(session: Session, statement: Statement): Promise<void> {
+  async #preload(session: Session, statement: Statement, database: string | null): Promise<void> {
     const ids = new Set<number>([session.characterSet, DEFAULT_COLLATION])
     if (statement.kind === STATEMENT.SET) {
       for (const item of statement.items) {
@@ -563,7 +564,7 @@ export class SqlExecutor implements Executor {
     const catalog = this.catalog
     // Every source, including nested query blocks, contributes its field collations.
     const tableCollations = (name: TableName): void => {
-      const schema = name.schema ?? session.database
+      const schema = name.schema ?? database
       if (catalog === undefined || schema === null) return
       try {
         for (const id of collationsOf(catalog.definition(schema, name.name))) ids.add(id)
@@ -575,7 +576,7 @@ export class SqlExecutor implements Executor {
     if (statement.kind === STATEMENT.INSERT) tableCollations(statement.table)
     if (catalog !== undefined && statement.kind === STATEMENT.CREATE_TABLE) {
       try {
-        const schema = statement.table.schema ?? session.database
+        const schema = statement.table.schema ?? database
         if (schema !== null) ids.add(resolveOptionsCollation(statement.options, catalog.schema(schema).collationId ?? DEFAULT_COLLATION))
       } catch (e) {
         expectTyped(e)
@@ -656,7 +657,9 @@ export class SqlExecutor implements Executor {
   async #one(session: Session, sql: string, statement: Statement, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol, stream = true, prepared?: object): Promise<StatementResult> {
     const began = performance.now()
     this.#alive(session)
-    await this.#preload(session, statement)
+    const hints = prepared instanceof PreparedStatement ? this.#preparedHints.get(prepared.columns) : undefined
+    const database = hints ? hints.database : session.database
+    await this.#preload(session, statement, database)
     this.#alive(session)
     const state = this.#state(session)
     const limit = conditionLimit(state)
@@ -680,15 +683,16 @@ export class SqlExecutor implements Executor {
       // The error is a condition too, after any the statement raised first.
       const failed = (e: unknown): SqlError => diagnostic ? toSqlError(e) : recordFailure(state, conditions, e, limit)
       try {
-        admitViewTarget(statement, session)
+        admitViewTarget(statement, database)
         const construction = Cursor.constructionConditions(statement)
         if (construction !== undefined) {
           if (protocol === 'text') appendParseConditions(conditions, construction.slice(0, limit))
           state.previous = conditions.diagnostics
         }
-        const admission = this.#admitStatement(statement, state, session)
+        const admission = this.#admitStatement(statement, state, session, database)
         if (protocol === 'text') binaryDeclarations(statement, conditions, limit)
-        const run = { ...this.#run(session, sql, params, known, protocol, conditions), admitQuery: admission.query, ...(prepared === undefined ? {} : { prepared }) }
+        const run = { ...this.#run(session, sql, params, known, protocol, conditions), preparedHints: hints, admitQuery: admission.query, ...(prepared === undefined ? {} : { prepared }) }
+        if (hints && database !== null && database !== 'information_schema') run.catalog?.schema(database)
         const batches: ResultSet[] | undefined = stream ? [] : undefined
         const dispatched = this.#dispatch(run, statement, batches === undefined ? undefined : (batch) => batches.push(batch))
         if (!isSteps(dispatched)) return settle(dispatched)
@@ -896,19 +900,19 @@ export class SqlExecutor implements Executor {
   #dispatch(run: Run, statement: Statement, emit?: (batch: ResultSet) => void): StatementResult | Generator<void, StatementResult> {
     const { state } = run
     const session = run.env.session
+    const database = defaultDatabase(run)
     if (writes(statement)) return this.#write(run, statement)
     switch (statement.kind) {
       case STATEMENT.QUERY: {
         const pending: Condition[] = []
-        const hints = run.prepared instanceof PreparedStatement ? this.#preparedHints.get(run.prepared.columns) : undefined
-        const plan = planStatementQuery({ ...run, preparedQuery: run.prepared !== undefined }, statement, pending, hints)
+        const plan = planStatementQuery({ ...run, preparedQuery: run.prepared !== undefined }, statement, pending)
         appendConditions(run.env.conditions, pending)
         if (this.catalog === undefined) return resultSet(run, plan, undefined)
         return state.steps(this.catalog.store, plan.locking, (trx) => resultSteps(run, plan, trx, emit))
       }
       case STATEMENT.CREATE_TABLE: {
         const catalog = this.#catalog(run)
-        const schema = requireSchema(statement.table.schema ?? session.database)
+        const schema = requireSchema(statement.table.schema ?? database)
         const temporary = statement.temporary === true ? catalog.temporary : undefined
         // CREATE TEMPORARY TABLE does not commit (8.4.11).
         if (temporary === undefined) state.commit()
@@ -988,7 +992,7 @@ export class SqlExecutor implements Executor {
       case STATEMENT.RENAME_TABLE:
         // DDL: the open transaction commits first (8.4.11).
         state.commit()
-        return renameTables(this.#catalog(run), statement, session.database)
+        return renameTables(this.#catalog(run), statement, database)
       case STATEMENT.CREATE_VIEW:
         state.commit()
         return this.#createView(run, statement)
@@ -1003,7 +1007,7 @@ export class SqlExecutor implements Executor {
       case STATEMENT.TRUNCATE: {
         // DDL: an implicit commit, then the table made again, empty and its
         // AUTO_INCREMENT from 1 (8.4.11; ER_NO_SUCH_TABLE for a missing one).
-        const schema = requireSchema(statement.table.schema ?? session.database)
+        const schema = requireSchema(statement.table.schema ?? database)
         state.commit()
         const checks = foreignKeyChecks(run)
         const catalog = this.#catalog(run)
@@ -1132,7 +1136,7 @@ export class SqlExecutor implements Executor {
     const { state } = run
     const session = run.env.session
     const like = statement.like as TableName
-    const source = catalog.definition(like.schema ?? session.database ?? schema, like.name)
+    const source = catalog.definition(like.schema ?? defaultDatabase(run) ?? schema, like.name)
     const temporary = statement.temporary === true ? catalog.temporary : undefined
     const name = statement.table.name
     const exists = temporary !== undefined ? temporary.has(schema, name) : catalog.tables(schema).some((t) => t.name === name)
@@ -1152,14 +1156,15 @@ export class SqlExecutor implements Executor {
 
   #createView(run: Run, statement: CreateViewNode): StatementResult {
     const session = run.env.session
-    const schema = requireSchema(statement.view.schema ?? session.database)
+    const database = defaultDatabase(run)
+    const schema = requireSchema(statement.view.schema ?? database)
     const catalog = this.#catalog(run)
     catalog.schema(schema)
     // A view may not read a temporary table (8.4.11: 1352).
     someNode(statement.query, (node) => {
       const ref = node as TableReference
       if (ref.kind === REF.TABLE) {
-        const schema = ref.table.schema ?? session.database
+        const schema = ref.table.schema ?? database
         if (schema !== null && catalog.temporary?.has(schema, ref.table.name) === true) throw sqlError('ER_VIEW_SELECT_TMPTABLE', `View's SELECT refers to a temporary table '${ref.table.name}'`)
       }
       return undefined
@@ -1168,7 +1173,7 @@ export class SqlExecutor implements Executor {
       schema,
       name: statement.view.name,
       query: viewText(run, statement),
-      ...(session.database === null ? {} : { database: session.database }),
+      ...(database === null ? {} : { database }),
       definer: `${session.user}@%`,
       collationConnection: session.characterSet,
       ...(statement.columns === undefined ? {} : { columns: statement.columns, listed: true as const }),
@@ -1221,14 +1226,15 @@ export class SqlExecutor implements Executor {
       if (session.database === name) session.database = null
       return { affectedRows: tables.length }
     }
+    const database = defaultDatabase(run)
     if (statement.object === 'VIEW') {
-      const schemas = new Set(statement.names.map((n) => n.schema ?? session.database))
+      const schemas = new Set(statement.names.map((n) => n.schema ?? database))
       if (schemas.has(null)) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
       run.state.commit()
       // One schema at a time, as the names are given; MySQL checks every name
       // first, and so does each call.
       for (const schema of schemas as Set<string>) {
-        const names = statement.names.filter((n) => (n.schema ?? session.database) === schema).map((n) => n.name)
+        const names = statement.names.filter((n) => (n.schema ?? database) === schema).map((n) => n.name)
         const missing = catalog.dropViews(schema, names, { ifExists: statement.ifExists === true })
         for (const name of missing) raise(run.env, 1051, `Unknown table '${schema}.${name}'`, 'Note')
       }
@@ -1241,7 +1247,7 @@ export class SqlExecutor implements Executor {
     }
     if (statement.object !== 'TABLE') throw notSupported(`DROP ${statement.object}`)
     const names = statement.names.map((n) => {
-      const schema = requireSchema(n.schema ?? session.database)
+      const schema = requireSchema(n.schema ?? database)
       return { schema, name: n.name }
     })
     // DROP TEMPORARY TABLE drops the session's own and nothing else, and does not commit (8.4.11).
@@ -1336,7 +1342,7 @@ export class SqlExecutor implements Executor {
     const encode = (s: string) => run.env.session.transcoder.encode(s, coll)
     const rows: Uint8Array[][] = []
     for (const t of tables) {
-      const schema = requireSchema(t.schema ?? run.env.session.database)
+      const schema = requireSchema(t.schema ?? defaultDatabase(run))
       const name = `${schema}.${t.name}`
       const catalog = this.catalog
       if (catalog?.tables().some((x) => x.schema === schema && x.name === t.name) === true) {
@@ -1356,6 +1362,7 @@ export class SqlExecutor implements Executor {
 
   #show(run: Run, statement: ShowNode): StatementResult {
     const coll = run.env.session.characterSet
+    const database = defaultDatabase(run)
     const text = (name: string, chars: number): ColumnDefinition => columnDefinition(name, stringType(chars, coll, false), coll)
     const encode = (s: string) => run.env.session.transcoder.encode(s, coll)
     switch (statement.what) {
@@ -1387,7 +1394,7 @@ export class SqlExecutor implements Executor {
       }
       case 'CREATE TABLE': {
         const name = statement.name as TableName
-        const schema = requireSchema(name.schema ?? run.env.session.database)
+        const schema = requireSchema(name.schema ?? database)
         const catalog = this.#catalog(run)
         // A view's SHOW CREATE TABLE is its SHOW CREATE VIEW (8.4.11).
         if (catalog.temporary?.has(schema, name.name) !== true && catalog.view(schema, name.name) !== undefined) return this.#show(run, { ...statement, what: 'CREATE VIEW' })
@@ -1397,7 +1404,7 @@ export class SqlExecutor implements Executor {
       }
       case 'CREATE VIEW': {
         const name = statement.name as TableName
-        const schema = requireSchema(name.schema ?? run.env.session.database)
+        const schema = requireSchema(name.schema ?? database)
         const catalog = this.#catalog(run)
         const view = catalog.view(schema, name.name)
         if (view === undefined) {
@@ -1412,7 +1419,7 @@ export class SqlExecutor implements Executor {
         }
       }
       case 'TABLES': {
-        const schema = requireSchema(statement.database ?? run.env.session.database)
+        const schema = requireSchema(statement.database ?? database)
         // Views beside tables, and under FULL, which is which (8.4.11).
         const catalog = this.#catalog(run)
         const tables = [...catalog.tables(schema).map((t) => [t.name, 'BASE TABLE']), ...catalog.views(schema).map((v) => [v.name, 'VIEW'])].sort((a, b) => ((a[0] as string) < (b[0] as string) ? -1 : 1))

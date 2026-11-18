@@ -53,6 +53,7 @@ export interface Run {
   readonly sql: string
   /** The protocol-owned prepared instance, distinct from the shared parsed tree. */
   readonly prepared?: object
+  readonly preparedHints?: PreparedHints | undefined
   readonly protocol: WireProtocol
   readonly serverVersion: string
   /** Parameter values, when they are known (an execute rather than a prepare). */
@@ -89,6 +90,7 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
     preparedSqlMode: run.prepared instanceof PreparedStatement ? run.prepared.sqlMode : undefined,
     rowNumberConditions: run.preparing === 'wire' ? false : undefined,
     session,
+    database: statementDatabase(run),
     state: run.state,
     serverVersion: run.serverVersion,
     params,
@@ -190,7 +192,11 @@ export function openTable(run: Run, name: TableName, alias = name.name): { reado
 /** The statement's memo entry for the temporary tables it has opened. */
 const OPENED = Symbol()
 
-const defaultDatabase = (run: Run): string | null => (run.database === undefined ? run.env.session.database : run.database)
+function statementDatabase(run: Run): string | null {
+  return run.preparedHints ? run.preparedHints.database : run.env.session.database
+}
+
+export const defaultDatabase = (run: Run): string | null => run.database === undefined ? statementDatabase(run) : run.database
 
 /** A view met again inside itself: its 1146 is the statement's, through every view between. */
 const recursion = new WeakSet<object>()
@@ -200,7 +206,7 @@ const INVALID_VIEW = new Set([1054, 1146, 1305, 1353])
 
 /** Stored views keep their creation database and exclude the caller's CTEs, parameters and enclosing scope. */
 function viewContext(run: Run, view: ViewDef): Run {
-  return { catalog: run.catalog, state: run.state, env: run.env, sql: view.query, protocol: run.protocol, serverVersion: run.serverVersion, database: view.database ?? null }
+  return { catalog: run.catalog, state: run.state, env: run.env, preparedHints: run.preparedHints, sql: view.query, protocol: run.protocol, serverVersion: run.serverVersion, database: view.database ?? null }
 }
 
 /**
@@ -355,11 +361,13 @@ interface SetMembers {
 }
 
 export interface PreparedHints {
+  readonly database: string | null
   tableIds?: string | undefined
 }
 
 /** Admit hints on a statement's outer SELECT after opening its sources. */
-export function planStatementQuery(run: Run, q: QueryExpression, pending?: Condition[], prepared?: PreparedHints): SelectPlan {
+export function planStatementQuery(run: Run, q: QueryExpression, pending?: Condition[]): SelectPlan {
+  const prepared = run.preparedQuery || run.preparing === 'wire' ? run.preparedHints : undefined
   const hints: HintAdmission = { query: q, previous: prepared?.tableIds }
   const plan = planQuery(run, q, pending, hints)
   // A failed reprepare keeps the previous admission.
@@ -1362,7 +1370,7 @@ function correlatedPair(where: Expression | undefined, inner: string, outer: str
 
 /** Existing root-session plan proofs may decline a missing definition; binding reports the name error. */
 function definitionForProof(run: Run, name: TableName): TableDef | undefined {
-  return proof(() => run.catalog?.definition(name.schema ?? run.env.session.database ?? '', name.name))
+  return proof(() => run.catalog?.definition(name.schema ?? defaultDatabase(run) ?? '', name.name))
 }
 
 /** Costed join alternatives read definitions without reopening temporary tables. */

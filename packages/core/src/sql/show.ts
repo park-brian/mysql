@@ -16,7 +16,7 @@ import { proof } from './errors.ts'
 import { parseStatement, type Expression, type QueryExpression, type ShowNode, type TableName, quoteName } from '@myjs/parser'
 import type { ColumnDefinition } from '@myjs/protocol'
 import type { TableDef, ViewDef } from '@myjs/engine'
-import { planViewQuery, type Run } from './query.ts'
+import { defaultDatabase, planViewQuery, type Run } from './query.ts'
 import { viewDefinition } from './view-text.ts'
 import type { CatalogApi } from './temporary.ts'
 
@@ -25,7 +25,7 @@ const quote = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'/g, 
 /** The query a SHOW COLUMNS, SHOW INDEX or DESCRIBE stands for. */
 export function showQuery(run: Run, catalog: CatalogApi, node: ShowNode): QueryExpression {
   const name = node.name as TableName
-  const schema = requireSchema(node.database ?? name.schema ?? run.env.session.database)
+  const schema = requireSchema(node.database ?? name.schema ?? defaultDatabase(run))
   // The database first, then the table (8.4.11: 1049 before 1146).
   catalog.schema(schema)
   if (catalog.view(schema, name.name) === undefined) catalog.definition(schema, name.name)
@@ -55,7 +55,7 @@ const TABLE_STATUS = [
  * and dropped with it, which its column metadata shows too.
  */
 export function tableStatusQuery(run: Run, catalog: CatalogApi, node: ShowNode): QueryExpression {
-  const schema = requireSchema(node.database ?? run.env.session.database)
+  const schema = requireSchema(node.database ?? defaultDatabase(run))
   catalog.schema(schema)
   const renamed = TABLE_STATUS.map(([name, column]) => `${column} AS \`${name}\``).join(', ')
   const like = node.like === undefined ? '' : ` AND TABLE_NAME LIKE ${quote(node.like)}`
@@ -163,7 +163,7 @@ export function printedView(run: Run, view: ViewDef, catalog = run.catalog, curr
 
 /** SHOW CREATE VIEW's statement: the view as 8.4.11 writes it back, names in the current database unqualified. */
 export function showCreateView(run: Run, catalog: CatalogApi, view: ViewDef): string {
-  const current = run.env.session.database
+  const current = defaultDatabase(run)
   const text = printedView(run, view, catalog, current)?.text
   const q = quoteName
   const [user, host] = (view.definer ?? 'root@%').split('@') as [string, string | undefined]

@@ -4,7 +4,7 @@
 > in `sql/protocol_classic.cc`; `include/mysql_com.h` `enum_cursor_type`.
 
 Prepared statements are how every serious client sends parameters — they avoid
-SQL string interpolation, they let the server cache the plan, and they use the
+SQL string interpolation, retain a statement across executions, and use the
 compact binary encoding. Prisma, Drizzle, and `mysql2`'s `execute()` all use
 this path, so it must be as solid as `COM_QUERY`.
 
@@ -60,6 +60,11 @@ Notes:
   `LOCAL INFILE` request can never appear in this response.
 - Statement ids are per-connection. Ours are a monotonically increasing 32-bit
   counter; reuse after `COM_STMT_CLOSE` is allowed but pointless.
+- Each prepared statement retains the database selected at PREPARE, including
+  a NULL default. Its unqualified names and DATABASE() read that scope.
+  USE selects the database for later text commands. EXECUTE raises 1049 if
+  the prepared statement's database was dropped.
+  [MySQL 8.4.11 prepared database selection](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_prepare.cc#L3186-L3196).
 
 ## `COM_STMT_EXECUTE`
 
