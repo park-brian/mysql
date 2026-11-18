@@ -182,7 +182,6 @@ function offsetOf(text: string, pos: bigint, binary: boolean, fn: string): numbe
     if (length === 0) return 0
     if (pos < 1n || pos > BigInt(length)) throw outOfBounds()
   } else {
-    if (pos < 1n) throw sqlError('ER_WRONG_PARAMETERS_TO_NATIVE_FCT', `Incorrect parameters in the call to native function '${fn}'`)
     if (pos > BigInt(length + 1)) throw outOfBounds()
   }
   if (binary) return Number(pos) - 1
@@ -220,7 +219,7 @@ function nth(re: RegExp, text: string, start: number, occurrence: bigint): RegEx
 interface Search {
   readonly subject: Value
   readonly pattern: Value
-  readonly position: bigint
+  readonly position: bigint | null
   readonly occurrence: bigint
   readonly type: MatchType | undefined
 }
@@ -284,9 +283,10 @@ function replacementOf(text: string, groups: number, names: ReadonlyMap<string, 
 /** Compile the pattern once before any matching work. */
 export function regexpSearch(s: Search, fn: string, searching: boolean, returnEnd: boolean, replacement: Value): string | bigint | undefined {
   if (replacement) pairCollation(s.subject ?? s.pattern, replacement, fn)
-  if (!s.pattern) return undefined
-  const { re, groups, names } = regexpFor(s.subject, s.pattern, s.type, fn, searching)
-  if (!searching || !s.subject) return undefined
+  const pattern = s.pattern && regexpFor(s.subject, s.pattern, s.type, fn, searching)
+  if (fn !== 'regexp_instr' && s.position !== null && s.position < 1n) throw sqlError('ER_WRONG_PARAMETERS_TO_NATIVE_FCT', `Incorrect parameters in the call to native function '${fn}'`)
+  if (!pattern || !searching || !s.subject || s.position === null) return undefined
+  const { re, groups, names } = pattern
   const text = textOf(s.subject)
   const binary = s.subject.kind === 'bytes'
   const start = offsetOf(text, s.position, binary, fn)

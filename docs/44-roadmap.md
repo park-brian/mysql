@@ -365,8 +365,8 @@ and keeps every previous complete match. Full Docker verification passes
 package and client smoke and all seven pinned corpora, including 1,737
 coercion warning counts. Parser, core and facade measure 44,906, 334,361
 and 334,265 gzipped bytes. The relational score stays at 2,158 of 2,248.
-Prepared return-option checks and nonpositive positions with NULL inputs
-remain open.
+Prepared return-option checks remain open. The nonpositive-position
+follow-up is recorded below.
 
 **M5.10 shared regex search setup and replacement collation, verified.**
 The search functions compile the pattern and set the character offset
@@ -381,6 +381,20 @@ verification passes 1,882 tests, all nine size gates, seeded fuzzing,
 including 1,737 coercion warning counts. Parser, core and facade measure
 44,906, 334,317 and 334,258 gzipped bytes. The relational score stays at
 2,158 of 2,248.
+
+**M5.10 nonpositive regex positions with NULL arguments, verified.**
+`REGEXP_SUBSTR` and `REGEXP_REPLACE` validate the pattern before checking
+the position for error 1583. That error takes precedence over a NULL
+subject, pattern or replacement. A NULL match type skips the search, and
+a NULL position or occurrence suppresses the position check. The pinned
+study improves from 657 to 709 exact outcomes out of 729 and keeps every
+prior match. The retained test checks both protocols. Full Docker
+verification passes 1,886 tests, all nine size gates, seeded fuzzing,
+10,000 crash points, package and client smoke and all seven pinned corpora,
+including 1,737 coercion warning counts. Parser, core and facade measure
+44,773, 334,348 and 334,264 gzipped bytes. The relational score stays at
+2,158 of 2,248. Prepared return-option validation and broader ICU
+compatibility remain open.
 
 **M0.3 and M0.4 shared byte handling, verified.** Binary value text,
 key text and PEM formatting use the same byte-to-code-point conversion.

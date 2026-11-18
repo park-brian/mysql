@@ -642,7 +642,9 @@ export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): 
       if (option === null) return null
       const mt = option === undefined ? undefined : matchType(toText(option), fn)
       const [subject, pattern, replacement] = v
-      const search = { subject, pattern, position: int(required, 1n), occurrence: int(required + 1, replace ? 0n : 1n), type: mt }
+      // A NULL occurrence suppresses position checks.
+      const position = v[required] === null || v[required + 1] === null ? null : int(required, 1n)
+      const search = { subject, pattern, position, occurrence: int(required + 1, replace ? 0n : 1n), type: mt }
       const out = regexpSearch(search, fn, !v.includes(null), ret === 1n, replace ? replacement! : null)
       if (typeof out === 'bigint') return intValue(out)
       if (out === undefined) return null

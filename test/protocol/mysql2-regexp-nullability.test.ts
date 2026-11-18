@@ -58,6 +58,19 @@ test('M5.10: REGEXP_LIKE reports nullable operands in its result flags', async (
       assert.deepEqual((await read(`SELECT REGEXP_SUBSTR(NULL, '(', 1, 1, NULL),
         REGEXP_REPLACE(REPEAT('a', 30), '(a+)+', NULL)`))[0], [[null, null]])
       assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      for (const [sql, fn] of [
+        ["SELECT REGEXP_SUBSTR(NULL, 'x', 0)", 'regexp_substr'],
+        ["SELECT REGEXP_SUBSTR('x', NULL, -1)", 'regexp_substr'],
+        ["SELECT REGEXP_REPLACE('x', 'x', NULL, 0)", 'regexp_replace'],
+      ] as const) {
+        const message = `Incorrect parameters in the call to native function '${fn}'`
+        await assert.rejects(read(sql), { errno: 1583, sqlState: '42000', sqlMessage: message })
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [['Error', 1583, message]])
+      }
+      await assert.rejects(read("SELECT REGEXP_SUBSTR(NULL, '(', 0, NULL)"), { errno: 3691, sqlState: 'HY000', sqlMessage: broken })
+      assert.deepEqual((await read(`SELECT REGEXP_SUBSTR(NULL, 'x', 0, NULL),
+        REGEXP_SUBSTR(NULL, '(', 0, 1, NULL), REGEXP_INSTR(NULL, 'x', 0)`))[0], [[null, null, null]])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
       const mixed = "Character set 'binary' cannot be used in conjunction with 'utf8mb4_0900_ai_ci' in call to regexp_replace."
       await assert.rejects(read("SELECT REGEXP_REPLACE(_binary 'x', _binary '(', 'z', NULL)"), { errno: 3995, sqlState: 'HY000', sqlMessage: mixed })
       assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [['Error', 3995, mixed]])
