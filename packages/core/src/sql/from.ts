@@ -586,7 +586,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     return out
   }
   let physical: Op | undefined
-  let conditions: readonly Placed[] = []
+  let conditions: Placed[] = []
   // Compile filters eagerly, but construct iterators after access/order settings are final.
   const physicalTree = (): Op | undefined => (physical ??= physicalOf(conditions))
 
@@ -788,13 +788,18 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         const l = notNull(e.left)
         return l !== undefined ? neverEqual(l, e.right) : neverEqual(notNull(e.right), e.left)
       }
-      conditions = splitAnd(where).filter((e) => e === preserve || !alwaysTrue(e)).map((e): Placed => {
+      conditions = []
+      let allFolded = true
+      for (const e of splitAnd(where)) {
+        if (e === preserve || !alwaysTrue(e)) allFolded = false
+        // Retain a direct NULL check on the side that was nullable before join conversion.
+        else if (e.kind !== NODE.UNARY || scope.columnAt(localSlot(e.operand, scope) ?? -1)?.table.nullable !== true) continue
         const compiled = compile(e)
         const semi = semijoin?.(e)
-        return { e, aliases: aliasesOf(e, scope), compiled, semijoin: semi }
-      })
-      // A WHERE proved true has no residual to drive an access range.
-      if (conditions.length === 0) settings.where = undefined
+        conditions.push({ e, aliases: aliasesOf(e, scope), compiled, semijoin: semi })
+      }
+      // Conditions that are already true of stored rows cannot drive range access.
+      if (allFolded) settings.where = undefined
       physical = undefined
     },
     usesLookup(alias) {

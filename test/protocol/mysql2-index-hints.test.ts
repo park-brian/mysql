@@ -666,3 +666,55 @@ test('a fully folded filter leaves the ordinary access path', async () => {
     await db?.end()
   }
 })
+
+
+test('a converted outer join retains its NULL-rejecting filter', async () => {
+  const { db, conn } = await indexHintConnection()
+  const schema = 'converted_outer_filter'
+  const select = "SELECT CONCAT(l1.s, '-') AS ln, IFNULL(pa.name, 'none') AS pn, pa.id * 2 AS p2, l1.n IS NULL AS missing"
+  const left = `${select} FROM pa LEFT JOIN lt AS l1 ON pa.id >= l1.n WHERE l1.n IS NOT NULL`
+  const right = `${select} FROM lt AS l1 RIGHT JOIN pa ON pa.id >= l1.n WHERE l1.n IS NOT NULL`
+  const plan = 'Nested loop inner join\n    Filter\n        Table scan on l1\n    Filter\n        Index range scan on pa'
+  const fields = [
+    ['ln', 253, 44, 0, 31, 255], ['pn', 253, 48, 1, 31, 255],
+    ['p2', 8, 12, 129, 0, 63], ['missing', 8, 1, 129, 0, 63],
+  ]
+  const before = [[null, 'éva', 2, 0], [null, 'zoë', 4, 0], [null, 'al', 6, 0], [null, 'x y', 8, 0], ['dee-', 'al', 6, 0], ['dee-', 'x y', 8, 0]]
+  try {
+    if (db === undefined) {
+      const [version] = await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS version')
+      assert.equal(version[0]?.version, '8.4.11')
+    }
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+    await conn.query('CREATE DATABASE ' + schema + ' COLLATE utf8mb4_0900_ai_ci')
+    await conn.query('USE ' + schema)
+    await conn.query('CREATE TABLE pa (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, name VARCHAR(12) NOT NULL, grp INT, amt DECIMAL(6,2), UNIQUE KEY (name), KEY (grp)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE lt (n INT NOT NULL PRIMARY KEY, s VARCHAR(10) CHARACTER SET latin1, t VARCHAR(10) COLLATE utf8mb4_bin) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO pa (name, grp, amt) VALUES ('éva',4,-1.49),('zoë',1,103.23),('al',NULL,182.63),('x y',2,196.81)")
+    await conn.query("INSERT INTO lt VALUES (1,NULL,'red'),(3,'dee','zoë'),(5,'Mo',NULL)")
+    await conn.query('ANALYZE TABLE pa, lt')
+    for (const sql of [left, right]) {
+      await checkIndexRead(conn, sql, before, fields, plan)
+      const [explain] = await conn.execute<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+      assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan)
+    }
+    const held = await conn.prepare(left)
+    const objects = (rows: readonly (readonly unknown[])[]) => rows.map(([ln, pn, p2, missing]) => ({ ln, pn, p2, missing }))
+    try {
+      assert.deepEqual((await held.execute([]))[0], objects(before))
+      await conn.query('DELETE FROM lt WHERE n=1')
+      await conn.query("UPDATE lt SET s='new' WHERE n=3")
+      assert.deepEqual((await held.execute([]))[0], objects([
+        ['new-', 'al', 6, 0], ['new-', 'x y', 8, 0],
+      ]))
+      const [extended] = await conn.query('SELECT pa.id FROM pa LEFT JOIN lt AS l1 ON pa.id >= l1.n WHERE l1.n IS NULL ORDER BY pa.id')
+      assert.deepEqual(extended, [{ id: 1 }, { id: 2 }])
+    } finally {
+      await held.close()
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS ' + schema)
+    await conn.end()
+    await db?.end()
+  }
+})

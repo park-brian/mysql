@@ -12,6 +12,7 @@ entry, recorded out of order, sits where its date and its commit put it.
 
 | Date | Entry |
 |---|---|
+| 2026-11-17 | **M5.49. Retain NULL checks on converted outer joins.** The direct check stays at the join input, and stored rows use ordinary access when the condition is already true of them. Both protocols match the retained left and right join cases. The relational plan score rises to 2,167 of 2,248. Full Docker verification passes 1,896 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-17 | **M5.8. Encode signed explicit AUTO_INCREMENT IDs in OK packets.** Both protocols deliver the signed value's wire representation and keep generated-ID priority and session state. The pinned comparison improves from 90 to 170 of 180 observations. Full Docker verification passes 1,895 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-17 | **M5.10. Share regex diagnostic constructors.** Pattern parsing and replacement use the same typed errors and keep their original validation order. All seven focused tests pass on both engines. Full Docker verification passes 1,894 tests and all seven pinned corpora, saving 42 core and 40 facade gzipped bytes within the existing caps. |
 | 2026-11-17 | **M4.23. Share catalog validation for optional type fields.** Stored definitions and typed diagnostics agree across 20,004 cases, including 8,357 byte-identical re-encodings. Full Docker verification passes 1,894 tests and all seven pinned corpora. Core and facade save 38 and 31 gzipped bytes within the existing caps. |
