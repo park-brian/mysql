@@ -223,8 +223,9 @@ version introduced). An update writes every off-page field afresh, so a chain
 belongs to exactly one version and only one list ever frees it. Purge removing
 a delete-marked row never frees what it finds in that row *(review)*.
 Clustered UPDATE and delete-mark collect the old overflow references while
-decoding the before-image fields. The undo record receives those references
-in stored field order.
+decoding the before-image fields. Clustered INSERT and UPDATE collect new
+references as each overflow chain is written. The undo record receives
+both lists in stored field order.
 
 A record stores the **old value whole**, header included. It does not store
 doc 25's "changed columns only". A value is at most one leaf cell, and its

@@ -12,6 +12,7 @@ entry, recorded out of order, sits where its date and its commit put it.
 
 | Date | Entry |
 |---|---|
+| 2026-11-18 | **M5.50. Record new overflow references as they are written.** Clustered INSERT and UPDATE share the write and undo path. UPDATE and delete-mark share the previous row read. Forty cases preserve exact WAL records and page allocations. Docker verifies 1,903 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.10. Keep UTC_DATE on the UTC calendar.** Both protocols preserve the UTC day alongside the session date across midnight. All 1,320 typed TIME cast observations are unchanged, and full Docker verifies 1,903 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.10. Anchor typed TIME casts to the session date.** DATE keeps the anchored day. DATETIME rounds or truncates its fraction after anchoring. Both protocols match all 1,320 pinned observations. Docker passes 1,903 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.10. Locate regex start positions in one pass.** Text position lookup stops at the requested code point. All 4,608 focused wire observations and 5,000 position controls are unchanged. Docker passes 1,902 tests and all seven pinned corpora within the existing caps. |

@@ -30,7 +30,7 @@ import { decodeDouble, decodeFloat, decodeInt, compareFloat, encodeKey, type Key
 import { collation, memcmp } from '@myjs/charsets'
 import type { Range } from './btree.ts'
 import { duplicateKey, misuse, noSuchTable, tableDefChanged } from './errors.ts'
-import { ClusteredIndex, SecondaryIndex, prefixEnd, type KeyColumn, type KeyValues, type ReadMode, type Row } from './indexes.ts'
+import { ClusteredIndex, SecondaryIndex, keyOf, prefixEnd, valuesOf, type KeyColumn, type KeyValues, type ReadMode, type Row } from './indexes.ts'
 import type { FieldBytes, RecordLayout } from './record.ts'
 import { clusteredKeyOf, keyColumnsOf, layoutOf, secondariesOf, ROW_ID_BYTES, type EngineName, type IndexDef, type TableDef } from './schema.ts'
 import type { Store } from './store.ts'
@@ -232,7 +232,7 @@ class NativeTable implements Table {
       if (old === undefined) return undefined
       if (!same) this.#clustered.insert(full, t)
       for (const s of this.#secondaries) {
-        if (same && equalBytes(encodeKey(s.columns.map((c) => old[c.field] ?? null), s.columns.map((c) => c.part)), encodeKey(s.columns.map((c) => full[c.field] ?? null), s.columns.map((c) => c.part)))) continue
+        if (same && equalBytes(keyOf(old, s.columns), keyOf(full, s.columns))) continue
         s.delete(old, id, t)
         s.insert(full, next, t)
       }
@@ -428,8 +428,6 @@ function compareKey(a: readonly FieldBytes[], b: readonly FieldBytes[], columns:
   return 0
 }
 
-const valuesOf = (row: Row, columns: readonly KeyColumn[]): FieldBytes[] => columns.map((c) => row[c.field] ?? null)
-
 interface MemoryRow {
   readonly id: RowId
   readonly key: FieldBytes[]
@@ -613,7 +611,7 @@ class MemoryTable implements Table {
       if (v === null && !f.nullable) throw misuse(`field ${i} is NOT NULL`)
       if (v !== null && f.fixed !== undefined && v.length !== f.fixed) throw misuse(`field ${i} is ${f.fixed} bytes wide, given ${v.length}`)
     }
-    for (const columns of [this.#clustered, ...this.#secondaries.map((s) => s.columns)]) encodeKey(valuesOf(full, columns), columns.map((c) => c.part))
+    for (const columns of [this.#clustered, ...this.#secondaries.map((s) => s.columns)]) keyOf(full, columns)
   }
 
   /** ER_DUP_ENTRY in the clustered index, then in each UNIQUE index in order — the order native inserts them. */

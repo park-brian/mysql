@@ -89,11 +89,9 @@ function secondaryBound(clustered: ClusteredIndex, columns: readonly KeyColumn[]
   BTree.checkKeyLength(maxKeyLength(clustered.layout, columns) + clustered.maxKey + SECONDARY_HEADER - 4, pageSize)
 }
 
-const keyOf = (row: Row, columns: readonly KeyColumn[]): Uint8Array =>
-  encodeKey(
-    columns.map((c) => row[c.field] ?? null),
-    columns.map((c) => c.part),
-  )
+export const valuesOf = (row: Row, columns: readonly KeyColumn[]): FieldBytes[] => columns.map((c) => row[c.field] ?? null)
+
+export const keyOf = (row: Row, columns: readonly KeyColumn[]): Uint8Array => encodeKey(valuesOf(row, columns), columns.map((c) => c.part))
 
 /** The first byte string after every string that starts with `prefix`, or `undefined` if there is none. */
 export function prefixEnd(prefix: Uint8Array): Uint8Array | undefined {
@@ -180,9 +178,7 @@ export class ClusteredIndex {
     return this.#change(trx, (t) => {
       this.tree.upsert(key, (current) => {
         if (current !== undefined && !versionOf(current).marked) throw duplicateKey(this.name)
-        const record = this.#encode(key, row)
-        const ptr = t.undo({ isInsert: current === undefined, purgeRemoves: false, indexId: this.tree.indexId, key, old: current ?? null, freeOnPurge: [], freeOnRollback: externalRefs(this.layout, record) })
-        return clusteredValue(false, t.id, ptr, record)
+        return this.#writeVersion(t, key, row, current ?? null, [])
       })
       this.tree.space.journal.row(this.tree.indexId, t.id, null, row)
       return key
@@ -203,31 +199,7 @@ export class ClusteredIndex {
 
   /** Replace a live row, returning its detached previous fields; undefined if absent. */
   replace(row: Row, trx?: Trx): FieldBytes[] | undefined {
-    const key = this.keyOf(row)
-    return this.#change(trx, (t) => {
-      let before: FieldBytes[] | undefined
-      this.tree.upsert(key, (current) => {
-        if (current === undefined || versionOf(current).marked) return undefined
-        const freeOnPurge: Uint8Array[] = []
-        before = this.#row(current.subarray(CLUSTERED_HEADER), freeOnPurge)
-        const record = this.#encode(key, row)
-        const ptr = t.undo({
-          isInsert: false,
-          purgeRemoves: false,
-          indexId: this.tree.indexId,
-          key,
-          old: current,
-          // The old version's chains are its own: freed when no view needs it.
-          freeOnPurge,
-          freeOnRollback: externalRefs(this.layout, record),
-        })
-        return clusteredValue(false, t.id, ptr, record)
-      })
-      if (before === undefined) return undefined
-      this.tree.space.journal.row(this.tree.indexId, t.id, before, row)
-      // A caller inside an outer batch must not mutate its pending ROW image.
-      return before.map((field) => field?.slice() ?? null)
-    })
+    return this.#update(this.keyOf(row), row, trx)
   }
 
   /** Delete-mark a row; purge removes it once no view can see it. `false` if there is none. */
@@ -237,6 +209,10 @@ export class ClusteredIndex {
 
   /** Delete-mark a live row, returning its detached previous fields; undefined if absent. */
   remove(key: Uint8Array, trx?: Trx): FieldBytes[] | undefined {
+    return this.#update(key, null, trx)
+  }
+
+  #update(key: Uint8Array, row: Row | null, trx: Trx | undefined): FieldBytes[] | undefined {
     return this.#change(trx, (t) => {
       let before: FieldBytes[] | undefined
       this.tree.upsert(key, (current) => {
@@ -244,11 +220,13 @@ export class ClusteredIndex {
         const record = current.subarray(CLUSTERED_HEADER)
         const freeOnPurge: Uint8Array[] = []
         before = this.#row(record, freeOnPurge)
+        if (row !== null) return this.#writeVersion(t, key, row, current, freeOnPurge)
         const ptr = t.undo({ isInsert: false, purgeRemoves: true, indexId: this.tree.indexId, key, old: current, freeOnPurge, freeOnRollback: [] })
         return clusteredValue(true, t.id, ptr, record)
       })
       if (before === undefined) return undefined
-      this.tree.space.journal.row(this.tree.indexId, t.id, before, null)
+      this.tree.space.journal.row(this.tree.indexId, t.id, before, row)
+      // A caller inside an outer batch must not mutate its pending ROW image.
       return before.map((field) => field?.slice() ?? null)
     })
   }
@@ -350,14 +328,25 @@ export class ClusteredIndex {
     return this.#sys.autocommit((t) => t.write(() => change(t)))
   }
 
-  #encode(key: Uint8Array, row: Row): Uint8Array {
+  /** Encode the new record once and give each overflow chain to the undo that frees it. */
+  #writeVersion(trx: Trx, key: Uint8Array, row: Row, old: Uint8Array | null, freeOnPurge: Uint8Array[]): Uint8Array {
     const pageSize = this.tree.space.pool.pageSize
     BTree.checkKeyLength(key.length, pageSize)
     const pages = this.tree.overflowPages()
     // A leaf cell is the key, the value and two length varints of up to three
     // bytes; the value is the version header, then the record.
     const maxSize = maxCellSize(pageSize) - Math.max(key.length, this.maxKey) - 6 - CLUSTERED_HEADER
-    return encodeRecord(this.layout, row, { maxSize, storeExternal: (b) => writeChain(pages, b) })
+    const freeOnRollback: Uint8Array[] = []
+    const record = encodeRecord(this.layout, row, {
+      maxSize,
+      storeExternal: (bytes) => {
+        const ref = writeChain(pages, bytes)
+        freeOnRollback.push(ref)
+        return ref
+      },
+    })
+    const ptr = trx.undo({ isInsert: old === null, purgeRemoves: false, indexId: this.tree.indexId, key, old, freeOnPurge, freeOnRollback })
+    return clusteredValue(false, trx.id, ptr, record)
   }
 
   #row(record: Uint8Array, refs?: Uint8Array[]): FieldBytes[] {
