@@ -35,8 +35,7 @@ import { compileIcu, type IcuFlags, type IcuPattern } from './icu-pattern.ts'
  * before it runs, so a statement never hangs; a named divergence, since the
  * server would finish one that happens to match quickly.
  */
-function shapeOf(pattern: string): { readonly depth: number; readonly nested: boolean } {
-  let deepest = 0
+function nestedQuantifiers(pattern: string): boolean {
   let inClass = false
   // For each open group: whether it holds a quantifier or an alternation.
   const open: boolean[] = []
@@ -54,15 +53,15 @@ function shapeOf(pattern: string): { readonly depth: number; readonly nested: bo
     if (c === '[') inClass = true
     else if (c === '(') {
       open.push(false)
-      deepest = Math.max(deepest, open.length)
+      if (open.length >= 100) throw sqlError('ER_REGEXP_INTERNAL_ERROR', 'Internal error in the regular expression library.')
     } else if (c === ')') {
-      const inner = open.pop() === true
+      if (!open.pop()) continue
       const next = pattern[i + 1]
-      if (inner && (next === '*' || next === '+' || (next === '{' && /^\{\d*,\}/.test(pattern.slice(i + 1))))) nested = true
-      if (inner && open.length > 0) open[open.length - 1] = true
-    } else if ((c === '*' || c === '+' || c === '|' || c === '{') && open.length > 0) open[open.length - 1] = true
+      if (next === '*' || next === '+' || (next === '{' && /^\{\d*,\}/.test(pattern.slice(i + 1)))) nested = true
+      if (open.length > 0) open[open.length - 1] = true
+    } else if (open.length > 0 && '*+|{'.includes(c)) open[open.length - 1] = true
   }
-  return { depth: deepest, nested }
+  return nested
 }
 
 const RUNAWAY_LENGTH = 17
@@ -129,10 +128,9 @@ function regexpFor(subject: Value, pattern: Exclude<Value, null>, type: MatchTyp
   const collation = subject?.kind === 'string' && pattern.kind === 'string' ? aggregateCollation(subject, pattern) : base
   const text = textOf(pattern)
   if (text === '' || text.includes('[[:<:]]') || text.includes('[[:>:]]')) throw regexpArgumentError()
-  const shape = shapeOf(text)
-  if (shape.depth >= 100) throw sqlError('ER_REGEXP_INTERNAL_ERROR', 'Internal error in the regular expression library.')
+  const nested = nestedQuantifiers(text)
   const c = compiled(text, { i: type?.i ?? nameOf(collation).endsWith('_ci'), m: type?.m ?? false, s: type?.s ?? false, d: type?.d ?? false })
-  if (searching && shape.nested && subject !== null && [...textOf(subject)].length > RUNAWAY_LENGTH) throw sqlError('ER_REGEXP_TIME_OUT', 'Timeout exceeded in regular expression match.')
+  if (searching && nested && subject !== null && [...textOf(subject)].length > RUNAWAY_LENGTH) throw sqlError('ER_REGEXP_TIME_OUT', 'Timeout exceeded in regular expression match.')
   return c
 }
 

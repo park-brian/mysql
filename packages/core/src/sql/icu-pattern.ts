@@ -61,10 +61,11 @@ interface Flags {
   s: boolean
   x: boolean
   d: boolean
+  behind?: boolean
 }
 
 /** ICU flags set by the SQL match type. */
-export type IcuFlags = Readonly<Omit<Flags, 'x'>>
+export type IcuFlags = Readonly<Omit<Flags, 'x' | 'behind'>>
 
 /** ICU's `\w`: `[\p{Alphabetic}\p{M}\p{Nd}\p{Pc}‌‍]`. */
 const WORD = '\\p{Alphabetic}\\p{M}\\p{Nd}\\p{Pc}\\u{200C}\\u{200D}'
@@ -324,8 +325,13 @@ class Parser {
         this.seen[f.i ? 'i' : 'c'] = true
         return { t: 'set', set: { negated: false, terms: [{ op: '', items: [{ t: 'class', src: posix }] }] }, i: f.i }
       }
-      case '.':
-        return { t: 'raw', src: f.s ? '[\\s\\S]' : f.d ? '[^\\n]' : `[^${TERMINATORS}]`, min: 1, max: 1 }
+      case '.': {
+        // A forward dot-all consumes CRLF as one atom. Keep the single-unit
+        // matcher inside JS lookbehind, which can end between CR and LF.
+        const pair = f.s && !f.behind
+        const src = pair ? '(?:\\r\\n|[^\\r]|\\r(?!\\n))' : f.s ? '[\\s\\S]' : f.d ? '[^\\n]' : `[^${TERMINATORS}]`
+        return { t: 'raw', src, min: 1, max: pair ? 2 : 1 }
+      }
       case '^':
         return { t: 'assert', src: caret(f), quantifiable: true }
       case '$':
@@ -372,6 +378,7 @@ class Parser {
           const d = this.raw()
           if (d === C('=') || d === C('!')) {
             kind = d === C('=') ? '<=' : '<!'
+            inner.behind = true
             break
           }
           if (!isLetter(d)) throw this.syntax(this.i - 1)
