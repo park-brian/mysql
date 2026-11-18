@@ -1070,35 +1070,42 @@ test('an unhinted ordered primary read is covering when the key holds every read
   }
 })
 
-test('BIGINT multipoint plans show exact bounds in index order', async () => {
+test('integer multipoint plans show exact bounds in index order', async () => {
   const { db, conn } = await rangeConnection()
-  const schema = 'bigint_multipoint_range'
+  const schema = 'integer_multipoint_range'
   try {
     await conn.query(`CREATE DATABASE ${schema}`)
     await conn.query(`USE ${schema}`)
-    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,s BIGINT,KEY by_s(s)) STATS_AUTO_RECALC=0')
-    const keys = ['-9223372036854775808', '-9223372036854775807', '9223372036854775807', ...Array.from({ length: 40 }, (_, i) => String(i + 3))]
-    await conn.query('INSERT INTO t VALUES ' + keys.map((key, i) => `(${i + 1},${key})`).join(','))
-    await conn.query('ANALYZE TABLE t')
-    const cases = [
-      ['7,-9223372036854775808,7', [1, 8], '(s = -9223372036854775808) OR (s = 7)'],
-      ['7,-9223372036854775807,9223372036854775807', [2, 8, 3], '(s = -9223372036854775807) OR (s = 7) OR (s = 9223372036854775807)'],
-    ] as const
-    for (const method of ['query', 'execute'] as const) {
-      const read = (sql: string) => method === 'query' ? conn.query<mysql.RowDataPacket[]>(sql) : conn.execute<mysql.RowDataPacket[]>(sql)
-      for (const [items, ids, bounds] of cases) {
-        const sql = `SELECT id FROM t WHERE s IN (${items})`
-        const [rows, fields] = await read(sql)
-        assert.deepEqual(rows.map((row) => row.id), ids)
-        assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
-          ['id', 3, 11, 20483, 0, 63, schema, 't', 't', 'id'],
-        ])
-        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
-        const [explain] = await read('EXPLAIN FORMAT=TREE ' + sql)
-        const tree = String(explain[0]?.EXPLAIN)
-        assert.equal(planSkeleton(tree), 'Filter\n    Covering index range scan on t using by_s over')
-        assert.ok(tree.includes('using by_s over ' + bounds), tree)
+    const widths = [['TINYINT', 8n], ['SMALLINT', 16n], ['MEDIUMINT', 24n], ['INT', 32n], ['BIGINT', 64n]] as const
+    for (const [type, bits] of widths) for (const unsigned of [false, true]) {
+      await conn.query(`CREATE TABLE t(id INT PRIMARY KEY,s ${type}${unsigned ? ' UNSIGNED' : ''},KEY by_s(s)) STATS_AUTO_RECALC=0`)
+      const limit = 1n << (unsigned ? bits : bits - 1n)
+      const min = unsigned ? 0n : -limit
+      const max = limit - 1n
+      const keys = [min, min + 1n, max, ...Array.from({ length: 40 }, (_, i) => BigInt(i + 3))]
+      await conn.query('INSERT INTO t VALUES ' + keys.map((key, i) => `(${i + 1},${key})`).join(','))
+      await conn.query('ANALYZE TABLE t')
+      const cases = [
+        [`7,${min},7`, [1, 8], `(s = ${min}) OR (s = 7)`],
+        [`7,${min + 1n},${max}`, [2, 8, 3], `(s = ${min + 1n}) OR (s = 7) OR (s = ${max})`],
+      ] as const
+      for (const method of ['query', 'execute'] as const) {
+        const read = (sql: string) => method === 'query' ? conn.query<mysql.RowDataPacket[]>(sql) : conn.execute<mysql.RowDataPacket[]>(sql)
+        for (const [items, ids, bounds] of cases) {
+          const sql = `SELECT id FROM t WHERE s IN (${items})`
+          const [rows, fields] = await read(sql)
+          assert.deepEqual(rows.map((row) => row.id), ids)
+          assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
+            ['id', 3, 11, 20483, 0, 63, schema, 't', 't', 'id'],
+          ])
+          assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+          const [explain] = await read('EXPLAIN FORMAT=TREE ' + sql)
+          const tree = String(explain[0]?.EXPLAIN)
+          assert.equal(planSkeleton(tree), 'Filter\n    Covering index range scan on t using by_s over')
+          assert.ok(tree.includes('using by_s over ' + bounds), tree)
+        }
       }
+      await conn.query('DROP TABLE t')
     }
   } finally {
     await conn.query(`DROP DATABASE IF EXISTS ${schema}`)

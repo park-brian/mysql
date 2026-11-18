@@ -471,7 +471,7 @@ const pointRange = (bound: KeyBound): KeyRange => ({ from: bound, to: bound })
 function describePoints(points: readonly KeyRange[], column: ColumnDef): string | undefined {
   const t = column.type
   if (points.length < 2) return undefined
-  if (t.type === FIELD_TYPE.LONGLONG ? points.length > 3 : t.type !== FIELD_TYPE.VAR_STRING || t.collationId === undefined || t.collationId === CHARSET_BINARY) return undefined
+  if (integerBytes(t.type) !== undefined ? points.length > 3 : t.type !== FIELD_TYPE.VAR_STRING || t.collationId === undefined || t.collationId === CHARSET_BINARY) return undefined
   return describeIntervals(points.map((point) => pointInterval(decodeField(point.from!.values[0]!, t) as RangeValue)), column.name)
 }
 
