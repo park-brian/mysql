@@ -327,7 +327,21 @@ verification passes 1,880 tests, all nine size gates, seeded fuzzing,
 10,000 crash points, package and client smoke and all seven pinned corpora,
 including 1,737 coercion warning counts. Parser, core and facade measure
 44,526, 334,334 and 334,260 gzipped bytes. The relational score stays at
-2,158 of 2,248. Several standalone multipoint plan labels remain open.
+2,158 of 2,248. The short BIGINT multipoint case is tracked below.
+
+**M5.49 short BIGINT multipoint labels, verified.** A range composed
+of two or three distinct BIGINT points prints the stored bounds in key
+order. The range selection and row reader still use those same keys.
+Both protocols match the full bounds for the signed minimum, its next
+value and the signed maximum. The original 480-observation comparison
+improves from 152 to 160 exact matches. A wider 1,008-observation study
+improves from 138 to 312 on rows, fields, warnings and plan shape with
+bounds. Every prior match is retained. Full Docker verification passes
+1,887 tests, all nine size gates, seeded fuzzing, 10,000 crash points,
+package and client smoke and all seven pinned corpora, including 1,737
+coercion warning counts. Parser, core and facade measure 44,773, 334,350
+and 334,266 gzipped bytes. The relational score stays at 2,158 of 2,248.
+Longer list truncation and combined primary-key bounds remain open.
 
 **M5.10 `REGEXP_LIKE` result nullability, verified.** The regex binder
 uses the operands' nullability for the scalar result field. Both

@@ -103,7 +103,7 @@ export interface Access {
   /** Exact compiler-produced integer bound applied by this selected range. */
   readonly implied?: ImpliedRange | undefined
   /** The range description for EXPLAIN. */
-  readonly over?: string
+  readonly over?: string | undefined
 }
 
 export const FULL_SCAN: Access = {}
@@ -252,8 +252,7 @@ function conditionAccess(def: TableDef, conditions: readonly Condition[], env: E
     const eligible = conditions.filter((c) => c.column === column)
     const points = pointRanges(column, eligible, unresolved, evaluate)
     if (points) {
-      const over = allowRange ? undefined : describeTextPoints(points, column)
-      const access = { index: index.name, ranges: points, ...(over === undefined ? {} : { over }) }
+      const access = { index: index.name, ranges: points, over: allowRange ? undefined : describePoints(points, column) }
       if (index.kind === 'primary') return access
       if (point === undefined || index.name === def.clustered) point = access
     } else if (points === undefined && allowRange && index.kind === 'primary') {
@@ -468,11 +467,12 @@ export function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Ex
 const NULL_KEY: KeyBound = { values: [null], inclusive: true }
 const pointRange = (bound: KeyBound): KeyRange => ({ from: bound, to: bound })
 
-/** A multi-point VARCHAR read shows the bounds in physical key order. */
-function describeTextPoints(points: readonly KeyRange[], column: ColumnDef): string | undefined {
+/** A multi-point read shows the bounds in physical key order. */
+function describePoints(points: readonly KeyRange[], column: ColumnDef): string | undefined {
   const t = column.type
-  if (points.length < 2 || t.type !== FIELD_TYPE.VAR_STRING || t.collationId === undefined || t.collationId === CHARSET_BINARY) return undefined
-  return describeIntervals(points.map(({ from }) => pointInterval(decodeField(from!.values[0]!, t) as RangeValue)), column.name)
+  if (points.length < 2) return undefined
+  if (t.type === FIELD_TYPE.LONGLONG ? points.length > 3 : t.type !== FIELD_TYPE.VAR_STRING || t.collationId === undefined || t.collationId === CHARSET_BINARY) return undefined
+  return describeIntervals(points.map((point) => pointInterval(decodeField(point.from!.values[0]!, t) as RangeValue)), column.name)
 }
 
 /** Intervals as EXPLAIN writes a range: `(2 < grp <= 5) OR (grp = 7)`, `(NULL < grp)`, `(grp = NULL)`. */
