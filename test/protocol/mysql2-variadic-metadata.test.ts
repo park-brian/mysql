@@ -83,3 +83,40 @@ test('M5.10: SHA2 markers retain their width and NULL skips the length read', as
     await db?.end()
   }
 })
+
+test('M5.10: SHA2 constant length diagnostics follow prepare and evaluation', async () => {
+  const { conn, db, host } = await metadataConnection()
+  const invalid = ['Warning', 1583, "Incorrect parameters in the call to native function 'sha2'"]
+  try {
+    if (host !== undefined) assert.deepEqual((await conn.query("SELECT SUBSTRING_INDEX(VERSION(), '-', 1)"))[0], [['8.4.11']])
+    for (const [size, valid] of [['224w', true], ['225w', false], [null, false]] as const) {
+      const sizeArg = size === null ? 'NULL' : "'" + size + "'"
+      const sql = `SELECT SHA2('abc',${sizeArg}) AS v`
+      const conversion = size === null ? [] : [['Warning', 1292, "Truncated incorrect INTEGER value: '" + size + "'"]]
+      const binding = valid ? conversion : [...conversion, invalid]
+      const expected = [[valid ? createHash('sha224').update('abc').digest('hex') : null]]
+      const metadata = [[253, valid ? 224 : 256, 0, 31, 255]]
+      const [text, fields] = await conn.query(sql)
+      assert.deepEqual(text, expected)
+      assert.deepEqual(fields.map((f) => [f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet]), metadata)
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [...binding, ...conversion])
+      const stmt = await conn.prepare(sql)
+      try {
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], binding)
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const [rows, fields] = await stmt.execute([])
+          assert.deepEqual(rows, expected)
+          assert.deepEqual(fields.map((f) => [f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet]), metadata)
+          assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], conversion)
+        }
+      } finally {
+        conn.unprepare(sql)
+      }
+    }
+    assert.deepEqual((await conn.execute('SELECT SHA2(?, CAST(? AS SIGNED)) AS v', ['abc', null]))[0], [[null]])
+    assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [invalid])
+  } finally {
+    await conn.end()
+    await db?.end()
+  }
+})

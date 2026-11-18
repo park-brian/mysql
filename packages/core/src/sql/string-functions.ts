@@ -1374,15 +1374,16 @@ function scalarStringFunction(name: string, xs: readonly Compiled[], callName: s
         if (n === 0n) return 256n
         return n === 224n || n === 256n || n === 384n || n === 512n ? n : null
       }
-      // A constant length fixes the metadata width and warns during binding if invalid.
+      // Constant sizes are read for metadata even when the subject is NULL.
+      const fixed = constant[1] === true
       let shaWidth = 128
-      let fixedBits: bigint | null | undefined
-      if (constant[1] === true) {
+      if (fixed) {
+        const conditions = ctx.preparedSqlMode === undefined ? ctx.conditions : undefined
         try {
-          const b = bitsC.eval([], constantEnv(ctx))
-          fixedBits = digestBits(b === null ? null : valInt(b))
-          shaWidth = Number(fixedBits ?? 256n) / 4
-          if (fixedBits === null) ctx.conditions?.push({ level: 'Warning', code: 1583, message })
+          const env = { ...constantEnv(ctx), conditions }
+          const n = digestBits(bits([], env))
+          shaWidth = Number(n ?? 256n) / 4
+          if (n === null) raise(env, 1583, message)
         } catch (e) {
           expectTyped(e)
           shaWidth = 64
@@ -1391,12 +1392,10 @@ function scalarStringFunction(name: string, xs: readonly Compiled[], callName: s
       return {
         eval: (r, env) => {
           const v = s.eval(r, env)
-          if (v === null || fixedBits === null) return null
-          const b = fixedBits ?? bits(r, env)
-          if (b === null) return null
-          const n = fixedBits ?? digestBits(b)
+          if (v === null) return null
+          const n = digestBits(bits(r, env))
           if (n === null) {
-            raise(env, 1583, message)
+            if (!fixed) raise(env, 1583, message)
             return null
           }
           const data = valueBytes(v)

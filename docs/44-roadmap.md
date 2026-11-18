@@ -51,6 +51,21 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 
 ## Next
 
+**M5.10 SHA2 integer conversion and diagnostic phases, verified.**
+Binding and evaluation share the integer reader. Text queries
+record the constant's conversion in both phases. Prepared
+executions keep evaluation warnings while the original binding
+warnings belong to PREPARE. A dynamic NULL length warns when the
+subject is present. Both protocols reproduce all 128 focused
+outcomes, up from 100, and all 16 separate constant-size cases
+through text, prepare and repeated execution, up from two. Full
+Docker verification passes 1,901 tests, all nine size gates,
+seeded fuzzing, 10,000 crash points, package and client smoke
+and all seven pinned corpora, including 1,737 coercion warning
+counts. Parser, core and facade measure 44,778, 334,351 and
+334,256 gzipped bytes. Wider function gaps keep M5.10 open.
+[MySQL 8.4.11 SHA2 implementation](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/item_strfunc.cc#L261-L369).
+
 **M5.47 ordinary join for unique integer membership, verified.**
 A complete visible non-null unique inner key proves at most one match
 for an unfiltered integer IN. The existing join planner reads that
@@ -76,8 +91,8 @@ field width across bound values. Literal lengths keep their
 resolved width. The digest reads the subject first, and a NULL
 subject skips the length and its side effects. Both protocols
 match 100 of 128 focused MySQL 8.4.11 observations, 17 more than
-before. Constant length conversion histories and warnings across
-prepare and execution remain open. Full Docker verification passes
+before. The subsequent shared integer reader closes the measured
+constant diagnostic gaps. Full Docker verification passes
 1,899 tests, all nine size gates, seeded fuzzing, 10,000 crash points,
 package and client smoke and all seven pinned corpora, including
 1,737 coercion warning counts. Parser, core and facade measure
