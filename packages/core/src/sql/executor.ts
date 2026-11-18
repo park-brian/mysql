@@ -374,7 +374,7 @@ export class SqlExecutor implements Executor {
         state.previous = conditions.diagnostics
       }
       const admission = statement === null ? undefined : this.#admitStatement(statement, state, session, database)
-      if (statement === null || (admission?.diagnostic === true && construction === undefined) || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
+      if (statement === null || (admission?.diagnostic === true && construction === undefined) || statement.kind === STATEMENT.USE || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
       binaryDeclarations(statement, conditions, limit)
       await this.#preload(session, statement, database)
       this.#alive(session)
@@ -1029,7 +1029,7 @@ export class SqlExecutor implements Executor {
       case STATEMENT.CREATE_TRIGGER:
       case STATEMENT.CREATE_EVENT:
       case STATEMENT.CALL:
-        this.server.program(session, statement as ProgramStatement)
+        this.server.program(database, statement as ProgramStatement)
         return { affectedRows: 0 }
 
       case STATEMENT.SET:
@@ -1202,8 +1202,9 @@ export class SqlExecutor implements Executor {
 
   #drop(run: Run, statement: DropNode): StatementResult {
     const session = run.env.session
+    const database = defaultDatabase(run)
     if (PROGRAM_OBJECTS.has(statement.object)) {
-      this.server.program(session, statement)
+      this.server.program(database, statement)
       return { affectedRows: 0 }
     }
     const catalog = this.#catalog(run)
@@ -1226,7 +1227,6 @@ export class SqlExecutor implements Executor {
       if (session.database === name) session.database = null
       return { affectedRows: tables.length }
     }
-    const database = defaultDatabase(run)
     if (statement.object === 'VIEW') {
       const schemas = new Set(statement.names.map((n) => n.schema ?? database))
       if (schemas.has(null)) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())

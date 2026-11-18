@@ -62,7 +62,8 @@ Notes:
   counter; reuse after `COM_STMT_CLOSE` is allowed but pointless.
 - Each prepared statement retains the database selected at PREPARE, including
   a NULL default. Its unqualified names and DATABASE() read that scope.
-  USE selects the database for later text commands. EXECUTE raises 1049 if
+  Text USE selects the database for later commands. PREPARE of USE raises
+  1295. EXECUTE raises 1049 if
   the prepared statement's database was dropped.
   [MySQL 8.4.11 prepared database selection](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_prepare.cc#L3186-L3196).
 

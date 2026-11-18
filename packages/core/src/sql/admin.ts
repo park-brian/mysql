@@ -47,9 +47,9 @@ type ProgramObject = keyof typeof PROGRAM_ERRORS
 export const PROGRAM_OBJECTS: ReadonlySet<string> = new Set(Object.keys(PROGRAM_ERRORS))
 
 /** `db.name`, in the session's database when unqualified. */
-const qualified = (name: TableName, session: Session): string => `${name.schema ?? session.database ?? ''}.${name.name}`
+const qualified = (name: TableName, database: string | null): string => `${name.schema ?? database ?? ''}.${name.name}`
 /** Stored-program names are case-insensitive, as MySQL's are. */
-const programKey = (object: string, name: TableName, session: Session): string => `${object}:${qualified(name, session).toLowerCase()}`
+const programKey = (object: string, name: TableName, database: string | null): string => `${object}:${qualified(name, database).toLowerCase()}`
 
 const MAX_SIGNED = (1n << 63n) - 1n
 
@@ -346,21 +346,21 @@ export class ServerState {
    * `CALL` finds the procedure and says it cannot run it yet. The same errors
    * a server gives for a name that exists or does not.
    */
-  program(session: Session, statement: ProgramStatement): void {
+  program(database: string | null, statement: ProgramStatement): void {
     if (statement.kind === STATEMENT.CALL) {
-      if (!this.#programs.has(programKey('PROCEDURE', statement.name, session))) throw sqlError('ER_SP_DOES_NOT_EXIST', messages.objectMissing('PROCEDURE', qualified(statement.name, session)))
+      if (!this.#programs.has(programKey('PROCEDURE', statement.name, database))) throw sqlError('ER_SP_DOES_NOT_EXIST', messages.objectMissing('PROCEDURE', qualified(statement.name, database)))
       throw notSupported('CALL')
     }
     if (statement.kind === STATEMENT.DROP) {
       const object = statement.object as ProgramObject
       const name = statement.names[0] as TableName
-      if (!this.#programs.delete(programKey(object, name, session)) && statement.ifExists !== true) {
-        throw sqlError(`ER_${PROGRAM_ERRORS[object]}_DOES_NOT_EXIST`, messages.objectMissing(object, qualified(name, session)))
+      if (!this.#programs.delete(programKey(object, name, database)) && statement.ifExists !== true) {
+        throw sqlError(`ER_${PROGRAM_ERRORS[object]}_DOES_NOT_EXIST`, messages.objectMissing(object, qualified(name, database)))
       }
       return
     }
     const object = statement.kind === STATEMENT.CREATE_ROUTINE ? statement.object : statement.kind === STATEMENT.CREATE_TRIGGER ? 'TRIGGER' : 'EVENT'
-    const key = programKey(object, statement.name, session)
+    const key = programKey(object, statement.name, database)
     if (this.#programs.has(key)) {
       if (statement.ifNotExists === true) return
       throw sqlError(`ER_${PROGRAM_ERRORS[object]}_ALREADY_EXISTS`, messages.objectExists(object, statement.name.name))
