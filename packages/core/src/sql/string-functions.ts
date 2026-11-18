@@ -116,7 +116,7 @@ function constantInt(c: Compiled | undefined, constant: boolean, ctx: CompileCon
 
 /** Read code points, or one Latin-1 code unit per byte for a binary result. */
 function stringUnits(v: V, binary: boolean, collation: number): string[] {
-  return binary ? Array.from(valueBytes(v), (byte) => String.fromCharCode(byte)) : [...stringText(v, false, collation)]
+  return [...stringText(v, binary, collation)]
 }
 
 function stringText(v: V, binary: boolean, collation: number): string {

@@ -38,7 +38,6 @@ const illegal = () => sqlError('ER_REGEXP_ILLEGAL_ARGUMENT', 'Illegal argument t
  * server would finish one that happens to match quickly.
  */
 function shapeOf(pattern: string): { readonly depth: number; readonly nested: boolean } {
-  let depth = 0
   let deepest = 0
   let inClass = false
   // For each open group: whether it holds a quantifier or an alternation.
@@ -57,10 +56,9 @@ function shapeOf(pattern: string): { readonly depth: number; readonly nested: bo
     if (c === '[') inClass = true
     else if (c === '(') {
       open.push(false)
-      deepest = Math.max(deepest, ++depth)
+      deepest = Math.max(deepest, open.length)
     } else if (c === ')') {
       const inner = open.pop() === true
-      depth = Math.max(0, depth - 1)
       const next = pattern[i + 1]
       if (inner && (next === '*' || next === '+' || (next === '{' && /^\{\d*,\}/.test(pattern.slice(i + 1))))) nested = true
       if (inner && open.length > 0) open[open.length - 1] = true
@@ -77,19 +75,16 @@ export interface MatchType extends Omit<IcuFlags, 'i'> {
 
 /** REGEXP_LIKE's third argument: 1210 for a letter it does not know. */
 export function matchType(text: string, fn: string): MatchType {
-  let insensitive: boolean | undefined
-  let multiline = false
-  let dotAll = false
-  let unixLines = false
+  const flags = { i: undefined as boolean | undefined, m: false, s: false, d: false }
   for (const ch of text) {
-    if (ch === 'c') insensitive = false
-    else if (ch === 'i') insensitive = true
-    else if (ch === 'm') multiline = true
-    else if (ch === 'n') dotAll = true
-    else if (ch === 'u') unixLines = true
+    if (ch === 'c') flags.i = false
+    else if (ch === 'i') flags.i = true
+    else if (ch === 'm') flags.m = true
+    else if (ch === 'n') flags.s = true
+    else if (ch === 'u') flags.d = true
     else throw wrongArgumentsError(fn)
   }
-  return { i: insensitive, m: multiline, s: dotAll, d: unixLines }
+  return flags
 }
 
 const cache = new Map<string, IcuPattern & { readonly re: RegExp }>()
@@ -177,17 +172,14 @@ const outOfBounds = () => sqlError('ER_REGEXP_INDEX_OUTOFBOUNDS_ERROR', 'Index o
  * REGEXP_REPLACE also the place just past its end, and call a position below
  * 1 their arguments' fault, 1583 (8.4.11). Past that, 3686.
  */
-function offsetOf(text: string, pos: bigint, binary: boolean, fn: string): number {
-  const length = binary ? text.length : [...text].length
-  if (fn === 'regexp_instr') {
-    if (length === 0) return 0
-    if (pos < 1n || pos > BigInt(length)) throw outOfBounds()
-  } else {
-    if (pos > BigInt(length + 1)) throw outOfBounds()
-  }
-  if (binary) return Number(pos) - 1
+function offsetOf(text: string, pos: number, binary: boolean, fn: string): number {
+  const length = charsBefore(text, text.length, binary)
+  const instr = fn === 'regexp_instr'
+  if (instr && length === 0) return 0
+  if (pos < 1 || pos > length + (instr ? 0 : 1)) throw outOfBounds()
+  if (binary) return pos - 1
   let offset = 0
-  for (let i = 1n; i < pos; i++) offset += (text.codePointAt(offset) as number) > 0xffff ? 2 : 1
+  for (let i = 1; i < pos; i++) offset += (text.codePointAt(offset) as number) > 0xffff ? 2 : 1
   return offset
 }
 
@@ -209,17 +201,17 @@ function* matchesFrom(re: RegExp, text: string, start: number): Generator<RegExp
 }
 
 /** The nth match from `start`, or undefined. */
-function nth(re: RegExp, text: string, start: number, occurrence: bigint): RegExpExecArray | undefined {
-  let n = occurrence || 1n
-  for (const m of matchesFrom(re, text, start)) if (--n === 0n) return m
+function nth(re: RegExp, text: string, start: number, occurrence: number): RegExpExecArray | undefined {
+  let n = occurrence || 1
+  for (const m of matchesFrom(re, text, start)) if (--n === 0) return m
   return undefined
 }
 
 interface Search {
   readonly subject: Value
   readonly pattern: Value
-  readonly position: bigint | null
-  readonly occurrence: bigint
+  readonly position: number | null
+  readonly occurrence: number
   readonly type: MatchType | undefined
 }
 
@@ -283,25 +275,25 @@ function replacementOf(text: string, groups: number, names: ReadonlyMap<string, 
 export function regexpSearch(s: Search, fn: string, searching: boolean, returnEnd: boolean, replacement: Value): string | bigint | undefined {
   if (replacement) pairCollation(s.subject ?? s.pattern, replacement, fn)
   const pattern = s.pattern && regexpFor(s.subject, s.pattern, s.type, fn, searching)
-  if (fn !== 'regexp_instr' && s.position !== null && s.position < 1n) throw sqlError('ER_WRONG_PARAMETERS_TO_NATIVE_FCT', `Incorrect parameters in the call to native function '${fn}'`)
+  if (fn !== 'regexp_instr' && s.position !== null && s.position < 1) throw sqlError('ER_WRONG_PARAMETERS_TO_NATIVE_FCT', `Incorrect parameters in the call to native function '${fn}'`)
   if (!pattern || !searching || !s.subject || s.position === null) return undefined
   const { re, groups, names } = pattern
   const text = textOf(s.subject)
   const binary = s.subject.kind === 'bytes'
   const start = offsetOf(text, s.position, binary, fn)
-  const occurrence = s.occurrence < 0n ? 1n : s.occurrence
+  const occurrence = s.occurrence < 0 ? 1 : s.occurrence
   if (replacement) {
     const pieces = replacementOf(textOf(replacement), groups.length - 1, names)
     const expand = (m: RegExpExecArray): string => pieces.map((p) => (typeof p === 'string' ? p : (m[groups[p] as number] ?? ''))).join('')
     let out = text.slice(0, start)
     let at = start
-    let n = 0n
+    let n = 0
     for (const m of matchesFrom(re, text, start)) {
       n++
-      if (occurrence > 0n && n !== occurrence) continue
+      if (occurrence > 0 && n !== occurrence) continue
       out += text.slice(at, m.index) + expand(m)
       at = m.index + m[0].length
-      if (occurrence > 0n) break
+      if (occurrence > 0) break
     }
     return out + text.slice(at)
   }
@@ -309,4 +301,10 @@ export function regexpSearch(s: Search, fn: string, searching: boolean, returnEn
   if (fn === 'regexp_substr') return match?.[0]
   if (match === undefined) return 0n
   return BigInt(charsBefore(text, match.index + (returnEnd ? match[0].length : 0), binary) + 1)
+}
+
+/** The narrowed REGEXP_INSTR return option selects the start or end. */
+export function regexpReturnEnd(option: number): boolean {
+  if (option !== 0 && option !== 1) throw sqlError('ER_WRONG_ARGUMENTS', 'Incorrect arguments to regexp_instr: return_option must be 1 or 0.')
+  return option === 1
 }

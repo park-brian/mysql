@@ -87,7 +87,6 @@ test('M5.10: REGEXP_LIKE reports nullable operands in its result flags', async (
   }
 })
 
-
 test('M5.10: regex search narrows optional integers and selects the first replacement for negative occurrences', async () => {
   const { db, conn, host } = await connect()
   try {
@@ -104,6 +103,35 @@ test('M5.10: regex search narrows optional integers and selects the first replac
         errno: 1583, sqlState: '42000', sqlMessage: message,
       })
       assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [['Error', 1583, message]], method)
+    }
+  } finally {
+    await conn.end()
+    await db?.end()
+  }
+})
+
+test('M5.10: REGEXP_INSTR checks written return options at preparation', async () => {
+  const { db, conn, host } = await connect()
+  const error = { errno: 1210, sqlState: 'HY000', sqlMessage: 'Incorrect arguments to regexp_instr: return_option must be 1 or 0.' }
+  const invalid = "SELECT REGEXP_INSTR(NULL,'(',1,1,-1) LIMIT 0"
+  try {
+    if (host !== undefined) assert.deepEqual((await conn.query("SELECT SUBSTRING_INDEX(VERSION(), '-', 1)"))[0], [['8.4.11']])
+    await assert.rejects(conn.prepare(invalid), error)
+    for (const method of ['query', 'execute'] as const) {
+      const read = (statement: string) => method === 'query' ? conn.query(statement) : conn.execute(statement)
+      for (const statement of [invalid, "SELECT REGEXP_INSTR('x','x',1,1,+2,NULL) LIMIT 0",
+        "SELECT REGEXP_INSTR('x','x',1,1,4294967298) LIMIT 0"]) {
+        await assert.rejects(read(statement), error)
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [['Error', error.errno, error.sqlMessage]], method)
+      }
+    }
+    const held = await conn.prepare("SELECT REGEXP_INSTR('a','a',1,1,CAST(? AS SIGNED))")
+    try {
+      assert.deepEqual((await held.execute([1]))[0], [['2']])
+      await assert.rejects(held.execute([2]), error)
+      assert.deepEqual((await held.execute([null]))[0], [[null]])
+    } finally {
+      await held.close()
     }
   } finally {
     await conn.end()

@@ -78,6 +78,7 @@ import {
   type Env,
   type Row,
 } from './compile.ts'
+import { integerLiteral, signedOperand } from './ast.ts'
 import { dateAdd, isInterval } from './interval.ts'
 import {
   CHARSET_UTF8MB3_GENERAL_CI,
@@ -95,7 +96,7 @@ import {
   type ResultType,
   minOf,
 } from './meta.ts'
-import { matchType, regexpLike, regexpSearch } from './regexp.ts'
+import { matchType, regexpLike, regexpReturnEnd, regexpSearch } from './regexp.ts'
 import { canonicalFunctionName, lengthArity, nativeArity, unregistered } from './registry.ts'
 import { modeOf } from './mode.ts'
 import { bitBytes } from './wire.ts'
@@ -586,13 +587,14 @@ export function informationFunction(name: string, e: CallNode, ctx: CompileConte
 }
 
 /** Optional regex arguments reach the matcher as signed 32-bit integers. */
-function regexpInt(value: NonNullable<Value>): bigint {
+function regexpInt(value: NonNullable<Value>): number {
   const n = toInteger(value)
   const maximum = value.kind === 'decimal' || value.kind === 'double' ? MAX_SIGNED : MAX_UNSIGNED
-  if (n < MIN_SIGNED) return 0n // Low bits of the signed minimum.
-  if (n > maximum) return -1n // Low bits of either 64-bit maximum.
-  return BigInt.asIntN(32, n)
+  const bounded = n < MIN_SIGNED ? MIN_SIGNED : n > maximum ? maximum : n
+  return Number(BigInt.asIntN(32, bounded))
 }
+
+const returnEnd = (v: Value | undefined) => regexpReturnEnd(v ? regexpInt(v) : 0)
 
 /** The REGEXP_ functions. */
 export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
@@ -616,6 +618,10 @@ export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): 
     throw sqlError('ER_INVALID_PARAMETER_USE', "Invalid use of parameters in '?'")
   }
 
+  const returnOption = e.args[4]
+  if (instr && returnOption && integerLiteral(signedOperand(returnOption, '+'))) {
+    returnEnd(xs[4]!.eval([], constantEnv(ctx)))
+  }
   const nullable = xs.some((x) => x.type.nullable)
   if (like) {
     return {
@@ -641,20 +647,19 @@ export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): 
   return {
     eval: (r, env) => {
       const v = xs.map((x) => x.eval(r, env)) as [Value, Value, ...Value[]]
-      const int = (i: number, fallback: bigint) => {
+      const int = (i: number, fallback: number) => {
         const value = v[i]
         return value ? regexpInt(value) : fallback
       }
-      const ret = instr ? int(required + 2, 0n) : 0n
-      if (ret !== 0n && ret !== 1n) throw sqlError('ER_WRONG_ARGUMENTS', 'Incorrect arguments to regexp_instr: return_option must be 1 or 0.')
+      const ret = instr && returnEnd(v[4])
       const option = v[matchAt]
       if (option === null) return null
       const mt = option === undefined ? undefined : matchType(toText(option), fn)
       const [subject, pattern, replacement] = v
       // A NULL occurrence suppresses position checks.
-      const position = v[required] === null || v[required + 1] === null ? null : int(required, 1n)
-      const search = { subject, pattern, position, occurrence: int(required + 1, replace ? 0n : 1n), type: mt }
-      const out = regexpSearch(search, fn, !v.includes(null), ret === 1n, replace ? replacement! : null)
+      const position = v[required] === null || v[required + 1] === null ? null : int(required, 1)
+      const search = { subject, pattern, position, occurrence: int(required + 1, replace ? 0 : 1), type: mt }
+      const out = regexpSearch(search, fn, !v.includes(null), ret, replace ? replacement! : null)
       if (typeof out === 'bigint') return intValue(out)
       if (out === undefined) return null
       // my_charset_latin1 (8) is also the binary regex output map: a
