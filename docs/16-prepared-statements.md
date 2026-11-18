@@ -66,6 +66,10 @@ Notes:
   1295. EXECUTE raises 1049 if
   the prepared statement's database was dropped.
   [MySQL 8.4.11 prepared database selection](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_prepare.cc#L3186-L3196).
+- PREPARE of CALL resolves the procedure name in that scope. A missing
+  procedure raises 1305. An unqualified name with no selected database
+  raises 1046. Argument validation and execution of stored bodies remain
+  open. [MySQL 8.4.11 procedure lookup](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_call.cc#L105-L124).
 
 ## `COM_STMT_EXECUTE`
 

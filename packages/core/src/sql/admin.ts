@@ -5,7 +5,7 @@
 // again: what a driver sends on connect (`SET NAMES`, `SET sql_mode`,
 // `SELECT @@version_comment`) worked before the executor existed and must keep
 // working exactly as it did.
-import { notSupported } from './errors.ts'
+import { requireSchema } from './scope.ts'
 import { CHARSET_UTF8MB4_0900_AI_CI, messages, sqlError, type Session, type SqlValue } from '@myjs/protocol'
 import {
   NODE,
@@ -44,12 +44,10 @@ export type ProgramStatement = CreateRoutineNode | CreateTriggerNode | CreateEve
 const PROGRAM_ERRORS = { PROCEDURE: 'SP', FUNCTION: 'SP', TRIGGER: 'TRG', EVENT: 'EVENT' } as const
 type ProgramObject = keyof typeof PROGRAM_ERRORS
 
-export const PROGRAM_OBJECTS: ReadonlySet<string> = new Set(Object.keys(PROGRAM_ERRORS))
+export const isProgramObject = (object: string): object is ProgramObject => Object.hasOwn(PROGRAM_ERRORS, object)
 
-/** `db.name`, in the session's database when unqualified. */
-const qualified = (name: TableName, database: string | null): string => `${name.schema ?? database ?? ''}.${name.name}`
-/** Stored-program names are case-insensitive, as MySQL's are. */
-const programKey = (object: string, name: TableName, database: string | null): string => `${object}:${qualified(name, database).toLowerCase()}`
+const programTarget = (statement: ProgramStatement): TableName =>
+  statement.kind === STATEMENT.DROP ? statement.names[0] as TableName : statement.name
 
 const MAX_SIGNED = (1n << 63n) - 1n
 
@@ -347,23 +345,27 @@ export class ServerState {
    * a server gives for a name that exists or does not.
    */
   program(database: string | null, statement: ProgramStatement): void {
-    if (statement.kind === STATEMENT.CALL) {
-      if (!this.#programs.has(programKey('PROCEDURE', statement.name, database))) throw sqlError('ER_SP_DOES_NOT_EXIST', messages.objectMissing('PROCEDURE', qualified(statement.name, database)))
-      throw notSupported('CALL')
-    }
+    const at = programTarget(statement)
+    const schema = at.schema ?? database
+    const name = `${schema ?? ''}.${at.name}`
+    const object = 'object' in statement ? statement.object as ProgramObject
+      : statement.kind === STATEMENT.CALL ? 'PROCEDURE' : statement.kind === STATEMENT.CREATE_TRIGGER ? 'TRIGGER' : 'EVENT'
+    const key = `${object}:${name.toLowerCase()}`
     if (statement.kind === STATEMENT.DROP) {
-      const object = statement.object as ProgramObject
-      const name = statement.names[0] as TableName
-      if (!this.#programs.delete(programKey(object, name, database)) && statement.ifExists !== true) {
-        throw sqlError(`ER_${PROGRAM_ERRORS[object]}_DOES_NOT_EXIST`, messages.objectMissing(object, qualified(name, database)))
+      if (!this.#programs.delete(key) && statement.ifExists !== true) {
+        throw sqlError(`ER_${PROGRAM_ERRORS[object]}_DOES_NOT_EXIST`, messages.objectMissing(object, name))
       }
       return
     }
-    const object = statement.kind === STATEMENT.CREATE_ROUTINE ? statement.object : statement.kind === STATEMENT.CREATE_TRIGGER ? 'TRIGGER' : 'EVENT'
-    const key = programKey(object, statement.name, database)
-    if (this.#programs.has(key)) {
+    const exists = this.#programs.has(key)
+    if (statement.kind === STATEMENT.CALL) {
+      requireSchema(schema)
+      if (!exists) throw sqlError('ER_SP_DOES_NOT_EXIST', messages.objectMissing(object, name))
+      return
+    }
+    if (exists) {
       if (statement.ifNotExists === true) return
-      throw sqlError(`ER_${PROGRAM_ERRORS[object]}_ALREADY_EXISTS`, messages.objectExists(object, statement.name.name))
+      throw sqlError(`ER_${PROGRAM_ERRORS[object]}_ALREADY_EXISTS`, messages.objectExists(object, at.name))
     }
     this.#programs.add(key)
   }

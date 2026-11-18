@@ -76,7 +76,7 @@ import { renameTables } from './rename.ts'
 import { showCreateView, showQuery, shownColumns, tableStatusQuery, variablesColumns, variablesQuery } from './show.ts'
 import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Condition, type Value } from '@myjs/types'
 import { charsetChange, ensureCollationResident, utf8StrictDecoder } from '../transcoder.ts'
-import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
+import { isProgramObject, ServerState, type ServerOptions } from './admin.ts'
 import { appendConditions, systemVariable, compile, EMPTY_SCOPE, parameterBindings, raise, type Env } from './compile.ts'
 import { renderTree } from './explain.ts'
 import { analyze, keepShown } from './stats.ts'
@@ -376,6 +376,7 @@ export class SqlExecutor implements Executor {
       const admission = statement === null ? undefined : this.#admitStatement(statement, state, session, database)
       if (statement === null || (admission?.diagnostic === true && construction === undefined) || statement.kind === STATEMENT.USE || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
       binaryDeclarations(statement, conditions, limit)
+      if (statement.kind === STATEMENT.CALL) this.server.program(database, statement)
       await this.#preload(session, statement, database)
       this.#alive(session)
       let columns: PreparedInfo['columns'] = []
@@ -1025,11 +1026,13 @@ export class SqlExecutor implements Executor {
         }
         return { affectedRows: 0 }
       }
+      case STATEMENT.CALL:
+        this.server.program(database, statement)
+        throw notSupported('CALL')
       case STATEMENT.CREATE_ROUTINE:
       case STATEMENT.CREATE_TRIGGER:
       case STATEMENT.CREATE_EVENT:
-      case STATEMENT.CALL:
-        this.server.program(database, statement as ProgramStatement)
+        this.server.program(database, statement)
         return { affectedRows: 0 }
 
       case STATEMENT.SET:
@@ -1203,7 +1206,7 @@ export class SqlExecutor implements Executor {
   #drop(run: Run, statement: DropNode): StatementResult {
     const session = run.env.session
     const database = defaultDatabase(run)
-    if (PROGRAM_OBJECTS.has(statement.object)) {
+    if (isProgramObject(statement.object)) {
       this.server.program(database, statement)
       return { affectedRows: 0 }
     }

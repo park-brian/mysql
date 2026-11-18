@@ -12,6 +12,7 @@ entry, recorded out of order, sits where its date and its commit put it.
 
 | Date | Entry |
 |---|---|
+| 2026-11-18 | **M5.47. Resolve a prepared CALL's procedure name.** Missing names return 1305, and an unqualified name without a database returns 1046. Docker verifies 1,904 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.47. Reject binary PREPARE of USE.** The connection selects its database through text USE. The stored-program registry reads names through the statement's retained database. Docker verifies 1,904 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.10. Share UTC and fixed-offset clock readings.** Session clocks read the session offset, UTC clocks keep UTC, and SYSDATE reads the live clock. The pinned audit gains 64 exact outcomes. Docker verifies 1,904 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.47. Retain the database selected at PREPARE.** Retained statements resolve database names and DATABASE() in the prepared scope after USE. The native controls cover a NULL default, dropped schemas, nested reads, DML and views. Docker verifies 1,904 tests and all seven pinned corpora within the existing caps. |
