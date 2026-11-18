@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import mysql from 'mysql2/promise'
 import { MySQL } from '@myjs/core'
 
-test('M5.10: regex line modes handle dot, line anchors and CRLF', async () => {
+test('M5.10: regex line modes handle dot, anchors and CRLF matches', async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = await mysql.createConnection({
@@ -78,6 +78,22 @@ test('M5.10: regex line modes handle dot, line anchors and CRLF', async () => {
     const inline = `SELECT REGEXP_SUBSTR(${crlf},'(?s:.)'), HEX(REGEXP_REPLACE(_binary X'0D0A00',_binary '(.)',_binary '<$1>',1,0,'n'))`
     assert.deepEqual((await conn.query(inline))[0], [['\r\n', '3C0D0A3E3C003E']])
     assert.deepEqual((await conn.execute(inline))[0], [['\r\n', '3C0D0A3E3C003E']])
+    const pattern = (value: string) => `_utf8mb4 X'${Buffer.from(value).toString('hex')}'`
+    const capture = pattern('(\\R)')
+    const two = pattern('^\\R\\R$')
+    const look = pattern('(?<=\\R).')
+    for (const pos of [1, 2]) {
+      const sql = `SELECT REGEXP_LIKE(${crlf},${two}), REGEXP_INSTR(${crlf},${capture},${pos},1,1), REGEXP_REPLACE(${crlf},${capture},'<$1>',${pos}), REGEXP_SUBSTR(${crlf},${look},1,1,'n')`
+      const expected = ['0', '3', pos === 1 ? '<\r\n>' : '\r<\n>', '\n']
+      for (const method of ['query', 'execute'] as const) {
+        const [rows, fields] = method === 'query' ? await conn.query(sql) : await conn.execute(sql)
+        assert.deepEqual(rows, [expected], `${method} at ${pos}`)
+        assert.deepEqual(fields.map((f) => [f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet]), [
+          [8, 1, 129, 0, 63], [8, 21, 129, 0, 63], [251, 67108864, 0, 31, 255], [253, 8, 0, 31, 255],
+        ])
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      }
+    }
   } finally {
     await conn.end()
     await db?.end()

@@ -71,6 +71,7 @@ export type IcuFlags = Readonly<Omit<Flags, 'x' | 'behind'>>
 const WORD = '\\p{Alphabetic}\\p{M}\\p{Nd}\\p{Pc}\\u{200C}\\u{200D}'
 /** The line terminators: LF, VT, FF, CR, NEL, LS, PS. */
 const TERMINATORS = '\\n\\x0B\\f\\r\\x85\\u2028\\u2029'
+const OUTSIDE_CRLF = '(?!(?<=\\r)\\n)'
 /** `[:name:]` and `\p{name}` for UTS #18's POSIX-compatible names, as ICU defines them. */
 const POSIX: Readonly<Record<string, string>> = {
   alpha: '\\p{Alphabetic}',
@@ -320,7 +321,7 @@ class Parser {
         return this.group(f, ch)
       case '[': {
         // `[:alpha:]` needs no outer brackets.
-        const posix = this.rawPeek() === C(':') ? this.posixAtom() : undefined
+        const posix = this.rawPeek() === C(':') ? this.posix() : undefined
         if (posix === undefined) return this.bracket(f, ch)
         this.seen[f.i ? 'i' : 'c'] = true
         return { t: 'set', set: { negated: false, terms: [{ op: '', items: [{ t: 'class', src: posix }] }] }, i: f.i }
@@ -329,7 +330,7 @@ class Parser {
         // A forward dot-all consumes CRLF as one atom. Keep the single-unit
         // matcher inside JS lookbehind, which can end between CR and LF.
         const pair = f.s && !f.behind
-        const src = pair ? '(?:\\r\\n|[^\\r]|\\r(?!\\n))' : f.s ? '[\\s\\S]' : f.d ? '[^\\n]' : `[^${TERMINATORS}]`
+        const src = pair ? `(?:\\r\\n|[\\s\\S]${OUTSIDE_CRLF})` : f.s ? '[\\s\\S]' : f.d ? '[^\\n]' : `[^${TERMINATORS}]`
         return { t: 'raw', src, min: 1, max: pair ? 2 : 1 }
       }
       case '^':
@@ -455,7 +456,7 @@ class Parser {
         this.sticky = true
         return { t: 'assert', src: '', quantifiable: true }
       case 'R':
-        return { t: 'raw', src: `(?:\\r\\n|[${TERMINATORS}])`, min: 1, max: 2 }
+        return { t: 'raw', src: `(?:\\r\\n|[${TERMINATORS}]${f.behind ? '' : OUTSIDE_CRLF})`, min: 1, max: 2 }
       case 'X':
         return { t: 'raw', src: '(?:\\r\\n|\\P{M}\\p{M}*)', min: 1, max: Infinity }
       case 'N':
@@ -689,11 +690,6 @@ class Parser {
     const p = property(name)
     return negated ? `[^${p}]` : p
   }
-
-  /** `[:name:]` where an atom may stand, outside brackets. */
-  posixAtom(): string | undefined {
-    return this.posix()
-  }
 }
 
 /** ICU's capturing groups, counted before parsing so `\10` can know whether there are ten. */
@@ -729,12 +725,12 @@ const hasCase = (cp: number): boolean => {
 
 function caret(f: Flags): string {
   if (!f.m) return '(?<![\\s\\S])'
-  return f.d ? '(?:(?<![\\s\\S])|(?<=\\n)(?=[\\s\\S]))' : `(?:(?<![\\s\\S])|(?<=[${TERMINATORS}])(?!(?<=\\r)\\n)(?=[\\s\\S]))`
+  return f.d ? '(?:(?<![\\s\\S])|(?<=\\n)(?=[\\s\\S]))' : `(?:(?<![\\s\\S])|(?<=[${TERMINATORS}])${OUTSIDE_CRLF}(?=[\\s\\S]))`
 }
 
 function dollar(f: Flags): string {
   if (f.d) return f.m ? '(?=\\n|(?![\\s\\S]))' : '(?=\\n?(?![\\s\\S]))'
-  return f.m ? `(?=[${TERMINATORS}]|(?![\\s\\S]))(?!(?<=\\r)\\n)` : `(?=(?:\\r\\n|[${TERMINATORS}])?(?![\\s\\S]))(?!(?<=\\r)\\n)`
+  return f.m ? `(?=[${TERMINATORS}]|(?![\\s\\S]))${OUTSIDE_CRLF}` : `(?=(?:\\r\\n|[${TERMINATORS}])?(?![\\s\\S]))${OUTSIDE_CRLF}`
 }
 
 const valid = (src: string): boolean => {
