@@ -163,8 +163,9 @@ export function regexpLike(subject: Value, pattern: Value, type: MatchType | und
 //     its end), else 1210; it is 0 when there is no such match.
 //   - REGEXP_SUBSTR is NULL when there is no such match, and `''` for an
 //     empty one.
-//   - REGEXP_REPLACE replaces every match from the position with occurrence
-//     0, or only the nth; the text before the position is kept. The
+//   - REGEXP_REPLACE uses occurrence 0 for every match, a negative occurrence
+//     for the first match, or a positive occurrence for the nth match. The
+//     text before the position is kept. The
 //     replacement is ICU's: `$n` a group (3686 past the last one), `\x` the
 //     character x, and a `$` not before a digit 3887.
 
@@ -209,9 +210,7 @@ function* matchesFrom(re: RegExp, text: string, start: number): Generator<RegExp
 
 /** The nth match from `start`, or undefined. */
 function nth(re: RegExp, text: string, start: number, occurrence: bigint): RegExpExecArray | undefined {
-  // The server keeps an occurrence in 32 bits: BIGINT's largest is -1 there, and so the first.
-  const wrapped = BigInt.asIntN(32, occurrence > 9223372036854775807n ? 9223372036854775807n : occurrence)
-  let n = wrapped < 1n ? 1n : wrapped
+  let n = occurrence || 1n
   for (const m of matchesFrom(re, text, start)) if (--n === 0n) return m
   return undefined
 }
@@ -290,6 +289,7 @@ export function regexpSearch(s: Search, fn: string, searching: boolean, returnEn
   const text = textOf(s.subject)
   const binary = s.subject.kind === 'bytes'
   const start = offsetOf(text, s.position, binary, fn)
+  const occurrence = s.occurrence < 0n ? 1n : s.occurrence
   if (replacement) {
     const pieces = replacementOf(textOf(replacement), groups.length - 1, names)
     const expand = (m: RegExpExecArray): string => pieces.map((p) => (typeof p === 'string' ? p : (m[groups[p] as number] ?? ''))).join('')
@@ -298,14 +298,14 @@ export function regexpSearch(s: Search, fn: string, searching: boolean, returnEn
     let n = 0n
     for (const m of matchesFrom(re, text, start)) {
       n++
-      if (s.occurrence > 0n && n !== s.occurrence) continue
+      if (occurrence > 0n && n !== occurrence) continue
       out += text.slice(at, m.index) + expand(m)
       at = m.index + m[0].length
-      if (s.occurrence > 0n) break
+      if (occurrence > 0n) break
     }
     return out + text.slice(at)
   }
-  const match = nth(re, text, start, s.occurrence)
+  const match = nth(re, text, start, occurrence)
   if (fn === 'regexp_substr') return match?.[0]
   if (match === undefined) return 0n
   return BigInt(charsBefore(text, match.index + (returnEnd ? match[0].length : 0), binary) + 1)

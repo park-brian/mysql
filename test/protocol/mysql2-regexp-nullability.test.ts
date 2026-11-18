@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import mysql from 'mysql2/promise'
 import { MySQL } from '@myjs/core'
 
-test('M5.10: REGEXP_LIKE reports nullable operands in its result flags', async () => {
+async function connect() {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = await mysql.createConnection({
@@ -16,6 +16,11 @@ test('M5.10: REGEXP_LIKE reports nullable operands in its result flags', async (
     supportBigNumbers: true,
     bigNumberStrings: true,
   })
+  return { db, conn, host }
+}
+
+test('M5.10: REGEXP_LIKE reports nullable operands in its result flags', async () => {
+  const { db, conn, host } = await connect()
   const schema = 'regexp_like_nullability'
   try {
     if (host !== undefined) assert.deepEqual((await conn.query("SELECT SUBSTRING_INDEX(VERSION(), '-', 1)"))[0], [['8.4.11']])
@@ -77,6 +82,30 @@ test('M5.10: REGEXP_LIKE reports nullable operands in its result flags', async (
     }
   } finally {
     await conn.query('DROP DATABASE IF EXISTS ' + schema)
+    await conn.end()
+    await db?.end()
+  }
+})
+
+
+test('M5.10: regex search narrows optional integers and selects the first replacement for negative occurrences', async () => {
+  const { db, conn, host } = await connect()
+  try {
+    if (host !== undefined) assert.deepEqual((await conn.query("SELECT SUBSTRING_INDEX(VERSION(), '-', 1)"))[0], [['8.4.11']])
+    for (const method of ['query', 'execute'] as const) {
+      const read = (statement: string) => method === 'query' ? conn.query(statement) : conn.execute(statement)
+      const narrowed = `SELECT REGEXP_SUBSTR('abc','.',4294967297,4294967299),
+        REGEXP_INSTR('abc','.',9223372036854775809,4294967299,-9223372036854775807),
+        REGEXP_REPLACE('abc','.','z',1,4294967296), REGEXP_REPLACE('abc','.','z',1,-1)`
+      assert.deepEqual((await read(narrowed))[0], [['c', '4', 'zzz', 'zbc']], method)
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], method)
+      const message = "Incorrect parameters in the call to native function 'regexp_substr'"
+      await assert.rejects(read("SELECT REGEXP_SUBSTR('abc','.',4294967296)"), {
+        errno: 1583, sqlState: '42000', sqlMessage: message,
+      })
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [['Error', 1583, message]], method)
+    }
+  } finally {
     await conn.end()
     await db?.end()
   }

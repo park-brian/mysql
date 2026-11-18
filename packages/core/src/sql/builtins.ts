@@ -585,6 +585,15 @@ export function informationFunction(name: string, e: CallNode, ctx: CompileConte
   }
 }
 
+/** Optional regex arguments reach the matcher as signed 32-bit integers. */
+function regexpInt(value: NonNullable<Value>): bigint {
+  const n = toInteger(value)
+  const maximum = value.kind === 'decimal' || value.kind === 'double' ? MAX_SIGNED : MAX_UNSIGNED
+  if (n < MIN_SIGNED) return 0n // Low bits of the signed minimum.
+  if (n > maximum) return -1n // Low bits of either 64-bit maximum.
+  return BigInt.asIntN(32, n)
+}
+
 /** The REGEXP_ functions. */
 export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
   const { args, arity, conn } = callOf(e, ctx)
@@ -634,7 +643,7 @@ export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): 
       const v = xs.map((x) => x.eval(r, env)) as [Value, Value, ...Value[]]
       const int = (i: number, fallback: bigint) => {
         const value = v[i]
-        return value ? toInteger(value) : fallback
+        return value ? regexpInt(value) : fallback
       }
       const ret = instr ? int(required + 2, 0n) : 0n
       if (ret !== 0n && ret !== 1n) throw sqlError('ER_WRONG_ARGUMENTS', 'Incorrect arguments to regexp_instr: return_option must be 1 or 0.')
