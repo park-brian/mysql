@@ -1567,7 +1567,7 @@ function planJoins(root: Node, where: readonly Weighed[], settings: LeafSettings
       const inner = n.inner
       if (inner.kind === 'leaf' && !lookups.has(inner.table.alias) && !inner.table.lateral && inner.table.def !== undefined && inner.table.table !== undefined) {
         const own = n.left ? n.on : conditions
-        if (rangeOf(inner.table, own) === undefined && own.some((c) => comparesWithEarlier(inner.table, c.e, before, scope))) dynamic.add(inner.table.alias)
+        if (rangeOf(inner.table, own) === undefined && comparesWithEarlier(inner.table, own, before, scope)) dynamic.add(inner.table.alias)
       }
       walk(inner)
     }
@@ -1592,14 +1592,14 @@ function joinUnionCondition(e: Expression, settings: LeafSettings): Expression |
   }
 }
 
-/** Whether a condition compares an indexed column of `t` by `<`, `<=`, `>`, `>=` or BETWEEN with columns of the tables in `before` alone. */
-function comparesWithEarlier(t: FromTable, e: Expression, before: ReadonlySet<string>, scope: TableScope): boolean {
+/** Whether an existing conjunct can look up an ordered bound from earlier tables. */
+function comparesWithEarlier(t: FromTable, predicates: readonly Weighed[], before: ReadonlySet<string>, scope: TableScope): boolean {
   const leads = (x: Expression): boolean => leadingIndex(t.def, columnOf(t, x, scope), true) !== undefined
   const earlier = (x: Expression | undefined): boolean => within(x === undefined ? undefined : aliasesOf(x, scope), before)
-  return splitAnd(e).some((c) => {
-    if (c.kind !== NODE.BINARY) return false
-    if (isOrderedComparison(c.op)) return (leads(c.left) && earlier(c.right)) || (leads(c.right) && earlier(c.left))
-    return c.op === 'BETWEEN' && leads(c.left) && (earlier(c.right) || earlier(c.extra as Expression))
+  return predicates.some(({ e }) => {
+    if (e.kind !== NODE.BINARY) return false
+    if (isOrderedComparison(e.op)) return (leads(e.left) && earlier(e.right)) || (leads(e.right) && earlier(e.left))
+    return e.op === 'BETWEEN' && leads(e.left) && (earlier(e.right) || earlier(e.extra as Expression))
   })
 }
 
