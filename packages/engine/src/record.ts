@@ -51,12 +51,13 @@ export interface EncodeOptions {
 export function encodeRecord(layout: RecordLayout, fields: readonly FieldBytes[], options: EncodeOptions): Uint8Array {
   if (fields.length !== layout.length) throw misuse(`${fields.length} fields for a ${layout.length}-field layout`)
   // Size the inline layout while validating widths. Only an off-page field changes it.
-  const bitmapSize = nullBitmapSize(layout)
-  let size = bitmapSize
+  let nullable = 0
+  let size = 0
   let largest = -1
   let largestLength = 0
   for (let i = 0; i < layout.length; i++) {
     const f = layout[i] as RecordField
+    if (f.nullable) nullable++
     const v = fields[i] ?? null
     if (v === null) {
       if (!f.nullable) throw misuse(`field ${i} is NOT NULL`)
@@ -74,6 +75,8 @@ export function encodeRecord(layout: RecordLayout, fields: readonly FieldBytes[]
       throw misuse(`field ${i} is ${f.fixed} bytes wide, given ${length}`)
     }
   }
+  let at = (nullable + 7) >> 3
+  size += at
   let external: boolean[] | undefined
   for (;;) {
     if (size <= options.maxSize && largestLength <= MAX_INLINE) break
@@ -84,8 +87,7 @@ export function encodeRecord(layout: RecordLayout, fields: readonly FieldBytes[]
     largestLength = fields[largest]?.length ?? 0
   }
   const out = new Uint8Array(size)
-  let at = bitmapSize
-  let nullable = 0
+  nullable = 0
   for (let i = 0; i < layout.length; i++) {
     const f = layout[i] as RecordField
     const v = fields[i] ?? null
@@ -117,8 +119,6 @@ export function encodeRecord(layout: RecordLayout, fields: readonly FieldBytes[]
 
 /** Decode a record into its fields: bytes, `null`, or an off-page reference. Any bytes may be passed. */
 export function decodeRecord(layout: RecordLayout, bytes: Uint8Array): (FieldBytes | OffPage)[] {
-  let at = nullBitmapSize(layout)
-  if (bytes.length < at) throw badRecord('shorter than its null bitmap')
   const isNull: boolean[] = []
   let nullable = 0
   for (const f of layout) {
@@ -128,6 +128,8 @@ export function decodeRecord(layout: RecordLayout, bytes: Uint8Array): (FieldByt
       nullable++
     }
   }
+  let at = (nullable + 7) >> 3
+  if (bytes.length < at) throw badRecord('shorter than its null bitmap')
   const lengths: number[] = []
   const external: boolean[] = []
   for (let i = 0; i < layout.length; i++) {
@@ -196,12 +198,6 @@ export function decodeLayout(r: Reader): RecordLayout {
 /** The off-page references a record holds — what must be freed when it is deleted or replaced. */
 export function externalRefs(layout: RecordLayout, bytes: Uint8Array): Uint8Array[] {
   return decodeRecord(layout, bytes).flatMap((v) => (v !== null && !(v instanceof Uint8Array) ? [v.ref] : []))
-}
-
-function nullBitmapSize(layout: RecordLayout): number {
-  let n = 0
-  for (const f of layout) if (f.nullable) n++
-  return (n + 7) >> 3
 }
 
 function lengthBytes(length: number): number {
