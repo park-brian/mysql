@@ -222,12 +222,17 @@ test('empty dependent IN chooses materialization at its native cost boundary', a
   }
 })
 
-test('M5.47: unique unfiltered membership uses an ordinary join', async () => {
+async function membershipConnection() {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = await mysql.createConnection(db === undefined
     ? { host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
     : { stream: db.createStream(), user: 'root' })
+  return { host, db, conn }
+}
+
+test('M5.47: unique unfiltered membership uses an ordinary join', async () => {
+  const { host, db, conn } = await membershipConnection()
   const schema = 'semi_unique_membership'
   const sql = 'SELECT p.id,p.k FROM p WHERE p.k IN (SELECT c.k FROM c) ORDER BY p.id'
   const streamed = 'Sort\n    Stream results\n        Nested loop inner join\n            Covering index scan on c using ck\n            Single-row covering index lookup on p using pk'
@@ -265,6 +270,48 @@ test('M5.47: unique unfiltered membership uses an ordinary join', async () => {
     await conn.query('DELETE FROM c')
     await conn.query('ANALYZE TABLE c')
     await read([], 4097, 4097, streamed)
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS ' + schema)
+    await conn.end()
+    await db?.end()
+  }
+})
+
+test('M5.47/M5.49: nullable unique equality reads one match while IS NULL reads every NULL', async () => {
+  const { host, db, conn } = await membershipConnection()
+  const schema = 'nullable_unique_equality'
+  const single = /Single-row covering index lookup on c using ck/
+  const check = async (sql: string, expected: readonly unknown[][], reader?: RegExp) => {
+    for (const method of ['query', 'execute'] as const) {
+      const options = { sql, rowsAsArray: true }
+      const [rows] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+      assert.deepEqual(rows, expected, sql)
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], sql)
+      const explain = 'EXPLAIN FORMAT=TREE ' + sql
+      const [result] = method === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
+      const plan = planSkeleton(result[0]?.EXPLAIN)
+      if (reader === undefined) assert.doesNotMatch(plan, single)
+      else assert.match(plan, reader)
+    }
+  }
+  try {
+    if (host !== undefined) assert.equal(String((await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS v'))[0][0]!.v).split('-')[0], '8.4.11')
+    await conn.query('CREATE DATABASE ' + schema)
+    await conn.query('USE ' + schema)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,k INT,KEY pk(k)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE c(id INT PRIMARY KEY,k INT,UNIQUE KEY ck(k)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO p VALUES (1,0),(2,0),(3,1),(4,NULL),(5,90)')
+    await conn.query('INSERT INTO c VALUES (1,0),(2,1),(3,NULL),(4,NULL)')
+    for (const changed of [false, true]) {
+      if (changed) await conn.query('UPDATE c SET k=2 WHERE id=1')
+      await conn.query('ANALYZE TABLE p,c')
+      const matched = changed ? [[3, 2]] : [[1, 1], [2, 1], [3, 2]]
+      await check('SELECT p.id,c.id FROM p STRAIGHT_JOIN c ON c.k=p.k ORDER BY p.id', matched, single)
+      const left = changed ? [[1, null], [2, null], [3, 2], [4, null], [5, null]] : [...matched, [4, null], [5, null]]
+      await check('SELECT p.id,c.id FROM p LEFT JOIN c ON c.k=p.k ORDER BY p.id', left, single)
+      await check('SELECT p.id FROM p WHERE p.k IN (SELECT c.k FROM c) ORDER BY p.id', changed ? [[3]] : [[1], [2], [3]], /Nested loop inner join/)
+      await check('SELECT id FROM c WHERE k IS NULL ORDER BY id', [[3], [4]])
+    }
   } finally {
     await conn.query('DROP DATABASE IF EXISTS ' + schema)
     await conn.end()

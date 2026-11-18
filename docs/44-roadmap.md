@@ -51,6 +51,25 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 
 ## Next
 
+**M5.47/M5.49 null-rejecting unique equality, verified.**
+A complete visible unique key proves at most one row for an
+equality lookup, including when the key column is nullable.
+Unfiltered integer IN uses the existing ordinary join planner
+with that proof. IS NULL still returns every matching NULL row.
+Text and prepared regressions cover inner and left joins, duplicate
+and NULL keys, and retained execution after a write. The pinned
+membership audit moves from 468 to 504 complete matches out of
+1,296 and from 1,158 to 1,284 matching field vectors. Earlier
+matches, rows and warnings are retained. Relational replay stays
+at 2,169 exact plans out of 2,248 and all 5,635 row outcomes.
+Full Docker verification passes 1,902 tests, all nine size gates,
+seeded fuzzing, 10,000 crash points, package and client smoke
+and all seven pinned corpora, including 1,737 coercion warning
+counts. Parser, core and facade measure 44,778, 334,360 and
+334,266 gzipped bytes. Wider access and ordering cases and
+prepared transformation lifetimes remain open.
+[MySQL 8.4.11 unique equality lookup](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_planner.cc#L353-L379).
+
 **M5.10 SHA2 integer conversion and diagnostic phases, verified.**
 Binding and evaluation share the integer reader. Text queries
 record the constant's conversion in both phases. Prepared
@@ -9467,8 +9486,10 @@ checks cover its lifetime. M5.47 remains partial.
    native. Full-index LooseScan retains its physical filter (D-89).
    Unfiltered integer IN over a visible full non-null unique inner key
    now uses the ordinary join planner. The empty-table regression retains
-   native source key flags. **Next:** broaden eligibility to nullable
-   unique inner keys and continue access/order comparisons.
+   native source key flags. Null-rejecting equality now extends that
+   proof to a complete visible nullable unique key. IS NULL retains
+   all matching keys. **Next:** continue access/order comparisons
+   and the prepared transformation study below.
    Pinned prepared EXPLAIN probes
    retain the `semijoin` and `derived_condition_pushdown` transformations
    across session switch changes. A referenced table's DDL triggers reprepare
@@ -13935,7 +13956,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,351 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-18. The facade is 334,256 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
+| Core bundle, gzipped | 334,360 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-18. The facade is 334,266 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

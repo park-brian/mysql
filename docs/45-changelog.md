@@ -12,6 +12,7 @@ entry, recorded out of order, sits where its date and its commit put it.
 
 | Date | Entry |
 |---|---|
+| 2026-11-18 | **M5.47/M5.49. Use nullable unique keys for null-rejecting equality.** Equality lookups and eligible integer IN joins can use the single-row proof. IS NULL still returns all matching rows. The pinned audit gains 36 complete outcomes and 126 matching field vectors. Full Docker verification passes 1,902 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.10. Share SHA2 integer conversion across binding and evaluation.** Constant conversion and invalid-length warnings appear in the native phase. All 128 prior focused observations and 16 prepare and repeated-execution cases match MySQL. Docker passes 1,901 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.47. Use an ordinary join for unique integer membership.** A full visible non-null unique inner key lets the existing join planner read unfiltered IN. The pinned audit gains 144 complete outcomes and 432 field matches without losing a prior match. Docker passes 1,900 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.10. Retain prepared SHA2 width and short-circuit NULL subjects.** The bound length supplies the digest without narrowing its prepared field. NULL subjects leave length effects unexecuted. The pinned audit improves by 17 exact outcomes. Docker passes 1,899 tests and all seven pinned corpora within the existing caps. |

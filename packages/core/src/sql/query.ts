@@ -1531,8 +1531,8 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     const index = candidates.length === 1 ? candidates[0] : candidates.find((i) => i.parts.length === 1)
     const member = tableColumn(innerField, def, innerAlias)
     // One match at most lets normal join planning handle unfiltered membership.
-    const pullout = !exists && !any && !extra && !limitOrLock && member &&
-      def.indexes.some((key) => !key.invisible && indexPartMatchesColumn(key.parts[0], innerColumn) && uniquePoint(key, member))
+    const pullout = !exists && !any && !extra && !limitOrLock &&
+      def.indexes.some((key) => !key.invisible && indexPartMatchesColumn(key.parts[0], innerColumn) && uniquePoint(key, false))
     if (!any && index === undefined && !pullout) return undefined
     const innerResidual = parentRange ? undefined : residual
     const innerRead = keyReads(innerColumn, innerResidual)

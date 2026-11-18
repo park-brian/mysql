@@ -1176,9 +1176,9 @@ function countRows(rows: Iterable<unknown>, limit: number): number {
 /**
  * An index lookup into the later table of a join, by an equality in the ON
  * or the WHERE between one of its indexed columns and an expression over the
- * earlier tables: `eq_ref` when the index is a PRIMARY or NOT NULL UNIQUE key
- * of that one column ("Single-row index lookup"), `ref` on any other index the
- * column leads ("Index lookup"). 8.4.11 joins by an index wherever one serves
+ * earlier tables. Equality rejects NULL, so a complete single-column unique
+ * key can supply `eq_ref` ("Single-row index lookup"). Other indexes the
+ * column leads can supply `ref` ("Index lookup"). 8.4.11 joins by an index wherever one serves
  * the join, and by a hash only where none does. The lookup decides the join's
  * order; whether the value converts exactly (D-65) decides only whether it is
  * a key read or a filtered scan, never which rows match. Only `=`, since
@@ -1201,7 +1201,7 @@ function refOf(t: FromTable, conditions: readonly Expression[], outerAliases: Re
       for (const candidate of def.indexes) {
         if (forwardKeyPart(candidate, true)?.column !== column.name) continue
         // Prefer a unique key, retaining declaration order within each class.
-        if (uniquePoint(candidate, column)) {
+        if (uniquePoint(candidate, false)) {
           index = candidate
           single = true
           break

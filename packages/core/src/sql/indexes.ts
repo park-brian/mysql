@@ -35,9 +35,9 @@ export function singleRefIndex(index: IndexDef | undefined): index is IndexDef {
   return index?.kind === 'index' && index.parts.length === 1 && index.parts[0]?.descending !== true
 }
 
-/** A complete point on the leading column identifies at most one row. */
-export function uniquePoint(index: IndexDef, column: ColumnDef): boolean {
-  return index.parts.length === 1 && (index.kind === 'primary' || (index.kind === 'unique' && !column.nullable))
+/** Whether a complete point is unique. A nullable UNIQUE key can match multiple NULL rows. */
+export function uniquePoint(index: IndexDef, matchesNull: boolean): boolean {
+  return index.parts.length === 1 && (index.kind === 'primary' || (index.kind === 'unique' && !matchesNull))
 }
 
 /** The first visible index leading on the canonical column. */

@@ -455,7 +455,7 @@ export function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Ex
     if (limit < c.keyed.length) continue
     // Cost the same range even when its stored endpoints let us skip the dive.
     // A unique key's non-NULL point estimates one row. Other ranges cost at least one row.
-    const unique = uniquePoint(c.index, c.column)
+    const unique = uniquePoint(c.index, c.column.nullable)
     let rows = 0
     for (const { range, point } of c.keyed) {
       const estimated = c.empty || (range.to?.values[0] !== null && (point ? unique : skipDive))
