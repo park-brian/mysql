@@ -171,13 +171,16 @@ const outOfBounds = () => sqlError('ER_REGEXP_INDEX_OUTOFBOUNDS_ERROR', 'Index o
  * 1 their arguments' fault, 1583 (8.4.11). Past that, 3686.
  */
 function offsetOf(text: string, pos: number, binary: boolean, instr: boolean): number {
-  const length = charsBefore(text, text.length, binary)
-  if (instr && length === 0) return 0
-  if (pos < 1 || pos > length + (instr ? 0 : 1)) throw outOfBounds()
+  if (instr && !text) return 0
+  if (pos < 1 || pos > text.length + (instr ? 0 : 1)) throw outOfBounds()
   if (binary) return pos - 1
-  let offset = 0
-  for (let i = 1; i < pos; i++) offset += (text.codePointAt(offset) as number) > 0xffff ? 2 : 1
-  return offset
+  let at = 0
+  for (const ch of text) {
+    if (--pos === 0) return at
+    at += ch.length
+  }
+  if (instr || pos !== 1) throw outOfBounds()
+  return at
 }
 
 /** Characters before UTF-16 offset `at`. */
