@@ -410,6 +410,20 @@ including 1,737 coercion warning counts. Parser, core and facade measure
 2,158 of 2,248. Prepared return-option validation and broader ICU
 compatibility remain open.
 
+**M5.10 `CONV` overflow and diagnostic bounds, verified.** The base
+reader stops when the magnitude exceeds its 64-bit limit and applies the
+signed or unsigned result limit. It publishes warning 1292 for overflow, with
+the same quoting and 128-byte limit MySQL applies to binary and text
+inputs. Both protocols pass the focused tests, including a million-digit
+input. MySQL comparisons improve from 364 to 478 of 526 conversion
+outcomes and from 28 to 182 of 196 warning-label outcomes, with all
+prior matches retained. Full Docker verification passes 1,888 tests,
+all nine size gates, seeded fuzzing, 10,000 crash points, package and client
+smoke and all seven pinned corpora, including 1,737 coercion warning counts.
+Parser, core and facade measure 44,773, 334,344 and 334,258 gzipped bytes.
+The relational score stays at 2,158 of 2,248. Charset-specific whitespace
+and malformed cp1250 input stay open.
+
 **M0.3 and M0.4 shared byte handling, verified.** Binary value text,
 key text and PEM formatting use the same byte-to-code-point conversion.
 Reader byte operations share the length check. Writer append and backfill

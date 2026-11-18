@@ -389,3 +389,33 @@ test('scalar DECIMAL readers follow fresh cached byte and NULL writes', async ()
     await db?.end()
   }
 })
+
+test('CONV clamps overflowing prefixes and emits the native bounded DECIMAL warning', async () => {
+  const { db, conn } = await connect()
+  const warning = (quoted: string) => [{ Level: 'Warning', Code: 1292, Message: `Truncated incorrect DECIMAL value: ${quoted}` }]
+  try {
+    await conn.query('SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+    const cases = [
+      ["'18446744073709551615',10,10", '18446744073709551615', []],
+      ["'18446744073709551616',10,10", '18446744073709551615', warning("'18446744073709551616'")],
+      ["'-18446744073709551616',10,10", '0', warning("'-18446744073709551616'")],
+      ["'-9223372036854775808',-10,-10", '-9223372036854775808', []],
+      ["'-9223372036854775809',-10,-10", '-9223372036854775808', warning("'-9223372036854775809'")],
+      ["'8000000000000000',-16,-16", '7FFFFFFFFFFFFFFF', warning("'8000000000000000'")],
+      ["'12x',10,10", '12', []],
+      ["CAST(X'8039' AS BINARY),10,10", '0', warning("'\\x809'")],
+      ["CONCAT(REPEAT('q',127),'é'),10,10", '0', warning("'" + 'q'.repeat(127) + "?'")],
+      ["REPEAT('9',1000000),10,10", '18446744073709551615', warning("'" + '9'.repeat(128) + "'")],
+    ] as const
+    for (const method of ['query', 'execute'] as const) {
+      for (const [args, value, warnings] of cases) {
+        assert.deepEqual(await outcome(conn, `SELECT CONV(${args}) AS x`, method), [
+          [[value]], [['x', 253, 260, 0, 31, 255, '', '', '', '']], warnings,
+        ])
+      }
+    }
+  } finally {
+    await conn.end()
+    await db?.end()
+  }
+})

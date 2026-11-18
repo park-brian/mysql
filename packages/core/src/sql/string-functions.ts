@@ -32,11 +32,12 @@ import { notSupported, proof } from './errors.ts'
 import { byteText, CHARSET_BINARY, expectTyped, equalBytes } from '@myjs/bytes'
 import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, escapedBytes, requireCollationInfo } from '@myjs/charsets'
 import { NODE, type CallNode, type Expression } from '@myjs/parser'
-import { sqlError } from '@myjs/protocol'
+import { sqlError, utf8 } from '@myjs/protocol'
 import {
   COERCIBILITY,
   DERIVATION_NONE,
   MAX_SIGNED,
+  MAX_UNSIGNED,
   MIN_SIGNED,
   bytesValue,
   compareValues,
@@ -66,6 +67,8 @@ import {
 import { hexOf } from './builtins.ts'
 import {
   readArguments,
+  bmpText,
+  utf8mb3WarningQuote,
   aggregate,
   aggregateCollations,
   aggregateTypes,
@@ -894,38 +897,32 @@ function format(n: V, d: number, locale: readonly [string, string, boolean]): st
   return `${negative ? '-' : ''}${grouped}${frac === undefined ? '' : `${point}${frac}`}`
 }
 
-/** `my_strntoull` / `my_strntoll` over a string in `base`: leading space, a sign, digits until one is not. */
-function parseInBase(text: string, base: number, signed: boolean, onNone?: () => void): bigint {
-  let i = 0
-  while (i < text.length && /\s/.test(text[i] as string)) i++
-  let negative = false
-  if (text[i] === '-' || text[i] === '+') negative = text[i++] === '-'
+/** `my_strntoull` / `my_strntoll`: leading space, a sign and digits up to the first invalid digit or overflow. */
+function parseInBase(text: string, base: number, signed: boolean, warn: () => void): bigint {
+  text = text.trimStart()
+  const negative = text[0] === '-'
+  let i = negative || text[0] === '+' ? 1 : 0
   let n = 0n
-  let overflow = false
   const b = BigInt(base)
-  const limit = signed ? (negative ? 1n << 63n : (1n << 63n) - 1n) : (1n << 64n) - 1n
+  const limit = signed ? (negative ? -MIN_SIGNED : MAX_SIGNED) : MAX_UNSIGNED
   const start = i
   for (; i < text.length; i++) {
     const d = parseInt(text[i] as string, 36)
     if (Number.isNaN(d) || d >= base) break
     n = n * b + BigInt(d)
-    if (n > limit) overflow = true
+    if (n > limit) {
+      warn()
+      return negative ? (signed ? MIN_SIGNED : 0n) : limit
+    }
   }
-  if (i === start) onNone?.()
-  if (signed) {
-    if (overflow) return negative ? -(1n << 63n) : (1n << 63n) - 1n
-    return negative ? -n : n
-  }
-  if (overflow) return (1n << 64n) - 1n
-  return negative ? BigInt.asUintN(64, -n) : n
+  if (i === start) warn()
+  if (!negative) return n
+  return signed ? -n : BigInt.asUintN(64, -n)
 }
 
 /** `longlong2str`: a negative radix writes the number signed, a positive one as unsigned. */
 function toBase(n: bigint, radix: number): string {
-  const signed = radix < 0
-  const r = Math.abs(radix)
-  const v = signed ? BigInt.asIntN(64, n) : BigInt.asUintN(64, n)
-  return v.toString(r).toUpperCase()
+  return (radix < 0 ? BigInt.asIntN(64, n) : BigInt.asUintN(64, n)).toString(Math.abs(radix)).toUpperCase()
 }
 
 /** Edit strings and convert between strings, numbers and bytes. */
@@ -1268,16 +1265,25 @@ function scalarStringFunction(name: string, xs: readonly Compiled[], callName: s
           const f = from(r, env)
           const t = to(r, env)
           if (v === null || f === null || t === null) return null
-          const fb = Number(f < 0n ? -f : f)
-          const tb = Number(t < 0n ? -t : t)
+          const fb = Math.abs(Number(f))
+          const radix = Number(t)
+          const tb = Math.abs(radix)
           if (fb < 2 || fb > 36 || tb < 2 || tb > 36) return null
           // A hex literal is its number; anything else is read as text, a number's digits in the from-base included.
-          if (v.kind === 'bytes' && v.hex === true) return conv(toBase(valInt(v), Number(t)))
-          const text = v.kind === 'bytes' ? new TextDecoder('latin1').decode(v.v) : toText(v)
-          if (text.length === 0) return null
-          // Not one digit of the base is 1292 (8.4.11: CONV('abc', 2, 10) warns, CONV('12', 2, 10) does not).
-          const n = parseInBase(text, fb, f < 0n, () => raise(env, 1292, `Truncated incorrect DECIMAL value: '${text}'`))
-          return conv(toBase(n, Number(t)))
+          let n: bigint
+          if (v.kind === 'bytes' && v.hex === true) n = valInt(v)
+          else {
+            const text = toText(v)
+            if (text.length === 0) return null
+            // An invalid first digit or an overflow warns. Text after a valid prefix is ignored.
+            n = parseInBase(text, fb, f < 0n, () => {
+              const quote = v.kind === 'bytes'
+                ? `'${escapedBytes(v.v.subarray(0, 128)).slice(0, 128)}'`
+                : utf8mb3WarningQuote(utf8(bmpText(text.slice(0, 256))))
+              raise(env, 1292, `Truncated incorrect DECIMAL value: ${quote}`)
+            })
+          }
+          return conv(toBase(n, radix))
         },
         type: hexText(65),
       }

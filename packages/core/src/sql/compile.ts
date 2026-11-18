@@ -392,7 +392,7 @@ function truncatedQuoted(env: Pick<Env, 'conditions'>, kind: string, quoted: str
 }
 
 /** A byte-limited C string and its closing quote, read as the server's utf8mb3 warning text. */
-function utf8mb3WarningQuote(bytes: Uint8Array): string {
+export function utf8mb3WarningQuote(bytes: Uint8Array): string {
   const raw = toText(bytesValue(bytes.subarray(0, 128))).split('\0', 1)[0]!
   // A lone three-byte lead also hides the closing quote. Other invalid bytes become question marks.
   const valid = ("'" + raw + "'").replace(/[\xe0-\xef]'$/, '').replace(
@@ -416,7 +416,7 @@ export function warnedText(v: Exclude<Value, null>): string {
 }
 
 /** utf8mb3 carries no character past the BMP. */
-const bmpText = (text: string): string => text.replace(/[\u{10000}-\u{10FFFF}]/gu, '?')
+export const bmpText = (text: string): string => text.replace(/[\u{10000}-\u{10FFFF}]/gu, '?')
 
 /** An invalid string argument: one 1411 warning for this evaluation, then NULL. */
 export function invalidString(env: Env, text: string, fn: string): null {
