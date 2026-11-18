@@ -93,16 +93,12 @@ function u32(bytes: Uint8Array, at: number): number {
  */
 export function varint(bytes: Uint8Array, at: number): { value: number; size: number } {
   let value = 0
-  let shift = 0
-  let n = 0
-  for (;;) {
+  for (let n = 0; ; n++) {
     need(bytes, at + n, 1, 'varint')
-    const b = bytes[at + n] as number
-    n++
-    value += (b & 0x7f) * 2 ** shift
-    if ((b & 0x80) === 0) return { value, size: n }
-    shift += 7
-    if (shift > 35) throw invalidJson('varint is longer than five bytes')
+    const byte = bytes[at + n]!
+    if (n === 4 && byte > 15) throw invalidJson('invalid 32-bit JSON length')
+    value |= (byte & 0x7f) << (7 * n)
+    if ((byte & 0x80) === 0) return { value: value >>> 0, size: n + 1 }
   }
 }
 

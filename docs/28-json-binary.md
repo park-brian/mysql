@@ -56,7 +56,7 @@ string ::= data-length utf8mb4-data
 custom-data ::= custom-type data-length binary-data
 custom-type ::= uint8       // an enum_field_types value
 
-data-length ::= uint8*      // 7 bits per byte, high bit = continuation
+data-length ::= uint8{1,5}  // unsigned 32-bit length, 7 bits per byte
 ```
 
 ## The parts that matter
@@ -89,9 +89,13 @@ raises `ER_JSON_KEY_TOO_BIG` (3151, SQLSTATE `22032`) when the value is
 serialized for storage. A standalone JSON expression can still construct
 and inspect the object before serialization.
 
-**The length varint** is 7 bits per byte with the high bit as a continuation
-flag, little-endian order — the same scheme as Protocol Buffers. Lengths up to
-127 take one byte, up to 16383 take two.
+**The length varint** stores seven low bits per byte, least significant
+group first, with the high bit marking continuation. Lengths up to 127
+take one byte, and lengths up to 16,383 take two. MySQL reads at most five
+bytes. The fifth byte must be between 0 and 15, making 4,294,967,295
+the largest representable length. Truncated or out-of-range lengths
+raise `ER_INVALID_JSON_BINARY_DATA` (3142).
+[MySQL 8.4.11 length reader](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql-common/json_binary.cc#L279-L301).
 
 **`custom-data` (`0x0f`)** wraps a non-JSON MySQL value — a `DATE`, `TIME`,
 `DATETIME`, `DECIMAL`, or an opaque blob — with its `enum_field_types` code and
@@ -132,12 +136,14 @@ function parseValue(buf, type, off) {
 }
 
 function varint(buf, off) {
-  let value = 0, shift = 0, n = 0
-  for (;;) {
-    const b = buf[off + n++]
-    value |= (b & 0x7f) << shift
-    if ((b & 0x80) === 0) return [value, n]
-    shift += 7
+  let value = 0
+  for (let n = 0; n < 5; n++) {
+    const b = buf[off + n]
+    if (b === undefined || (n === 4 && b > 0x0f)) {
+      throw new Error('invalid JSON data length')
+    }
+    value |= (b & 0x7f) << (n * 7)
+    if ((b & 0x80) === 0) return [value >>> 0, n + 1]
   }
 }
 ```

@@ -20,12 +20,14 @@ import {
   TypeError as MyjsTypeError,
   compareJsonKeys,
   decodeJson,
+  decodeJsonDoc,
   encodeDatetime2,
   encodeJson,
   encodeJsonDoc,
   parseJson,
   type JsonValue,
 } from '@myjs/types'
+import { varint } from '../../packages/types/src/json.ts'
 
 const roundTrip = (v: JsonValue): JsonValue => decodeJson(encodeJson(v))
 const hex = (u: Uint8Array) => [...u].map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')
@@ -173,6 +175,13 @@ test('M2.13: malformed input is a typed error, never a crash or a wrong value', 
     MyjsTypeError,
   )
   assert.throws(() => decodeJson(Uint8Array.of(JSON_TYPE.STRING, 0x7f)), MyjsTypeError) // string past the end
+  const max = Uint8Array.of(0xff, 0xff, 0xff, 0xff, 0x0f)
+  assert.deepEqual(varint(max, 0), { value: 0xffffffff, size: 5 })
+  const invalid = { code: 'ER_INVALID_JSON_BINARY_DATA', errno: 3142 }
+  assert.throws(() => varint(Uint8Array.of(0x80, 0x80, 0x80, 0x80, 0x10), 0), invalid)
+  const overlongEmpty = Uint8Array.of(JSON_TYPE.STRING, 0x80, 0x80, 0x80, 0x80, 0x80, 0)
+  assert.throws(() => decodeJson(overlongEmpty), invalid)
+  assert.throws(() => decodeJsonDoc(overlongEmpty), invalid)
 })
 
 test('M2.13: fuzzed bytes never crash — only a typed error comes out', () => {
