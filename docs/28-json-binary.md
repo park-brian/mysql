@@ -69,9 +69,16 @@ child still requires a large parent. Both writers share these layout rules.
 [MySQL 8.4.11 serializer](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql-common/json_binary.cc#L672-L720)
 
 **`size` is the whole container's byte length**, which is what lets a reader skip
-a sub-document without parsing it.
+a sub-document without parsing it. Both readers require the entry tables to fit
+inside that length and bound child reads to the declared bytes. These checks
+also allow unused space inside the container, as partial updates can leave
+holes.
 
-**Offsets are relative to the start of the container**, not the document.
+**Offsets are relative to the start of the container.** A key starts at or
+after the end of the entry tables and its bytes stay inside the container.
+A non-inline value starts at or after the end of its own entry. Its payload
+must also fit inside the container.
+[MySQL 8.4.11 container reader](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql-common/json_binary.cc#L960-L1095).
 
 **Inlining.** `offset-or-inlined-value` holds either an offset *or the value
 itself*, when the value is small enough to fit: literals (`null`, `true`,

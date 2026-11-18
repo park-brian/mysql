@@ -184,6 +184,37 @@ test('M2.13: malformed input is a typed error, never a crash or a wrong value', 
   assert.throws(() => decodeJsonDoc(overlongEmpty), invalid)
 })
 
+test('M2.13: entry tables, keys and values stay inside their declared container', () => {
+  const array = encodeJson(['ab'])
+  const object = encodeJson({ a: 1 })
+  const nested = encodeJson([['ab'], 'sibling'])
+  const large = encodeJson(['a'.repeat(65536)])
+  const invalid = { code: 'ER_INVALID_JSON_BINARY_DATA', errno: 3142 }
+  for (const [bytes, edits] of [
+    [array, [[3, 0xff]]], // Declared size runs past the supplied bytes.
+    [array, [[3, 6]]], // The value entry crosses the end of the container.
+    [array, [[6, 5]]], // The value offset points inside its entry.
+    [array, [[3, 8]]], // The string length fits, but its payload crosses the end.
+    [object, [[5, 10]]], // The key starts inside the entries.
+    [object, [[3, 11]]], // The key ends past the declared size.
+    [nested, [[13, 8]]], // A child cannot borrow bytes from the remaining parent.
+    [large, [[5, 12], [7, 0]]], // A large container also has to fit its entry table.
+  ] as const) {
+    const input = bytes.slice()
+    for (const [at, byte] of edits) input[at] = byte
+    assert.throws(() => decodeJson(input), invalid)
+    assert.throws(() => decodeJsonDoc(input), invalid)
+  }
+  assert.deepEqual(decodeJson(nested), [['ab'], 'sibling'])
+  assert.deepEqual(decodeJsonDoc(nested), {
+    t: 'array',
+    v: [{ t: 'array', v: [{ t: 'string', v: 'ab' }] }, { t: 'string', v: 'sibling' }],
+  })
+  const emptyKey = encodeJson({ '': 1 })
+  assert.deepEqual(decodeJson(emptyKey), { '': 1 })
+  assert.deepEqual(decodeJsonDoc(emptyKey), { t: 'object', v: [['', { t: 'int', v: 1n }]] })
+})
+
 test('M2.13: fuzzed bytes never crash — only a typed error comes out', () => {
   // The fuzzing invariant, on the codec most likely to be handed hostile bytes.
   fc.assert(

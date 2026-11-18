@@ -680,35 +680,37 @@ function invalidLiteral(b: number): never {
 
 function decodeContainer(c: Uint8Array, large: boolean, isObject: boolean): JsonDoc {
   const w = large ? 4 : 2
-  need(c, 0, 2 * w)
+  const header = 2 * w
+  need(c, 0, header)
   const v = new DataView(c.buffer, c.byteOffset, c.length)
-  const get = (at: number): number => {
-    need(c, at, w)
-    return large ? v.getUint32(at, true) : v.getUint16(at, true)
-  }
+  const get = (at: number) => large ? v.getUint32(at, true) : v.getUint16(at, true)
   const count = get(0)
-  const entry = (at: number): JsonDoc => {
-    need(c, at, 1 + w)
+  const size = get(w)
+  const values = header + (isObject ? count * (w + 2) : 0)
+  const end = values + count * (1 + w)
+  if (size < end || size > c.length) throw invalidJson('invalid container size')
+  c = c.subarray(0, size)
+  const entry = (i: number): JsonDoc => {
+    const at = values + i * (1 + w)
     const type = c[at] as number
-    if (isInlined(type, large)) return decodeAt(type, c.subarray(at + 1, at + 1 + w))
+    const after = at + 1 + w
+    if (isInlined(type, large)) return decodeAt(type, c.subarray(at + 1, after))
     const offset = get(at + 1)
-    if (offset >= c.length) throw invalidJson(`value offset ${offset} past a ${c.length}-byte container`)
+    if (offset < after || offset >= size) throw invalidJson(`invalid value offset ${offset}`)
     return decodeAt(type, c.subarray(offset))
   }
   if (!isObject) {
     const items: JsonDoc[] = []
-    for (let i = 0; i < count; i++) items.push(entry(2 * w + i * (1 + w)))
+    for (let i = 0; i < count; i++) items.push(entry(i))
     return { t: 'array', v: items }
   }
   const members: [string, JsonDoc][] = []
-  const values = 2 * w + count * (w + 2)
   for (let i = 0; i < count; i++) {
-    const keyEntry = 2 * w + i * (w + 2)
+    const keyEntry = header + i * (w + 2)
     const keyAt = get(keyEntry)
-    need(c, keyEntry + w, 2)
-    const keyLength = v.getUint16(keyEntry + w, true)
-    need(c, keyAt, keyLength)
-    members.push([fromUtf8(c.subarray(keyAt, keyAt + keyLength)), entry(values + i * (1 + w))])
+    const keyEnd = keyAt + v.getUint16(keyEntry + w, true)
+    if (keyAt < end || keyEnd > size) throw invalidJson(`invalid key offset ${keyAt}`)
+    members.push([fromUtf8(c.subarray(keyAt, keyEnd)), entry(i)])
   }
   return { t: 'object', v: members }
 }

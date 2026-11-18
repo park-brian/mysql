@@ -221,6 +221,7 @@ interface Header {
   readonly count: number
   readonly offsetSize: number
   readonly headerSize: number
+  readonly size: number
 }
 
 function readHeader(container: Uint8Array, large: boolean): Header {
@@ -234,7 +235,7 @@ function readHeader(container: Uint8Array, large: boolean): Header {
   if (size > container.length) {
     throw invalidJson(`container claims ${size} bytes but only ${container.length} are present`)
   }
-  return { count, offsetSize, headerSize: offsetSize * 2 }
+  return { count, offsetSize, headerSize: offsetSize * 2, size }
 }
 
 function readValueEntry(
@@ -251,16 +252,18 @@ function readValueEntry(
     return decodeValue(type, container.subarray(at + 1), meta)
   }
   const offset = large ? u32(container, at + 1) : u16(container, at + 1)
-  if (offset >= container.length) {
-    throw invalidJson(`value offset ${offset} is past the end of a ${container.length}-byte container`)
+  if (offset < at + 1 + (large ? 4 : 2) || offset >= container.length) {
+    throw invalidJson(`invalid value offset ${offset} in a ${container.length}-byte container`)
   }
   // Value offsets are relative to the current container.
   return decodeValue(type, container.subarray(offset), meta)
 }
 
 function decodeArray(container: Uint8Array, large: boolean, meta?: Omit<ColumnMeta, 'type'>): JsonValue[] {
-  const { count, offsetSize, headerSize } = readHeader(container, large)
+  const { count, offsetSize, headerSize, size } = readHeader(container, large)
+  container = container.subarray(0, size)
   const entrySize = 1 + offsetSize
+  need(container, 0, headerSize + count * entrySize, 'entry table')
   const out: JsonValue[] = []
   for (let i = 0; i < count; i++) out.push(readValueEntry(container, headerSize + i * entrySize, large, meta))
   return out
@@ -271,10 +274,13 @@ function decodeObject(
   large: boolean,
   meta?: Omit<ColumnMeta, 'type'>,
 ): { [key: string]: JsonValue } {
-  const { count, offsetSize, headerSize } = readHeader(container, large)
+  const { count, offsetSize, headerSize, size } = readHeader(container, large)
+  container = container.subarray(0, size)
   const keyEntrySize = offsetSize + 2
   const valueEntrySize = 1 + offsetSize
   const valueEntries = headerSize + count * keyEntrySize
+  const end = valueEntries + count * valueEntrySize
+  need(container, 0, end, 'entry table')
   const out: { [key: string]: JsonValue } = {}
   for (let i = 0; i < count; i++) {
     const keyEntry = headerSize + i * keyEntrySize
@@ -282,6 +288,7 @@ function decodeObject(
     // Key length is uint16 whatever the container width — doc 28: "keys must
     // be < 64 KB".
     const keyLength = u16(container, keyEntry + offsetSize)
+    if (keyOffset < end) throw invalidJson(`invalid key offset ${keyOffset}`)
     need(container, keyOffset, keyLength, 'key')
     const key = fromUtf8(container.subarray(keyOffset, keyOffset + keyLength))
     // `defineProperty` rather than `out[key] = …`, because a stored document is

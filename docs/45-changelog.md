@@ -12,6 +12,7 @@ entry, recorded out of order, sits where its date and its commit put it.
 
 | Date | Entry |
 |---|---|
+| 2026-11-17 | **M2.13/M5.21. Bound binary JSON entries to their declared containers.** Both readers reject invalid entry tables, key offsets and payloads that cross their claimed size. Full Docker verification passes 1,897 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-17 | **M2.13/M5.21. Share the binary JSON tag definitions.** Both codecs preserve their bytes and the public `JSON_TYPE` map across 20,000 documents. Core and facade save 49 and 75 gzipped bytes. All 1,896 tests and seven pinned corpora pass in Docker within the existing caps. |
 | 2026-11-17 | **M2.13/M5.21. Enforce binary JSON's five-byte length limit.** The shared decoder reads unsigned 32-bit lengths and both consumers reject malformed lengths with error 3142. Full Docker verification passes 1,896 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-17 | **M5.10. Search the requested suffix in `REGEXP_INSTR`.** Anchors and lookbehind see MySQL's search region, and empty matches keep the requested SQL position on an empty subject. Both wire protocols reproduce all 4,608 position, dot-all and line-break observations. Full Docker verification passes 1,896 tests and all seven pinned corpora within the existing caps. |
