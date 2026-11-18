@@ -221,3 +221,53 @@ test('empty dependent IN chooses materialization at its native cost boundary', a
     await db?.end()
   }
 })
+
+test('M5.47: unique unfiltered membership uses an ordinary join', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection(db === undefined
+    ? { host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+    : { stream: db.createStream(), user: 'root' })
+  const schema = 'semi_unique_membership'
+  const sql = 'SELECT p.id,p.k FROM p WHERE p.k IN (SELECT c.k FROM c) ORDER BY p.id'
+  const streamed = 'Sort\n    Stream results\n        Nested loop inner join\n            Covering index scan on c using ck\n            Single-row covering index lookup on p using pk'
+  const read = async (rows: readonly unknown[][], idFlags: number, keyFlags: number, fullPlan?: string) => {
+    for (const method of ['query', 'execute'] as const) {
+      const options = { sql, rowsAsArray: true }
+      const [selected, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+      assert.deepEqual(selected, rows)
+      assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
+        ['id', 3, 11, idFlags, 0, 63, schema, 'p', 'p', 'id'],
+        ['k', 3, 11, keyFlags, 0, 63, schema, 'p', 'p', 'k'],
+      ])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      const explain = 'EXPLAIN FORMAT=TREE ' + sql
+      const [result] = method === 'query' ? await conn.query<mysql.RowDataPacket[]>(explain) : await conn.execute<mysql.RowDataPacket[]>(explain)
+      const plan = planSkeleton(result[0]?.EXPLAIN)
+      if (fullPlan === undefined) {
+        assert.ok(plan.split('\n').some((line: string) => line.trim() === 'Nested loop inner join'), plan)
+        assert.match(plan, /Single-row covering index lookup on c using ck/)
+      } else assert.equal(plan, fullPlan)
+    }
+  }
+  try {
+    if (host !== undefined) assert.equal(String((await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS v'))[0][0]!.v).split('-')[0], '8.4.11')
+    await conn.query('CREATE DATABASE ' + schema)
+    await conn.query('USE ' + schema)
+    await conn.query('CREATE TABLE p(id INT PRIMARY KEY,v INT NOT NULL,k INT NOT NULL,UNIQUE KEY pk(k)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE c(id INT PRIMARY KEY,v INT NOT NULL,k INT NOT NULL,UNIQUE KEY ck(k)) STATS_AUTO_RECALC=0')
+    await conn.query('ANALYZE TABLE p,c')
+    await read([], 20483, 20485)
+    await conn.query('INSERT INTO p VALUES (1,8,0),(2,7,1),(3,6,2),(4,5,3)')
+    await conn.query('INSERT INTO c VALUES (1,8,0)')
+    await conn.query('ANALYZE TABLE p,c')
+    await read([[1, 0]], 4097, 4097, streamed)
+    await conn.query('DELETE FROM c')
+    await conn.query('ANALYZE TABLE c')
+    await read([], 4097, 4097, streamed)
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS ' + schema)
+    await conn.end()
+    await db?.end()
+  }
+})

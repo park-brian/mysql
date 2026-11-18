@@ -23,7 +23,7 @@ import { EMPTY_KEY_RANGES, constantValue, equalBounds, isConstant, optimizerEnab
 import { isNotEqual, and, columnRefs, integerLiteral, isOrderedComparison, logicalShortCircuit, nativeCallName, nullLiteral, operandPairs, queryBody, rewriteExpression, someNode, tableAlias, withoutUnaryPlus } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, proof, wrongArgumentsError } from './errors.ts'
-import { clusteredIndex, forwardKeyPart, indexPartMatchesColumn, indexParts, leadingIndex, singleRefIndex } from './indexes.ts'
+import { clusteredIndex, forwardKeyPart, indexPartMatchesColumn, indexParts, leadingIndex, singleRefIndex, uniquePoint } from './indexes.ts'
 import { collationInfoByName } from '@myjs/charsets'
 import { ambiguousColumnError, unknownColumnError, requireSchema, safeIndex, safeResolve, TableScope, columnIndex as indexOfColumn } from './scope.ts'
 import { holdsRead, indexRecordBytes, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type HintAdmission, type JoinCondition } from './from.ts'
@@ -1529,7 +1529,11 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
       candidates = candidates.filter((key) => forwardKeyPart(key))
     }
     const index = candidates.length === 1 ? candidates[0] : candidates.find((i) => i.parts.length === 1)
-    if (!any && index === undefined) return undefined
+    const member = tableColumn(innerField, def, innerAlias)
+    // One match at most lets normal join planning handle unfiltered membership.
+    const pullout = !exists && !any && !extra && !limitOrLock && member &&
+      def.indexes.some((key) => !key.invisible && indexPartMatchesColumn(key.parts[0], innerColumn) && uniquePoint(key, member))
+    if (!any && index === undefined && !pullout) return undefined
     const innerResidual = parentRange ? undefined : residual
     const innerRead = keyReads(innerColumn, innerResidual)
     const scanOnly = index !== undefined && !holdsRead(def, index, innerRead)
@@ -1552,7 +1556,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
       }
     }
     const fanoutOff = !fanoutFilter && scanOnly && (compoundArm || strategy === 'weedout' && !text) &&
-      signedPrimaryMembership(outerDef, parent, tableColumn(innerField, def, innerAlias))
+      signedPrimaryMembership(outerDef, parent, member)
     if (!fanoutFilter && compoundArm && !fanoutOff) return undefined
 
     // Keep the outer table's slots first: its logical scope remains the SELECT's scope.
@@ -1563,6 +1567,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     const read = columnsRead(from.scope, node, q)
     read.set(innerAlias, innerRead)
     alternative.reads(read)
+    if (pullout) return { from: alternative, where: predicate, outerLoop: false, preserve: undefined }
     alternative.sortedBy(sortBy, keep)
     const innerFirst = alternative.integerSemijoin(innerAlias, scanOnly ? undefined : index, key, innerResidual,
       !someNode([node.items, q.orderBy], (n) => (n as Expression).kind === NODE.SUBQUERY || undefined), strategy, fanoutOff)
