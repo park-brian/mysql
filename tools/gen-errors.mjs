@@ -105,9 +105,33 @@ function symbolPrefix(symbol) {
   return symbol.startsWith('OBSOLETE_ER_') ? 'OBSOLETE_ER_' : ''
 }
 const storedName = (symbol) => symbol.slice(symbolPrefix(symbol).length)
+// A dictionary token can name a repeated adjacent pair as well as one word.
+const pairs = new Map()
+for (const { symbol } of entries) {
+  const words = storedName(symbol).split('_')
+  for (let i = 1; i < words.length; i++) {
+    if (words[i - 1] === '' || words[i] === '') continue
+    const pair = `${words[i - 1]}_${words[i]}`
+    pairs.set(pair, (pairs.get(pair) ?? 0) + 1)
+  }
+}
+const phrases = new Set([...pairs.keys()].sort().sort((a, b) => pairs.get(b) - pairs.get(a)).slice(0, 8))
+
+function wordsOf(name) {
+  const parts = name.split('_')
+  const words = []
+  for (let i = 0; i < parts.length; i++) {
+    const pair = `${parts[i]}_${parts[i + 1]}`
+    if (i + 1 < parts.length && phrases.has(pair)) {
+      words.push(pair)
+      i++
+    } else words.push(parts[i])
+  }
+  return words
+}
 const counts = new Map()
 for (const { symbol } of entries) {
-  for (const word of storedName(symbol).split('_')) {
+  for (const word of wordsOf(storedName(symbol))) {
     if (word.length > 1) counts.set(word, (counts.get(word) ?? 0) + 1)
   }
 }
@@ -119,7 +143,7 @@ const tokens = [...letters.slice(0, shortCount), ...[...letters.slice(shortCount
 const names = [...counts.keys()].sort().sort((a, b) => counts.get(b) - counts.get(a))
 const shortWords = names.slice(0, shortCount)
 const savings = (word) => counts.get(word) * (word.length - 1)
-const longWords = names.slice(shortCount).sort((a, b) => savings(b) - savings(a)).slice(0, tokens.length - shortCount)
+const longWords = names.slice(shortCount).sort((a, b) => Number(phrases.has(b)) - Number(phrases.has(a)) || savings(b) - savings(a)).slice(0, tokens.length - shortCount)
 // Give ascending codes to adjacent long words so similar names share token prefixes.
 const words = [...shortWords, ...longWords.sort()]
 const codes = new Map(words.map((word, i) => [word, tokens[i]]))
@@ -131,7 +155,7 @@ function packSymbol(symbol) {
   const name = symbol.slice(prefix.length)
   let packed = symbolMarkers[prefix]
   let previousRaw = false
-  for (const word of name.split('_')) {
+  for (const word of wordsOf(name)) {
     const token = codes.get(word)
     const raw = token === undefined && word !== ''
     if (previousRaw && raw) packed += '_'
@@ -193,7 +217,7 @@ export const ERROR_NAME_WORDS = '${words.join(' ')}'
  * A trailing space represents 42000, the most common nondefault state.
  * Symbols begin with ER_ by default. ? means OBSOLETE_ER_, and ! leaves
  * the symbol prefix empty. Lowercase tokens
- * encode words, _ separates adjacent raw words and ~ encodes an empty word.
+ * encode words and frequent adjacent pairs. _ separates raw words and ~ encodes an empty word.
  * The decoder preserves entry order and alias precedence.
  */
 export const PACKED_ERROR_TABLE = \`${packed}\`

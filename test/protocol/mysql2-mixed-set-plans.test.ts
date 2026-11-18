@@ -28,15 +28,20 @@ test('mixed set operations report the operands that keep duplicates', async () =
       ['EXCEPT ALL', 'EXCEPT ALL', [], [4]],
       ['INTERSECT DISTINCT', 'INTERSECT ALL', [], [1, 2]],
       ['UNION DISTINCT', 'UNION ALL', ['t2'], [1, 1, 2, 2, 2, 3, 3, 4, 5, 7]],
+      ['EXCEPT ALL', 'EXCEPT ALL', [], [1, 1, 2, 2, 3, 4], true],
     ] as const
-    for (const [first, second, kept, expected] of cases) {
-      const sql = `SELECT v FROM t0 ${first} SELECT v FROM t1 ${second} SELECT v FROM t2 ORDER BY 1`
+    for (const [first, second, kept, expected, nested] of cases) {
+      const right = `SELECT v FROM t1 ${second} SELECT v FROM t2`
+      const sql = `SELECT v FROM t0 ${first} ${nested ? `(${right})` : right} ORDER BY 1`
       const explain = 'EXPLAIN FORMAT=TREE ' + sql
       for (const method of ['query', 'execute'] as const) {
         const [planRows] = method === 'query' ? await conn.query(explain) : await conn.execute(explain)
         const plan = String((planRows as string[][])[0]?.[0])
         const labels = [...plan.matchAll(/Disable deduplication\n\s+-> Table scan on (t\d)/g)].map((m) => m[1])
         assert.deepEqual(labels, kept, `${method}: ${sql}`)
+        if (first === 'EXCEPT ALL' && second === 'EXCEPT ALL') {
+          assert.equal([...plan.matchAll(/Except all materialize/g)].length, nested ? 2 : 1, `${method}: ${sql}`)
+        }
         const [rows] = method === 'query' ? await conn.query(sql) : await conn.execute(sql)
         assert.deepEqual(rows, expected.map((v) => [v]))
         assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])

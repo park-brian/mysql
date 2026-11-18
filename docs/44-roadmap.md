@@ -51,6 +51,17 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 
 ## Next
 
+**M5.49 preserve right-hand EXCEPT plans, verified.**
+An EXCEPT on the right keeps its own materialization. A flat EXCEPT ALL
+chain still uses one stage. The two wire methods agree with MySQL 8.4.11
+on both plans and results. The 180-case set audit gains 24 exact plans
+and keeps all rows, fields and warnings. The error-name generator stores
+eight frequent adjacent word pairs in its existing dictionary. Every
+error lookup is unchanged, and regeneration produces identical bytes.
+Full Docker verification passes 1,908 tests, all seven pinned corpora
+and all nine size gates. Parser, core and facade measure 44,778, 334,343
+and 334,249 gzipped bytes. Nested INTERSECT and UNION planning remain open.
+
 **M5.49 report duplicate handling in mixed set operations, verified.**
 A materialized EXCEPT reports the ALL operands before its first DISTINCT.
 UNION reports ALL operands after its last DISTINCT. INTERSECT applies its
@@ -14172,7 +14183,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,356 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-18. The facade is 334,266 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
+| Core bundle, gzipped | 334,343 B (326.5 KiB) for the browser entry chunk, measured on 2026-11-18. The facade is 334,249 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion, M5.10 function and M5.47/M5.49 planner fixes pass the existing stabilization budgets | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

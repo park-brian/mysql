@@ -2332,9 +2332,9 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: { readonly 
     parent?.op !== 'UNION' || parent.op === node.op
       ? op.columns
       : op.columns.map((c, i) => ({ name: c.name, type: { ...c.type, nullable: nestedNullability(node.op, (left.columns[i] as { type: ResultType }).type.nullable, (right.columns[i] as { type: ResultType }).type.nullable) } }))
-  // EXPLAIN: a chain of one operator is one temporary table, its branches in order.
+  // EXPLAIN folds compatible operands. A right-hand EXCEPT stays separate.
   const flatten = (p: SelectPlan, all: boolean): { node: PlanNode; all: boolean }[] | undefined => {
-    if (p.members !== undefined && p.members.op === node.op) return p.members.items.map((m, i) => (i === 0 ? { ...m, all } : m))
+    if (p.members?.op === node.op && (p === left || node.op !== 'EXCEPT')) return p.members.items.map((m, i) => (i === 0 ? { ...m, all } : m))
     const n = p.explain?.(true)?.[0]
     return n === undefined ? undefined : [{ node: n, all }]
   }
