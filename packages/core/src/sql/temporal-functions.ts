@@ -106,7 +106,7 @@ export const TEMPORAL_FUNCTIONS: ReadonlySet<string> = new Set([
 export function clockInZone(env: Env, utc: boolean, at = env.now): Date {
   const zone = utc ? null : env.state.systemVariable('time_zone', undefined, env.session)
   const offset = zone?.kind === 'string' ? offsetOf(zone.v) : undefined
-  return offset ? new Date(at.getTime() + offset * 1000) : at
+  return new Date((Math.floor(at) + (offset ?? 0)) * 1000)
 }
 
 /** The statement's date in the session's fixed-offset zone or in UTC. */
@@ -457,7 +457,7 @@ export function temporalFunction(name: string, e: CallNode, ctx: CompileContext)
       return strToDate(arg(0), arg(1), constant(1, arg(1)))
     case 'UNIX_TIMESTAMP': {
       count(0, 1)
-      if (e.args.length === 0) return { eval: (_r, env) => intValue(BigInt(Math.floor(env.now.getTime() / 1000))), type: INT(21, false) }
+      if (e.args.length === 0) return { eval: (_r, env) => intValue(BigInt(Math.floor(env.now))), type: INT(21, false) }
       const x = arg(0)
       const fsp = temporalPrecision(x, constant(0, x))
       const nullable = x.type.nullable

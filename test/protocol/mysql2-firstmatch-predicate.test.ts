@@ -89,7 +89,7 @@ test('physical FirstMatch proof skips evaluations and declines points, other col
         userVariables: new Map(), lastInsertId: 0n, insertIdSet: false, rowCount: 0n,
         systemVariable: (name) => name === 'optimizer_switch' ? { kind: 'string', v: 'materialization=off' + (mode.startsWith('loose') ? '' : ',loosescan=off'), collationId: 255, coercibility: 4 } : undefined,
       }
-      const env: Env = { params: mode === 'parameter-bound' ? [{ kind: 'int', v: 1n, unsigned: false }] : [], now: new Date(), session, state }
+      const env: Env = { params: mode === 'parameter-bound' ? [{ kind: 'int', v: 1n, unsigned: false }] : [], now: Date.now() / 1000, session, state }
       const query = parseStatement('SELECT pa.g,pa.s FROM pa JOIN ' + (mode.startsWith('self-alias') ? 'pa AS ch' : 'ch') + ' ON pa.g=ch.g WHERE ' + where)
       if (query.kind !== 'query' || query.body.kind !== 'select') throw new Error('expected SELECT')
       let evaluations = 0

@@ -10,7 +10,7 @@ import { intType, stringType } from '../../packages/core/src/sql/meta.ts'
 test('NULLIF separately reads its original result, including after a NULL comparison', async () => {
   await loadCollation(255)
   const env: Env = {
-    params: [], now: new Date(0), memo: new Map(), conditions: [],
+    params: [], now: 0, memo: new Map(), conditions: [],
     session: new Session({ connectionId: 1, capabilities: capabilities(0) }),
     state: { userVariables: new Map(), lastInsertId: 0n, insertIdSet: false, rowCount: 0n, systemVariable: () => undefined },
   }

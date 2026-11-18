@@ -9,7 +9,7 @@ import { doubleType, intType, stringType } from '../../packages/core/src/sql/met
 test('a nested DECIMAL reader selects once per evaluation and memoizes only diagnostics', () => {
   const conditions: Condition[] = []
   const env: Env = {
-    params: [], now: new Date(0), memo: new Map(), conditions,
+    params: [], now: 0, memo: new Map(), conditions,
     session: new Session({ connectionId: 1, capabilities: capabilities(0) }),
     state: { userVariables: new Map(), lastInsertId: 0n, insertIdSet: false, rowCount: 0n, systemVariable: () => undefined },
   }

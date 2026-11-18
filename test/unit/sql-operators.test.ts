@@ -12,7 +12,7 @@ import { intType } from '../../packages/core/src/sql/meta.ts'
 const session = new Session({ connectionId: 1, capabilities: capabilities(0), transcoder: utf8Transcoder })
 const env: Env = {
   params: [],
-  now: new Date(0),
+  now: 0,
   session,
   state: { userVariables: new Map(), lastInsertId: 0n, insertIdSet: false, rowCount: 0n, systemVariable: () => undefined },
 }

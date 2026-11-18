@@ -10,6 +10,8 @@ import { LITERAL, NODE, deparse, hexBytes, type CallNode, type Expression, type 
 import { dateToMysql, messages, sqlError, utf8, webCryptoRandom } from '@myjs/protocol'
 import {
   COERCIBILITY,
+  roundFraction,
+  roundHalfEven,
   MAX_SIGNED,
   MAX_UNSIGNED,
   MIN_SIGNED,
@@ -731,9 +733,10 @@ function fspArgument(e: CallNode): number {
 
 /** Quantize the clock to the requested fractional precision. */
 function clock(env: Env, fsp: number, utc: boolean, live = false): MysqlDateTime {
-  const date = dateToMysql(clockInZone(env, utc, live ? new Date() : undefined))
-  const unit = 10 ** (6 - fsp)
-  return { ...date, microsecond: Math.floor(date.microsecond / unit) * unit }
+  const at = live ? Date.now() / 1000 : env.now
+  const date = dateToMysql(clockInZone(env, utc, at))
+  const fraction = Math.min(roundHalfEven((at - Math.floor(at)) * 1e6), 999999)
+  return { ...date, microsecond: roundFraction(fraction, fsp, true) }
 }
 
 /** RAND's state: MySQL's `rand_struct`. */

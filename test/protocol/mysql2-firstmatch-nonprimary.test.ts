@@ -986,7 +986,7 @@ test('hash, repeated-scan and indexed weedout evaluate every raw candidate after
         userVariables: new Map(), lastInsertId: 0n, insertIdSet: false, rowCount: 0n,
         systemVariable: (name) => name === 'optimizer_switch' ? { kind: 'string', v: 'firstmatch=off,loosescan=off,materialization=off,duplicateweedout=off' + (buffered ? '' : ',block_nested_loop=off'), collationId: 255, coercibility: 4 } : undefined,
       }
-      const env: Env = { params: [], now: new Date(), session, state }
+      const env: Env = { params: [], now: Date.now() / 1000, session, state }
       const compiled = (e: Parameters<typeof compile>[0], scope: CompileContext['scope']) =>
         compile(e, { scope, session, state, connectionCollation: 255, clause: 'on clause', serverVersion: '8.4.11' })
       const query = parseStatement('SELECT pa.g,pa.s FROM pa JOIN ch ON pa.g=ch.g')

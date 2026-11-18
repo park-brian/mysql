@@ -11,7 +11,7 @@ test('CHAR/BINARY casts own DECIMAL diagnostics after one original argument read
   await loadCollation(255)
   await loadCollation(8)
   const env: Env = {
-    params: [], now: new Date(0), memo: new Map(), conditions: [],
+    params: [], now: 0, memo: new Map(), conditions: [],
     session: new Session({ connectionId: 1, capabilities: capabilities(0) }),
     state: { userVariables: new Map(), lastInsertId: 0n, insertIdSet: false, rowCount: 0n, systemVariable: () => undefined },
   }

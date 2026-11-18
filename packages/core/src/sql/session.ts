@@ -117,9 +117,9 @@ export class SqlSession implements SessionValues {
    * CURDATE() and a TIME's date read until it is set to 0 or DEFAULT, or the
    * time now (SYSDATE() reads its own).
    */
-  clock(): Date {
+  clock(): number {
     const pinned = this.ownVariables.get('timestamp')
-    return pinned === undefined || pinned === null ? new Date() : new Date(Number(toText(pinned)) * 1000)
+    return pinned == null ? Date.now() / 1000 : Number(toText(pinned))
   }
 
   systemVariableNames(): string[] {

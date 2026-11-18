@@ -153,8 +153,8 @@ export const setRowNumber = (env: Env, n: number): void => {
 /** What evaluation may read beyond the row: the parameters, the clock, the session. */
 export interface Env {
   readonly params: readonly Value[]
-  /** The statement's start, which every `NOW()` in it returns. */
-  readonly now: Date
+  /** The statement's start in epoch seconds, which every `NOW()` in it returns. */
+  readonly now: number
   readonly session: Session
   readonly state: SessionValues
   /** The transaction a subquery reads in (M5.1). */
@@ -424,7 +424,7 @@ export function invalidString(env: Env, text: string, fn: string): null {
 }
 
 /** An environment for evaluating a constant while compiling: no row, the statement's parameters. */
-export const constantEnv = (ctx: CompileContext): Env => ({ params: ctx.params ?? [], now: ctx.state.clock?.() ?? new Date(), session: ctx.session, state: ctx.state })
+export const constantEnv = (ctx: CompileContext): Env => ({ params: ctx.params ?? [], now: ctx.state.clock?.() ?? Date.now() / 1000, session: ctx.session, state: ctx.state })
 
 /** The session byte limit used by string result sizing and packet checks. */
 export function maxPacket(env: Pick<Env, 'state' | 'session'>): number {
@@ -593,7 +593,7 @@ export interface SessionValues {
   /** A system variable's value, as `@@name` reads it; `undefined` for one that does not exist. */
   systemVariable(name: string, scope: 'GLOBAL' | 'SESSION' | undefined, session: Session): Value | undefined
   /** The statement's clock: the session's `SET TIMESTAMP`, or the time now. */
-  clock?(): Date
+  clock?(): number
 }
 
 export interface Compiled {
