@@ -84,13 +84,17 @@ export function matchType(text: string, fn: string): MatchType {
   return flags
 }
 
-const cache = new Map<string, IcuPattern & { readonly re: RegExp }>()
+type CompiledPattern = IcuPattern & { readonly re: RegExp; readonly nested: boolean }
+
+const cache = new Map<string, CompiledPattern>()
 
 /** A pattern compiled once per flags and text: ICU's syntax read, the engine's written. */
-function compiled(pattern: string, flags: IcuFlags): IcuPattern & { readonly re: RegExp } {
+function compiled(pattern: string, flags: IcuFlags): CompiledPattern {
   const key = `${flags.i}${flags.m}${flags.s}${flags.d}/${pattern}`
   let c = cache.get(key)
   if (c === undefined) {
+    if (pattern === '' || pattern.includes('[[:<:]]') || pattern.includes('[[:>:]]')) throw regexpArgumentError()
+    const nested = nestedQuantifiers(pattern)
     const p = compileIcu(pattern, flags)
     let re: RegExp
     try {
@@ -99,7 +103,7 @@ function compiled(pattern: string, flags: IcuFlags): IcuPattern & { readonly re:
       // Never expected — 600,000 fuzzed patterns compile — but a typed error, not a crash, if one does not.
       throw regexpArgumentError()
     }
-    c = { ...p, re }
+    c = { ...p, re, nested }
     if (cache.size > 256) cache.clear()
     cache.set(key, c)
   }
@@ -123,14 +127,11 @@ function pairCollation(a: Value, b: Exclude<Value, null>, fn: string): number {
 const textOf = (v: Exclude<Value, null>): string => (v.kind === 'bytes' ? decodeCharset(v.v, 'latin1') : toText(v))
 
 /** The engine's pattern for `pattern` over `subject`. */
-function regexpFor(subject: Value, pattern: Exclude<Value, null>, type: MatchType | undefined, fn: string, searching = true): IcuPattern & { readonly re: RegExp } {
+function regexpFor(subject: Value, pattern: Exclude<Value, null>, type: MatchType | undefined, fn: string, searching = true): CompiledPattern {
   const base = pairCollation(subject, pattern, fn)
   const collation = subject?.kind === 'string' && pattern.kind === 'string' ? aggregateCollation(subject, pattern) : base
-  const text = textOf(pattern)
-  if (text === '' || text.includes('[[:<:]]') || text.includes('[[:>:]]')) throw regexpArgumentError()
-  const nested = nestedQuantifiers(text)
-  const c = compiled(text, { i: type?.i ?? nameOf(collation).endsWith('_ci'), m: type?.m ?? false, s: type?.s ?? false, d: type?.d ?? false })
-  if (searching && nested && subject !== null && [...textOf(subject)].length > RUNAWAY_LENGTH) throw sqlError('ER_REGEXP_TIME_OUT', 'Timeout exceeded in regular expression match.')
+  const c = compiled(textOf(pattern), { i: type?.i ?? nameOf(collation).endsWith('_ci'), m: type?.m ?? false, s: type?.s ?? false, d: type?.d ?? false })
+  if (searching && c.nested && subject !== null && [...textOf(subject)].length > RUNAWAY_LENGTH) throw sqlError('ER_REGEXP_TIME_OUT', 'Timeout exceeded in regular expression match.')
   return c
 }
 
