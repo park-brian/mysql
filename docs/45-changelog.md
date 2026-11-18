@@ -12,6 +12,7 @@ entry, recorded out of order, sits where its date and its commit put it.
 
 | Date | Entry |
 |---|---|
+| 2026-11-18 | **M1.6/M5.53. Order long generated error tokens alphabetically.** Every numeric slot, error name, SQLSTATE and strict rule is preserved. The reproducible table saves 31 gzipped bytes in core, 23 in the facade and 50 in protocol. Docker passes 1,904 tests and seven pinned corpora. |
 | 2026-11-18 | **M5.49. Reuse split join conjuncts.** Dynamic range detection reads the existing planner predicates directly. All 300 focused observations and the relational score of 2,169 of 2,248 plans are unchanged. Docker passes 1,904 tests and seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.47. Resolve a prepared CALL's procedure name.** Missing names return 1305, and an unqualified name without a database returns 1046. Docker verifies 1,904 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.47. Reject binary PREPARE of USE.** The connection selects its database through text USE. The stored-program registry reads names through the statement's retained database. Docker verifies 1,904 tests and all seven pinned corpora within the existing caps. |

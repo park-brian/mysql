@@ -120,7 +120,8 @@ const names = [...counts.keys()].sort().sort((a, b) => counts.get(b) - counts.ge
 const shortWords = names.slice(0, shortCount)
 const savings = (word) => counts.get(word) * (word.length - 1)
 const longWords = names.slice(shortCount).sort((a, b) => savings(b) - savings(a)).slice(0, tokens.length - shortCount)
-const words = [...shortWords, ...longWords]
+// Give ascending codes to adjacent long words so similar names share token prefixes.
+const words = [...shortWords, ...longWords.sort()]
 const codes = new Map(words.map((word, i) => [word, tokens[i]]))
 
 const symbolMarkers = { ER_: '', OBSOLETE_ER_: '?', '': '!' }
