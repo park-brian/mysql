@@ -31,30 +31,46 @@ import { fromUtf8, utf8 } from '@myjs/bytes'
 import { invalidJson, jsonKeyTooBig } from './errors.ts'
 import { decodeStorageValue, type ColumnMeta, type StorageValue } from './values.ts'
 
-/** Type tags, from `sql-common/json_binary.h`'s grammar. */
+/** Type tags, from sql-common/json_binary.h. */
+export const JSON_SMALL_OBJECT = 0x00
+export const JSON_LARGE_OBJECT = 0x01
+export const JSON_SMALL_ARRAY = 0x02
+export const JSON_LARGE_ARRAY = 0x03
+export const JSON_LITERAL = 0x04
+export const JSON_INT16 = 0x05
+export const JSON_UINT16 = 0x06
+export const JSON_INT32 = 0x07
+export const JSON_UINT32 = 0x08
+export const JSON_INT64 = 0x09
+export const JSON_UINT64 = 0x0a
+export const JSON_DOUBLE = 0x0b
+export const JSON_STRING = 0x0c
+
+/**
+ * A non-JSON MySQL value in its *storage* encoding.
+ *
+ * Note the collision, which is only confusing if you forget these are two
+ * namespaces: `0x0f` here is custom-data, while `0x0f` in
+ * `enum_field_types` is the internal VARCHAR type. The byte inside a
+ * custom-data payload is from the *other* namespace.
+ */
+export const JSON_CUSTOM = 0x0f
+
 export const JSON_TYPE = {
-  SMALL_OBJECT: 0x00,
-  LARGE_OBJECT: 0x01,
-  SMALL_ARRAY: 0x02,
-  LARGE_ARRAY: 0x03,
-  LITERAL: 0x04,
-  INT16: 0x05,
-  UINT16: 0x06,
-  INT32: 0x07,
-  UINT32: 0x08,
-  INT64: 0x09,
-  UINT64: 0x0a,
-  DOUBLE: 0x0b,
-  STRING: 0x0c,
-  /**
-   * A non-JSON MySQL value in its *storage* encoding.
-   *
-   * Note the collision, which is only confusing if you forget these are two
-   * namespaces: `0x0f` here is custom-data, while `0x0f` in
-   * `enum_field_types` is the internal VARCHAR type. The byte inside a
-   * custom-data payload is from the *other* namespace.
-   */
-  CUSTOM: 0x0f,
+  SMALL_OBJECT: JSON_SMALL_OBJECT,
+  LARGE_OBJECT: JSON_LARGE_OBJECT,
+  SMALL_ARRAY: JSON_SMALL_ARRAY,
+  LARGE_ARRAY: JSON_LARGE_ARRAY,
+  LITERAL: JSON_LITERAL,
+  INT16: JSON_INT16,
+  UINT16: JSON_UINT16,
+  INT32: JSON_INT32,
+  UINT32: JSON_UINT32,
+  INT64: JSON_INT64,
+  UINT64: JSON_UINT64,
+  DOUBLE: JSON_DOUBLE,
+  STRING: JSON_STRING,
+  CUSTOM: JSON_CUSTOM,
 } as const
 
 const LITERAL_NULL = 0x00
@@ -103,7 +119,7 @@ export function varint(bytes: Uint8Array, at: number): { value: number; size: nu
 }
 
 function isLarge(type: number): boolean {
-  return type === JSON_TYPE.LARGE_OBJECT || type === JSON_TYPE.LARGE_ARRAY
+  return type === JSON_LARGE_OBJECT || type === JSON_LARGE_ARRAY
 }
 
 /**
@@ -116,12 +132,12 @@ function isLarge(type: number): boolean {
  */
 export function isInlined(type: number, large: boolean): boolean {
   switch (type) {
-    case JSON_TYPE.LITERAL:
-    case JSON_TYPE.INT16:
-    case JSON_TYPE.UINT16:
+    case JSON_LITERAL:
+    case JSON_INT16:
+    case JSON_UINT16:
       return true
-    case JSON_TYPE.INT32:
-    case JSON_TYPE.UINT32:
+    case JSON_INT32:
+    case JSON_UINT32:
       return large
     default:
       return false
@@ -146,13 +162,13 @@ function decodeValue(
   meta?: Omit<ColumnMeta, 'type'>,
 ): JsonValue {
   switch (type) {
-    case JSON_TYPE.SMALL_OBJECT:
-    case JSON_TYPE.LARGE_OBJECT:
+    case JSON_SMALL_OBJECT:
+    case JSON_LARGE_OBJECT:
       return decodeObject(body, isLarge(type), meta)
-    case JSON_TYPE.SMALL_ARRAY:
-    case JSON_TYPE.LARGE_ARRAY:
+    case JSON_SMALL_ARRAY:
+    case JSON_LARGE_ARRAY:
       return decodeArray(body, isLarge(type), meta)
-    case JSON_TYPE.LITERAL: {
+    case JSON_LITERAL: {
       need(body, 0, 1, 'literal')
       const v = body[0] as number
       if (v === LITERAL_NULL) return null
@@ -160,32 +176,32 @@ function decodeValue(
       if (v === LITERAL_FALSE) return false
       throw invalidJson(`literal 0x${v.toString(16)} is not null, true or false`)
     }
-    case JSON_TYPE.INT16:
+    case JSON_INT16:
       return (u16(body, 0) << 16) >> 16
-    case JSON_TYPE.UINT16:
+    case JSON_UINT16:
       return u16(body, 0)
-    case JSON_TYPE.INT32:
+    case JSON_INT32:
       return u32(body, 0) | 0
-    case JSON_TYPE.UINT32:
+    case JSON_UINT32:
       return u32(body, 0)
-    case JSON_TYPE.INT64: {
+    case JSON_INT64: {
       need(body, 0, 8, 'int64')
       return new DataView(body.buffer, body.byteOffset, 8).getBigInt64(0, true)
     }
-    case JSON_TYPE.UINT64: {
+    case JSON_UINT64: {
       need(body, 0, 8, 'uint64')
       return new DataView(body.buffer, body.byteOffset, 8).getBigUint64(0, true)
     }
-    case JSON_TYPE.DOUBLE: {
+    case JSON_DOUBLE: {
       need(body, 0, 8, 'double')
       return new DataView(body.buffer, body.byteOffset, 8).getFloat64(0, true)
     }
-    case JSON_TYPE.STRING: {
+    case JSON_STRING: {
       const { value: length, size } = varint(body, 0)
       need(body, size, length, 'string')
       return fromUtf8(body.subarray(size, size + length))
     }
-    case JSON_TYPE.CUSTOM: {
+    case JSON_CUSTOM: {
       // Doc 28: "this is how `CAST(NOW() AS JSON)` round-trips a temporal
       // without turning it into a string, and it is why the JSON codec depends
       // on the column codec."
@@ -311,19 +327,19 @@ export interface EncodedJson {
 }
 
 function encodeScalar(value: JsonValue): EncodedJson {
-  if (value === null) return { type: JSON_TYPE.LITERAL, body: new Uint8Array(0), inline: LITERAL_NULL }
-  if (value === true) return { type: JSON_TYPE.LITERAL, body: new Uint8Array(0), inline: LITERAL_TRUE }
-  if (value === false) return { type: JSON_TYPE.LITERAL, body: new Uint8Array(0), inline: LITERAL_FALSE }
+  if (value === null) return { type: JSON_LITERAL, body: new Uint8Array(0), inline: LITERAL_NULL }
+  if (value === true) return { type: JSON_LITERAL, body: new Uint8Array(0), inline: LITERAL_TRUE }
+  if (value === false) return { type: JSON_LITERAL, body: new Uint8Array(0), inline: LITERAL_FALSE }
 
   if (typeof value === 'bigint') {
     const body = new Uint8Array(8)
     const view = new DataView(body.buffer)
     if (value < 0n) {
       view.setBigInt64(0, value, true)
-      return { type: JSON_TYPE.INT64, body }
+      return { type: JSON_INT64, body }
     }
     view.setBigUint64(0, value, true)
-    return { type: JSON_TYPE.UINT64, body }
+    return { type: JSON_UINT64, body }
   }
 
   if (typeof value === 'number') {
@@ -333,21 +349,21 @@ function encodeScalar(value: JsonValue): EncodedJson {
     // where DECIMAL has no negative zero and normalising it was the fix.
     if (Number.isInteger(value) && !Object.is(value, -0)) {
       if (value >= -0x8000 && value <= 0x7fff) {
-        return { type: JSON_TYPE.INT16, body: new Uint8Array(0), inline: value & 0xffff }
+        return { type: JSON_INT16, body: new Uint8Array(0), inline: value & 0xffff }
       }
       if (value >= 0 && value <= 0xffff) {
-        return { type: JSON_TYPE.UINT16, body: new Uint8Array(0), inline: value }
+        return { type: JSON_UINT16, body: new Uint8Array(0), inline: value }
       }
       if (value >= -0x80000000 && value <= 0x7fffffff) {
-        return { type: JSON_TYPE.INT32, body: int32Body(value), inline: value >>> 0 }
+        return { type: JSON_INT32, body: int32Body(value), inline: value >>> 0 }
       }
       if (value >= 0 && value <= 0xffffffff) {
-        return { type: JSON_TYPE.UINT32, body: int32Body(value), inline: value >>> 0 }
+        return { type: JSON_UINT32, body: int32Body(value), inline: value >>> 0 }
       }
     }
     const body = new Uint8Array(8)
     new DataView(body.buffer).setFloat64(0, value, true)
-    return { type: JSON_TYPE.DOUBLE, body }
+    return { type: JSON_DOUBLE, body }
   }
 
   if (typeof value === 'string') {
@@ -356,7 +372,7 @@ function encodeScalar(value: JsonValue): EncodedJson {
     const body = new Uint8Array(length.length + encoded.length)
     body.set(length)
     body.set(encoded, length.length)
-    return { type: JSON_TYPE.STRING, body }
+    return { type: JSON_STRING, body }
   }
 
   throw invalidJson(`cannot encode ${typeof value} as JSON`)
@@ -381,20 +397,20 @@ export function writeVarint(n: number): Uint8Array {
 
 function encodeAny(value: JsonValue): EncodedJson {
   if (Array.isArray(value)) {
-    return encodeJsonContainer(JSON_TYPE.SMALL_ARRAY, [], value.map(encodeAny))
+    return encodeJsonContainer(JSON_SMALL_ARRAY, [], value.map(encodeAny))
   }
   if (typeof value === 'object' && value !== null && !(value instanceof Uint8Array) && !(value instanceof Date)) {
     const object = value as { [key: string]: JsonValue }
     const keys = Object.keys(object).sort(compareJsonKeys)
     const keyBytes = keys.map(utf8)
-    return encodeJsonContainer(JSON_TYPE.SMALL_OBJECT, keyBytes, keys.map((key) => encodeAny(object[key]!)))
+    return encodeJsonContainer(JSON_SMALL_OBJECT, keyBytes, keys.map((key) => encodeAny(object[key]!)))
   }
   return encodeScalar(value)
 }
 
 /** Containers start small. A large child also needs a large parent. */
 export function encodeJsonContainer(
-  type: typeof JSON_TYPE.SMALL_ARRAY | typeof JSON_TYPE.SMALL_OBJECT,
+  type: typeof JSON_SMALL_ARRAY | typeof JSON_SMALL_OBJECT,
   keys: readonly Uint8Array[],
   pieces: readonly EncodedJson[],
 ): EncodedJson {
@@ -446,7 +462,7 @@ function layout(keys: readonly Uint8Array[], pieces: readonly EncodedJson[], lar
 export function encodeJsonDocument(p: EncodedJson): Uint8Array {
   // A bare scalar has no entry to inline into: its value follows the type byte.
   const inline = isInlined(p.type, false)
-  const literal = p.type === JSON_TYPE.LITERAL
+  const literal = p.type === JSON_LITERAL
   const out = new Uint8Array(1 + (inline ? literal ? 1 : 2 : p.body.length))
   out[0] = p.type
   if (!inline) out.set(p.body, 1)

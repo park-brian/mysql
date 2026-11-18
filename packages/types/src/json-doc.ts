@@ -26,7 +26,12 @@ import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
 import { byteText, fromUtf8, utf8, FIELD_TYPE, compareBytes, MyjsError, renderMysqlDateTime, renderMysqlTime } from '@myjs/bytes'
 import { decodeDecimal, encodeDecimal } from './decimal.ts'
 import { invalidJson } from './errors.ts'
-import { JSON_TYPE, compareJsonKeys, encodeJsonContainer, encodeJsonDocument, isInlined, varint, writeVarint, type EncodedJson } from './json.ts'
+import {
+  JSON_SMALL_OBJECT, JSON_LARGE_OBJECT, JSON_SMALL_ARRAY, JSON_LARGE_ARRAY,
+  JSON_LITERAL, JSON_INT16, JSON_UINT16, JSON_INT32, JSON_UINT32, JSON_INT64, JSON_UINT64,
+  JSON_DOUBLE, JSON_STRING, JSON_CUSTOM, compareJsonKeys, encodeJsonContainer, encodeJsonDocument,
+  isInlined, varint, writeVarint, type EncodedJson,
+} from './json.ts'
 import { compareDecimals } from './compare.ts'
 import { parseDecimal, renderDecimal, renderDouble, timeFieldValue, type DecimalValue, type Value } from './sql-value.ts'
 
@@ -526,7 +531,7 @@ function sizedBody(payload: Uint8Array, field?: number): Uint8Array {
 }
 
 function custom(field: number, payload: Uint8Array): EncodedJson {
-  return { type: JSON_TYPE.CUSTOM, body: sizedBody(payload, field) }
+  return { type: JSON_CUSTOM, body: sizedBody(payload, field) }
 }
 
 const EMPTY_INLINE_BODY = new Uint8Array(0)
@@ -535,26 +540,26 @@ function piece(doc: JsonDoc): EncodedJson {
   switch (doc.t) {
     case 'null':
     case 'bool':
-      return { type: JSON_TYPE.LITERAL, body: EMPTY_INLINE_BODY, inline: doc.t === 'null' ? 0 : doc.v ? 1 : 2 }
+      return { type: JSON_LITERAL, body: EMPTY_INLINE_BODY, inline: doc.t === 'null' ? 0 : doc.v ? 1 : 2 }
     case 'int': {
       const v = doc.v
-      if (v >= -0x8000n && v <= 0x7fffn) return { type: JSON_TYPE.INT16, body: EMPTY_INLINE_BODY, inline: Number(v) & 0xffff }
+      if (v >= -0x8000n && v <= 0x7fffn) return { type: JSON_INT16, body: EMPTY_INLINE_BODY, inline: Number(v) & 0xffff }
       if (v >= -0x80000000n && v <= 0x7fffffffn) {
         const body = new Uint8Array(4)
         new DataView(body.buffer).setInt32(0, Number(v), true)
-        return { type: JSON_TYPE.INT32, body, inline: Number(v) >>> 0 }
+        return { type: JSON_INT32, body, inline: Number(v) >>> 0 }
       }
-      return { type: JSON_TYPE.INT64, body: int64Bytes(v) }
+      return { type: JSON_INT64, body: int64Bytes(v) }
     }
     case 'uint':
-      return { type: JSON_TYPE.UINT64, body: int64Bytes(doc.v, true) }
+      return { type: JSON_UINT64, body: int64Bytes(doc.v, true) }
     case 'double': {
       const body = new Uint8Array(8)
       new DataView(body.buffer).setFloat64(0, doc.v, true)
-      return { type: JSON_TYPE.DOUBLE, body }
+      return { type: JSON_DOUBLE, body }
     }
     case 'string':
-      return { type: JSON_TYPE.STRING, body: sizedBody(utf8(doc.v)) }
+      return { type: JSON_STRING, body: sizedBody(utf8(doc.v)) }
     case 'decimal': {
       const text = renderDecimal(doc.v)
       const digits = text.replace(/^-/, '').split('.')
@@ -578,9 +583,9 @@ function piece(doc: JsonDoc): EncodedJson {
     case 'opaque':
       return custom(doc.field, doc.v)
     case 'array':
-      return encodeJsonContainer(JSON_TYPE.SMALL_ARRAY, [], doc.v.map(piece))
+      return encodeJsonContainer(JSON_SMALL_ARRAY, [], doc.v.map(piece))
     case 'object':
-      return encodeJsonContainer(JSON_TYPE.SMALL_OBJECT, doc.v.map(([key]) => utf8(key)), doc.v.map(([, value]) => piece(value)))
+      return encodeJsonContainer(JSON_SMALL_OBJECT, doc.v.map(([key]) => utf8(key)), doc.v.map(([, value]) => piece(value)))
   }
 }
 
@@ -612,31 +617,31 @@ function decodeAt(type: number, body: Uint8Array): JsonDoc {
     return new DataView(body.buffer, body.byteOffset, n)
   }
   switch (type) {
-    case JSON_TYPE.SMALL_OBJECT:
-    case JSON_TYPE.LARGE_OBJECT:
-    case JSON_TYPE.SMALL_ARRAY:
-    case JSON_TYPE.LARGE_ARRAY:
-      return decodeContainer(body, type === JSON_TYPE.LARGE_OBJECT || type === JSON_TYPE.LARGE_ARRAY, type <= JSON_TYPE.LARGE_OBJECT)
-    case JSON_TYPE.LITERAL:
+    case JSON_SMALL_OBJECT:
+    case JSON_LARGE_OBJECT:
+    case JSON_SMALL_ARRAY:
+    case JSON_LARGE_ARRAY:
+      return decodeContainer(body, type === JSON_LARGE_OBJECT || type === JSON_LARGE_ARRAY, type <= JSON_LARGE_OBJECT)
+    case JSON_LITERAL:
       need(body, 0, 1)
       return body[0] === 0 ? JSON_NULL : body[0] === 1 ? JSON_TRUE : body[0] === 2 ? JSON_FALSE : invalidLiteral(body[0] as number)
-    case JSON_TYPE.INT16:
+    case JSON_INT16:
       return { t: 'int', v: BigInt(view(2).getInt16(0, true)) }
-    case JSON_TYPE.UINT16:
+    case JSON_UINT16:
       return { t: 'int', v: BigInt(view(2).getUint16(0, true)) }
-    case JSON_TYPE.INT32:
+    case JSON_INT32:
       return { t: 'int', v: BigInt(view(4).getInt32(0, true)) }
-    case JSON_TYPE.UINT32:
+    case JSON_UINT32:
       return { t: 'int', v: BigInt(view(4).getUint32(0, true)) }
-    case JSON_TYPE.INT64:
+    case JSON_INT64:
       return { t: 'int', v: view(8).getBigInt64(0, true) }
-    case JSON_TYPE.UINT64:
+    case JSON_UINT64:
       return jsonInteger(view(8).getBigUint64(0, true))
-    case JSON_TYPE.DOUBLE:
+    case JSON_DOUBLE:
       return { t: 'double', v: view(8).getFloat64(0, true) }
-    case JSON_TYPE.STRING:
+    case JSON_STRING:
       return { t: 'string', v: fromUtf8(sizedPayload(body, 0)) }
-    case JSON_TYPE.CUSTOM: {
+    case JSON_CUSTOM: {
       need(body, 0, 1)
       const field = body[0] as number
       const payload = sizedPayload(body, 1)
