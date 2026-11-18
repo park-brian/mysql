@@ -112,8 +112,8 @@ for (const { symbol } of entries) {
   }
 }
 const letters = 'abcdefghijklmnopqrstuvwxyz'
-const shortCount = 12
-// The letters a through l are single-letter tokens. The rest start two-letter tokens.
+const shortCount = 11
+// The letters a through k are single-letter tokens. The rest start two-letter tokens.
 const tokens = [...letters.slice(0, shortCount), ...[...letters.slice(shortCount)].flatMap((prefix) => [...letters].map((letter) => prefix + letter))]
 // A one-letter slot saves one byte per occurrence over a two-letter slot.
 const names = [...counts.keys()].sort().sort((a, b) => counts.get(b) - counts.get(a))

@@ -128,7 +128,7 @@ interface EqRef {
   readonly value: Compiled
   /** `eq_ref`: a unique key, one row at most. */
   readonly unique: boolean
-  /** The conjunct it reads by: the key read itself, which EXPLAIN shows no Filter for. */
+  /** The conjunct that supplies the lookup key. */
   readonly condition: Expression
 }
 
@@ -2120,9 +2120,12 @@ function indexedJoinOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, l
       if (lookup === undefined) return nestedLoop(node.left, input, filterPlan(on.length > 0, planNode(`Index range scan on ${t.alias} (re-planned for each iteration)`)))
       const covering = t.def !== undefined && holdsRead(t.def, lookup.index, readOf(settings, t.alias))
       const lookupNode = indexLookup(t.alias, lookup.index.name, lookup.unique, covering)
-      // The lookup's own equality is the key read, not a filter.
-      const rest = remaining(env).filter((c) => c.e !== lookup.condition)
-      const read = filterPlan(rest.length > 0, lookupNode)
+      // Covering string lookups still compare fields of different declared widths.
+      const value = lookup.value.type
+      const column = lookup.column.type
+      const recheck = covering && key && column.type === value.field &&
+        (value.field === FIELD_TYPE.VAR_STRING || value.field === FIELD_TYPE.STRING) && value.length !== column.length
+      const read = filterPlan(recheck || remaining(env).some((c) => c.e !== lookup.condition), lookupNode)
       return nestedLoop(node.left, input, wrap(firstOnly && !semi, 'Limit', read), semi)
     },
   }

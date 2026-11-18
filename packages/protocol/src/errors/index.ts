@@ -43,8 +43,8 @@ function load(): ErrorTable {
     if (token === '~') return ''
     const first = token.charCodeAt(0) - 97
     if (first < 0) return token
-    // The first 12 words use a through l, followed by 26 words for each two-letter prefix.
-    return words[token.length === 1 ? first : 12 + 26 * (first - 12) + token.charCodeAt(1) - 97]!
+    // The first 11 words use a through k, followed by 26 words for each two-letter prefix.
+    return words[token.length === 1 ? first : 11 + 26 * (first - 11) + token.charCodeAt(1) - 97]!
   }
   let errno = 0
   for (const row of PACKED_ERROR_TABLE.split(',')) {
@@ -55,7 +55,7 @@ function load(): ErrorTable {
     const [packedSymbol, sqlState = DEFAULT_SQLSTATE] = row.split(' ') as [string, string?]
     const first = packedSymbol[0]
     const prefix = first === '?' ? 'OBSOLETE_ER_' : first === '!' ? '' : 'ER_'
-    const symbol = prefix + packedSymbol.match(/[a-l]|[m-z][a-z]|[A-Z0-9]+|~/g)!.map(unpack).join('_')
+    const symbol = prefix + packedSymbol.match(/[a-k]|[l-z][a-z]|[A-Z0-9]+|~/g)!.map(unpack).join('_')
     // A trailing space abbreviates 42000, the most common nondefault SQLSTATE.
     const entry: Entry = { errno, symbol, sqlState: sqlState || '42000' }
     bySymbol.set(symbol, entry)
