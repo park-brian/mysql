@@ -94,7 +94,7 @@ function compiled(pattern: string, flags: IcuFlags): IcuPattern & { readonly re:
     const p = compileIcu(pattern, flags)
     let re: RegExp
     try {
-      re = new RegExp(p.source, p.flags)
+      re = new RegExp(p.source, p.flags + 'g')
     } catch {
       // Never expected — 600,000 fuzzed patterns compile — but a typed error, not a crash, if one does not.
       throw regexpArgumentError()
@@ -148,8 +148,10 @@ export function regexpLike(subject: Value, pattern: Value, type: MatchType | und
 // Positions count characters — code points — from 1, and bytes in a binary
 // string. What 8.4.11 answered, beyond REGEXP_LIKE's rules:
 //
-//   - A position below 1, or past the subject's last character (1 is allowed
-//     in an empty subject), is 3686. An occurrence below 1 is 1.
+//   - INSTR accepts a position inside its subject, and any position on an
+//     empty subject. SUBSTR and REPLACE also allow the position after the
+//     last character. A position below 1 raises 1583 in SUBSTR and REPLACE,
+//     and out-of-range positions otherwise raise 3686.
 //   - REGEXP_INSTR's return option is 0 (the match's start) or 1 (just past
 //     its end), else 1210; it is 0 when there is no such match.
 //   - REGEXP_SUBSTR is NULL when there is no such match, and `''` for an
@@ -181,17 +183,16 @@ function offsetOf(text: string, pos: number, binary: boolean, instr: boolean): n
 /** Characters before UTF-16 offset `at`. */
 const charsBefore = (text: string, at: number, binary: boolean): number => (binary ? at : [...text.slice(0, at)].length)
 
-/** The matches of `re` in `text` from `start`, in order. */
+/** A synchronous scan of the cached expression. Each consumer resets its index. */
 function* matchesFrom(re: RegExp, text: string, start: number): Generator<RegExpExecArray> {
-  const r = new RegExp(re.source, re.sticky ? re.flags : `${re.flags}g`)
-  r.lastIndex = start
+  re.lastIndex = start
   for (;;) {
-    const m = r.exec(text)
+    const m = re.exec(text)
     if (m === null) return
     yield m
     // An empty match moves on one character, as ICU's `find` does.
-    if (m[0] === '') r.lastIndex = m.index + ((text.codePointAt(m.index) ?? 0) > 0xffff ? 2 : 1)
-    if (r.lastIndex > text.length) return
+    if (m[0] === '') re.lastIndex = m.index + ((text.codePointAt(m.index) ?? 0) > 0xffff ? 2 : 1)
+    if (re.lastIndex > text.length) return
   }
 }
 
