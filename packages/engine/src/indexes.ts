@@ -208,7 +208,8 @@ export class ClusteredIndex {
       let before: FieldBytes[] | undefined
       this.tree.upsert(key, (current) => {
         if (current === undefined || versionOf(current).marked) return undefined
-        before = this.#row(current.subarray(CLUSTERED_HEADER))
+        const freeOnPurge: Uint8Array[] = []
+        before = this.#row(current.subarray(CLUSTERED_HEADER), freeOnPurge)
         const record = this.#encode(key, row)
         const ptr = t.undo({
           isInsert: false,
@@ -217,7 +218,7 @@ export class ClusteredIndex {
           key,
           old: current,
           // The old version's chains are its own: freed when no view needs it.
-          freeOnPurge: this.refsOf(current),
+          freeOnPurge,
           freeOnRollback: externalRefs(this.layout, record),
         })
         return clusteredValue(false, t.id, ptr, record)
@@ -241,9 +242,10 @@ export class ClusteredIndex {
       this.tree.upsert(key, (current) => {
         if (current === undefined || versionOf(current).marked) return undefined
         const record = current.subarray(CLUSTERED_HEADER)
-        before = this.#row(record)
-        const ptr = t.undo({ isInsert: false, purgeRemoves: true, indexId: this.tree.indexId, key, old: current, freeOnPurge: this.refsOf(current), freeOnRollback: [] })
-        return clusteredValue(true, t.id, ptr, record.slice())
+        const freeOnPurge: Uint8Array[] = []
+        before = this.#row(record, freeOnPurge)
+        const ptr = t.undo({ isInsert: false, purgeRemoves: true, indexId: this.tree.indexId, key, old: current, freeOnPurge, freeOnRollback: [] })
+        return clusteredValue(true, t.id, ptr, record)
       })
       if (before === undefined) return undefined
       this.tree.space.journal.row(this.tree.indexId, t.id, before, null)
@@ -358,8 +360,12 @@ export class ClusteredIndex {
     return encodeRecord(this.layout, row, { maxSize, storeExternal: (b) => writeChain(pages, b) })
   }
 
-  #row(record: Uint8Array): FieldBytes[] {
-    return decodeRecord(this.layout, record).map((v) => (v === null || v instanceof Uint8Array ? v : readChain(this.tree.space.pool, v.ref)))
+  #row(record: Uint8Array, refs?: Uint8Array[]): FieldBytes[] {
+    return decodeRecord(this.layout, record).map((v) => {
+      if (v === null || v instanceof Uint8Array) return v
+      refs?.push(v.ref)
+      return readChain(this.tree.space.pool, v.ref)
+    })
   }
 }
 

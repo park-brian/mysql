@@ -12,6 +12,7 @@ entry, recorded out of order, sits where its date and its commit put it.
 
 | Date | Entry |
 |---|---|
+| 2026-11-18 | **M5.50. Collect old overflow references while reading the previous fields.** Clustered UPDATE and delete-mark reuse that decode. Forty cases preserve WAL records and page allocations through savepoints, rollback and purge. Full Docker verification passes 1,898 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-18 | **M5.10. Reuse compiled regex during a search.** Each synchronous caller starts at its own index on the cached expression. All 4,608 focused wire observations agree, and core and facade save 27 and 24 gzipped bytes. Full Docker verification passes 1,898 tests and all seven pinned corpora. |
 | 2026-11-18 | **M5.49. Compare dependent non-covering lookups with a table scan.** Scalar and LATERAL readers reuse the existing cost estimates while preserving covering and hinted reads. The focused audit gains 44 exact plans, and relational replay reaches 2,169 of 2,248 plans. SHA2 shares its digest-length validation. Docker passes 1,898 tests and all seven pinned corpora within the existing caps. |
 | 2026-11-17 | **M2.13/M5.21. Bound binary JSON entries to their declared containers.** Both readers reject invalid entry tables, key offsets and payloads that cross their claimed size. Full Docker verification passes 1,897 tests and all seven pinned corpora within the existing caps. |
